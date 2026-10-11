@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "type": "module",
+  "description": "Dubuddy tools site. Static pages + the Claude pipeline functions in api/pipeline (Vercel)."
+}

@@ -1,0 +1,458 @@
+/* =====================================================================
+   CLAUDE PIPELINE PANEL: the "🤖 Claude edit & post" block in a Content
+   Process card (Social Media space).
+
+   Raw video → Claude plans the edit (dubuddy-short) → ✋ CHECK 1: approve
+   the brief or ask for changes → Claude renders YouTube + Instagram
+   versions → vidIQ SEO → ✋ CHECK 2: edit / approve the title,
+   description, tags and caption → Post (only on an owner's click).
+
+   Talks to the website functions in api/pipeline/ (lib/pipeline/core.js):
+     GET  /api/pipeline/jobs?team=     every job of the team + file links
+     POST /api/pipeline/upload-url     a one-file upload link for the raw clip
+     POST /api/pipeline/action         start / approve / changes / post / …
+   Each step runs as a Claude Code routine in the cloud (or on the Mac when
+   testing locally). social-space.js calls:
+     PIPE.attach(root)            once per render, for the board badges
+     PIPE.mount(host, card, h)    when a card drawer opens
+   ===================================================================== */
+(function(){
+"use strict";
+
+const S = { jobs:{}, mode:null, me:null, root:null, hooks:{}, mounted:null, timer:null, err:"" };
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ago = iso => { if(!iso) return ""; const s=Math.round((Date.now()-new Date(iso))/1000);
+  return s<60?s+"s":s<3600?Math.round(s/60)+" min":Math.round(s/3600*10)/10+" h"; };
+const team = () => (typeof TEAM!=="undefined" && TEAM) || new URLSearchParams(location.search).get("team") || "";
+
+const LABEL = {
+  planning:["Claude is planning the edit","warn","🧠"], brief_ready:["Brief ready — your check","accent","✋"],
+  rendering:["Rendering YT + IG","warn","🎬"], seo_running:["vidIQ SEO running","warn","🔎"],
+  final_review:["Final check — your turn","accent","✋"], scheduled:["Scheduled","good","🗓"], posting:["Posting","warn","🚀"], posted:["Posted","good","✅"],
+  post_failed:["Posting needs a look","crit","⚠️"], failed:["Stopped — needs a look","crit","⚠️"], cancelled:["Cancelled","mute","⏹"],
+};
+const BUSY = ["planning","rendering","seo_running","posting","researching","scripting"];
+const MODE = { fire:["☁️ Cloud routine","good"], local:["💻 This Mac","warn"], fake:["🧪 Test mode (nothing real)","mute"], off:["Not set up yet","mute"] };
+
+/* ------------------------------------------------------------ server */
+async function headers(){
+  const h = { "content-type":"application/json" };
+  try{ if(!window.LOCAL_MODE && typeof SUPA!=="undefined" && SUPA){ const { data } = await SUPA.auth.getSession();
+    if(data && data.session) h.authorization = "Bearer " + data.session.access_token; } }catch(_){ }
+  return h;
+}
+async function call(path, body){
+  const r = await fetch(path, body ? { method:"POST", headers: await headers(), body: JSON.stringify(body) } : { headers: await headers() });
+  const j = await r.json().catch(()=>({ error:"The pipeline server didn't answer ("+r.status+")" }));
+  if(j.error) throw new Error(j.error);
+  return j;
+}
+async function action(card, act, extra){
+  const j = await call("/api/pipeline/action", Object.assign({ team: team(), job: card, action: act }, extra||{}));
+  S.jobs[card] = Object.assign({}, S.jobs[card], j.data); kick(); return j.data;
+}
+// first frame + length of a local video file, for the upload preview (best effort)
+function preview(f){
+  return new Promise(ok => {
+    const v = document.createElement("video"), url = URL.createObjectURL(f), done = o => { URL.revokeObjectURL(url); ok(o); };
+    v.muted = true; v.preload = "metadata"; v.src = url;
+    v.onloadedmetadata = () => { v.currentTime = Math.min(1, (v.duration||2)/2); };
+    v.onseeked = () => { let thumb = null;
+      try{ const cv = document.createElement("canvas"), sc = 120 / (v.videoHeight||120); cv.width = Math.round((v.videoWidth||68)*sc); cv.height = 120;
+        cv.getContext("2d").drawImage(v, 0, 0, cv.width, cv.height); thumb = cv.toDataURL("image/jpeg", .7); }catch(_){ }
+      done({ duration: v.duration || null, thumb }); };
+    v.onerror = () => done({});
+    setTimeout(() => done({}), 8000);
+  });
+}
+const sigOf = job => [S.mode, S.me&&S.me.role, S.err?1:0].join("/") + "|" + (job ? [job.status, job.brief&&job.brief.at, job.seo?1:0, job.error||"", Object.keys(job.media||{}).join()].join("|") : "none");
+async function poll(){
+  try{ const j = await call("/api/pipeline/jobs?team=" + encodeURIComponent(team()));
+    S.jobs = j.data || {}; S.mode = j.mode; S.me = j.me; S.err = "";
+    if(S.hooks.onJobs) S.hooks.onJobs(S.jobs); }
+  catch(e){ S.err = e.message; }
+  paintBadges();
+  const m = S.mounted;
+  if(!m || !m.host.isConnected) return;
+  const job = S.jobs[m.card.id];
+  const rj = S.jobs[m.card.id + "__r"], sj = S.jobs[m.card.id + "__s"];
+  const rsig = (rj ? rj.status + (rj.research ? rj.research.at : "") : "") + "/" + (sj ? sj.status + (sj.script ? sj.script.at : "") : "");
+  if(rsig !== (m.rsig || "")){ m.rsig = rsig; if(m.h.onJob && m.h.onJob(job) !== false) return; }
+  if(sigOf(job) !== m.sig){
+    // don't redraw under someone's typing; the next poll catches up
+    const a = m.host.getRootNode().activeElement;
+    if(a && m.host.contains(a) && /INPUT|TEXTAREA/.test(a.tagName)) return;
+    const prev = m.sig.split("|")[1];
+    // the job moved to another step: let the card redraw itself (its layout depends on the step)
+    if(m.h.onJob && prev !== (job ? job.status : "none") && m.h.onJob(job) !== false) return;
+    render();
+  } else { const pr = m.host.querySelector("[data-pp-progress]"); if(pr && job) pr.textContent = progressLine(job); }
+}
+// every 3 s while a card is open on a running job, every 30 s otherwise, never while the tab is hidden
+// (each check is one function call on Vercel)
+// something was just started: check again soon instead of waiting out a slow interval
+function kick(){ if(S.tick){ clearTimeout(S.timer); S.timer = setTimeout(S.tick, 2500); } }
+function ensurePolling(){
+  if(S.timer) return;
+  const tick = S.tick = async () => {
+    if(!document.hidden) await poll();
+    const m = S.mounted, open = m && m.host.isConnected, busy = open && [m.card.id, m.card.id + "__r", m.card.id + "__s"].some(id => S.jobs[id] && BUSY.includes(S.jobs[id].status));
+    const anyBusy = Object.values(S.jobs).some(j => BUSY.includes(j.status));   // e.g. research on an Ideation row
+    S.timer = setTimeout(tick, busy ? 3000 : anyBusy ? 5000 : open ? 8000 : 30000);
+  };
+  S.timer = setTimeout(tick, 0);
+  document.addEventListener("visibilitychange", () => { if(!document.hidden && S.timer){ clearTimeout(S.timer); S.timer = setTimeout(tick, 0); } });
+}
+
+/* ------------------------------------------------------------ board badges */
+function badgeHtml(job){
+  if(!job) return "";
+  const [l,cls,ic] = LABEL[job.status] || [job.status,"mute","•"];
+  return `<span class="badge ${cls==="accent"?"warn":cls}" title="Claude pipeline: ${esc(l)}">${ic} ${esc(l.split(" — ")[0])}</span>`;
+}
+function paintBadges(){
+  if(S.root) S.root.querySelectorAll("[data-pipe-badge]").forEach(el=>{ el.innerHTML = badgeHtml(S.jobs[el.dataset.pipeBadge]); });
+}
+
+/* ------------------------------------------------------------ pieces */
+function modePill(){ const [t,c] = MODE[S.mode] || ["…","mute"]; return `<span class="badge ${c}">${t}</span>`; }
+function progressLine(job){
+  const t = job.run && job.run.started_at ? " · running " + ago(job.run.started_at) : "";
+  return (job.progress || (LABEL[job.status]||[job.status])[0]) + t;
+}
+const watchLink = job => job.run && job.run.session_url
+  ? `<a class="pp-link" href="${esc(job.run.session_url)}" target="_blank" rel="noopener">Watch Claude work ↗</a>` : "";
+function copyBlock(cmd){ return `<div class="pp-copy"><code>${esc(cmd)}</code><button class="btn sm" data-copy="${esc(cmd)}">Copy</button></div>`; }
+function macLoginHelp(){
+  return `<div class="pp-note crit"><b>Claude isn't signed in on this Mac yet.</b> One-time setup — run these in Terminal, one at a time:
+    <div class="pp-step">1. Install Claude Code</div>${copyBlock("curl -fsSL https://claude.ai/install.sh | bash")}
+    <div class="pp-step">2. Sign in (pick your Claude account in the browser), then type /exit</div>${copyBlock("claude")}
+    <div class="pp-step">3. Check it can see vidIQ</div>${copyBlock("node ~/Claud/dubuddy-tools-site/local/runner.mjs --doctor")}
+    <div class="pp-step">Then press <b>Retry</b>.</div></div>`;
+}
+function cardInfo(c, h){
+  const idea = h.idea && h.idea(c);
+  return { id:c.id, idea:c.idea, title:c.pre.title, description:c.pre.desc, hashtags:c.pre.hashtags,
+    keywords:(c.pre.keywords||[]).map(k=>k.kw||k.keyword||k.term||k.text||k).filter(x=>typeof x==="string"),
+    why:c.pre.why, platform:c.platform, platforms:(c.platforms&&c.platforms.length?c.platforms:[c.platform]),
+    video_type:c.vtype, scheduled:c.scheduled, time:c.time||null,
+    hook: idea ? idea.hook : "", cta: idea ? idea.cta : "" };
+}
+// the skill's hook markup: *word* = orange, | = new line
+const hookHtml = t => esc(t).replace(/\*([^*]+)\*/g, '<span class="pp-em">$1</span>').replace(/\s*\|\s*/g, " / ");
+
+const CSS = `<style>
+.pp{border:1.5px solid color-mix(in srgb,var(--accent) 35%,var(--line));background:linear-gradient(180deg,var(--accent-soft),var(--surface) 90px)}
+.pp .pp-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pp .filebtn input[type=file]{display:none}
+.pp .filebtn:has(input:disabled){opacity:.5;cursor:not-allowed}
+.pp .pp-note{padding:10px 12px;border-radius:var(--r-s);background:var(--surface-2);font-size:12.5px;line-height:1.5;margin:10px 0}
+.pp .pp-note.crit{background:var(--crit-soft);color:var(--ink)}
+.pp .pp-step{margin:9px 0 4px;font-weight:600}
+.pp .pp-copy{display:flex;gap:6px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:5px 6px 5px 9px}
+.pp .pp-copy code{flex:1;font-family:var(--mono);font-size:11.5px;overflow-x:auto;white-space:nowrap}
+.pp .pp-prog{display:flex;gap:10px;align-items:center;padding:10px 0}
+.pp .pp-spin{width:16px;height:16px;border-radius:50%;border:2.5px solid var(--line-2);border-top-color:var(--accent);animation:ppspin .8s linear infinite;flex:none}
+@keyframes ppspin{to{transform:rotate(360deg)}}
+.pp .pp-ready{display:flex;flex-wrap:wrap;gap:6px}
+.pp .gchip{font-family:var(--mono);font-size:10.5px;padding:3px 8px;border-radius:99px;border:1px solid var(--line)}
+.pp .gchip.ok{color:var(--good);background:var(--good-soft);border-color:color-mix(in srgb,var(--good) 30%,var(--line))}
+.pp .gchip.no{color:var(--crit);background:var(--crit-soft);border-color:color-mix(in srgb,var(--crit) 25%,var(--line))}
+.pp .pp-drop{display:flex;gap:12px;align-items:center;border:1.5px dashed var(--line-2);border-radius:10px;padding:12px;background:var(--surface);transition:border-color .15s,background .15s}
+.pp .pp-drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.pp .pp-drop.has{border-style:solid;border-color:color-mix(in srgb,var(--good) 35%,var(--line))}
+.pp .pp-dropic{font-size:26px;width:54px;text-align:center}
+.pp .pp-thumb{width:54px;height:96px;object-fit:cover;border-radius:6px;background:#000;flex:none}
+.pp .pp-bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:6px}
+.pp .pp-bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .2s}
+.pp .pp-sheet{width:100%;border-radius:8px;border:1px solid var(--line);cursor:zoom-in;display:block;margin:6px 0 10px}
+.pp .pp-vids{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,300px));justify-content:center;gap:14px;margin:6px 0 12px}
+.pp .pp-vids video{width:100%;aspect-ratio:9/16;background:#000;border-radius:8px;display:block}
+.pp .pp-vids .lbl{margin-bottom:4px}
+.pp table{width:100%;min-width:0;border-collapse:collapse;font-size:12px;margin:4px 0 10px;table-layout:fixed}
+.pp table.pp-at th:first-child,.pp table.pp-at td:first-child{width:44px}
+.pp th,.pp td{text-align:left;padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+.pp th{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);font-weight:500;white-space:normal;background:none}
+.pp td{overflow-wrap:anywhere}
+.pp .pp-em{color:var(--accent);font-weight:700}
+.pp details{margin:6px 0;font-size:12.5px}.pp summary{cursor:pointer;font-weight:600;padding:4px 0}
+.pp .pp-title{display:flex;gap:8px;align-items:flex-start;padding:7px 8px;border:1px solid var(--line);border-radius:7px;margin-bottom:5px;cursor:pointer;font-size:12.5px;background:var(--surface)}
+.pp .pp-title.on{border-color:var(--accent);background:var(--accent-soft)}
+.pp .pp-score{margin-left:auto;font-family:var(--mono);font-weight:600;white-space:nowrap}
+.pp .pp-count{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);float:right}
+.pp .pp-count.over{color:var(--crit)}
+.pp .pp-link{font-size:12px;color:var(--accent-ink)}
+.pp ul{margin:4px 0 8px 18px;padding:0;font-size:12.5px}
+</style>`;
+
+/* ------------------------------------------------------------ panel */
+// what Claude uses from the card, and whether it's there
+function readiness(c){
+  const k = (c.pre.keywords||[]).find(x=>x.rank==="primary") || (c.pre.keywords||[])[0];
+  return [["Title", !!c.pre.title], ["Description", !!c.pre.desc], ["Hashtags", !!c.pre.hashtags], ["Primary keyword", !!(k && k.kw)]];
+}
+const mmss = s => s ? Math.floor(s/60) + ":" + String(Math.round(s%60)).padStart(2,"0") : "";
+function startView(c, canRun, m){
+  const ready = readiness(c), missing = ready.filter(x=>!x[1]).map(x=>x[0].toLowerCase());
+  const r = m.raw;
+  return `<p class="hint" style="margin:0 0 10px">Give Claude the raw clip. It plans the edit with the <b>dubuddy-short</b> skill using this card's
+      title, description, hook and keywords, then waits for a check. Nothing renders or posts without an owner's click.</p>
+    <div class="pp-ready">${ready.map(([l,ok])=>`<span class="gchip ${ok?"ok":"no"}">${ok?"✓":"✗"} ${l}</span>`).join("")}</div>
+    ${missing.length?`<p class="hint" style="margin:6px 0 12px">Claude can start without the ${esc(missing.join(", "))}, but the hook and SEO get weaker — fill ${missing.length>1?"them":"it"} in on the left first if you can.</p>`:`<div style="height:10px"></div>`}
+    <div class="fld" style="margin-bottom:10px"><label>Raw video</label>
+      <div class="pp-drop ${r?"has":""}" data-pp-drop>
+        ${r&&r.thumb?`<img class="pp-thumb" src="${r.thumb}" alt="">`:`<div class="pp-dropic">🎞️</div>`}
+        <div style="flex:1;min-width:0">
+          <div data-pp-up>${r?`<b>✓ ${esc(r.name)}</b> <span class="hint">${(r.size/1e6).toFixed(0)} MB${r.duration?" · "+mmss(r.duration):""} · uploaded</span>`
+            :`<b>Drop the raw clip here</b> <span class="hint">or</span>`}</div>
+          <label class="filebtn" style="margin-top:6px">${r?"Choose another file":"Choose file"}<input type="file" accept="video/*" data-pp-file ${canRun?"":"disabled"}></label>
+          <span class="hint" style="margin-left:6px">MP4 or MOV, straight from the phone/camera</span>
+          <div class="pp-bar" data-pp-bar hidden><i></i></div></div></div></div>
+    <div class="pp-row"><button class="btn pri" data-pp="start" ${canRun&&r?"":"disabled"}>🤖 Edit with Claude</button>
+      ${canRun?"":`<span class="hint">Your role can view this, not run it.</span>`}</div>`;
+}
+
+function render(){
+  const m = S.mounted; if(!m) return;
+  const { host, card:c } = m;
+  const job = S.jobs[c.id], me = S.me || {}, st = job ? job.status : null;
+  m.sig = sigOf(job);
+  const [lbl,cls,ic] = st ? (LABEL[st]||[st,"mute","•"]) : ["Not started","mute","○"];
+  let body = "";
+
+  if(S.mode==="off") body = `<div class="pp-note">Claude edit &amp; post isn't switched on for this site yet. An owner sets it up once (storage, the jobs table and the cloud routine — see <b>routine/SETUP.md</b>), then this panel starts working. You can still edit this card by hand.</div>`;
+  else if(S.err && !S.me) body = `<div class="pp-note crit">${esc(S.err)}</div>`;
+  else if(!job) body = startView(c, me.canRun, m);
+  else if(BUSY.includes(st)){
+    body = `<div class="pp-prog"><div class="pp-spin"></div><div><b>${esc(lbl)}</b><div class="hint" data-pp-progress>${esc(progressLine(job))}</div></div></div>
+      ${st==="rendering"&&S.mode==="local"?`<div class="pp-note">Rendering uses the whole Mac — keep it plugged in and awake.</div>`:""}
+      ${st==="posting"?`<div class="pp-note">Posting exactly what was approved to ${esc((job.post_request&&job.post_request.targets||[]).map(t=>t==="yt"?"YouTube":"Instagram").join(" + "))}.</div>`:""}
+      <div class="pp-row">${watchLink(job)}${st!=="posting"&&me.canRun?`<button class="btn sm" data-pp="cancel" style="margin-left:auto">Cancel</button>`:""}</div>`;
+  }
+  else if(st==="brief_ready") body = briefView(job, me);
+  else if(st==="final_review") body = finalView(job, c, me);
+  else if(st==="scheduled") body = scheduledView(job, me);
+  else if(st==="posted") body = postedView(job);
+  else if(st==="post_failed") body = postFailedView(job, c, me);
+  else if(st==="failed" || st==="cancelled"){
+    const mac = S.mode==="local" && /signed in|installed/i.test(job.error||"");
+    body = `${st==="failed"?(mac?macLoginHelp():`<div class="pp-note crit"><b>Stopped:</b> ${esc(job.error||"unknown error")}</div>`):""}
+      <div class="pp-row">${me.canRun?`<button class="btn pri" data-pp="retry">↻ ${st==="cancelled"?"Resume":"Retry"} from “${esc(job.last_step||"plan")}”</button>`:""}${watchLink(job)}</div>
+      <details style="margin-top:12px"><summary>Or start over with a new clip</summary>${startView(c, me.canRun, m)}</details>`;
+  }
+
+  host.innerHTML = CSS + `<div class="block pp">
+    <div class="block-h"><h4>🤖 Claude edit &amp; post</h4><span class="badge ${cls==="accent"?"warn":cls}">${ic} ${esc(lbl)}</span>
+      <span style="margin-left:auto">${modePill()}</span></div>
+    ${body}
+    ${job&&(job.history||[]).length?`<details style="margin-top:10px"><summary>History (${job.history.length})</summary><table>
+      ${job.history.slice().reverse().map(x=>`<tr><td style="width:90px" class="hint">${esc(new Date(x.at).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}))}</td><td>${esc(x.msg||x.status)}</td></tr>`).join("")}</table></details>`:""}
+  </div>`;
+  wire();
+}
+
+function briefView(job, me){
+  const b = job.brief || {}, md = job.media || {};
+  const list = a => (a&&a.length)?`<ul>${a.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:"";
+  return `<div class="pp-note"><b>✋ Check 1 — the edit plan.</b> Nothing is rendered yet. Approve it, or say what to change and Claude redoes the brief.</div>
+    ${md.brief_sheet?`<a href="${esc(md.brief_sheet)}" target="_blank"><img class="pp-sheet" src="${esc(md.brief_sheet)}" alt="Preview stills of every graphic"></a>`:""}
+    ${b.summary?`<p style="margin:0 0 8px;font-size:13px">${esc(b.summary)}</p>`:""}
+    ${b.hook?`<p style="margin:0 0 8px;font-size:13px"><b>Hook:</b> ${hookHtml(b.hook)}</p>`:""}
+    ${(b.storyboard||[]).length?`<details open><summary>Storyboard (${b.storyboard.length})</summary><table class="pp-at"><tr><th>At</th><th>Said</th><th>Scene</th><th>Display</th></tr>
+      ${b.storyboard.map(s=>`<tr><td>${esc(s.at)}</td><td>${esc(s.said)}</td><td>${esc(s.scene)}</td><td>${esc(s.display)}</td></tr>`).join("")}</table></details>`:""}
+    ${(b.graphics||[]).length?`<details><summary>Graphics &amp; B-roll (${b.graphics.length})</summary><table class="pp-at"><tr><th>At</th><th>Display</th><th>Text</th><th>Source</th></tr>
+      ${b.graphics.map(s=>`<tr><td>${esc(s.at)}</td><td>${esc(s.display)}</td><td>${esc(s.text)}</td><td>${esc(s.source)}</td></tr>`).join("")}</table></details>`:""}
+    ${b.cuts?`<details><summary>Cuts</summary><p style="margin:4px 0">${esc(b.cuts)}</p></details>`:""}
+    ${b.captions?`<details><summary>Full captions</summary><p style="margin:4px 0;white-space:pre-wrap">${esc(b.captions)}</p></details>`:""}
+    ${b.audio?`<details><summary>Audio</summary><p style="margin:4px 0">${esc(b.audio)}</p></details>`:""}
+    ${(b.questions||[]).length?`<div class="pp-note"><b>Claude decided these — change any you like:</b>${list(b.questions)}</div>`:""}
+    ${(b.warnings||[]).length?`<div class="pp-note crit"><b>Warnings</b>${list(b.warnings)}</div>`:""}
+    <div class="pp-row">${md.brief_md?`<a class="pp-link" href="${esc(md.brief_md)}" target="_blank">Full brief</a>`:""}${watchLink(job)}</div>
+    <div class="fld" style="margin-top:12px"><label>What should change? (only for "Request changes")</label>
+      <textarea data-pp-notes placeholder="e.g. Shorter hook, drop the second B-roll, bigger captions…"></textarea></div>
+    <div class="pp-row"><button class="btn pri" data-pp="approve_edit" ${me.canApprove?"":"disabled"}>✅ Approve — render it</button>
+      <button class="btn" data-pp="request_changes" ${me.canRun?"":"disabled"}>✏️ Request changes</button>
+      ${me.canRun?`<button class="btn sm" data-pp="cancel" style="margin-left:auto">Cancel job</button>`:""}</div>
+    ${me.canApprove?"":`<p class="hint" style="margin:8px 0 0">Only an owner or admin can approve.</p>`}`;
+}
+
+function finalView(job, c, me){
+  const seo = job.seo || {}, md = job.media || {}, m = S.mounted;
+  const draft = m.draft = m.draft || {
+    yt_title: (seo.yt&&seo.yt.title)||c.pre.title||"", yt_desc:(seo.yt&&seo.yt.description)||c.pre.desc||"",
+    yt_tags: ((seo.yt&&seo.yt.tags)||[]).join(", "), ig_caption:(seo.ig&&seo.ig.caption)||"",
+    // ticked by default: the platforms chosen on the card that have a rendered version
+    targets: (pl => ({ yt: !!md.yt && pl.includes("yt"), ig: !!md.ig && pl.includes("ig") }))(c.platforms&&c.platforms.length?c.platforms:[c.platform]) };
+  const sc = v => v==null ? "—" : Math.round(v);
+  const titles = [...(seo.original_title&&seo.original_title.title?[{...seo.original_title, why:"The card's original title"}]:[]), ...(seo.titles||[])];
+  return `<div class="pp-note"><b>✋ Check 2 — final check before posting.</b> Watch both versions, pick or edit the copy, choose where to post. Nothing goes live until Post is pressed.</div>
+    <div class="pp-vids">
+      ${md.yt?`<div><div class="lbl">YouTube Short</div><video controls preload="metadata" src="${esc(md.yt)}"></video></div>`:""}
+      ${md.ig?`<div><div class="lbl">Instagram Reel</div><video controls preload="metadata" src="${esc(md.ig)}"></video></div>`:""}</div>
+    ${job.outputs&&job.outputs.qc?`<p class="hint" style="margin:-4px 0 10px">QC: ${esc(job.outputs.qc)}</p>`:""}
+    ${(seo.keywords||[]).length?`<details open><summary>Keywords (vidIQ)</summary><table><tr><th>Keyword</th><th>Volume</th><th>Competition</th><th>Score</th></tr>
+      ${seo.keywords.map(k=>`<tr><td>${esc(k.keyword)}</td><td>${esc(k.volume??"—")}</td><td>${esc(k.competition??"—")}</td><td>${esc(k.score??"—")}</td></tr>`).join("")}</table></details>`:""}
+    ${titles.length?`<div class="lbl" style="margin-top:6px">Title options — click one to use it</div>
+      ${titles.map(t=>`<div class="pp-title ${t.title===draft.yt_title?"on":""}" data-pp-pick="${esc(t.title)}">
+        <div><div>${esc(t.title)}</div>${t.why?`<div class="hint" style="font-size:11px">${esc(t.why)}</div>`:""}</div>
+        <span class="pp-score" title="vidIQ title score">${sc(t.score)}</span></div>`).join("")}`:""}
+    ${seo.notes?`<div class="pp-note">${esc(seo.notes)}</div>`:""}
+    <div class="fld" style="margin-top:10px"><label>YouTube title <span class="pp-count ${draft.yt_title.length>100?"over":""}" data-pp-cnt>${draft.yt_title.length}/100</span></label>
+      <input data-pp-f="yt_title" value="${esc(draft.yt_title)}"></div>
+    <div class="fld"><label>YouTube description</label><textarea data-pp-f="yt_desc" rows="6">${esc(draft.yt_desc)}</textarea></div>
+    <div class="fld"><label>YouTube tags (comma separated)</label><input data-pp-f="yt_tags" value="${esc(draft.yt_tags)}"></div>
+    <div class="fld"><label>Instagram caption</label><textarea data-pp-f="ig_caption" rows="6">${esc(draft.ig_caption)}</textarea></div>
+    <div class="fld"><label>Post to</label><div class="pp-row">
+      <label><input type="checkbox" data-pp-t="yt" ${draft.targets.yt?"checked":""} ${md.yt?"":"disabled"}> YouTube</label>
+      <label><input type="checkbox" data-pp-t="ig" ${draft.targets.ig?"checked":""} ${md.ig?"":"disabled"}> Instagram</label></div></div>
+    ${(()=>{ const sl = S.mounted.h.slot && S.mounted.h.slot(), future = sl && sl.at > new Date(Date.now()+5*60000);
+      return `<div class="pp-row">
+        ${future?`<button class="btn pri" data-pp="schedule" ${me.canApprove?"":"disabled"}>🗓 Post at slot · ${esc(sl.label)}</button>`:""}
+        <button class="btn ${future?"":"pri"}" data-pp="post" ${me.canApprove?"":"disabled"}>🚀 Post now</button>
+        ${me.canApprove?"":`<span class="hint">Only an owner or admin can post.</span>`}</div>
+      ${!future?`<p class="hint" style="margin:6px 0 0">${sl?"The card's slot has passed —":"No posting slot on this card —"} set the scheduled date on the card to post at a slot instead.</p>`:""}`; })()}
+    <div class="fld" style="margin-top:14px"><label>Not happy? Say what to change</label><textarea data-pp-notes placeholder="e.g. Title should mention CUET 2026 · or · cut the last 3 seconds"></textarea></div>
+    <div class="pp-row"><button class="btn" data-pp="redo_seo" ${me.canRun?"":"disabled"}>🔁 Redo SEO</button>
+      <button class="btn" data-pp="back_to_edit" ${me.canRun?"":"disabled"}>↩ Back to edit</button>
+      ${me.canRun?`<button class="btn sm" data-pp="cancel" style="margin-left:auto">Cancel job</button>`:""}</div>`;
+}
+
+function scheduledView(job, me){
+  const at = job.post_at ? new Date(job.post_at) : null, pr = job.post_request || {};
+  const where = (pr.targets||[]).map(t=>t==="yt"?"YouTube":"Instagram").join(" + ");
+  return `<div class="pp-note"><b>🗓 Goes live ${at?esc(at.toLocaleString("en-GB",{weekday:"long",day:"numeric",month:"short",hour:"numeric",minute:"2-digit",hour12:true})):""}</b>
+      on ${esc(where)}, with exactly the text approved by ${esc(pr.approved_by||"the owner")}. Nothing else to do.</div>
+    ${pr.yt?`<p style="margin:0 0 4px;font-size:13px"><b>YouTube title:</b> ${esc(pr.yt.title)}</p>`:""}
+    ${pr.ig?`<p class="hint" style="margin:0 0 10px;white-space:pre-wrap">${esc((pr.ig.caption||"").slice(0,160))}${(pr.ig.caption||"").length>160?"…":""}</p>`:""}
+    <div class="pp-row"><button class="btn" data-pp="post_now" ${me.canApprove?"":"disabled"}>🚀 Post now instead</button>
+      <button class="btn" data-pp="unschedule" ${me.canApprove?"":"disabled"}>↩ Unschedule — back to the final check</button>
+      ${me.canRun?`<button class="btn sm" data-pp="cancel" style="margin-left:auto">Cancel job</button>`:""}</div>`;
+}
+function resultRows(job){
+  const p = job.posted || {};
+  return ["yt","ig"].filter(t=>p[t] && p[t].status && p[t].status!=="skipped").map(t=>{ const r=p[t];
+    return `<tr><td>${t==="yt"?"YouTube":"Instagram"}</td><td><span class="badge ${r.status==="posted"?"good":"crit"}">${esc(r.status)}</span></td>
+      <td>${r.url?`<a class="pp-link" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.url)}</a>`:esc(r.error||"")}</td></tr>`; }).join("");
+}
+// the links themselves are listed in the card's Post-production block
+function postedView(job){
+  const p = job.posted || {}, live = ["yt","ig"].filter(t=>p[t] && p[t].status==="posted").map(t=>t==="yt"?"YouTube":"Instagram");
+  return `<p style="margin:0;font-size:13px">✅ Live on <b>${esc(live.join(" + ")||"—")}</b>${job.post_request&&job.post_request.approved_by?` · approved by ${esc(job.post_request.approved_by)}`:""}.</p>
+    <p class="hint" style="margin:4px 0 0">${job.linked?"The links are on this card under Post-production → Published.":"Saving the links on this card…"}</p>`;
+}
+function postFailedView(job, c, me){
+  return `<div class="pp-note crit"><b>Posting didn't fully go through.</b> ${esc(job.error||"")}
+      <br><b>Check YouTube Studio / Instagram first</b> — if a post is already live there, don't post it again.</div>
+    ${job.posted?`<table><tr><th>Platform</th><th>Status</th><th>Link / error</th></tr>${resultRows(job)}</table>`:""}
+    ${watchLink(job)}
+    ${finalView(job, c, me)}`;
+}
+
+/* ------------------------------------------------------------ events */
+function wire(){
+  const m = S.mounted, { host, card:c, h } = m, job = S.jobs[c.id];
+  const q = s => host.querySelector(s);
+  const toast = msg => h.toast ? h.toast(msg) : alert(msg);
+  const notes = () => { const t=q("[data-pp-notes]"); return t ? t.value.trim() : ""; };
+  const run = async (b, act, extra) => {
+    b.disabled = true; const label = b.textContent; b.textContent = "…";
+    try{ await action(c.id, act, Object.assign({ card_info: cardInfo(c, h) }, extra||{})); m.draft = null; if(act==="start") m.raw = null; render(); poll(); }
+    catch(e){ b.disabled = false; b.textContent = label; toast(e.message); }
+  };
+
+  host.querySelectorAll("[data-copy]").forEach(b=>b.onclick=async()=>{
+    try{ await navigator.clipboard.writeText(b.dataset.copy); b.textContent="Copied"; setTimeout(()=>b.textContent="Copy",1400); }catch(_){ }
+  });
+
+  // raw clip: ask for a one-file upload link, then send the file straight to storage
+  const fileIn = q("[data-pp-file]"), drop = q("[data-pp-drop]");
+  if(fileIn) fileIn.onchange = () => { if(fileIn.files[0]) upload(fileIn.files[0]); };
+  if(drop && (S.me||{}).canRun){
+    drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+    drop.ondragleave = () => drop.classList.remove("over");
+    drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over");
+      const f = [...(e.dataTransfer.files||[])].find(x=>/^video\//.test(x.type) || /\.(mp4|mov|m4v|mkv)$/i.test(x.name));
+      if(f) upload(f); else toast("Drop a video file (.mp4 / .mov)"); };
+  }
+  async function upload(f){
+    const st = q("[data-pp-up]"), bar = q("[data-pp-bar]"), go = q('[data-pp="start"]');
+    const meta = preview(f);
+    if(go) go.disabled = true; bar.hidden = false; st.textContent = `Getting an upload link…`;
+    try{
+      const { data } = await call("/api/pipeline/upload-url", { team: team(), job: c.id, name: f.name, size: f.size });
+      await new Promise((ok, bad) => {
+        const x = new XMLHttpRequest(); x.open("PUT", data.url);
+        x.upload.onprogress = e => { if(e.lengthComputable){ const pc = Math.round(e.loaded/e.total*100); bar.firstChild.style.width = pc+"%"; st.textContent = `Uploading ${f.name}… ${pc}%`; } };
+        x.onload = () => x.status < 300 ? ok() : bad(new Error("Upload refused (" + x.status + ")"));
+        x.onerror = () => bad(new Error("Upload failed — check the connection"));
+        x.send(f);
+      });
+      m.raw = Object.assign({ file: data.file, name: f.name, size: f.size }, await meta);
+      render();
+    }catch(e){ st.textContent = e.message; bar.hidden = true; }
+  }
+
+  host.querySelectorAll("[data-pp-f]").forEach(el=>el.oninput=()=>{ m.draft[el.dataset.ppF] = el.value;
+    if(el.dataset.ppF==="yt_title"){ const n=q("[data-pp-cnt]"); n.textContent=el.value.length+"/100"; n.classList.toggle("over", el.value.length>100); } });
+  host.querySelectorAll("[data-pp-t]").forEach(el=>el.onchange=()=>{ m.draft.targets[el.dataset.ppT] = el.checked; });
+  host.querySelectorAll("[data-pp-pick]").forEach(el=>el.onclick=()=>{ m.draft.yt_title = el.dataset.ppPick; render(); });
+
+  host.querySelectorAll("[data-pp]").forEach(b=>b.onclick=()=>{
+    const act = b.dataset.pp;
+    if(act==="start"){
+      if(!m.raw) return toast("Upload the raw video first");
+      if(h.beforeStart) h.beforeStart();     // keeps the card's typed changes
+      return run(b, "start", { raw_file: m.raw.file, raw_name: m.raw.name });
+    }
+    if(act==="request_changes" || act==="back_to_edit"){
+      if(!notes()) return toast("Write what should change first");
+      return run(b, act, { notes: notes() });
+    }
+    if(act==="redo_seo") return run(b, act, { notes: notes() });
+    if(act==="cancel"){ if(!confirm("Stop this job? A cloud run that's already going may finish on its own; its results will be ignored.")) return; return run(b, "cancel"); }
+    if(act==="post_now"){
+      if(!confirm("Post it now instead of waiting for the slot? It goes live publicly.")) return;
+      return run(b, "post", { targets: (job.post_request && job.post_request.targets) || [] });
+    }
+    if(act==="post" || act==="schedule"){
+      const d = m.draft, t = Object.keys(d.targets).filter(k=>d.targets[k]);
+      if(!t.length) return toast("Tick YouTube, Instagram or both");
+      if(t.includes("yt") && !d.yt_title.trim()) return toast("The YouTube title is empty");
+      const where = t.map(x=>x==="yt"?"YouTube":"Instagram").join(" and ");
+      const sl = act==="schedule" && h.slot && h.slot();
+      if(!confirm(act==="schedule" ? `Schedule this for ${where} at ${sl.label}?\n\n${t.includes("yt")?"YouTube title: "+d.yt_title+"\n":""}It goes live by itself at that time.`
+        : `Post this to ${where} now?\n\n${t.includes("yt")?"YouTube title: "+d.yt_title+"\n":""}This goes live publicly.`)) return;
+      return run(b, act, { targets: t, post_at: sl ? sl.iso : undefined,
+        yt: { title: d.yt_title.trim(), description: d.yt_desc, tags: d.yt_tags.split(",").map(s=>s.trim()).filter(Boolean) },
+        ig: { caption: d.ig_caption } });
+    }
+    run(b, act);
+  });
+
+  // posted: put the link on the card and move it to Published (the card itself is saved by the app)
+  if(job && job.status==="posted" && !job.linked && h.onPosted && !m.linking){
+    const p = job.posted || {}, url = (p[c.platform] && p[c.platform].url) || (p.yt && p.yt.url) || (p.ig && p.ig.url) || "";
+    m.linking = true;
+    const links = {}; ["yt","ig"].forEach(t=>{ if(p[t] && p[t].url) links[t] = p[t].url; });
+    if(h.onPosted(url, links)) action(c.id, "mark_linked").then(()=>render()).catch(()=>{}).finally(()=>{ m.linking = false; });
+  }
+}
+
+window.PIPE = {
+  attach(root, hooks){ S.root = root; if(hooks) S.hooks = hooks; ensurePolling(); paintBadges(); },
+  job(cardId){ return S.jobs[cardId] || null; },
+  busy(cardId){ const j = S.jobs[cardId]; return !!j && BUSY.includes(j.status); },
+  cancel(cardId){ return action(cardId, "cancel"); },
+  // "✍️ Draft hook & talking points": a helper job of its own (<card>__s)
+  async script(card, h){ await action(card.id + "__s", "script", { card_info: cardInfo(card, h||{}) }); poll(); },
+  // "🔎 Fill with vidIQ": a small research job of its own (<card>__r)
+  async research(card, h){ await action(card.id + "__r", "research", { card_info: cardInfo(card, h||{}) }); poll(); },
+  badge(cardId){ return `<span data-pipe-badge="${esc(cardId)}">${badgeHtml(S.jobs[cardId])}</span>`; },
+  mount(host, card, helpers){
+    if(!host) return;
+    const keep = S.mounted && S.mounted.card.id===card.id ? S.mounted : {};
+    S.mounted = { host, card, h: helpers||{}, raw: keep.raw, draft: keep.draft, rsig: keep.rsig };
+    ensurePolling(); render(); poll();     // fresh status as soon as a card opens
+  },
+};
+})();

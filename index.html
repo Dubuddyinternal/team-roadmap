@@ -14,6 +14,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Social Media space: Summary (live YouTube numbers) / Ideation / Content Process / Schedule -->
 <script src="social-space.js"></script>
+<script src="pipeline.js"></script><!-- Claude edit & post panel on Content Process cards -->
+<script src="hinglish.js"></script><script src="dictate.js"></script><!-- 🎤 dictation in every text box -->
 <script src="wiki-utm.js"></script>
 <!-- Notifications: the 🔔 bell and pop-ups (notifications.js) -->
 <script src="notifications.js"></script>
@@ -1258,7 +1260,9 @@ body{margin:0}
 #pane-work.tabpane{padding-top:18px}
 #pane-summary .head-meta{margin-top:0}
 @media(max-width:820px){
-  .shell{grid-template-columns:1fr;grid-template-rows:auto;height:auto;overflow:visible}
+  /* minmax(0,…) + min-width:0: the column stays phone-wide, wide rows scroll inside instead of stretching the page */
+  .shell{grid-template-columns:minmax(0,1fr);grid-template-rows:auto;height:auto;overflow:visible}
+  .shell>*{min-width:0}
   .rail{border-right:none;border-bottom:1px solid var(--line)}
   .pane{overflow:visible}
   .head-row{flex-wrap:wrap}
@@ -4709,6 +4713,8 @@ function savePlace(){
     sessionStorage.setItem(placeKey(), JSON.stringify({
       view, lastWs, activeModule, activeCspace, activeSection, activeRmap, devSpace, activeCycle,
       okrView2, paneTab, contentMode, page, adminView, mtView, y: window.scrollY || 0,
+      socialView, discView, pdtView, campView, watchView, horizonView, // the tab inside a space
+      sxOpen: (window.SX && SX.openState) ? SX.openState() : null,     // a card or idea open in Social Media
     }));
   }catch(_){ }
 }
@@ -4734,9 +4740,15 @@ function restorePlace(){
     activeCspace = p.activeCspace || null; activeSection = p.activeSection || "all";
     activeRmap = p.activeRmap || null; devSpace = p.devSpace || null; activeCycle = p.activeCycle || activeCycle;
     if(p.okrView2) okrView2 = p.okrView2; if(p.paneTab) paneTab = p.paneTab; if(p.contentMode) contentMode = p.contentMode;
+    if(typeof p.socialView === "string") socialView = p.socialView;
+    if(typeof p.discView === "string") discView = p.discView;
+    if(typeof p.pdtView === "string") pdtView = p.pdtView;
+    if(typeof p.campView === "string") campView = p.campView;
+    if(typeof p.watchView === "string") watchView = p.watchView;
+    if(typeof p.horizonView === "string") horizonView = p.horizonView;
     // and that this person may still see
     if(typeof spaceViewAllowed === "function" && !spaceViewAllowed()) throw 0;
-    _pendingPlace = { page: p.page || "", adminView: p.adminView, mtView: p.mtView, y: p.y || 0 };
+    _pendingPlace = { page: p.page || "", adminView: p.adminView, mtView: p.mtView, y: p.y || 0, sxOpen: p.sxOpen || null };
     return true;
   }catch(_){
     // put the old values back
@@ -4755,6 +4767,7 @@ function restorePageAfterRender(){
     else if(pp.page === "team"){ openTeam(); if(pp.mtView && pp.mtView !== mtView){ mtView = pp.mtView; renderTeamPage(); } }
     else if(pp.page === "kim") openKim();
     if(pp.y) setTimeout(()=> window.scrollTo(0, pp.y), 50);
+    if(pp.sxOpen && view === "social" && window.SX && SX.reopen) setTimeout(()=> SX.reopen(pp.sxOpen), 80);
   }catch(_){ }
 }
 function defaultView(){

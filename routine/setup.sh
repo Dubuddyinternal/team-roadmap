@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# DRAFT, to be confirmed by the first cloud test run.
+# Setup script for the routine's cloud environment (claude.ai → Environment → Setup script).
+# It runs as root on Ubuntu 24.04 when a session starts; the result is cached if it finishes in about 5 minutes.
+# Expected repo layout:  routine/  skills/dubuddy-short/  video-use/  sfx/  (the SFX library the skill uses)
+set -euo pipefail
+REPO="$(pwd)"
+
+apt-get update -qq
+apt-get install -y -qq ffmpeg fonts-noto fonts-noto-color-emoji fonts-noto-core >/dev/null
+
+command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+
+# put the skill and video-use where the skill's own commands look for them
+mkdir -p ~/.agents/skills ~/.claude/skills ~/Developer
+ln -sfn "$REPO/skills/dubuddy-short" ~/.agents/skills/dubuddy-short
+ln -sfn ~/.agents/skills/dubuddy-short ~/.claude/skills/dubuddy-short
+ln -sfn "$REPO/video-use" ~/Developer/video-use
+(cd ~/Developer/video-use && uv sync -q)
+python3 -m pip install -q --break-system-packages pillow
+
+# warm the HyperFrames versions the skill pins (renderer + its headless browser)
+npx --yes hyperframes@0.8.111 --version >/dev/null 2>&1 || true
+npx --yes hyperframes@0.8.34 --version >/dev/null 2>&1 || true
+
+# the skill reads the SFX library from this env var when set (sfx/ in the repo)
+echo "export DUBUDDY_SFX_DIR=\"$REPO/sfx\"" >> ~/.bashrc
+echo "setup done"
