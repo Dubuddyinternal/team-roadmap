@@ -225,7 +225,7 @@ tr.rowlink:hover .td-idea{color:var(--accent-ink);text-decoration:underline;text
 .av{width:21px;height:21px;border-radius:50%;display:grid;place-items:center;font-size:9.5px;font-weight:700;color:#fff;flex-shrink:0}
 .cbtn{border:1px solid var(--line-2);border-radius:var(--r-s);padding:3px 8px;font-size:11px;font-family:var(--mono);color:var(--ink-3);display:inline-flex;gap:4px;align-items:center}
 .cbtn.has{border-color:var(--accent);color:var(--accent)}
-.hook{font-family:var(--hand);font-size:16.5px;line-height:1.3;color:var(--ink);min-width:150px;max-width:210px;display:block}
+.hook{font-family:var(--sans);font-size:13px;line-height:1.45;color:var(--ink);min-width:150px;max-width:210px;display:block}
 .cta{font-size:12px;color:var(--ink-2);min-width:120px;max-width:170px}
 .stsel{font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.04em;border:1px solid transparent;border-radius:5px;padding:4px 6px;min-width:112px;cursor:pointer;background:var(--surface-2);color:var(--ink-3)}
 .stsel.good{background:var(--good-soft);color:var(--good)} .stsel.warn{background:var(--warn-soft);color:var(--warn)}
@@ -362,7 +362,7 @@ details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var
 .fld textarea{resize:vertical;min-height:62px;font-family:inherit}
 .fld.bad input,.fld.bad select,.fld.bad textarea{border-color:var(--crit)}
 .fld .req{color:var(--crit);font-family:var(--mono);font-size:10px;margin-left:4px;letter-spacing:0}
-.fld .hookin{font-family:var(--hand);font-size:17px}
+.fld .hookin{font-family:var(--sans);font-size:13px}
 .otherin{margin-top:6px;border-style:dashed!important}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .block{border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:14px;background:var(--surface-4)}
