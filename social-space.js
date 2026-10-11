@@ -206,6 +206,8 @@ th{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:up
 td{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top;font-size:13px}
 tr:last-child td{border-bottom:none}
 tbody tr:hover{background:var(--surface-4)}
+tr.rowlink{cursor:pointer}
+tr.rowlink:hover .td-idea{color:var(--accent-ink);text-decoration:underline;text-underline-offset:3px}
 .td-idea{font-weight:600;min-width:218px;max-width:300px}
 .td-idea a{text-decoration:none}
 .td-idea a:hover{text-decoration:underline}
@@ -251,9 +253,108 @@ tbody tr:hover{background:var(--surface-4)}
 
 .scrim{position:fixed;inset:0;background:rgba(10,8,5,.42);z-index:9960;opacity:0;pointer-events:none;transition:opacity .16s}
 .scrim.on{opacity:1;pointer-events:auto}
-.drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--bg);border-left:1px solid var(--line);z-index:9970;transform:translateX(100%);transition:transform .2s ease;overflow-y:auto;padding:20px 22px calc(40px + env(safe-area-inset-bottom,0px));padding-top:calc(20px + env(safe-area-inset-top,0px));font-family:var(--sans);font-size:14px;line-height:1.5;color:var(--ink)}
-.drawer.on{transform:none}
-.dr-h{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:16px}
+/* the opened card / idea: a large window in the middle of the screen (full screen on phones) */
+.drawer{position:fixed;top:50%;left:50%;width:min(680px,calc(100% - 48px));max-height:calc(100vh - 48px);background:var(--bg);
+  border:1px solid var(--line);border-radius:16px;box-shadow:0 24px 70px rgba(10,8,5,.28);z-index:9970;
+  transform:translate(-50%,-50%) scale(.97);opacity:0;pointer-events:none;transition:transform .18s ease,opacity .18s ease;
+  overflow-y:auto;overscroll-behavior:contain;padding:0 28px 28px;font-family:var(--sans);font-size:14px;line-height:1.5;color:var(--ink)}
+.drawer.on{transform:translate(-50%,-50%);opacity:1;pointer-events:auto}
+.drawer.wide{width:min(1100px,calc(100% - 48px))}
+@media(max-width:700px){.drawer,.drawer.wide{top:0;left:0;width:100%;max-height:none;height:100%;border-radius:0;border:none;transform:translateY(12px);padding:0 16px calc(28px + env(safe-area-inset-bottom,0px))}
+  .drawer.on{transform:none}}
+.dr-h{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin:0 -28px 18px;padding:20px 28px 14px;
+  position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+@media(max-width:700px){.dr-h{margin:0 -16px 16px;padding:calc(14px + env(safe-area-inset-top,0px)) 16px 12px}}
+.steps{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin-top:10px;font-family:var(--mono);font-size:10.5px;letter-spacing:.04em}
+.step{padding:3px 8px;border-radius:99px;color:var(--ink-3);border:1px solid var(--line)}
+.step.done{color:var(--good);border-color:color-mix(in srgb,var(--good) 35%,var(--line));background:var(--good-soft)}
+.step.now{color:#fff;background:var(--accent);border-color:var(--accent);font-weight:600}
+.step-sep{color:var(--line-2)}
+.step-pipe{margin-left:8px}
+.dr-more{margin:18px 0 0;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.dr-more>summary{cursor:pointer;padding:12px 16px;font-weight:600;font-size:13px;color:var(--ink-2)}
+.dr-more[open]>summary{border-bottom:1px solid var(--line)}
+.dr-more>.dr-cols{padding:16px}
+details.manual{margin:0 0 12px}
+table.ideas{min-width:0}
+table.ideas td{vertical-align:top}
+table.ideas .td-idea{min-width:0;max-width:none;width:38%}
+table.ideas .sub{font-size:11.5px;color:var(--ink-3);font-weight:400;margin-top:3px}
+.kw1{font-size:12px}.kw1 span{color:var(--ink-3);font-family:var(--mono);font-size:11px}
+.qdec{display:flex;gap:5px;white-space:nowrap}
+details.isec{margin:0 0 14px}
+.movesel{margin-top:6px;min-width:0}
+details.isec>summary{display:flex;align-items:center;gap:10px;cursor:pointer;padding:6px 0 10px;list-style:none}
+details.isec>summary::-webkit-details-marker{display:none}
+details.isec>summary h3{margin:0;font-size:15px}
+details.isec>summary::before{content:"▸";color:var(--ink-3);font-size:12px;transition:transform .15s}
+details.isec[open]>summary::before{transform:rotate(90deg)}
+details.isec .count{font-family:var(--mono);font-size:11px;padding:1px 7px;border-radius:99px;background:var(--surface-2);color:var(--ink-2)}
+details.isec .hint{font-size:12px}
+.idea-next{margin:8px 0 0;font-size:12.5px;color:var(--ink-2)}
+.decide-row{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:8px}
+.decide-row .btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 8px;font-weight:600}
+.decide-row .btn small{font-weight:500;font-size:10.5px;opacity:.8}
+.idea-rs{display:flex;gap:6px;align-items:center;margin-top:6px;font-size:11.5px;color:var(--ink-3)}
+.pp-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.platpick{display:flex;gap:8px;flex-wrap:wrap}
+.ficon{display:inline-block;font-size:14px;line-height:1;margin-right:2px;vertical-align:-1px}
+.ftabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+.ftab{border:1px solid var(--line-2);background:var(--surface);border-radius:99px;padding:6px 12px;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--ink-2);font-family:inherit;display:inline-flex;gap:6px;align-items:center}
+.ftab.on{background:var(--ink);border-color:var(--ink);color:#fff}.ftab.on .count{background:rgba(255,255,255,.18);color:#fff}
+.ftab.ghost{border-style:dashed;margin-left:auto}
+.fpick{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+.fpick-c{display:flex;flex-direction:column;gap:6px;align-items:flex-start;text-align:left;border:1.5px solid var(--line-2);border-radius:var(--r);padding:16px;background:var(--surface);cursor:pointer;font-family:inherit;color:var(--ink)}
+.fpick-c:hover{border-color:var(--accent);background:var(--accent-soft)}
+.fpick-c.add{border-style:dashed}
+.fpick-i{font-size:30px;line-height:1}.fpick-c b{font-size:15px}
+.fpick-p{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.ftypes{display:flex;gap:6px;flex-wrap:wrap}
+.linkbtn{border:none;background:none;color:var(--accent-ink);font:inherit;font-size:11px;text-decoration:underline;cursor:pointer;margin-left:6px;padding:0;letter-spacing:0;text-transform:none}
+.pp-chk{display:flex;align-items:center;gap:6px;border:1px solid var(--line-2);border-radius:var(--r-s);padding:7px 10px;font-size:12.5px;cursor:pointer;background:var(--surface)}
+.pp-chk.on{border-color:var(--accent);background:var(--accent-soft)}
+.pp-chk input{margin:0}
+.fld .pp-chk{display:flex;margin:0;text-transform:none;letter-spacing:0;font-family:var(--sans);font-size:12.5px;font-weight:500;color:var(--ink)}
+.pp-chk input[type=checkbox]{width:auto;accent-color:var(--accent)}
+.pp-mini{display:flex;gap:10px;margin:0 0 10px}
+.pp-mini>div{width:118px}.pp-mini video{width:118px;aspect-ratio:9/16;background:#000;border-radius:8px;display:block}
+.pp-mini .lbl{margin-bottom:3px}
+.pub-list{margin:0 0 10px}
+.pub-row{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px;min-width:0}
+.pub-row a{color:var(--accent-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.pub-pl{font-weight:600;width:74px;flex:none}
+.pre-miss{font-size:11.5px;font-weight:600;color:var(--crit);text-align:right;max-width:62%}
+.pre-step{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}
+.pre-step:first-of-type{border-top:none;padding-top:0;margin-top:4px}
+.pre-h{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:13px}
+.pre-h .btn{margin-left:auto}.pre-h .hint{margin-left:auto;font-size:11.5px}
+.pre-n{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:var(--surface-2);border:1px solid var(--line-2);color:var(--ink-2)}
+.pre-n.ok{background:var(--good);border-color:var(--good);color:#fff}
+.pre-note{margin:-4px 0 10px;font-size:12px}
+details.srcd>summary{cursor:pointer;font-size:12px;color:var(--ink-2);list-style:none}
+details.srcd>summary::-webkit-details-marker{display:none}
+.srcd-ch{color:var(--accent-ink);font-weight:600;margin-left:6px;text-decoration:underline;text-underline-offset:2px}
+details.srcd[open] .srcd-ch{display:none}
+.ttl-ideas{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:7px}
+.ttl-chip{border:1px solid var(--line-2);background:var(--surface);border-radius:99px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--ink);font-family:inherit}
+.ttl-chip b{font-family:var(--mono);color:var(--accent-ink);margin-left:4px}
+.ttl-chip:hover,.ttl-chip.on{border-color:var(--accent);background:var(--accent-soft)}
+.dr-foot{position:sticky;bottom:0;z-index:5;margin:18px -28px -28px;padding:14px 28px;background:var(--bg);border-top:1px solid var(--line);align-items:center}
+@media(max-width:700px){.dr-foot{margin:18px -16px -28px;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px))}}
+.dirty{font-size:12px;font-weight:600;color:var(--warn)}
+.rs{margin:-2px 0 16px;padding:12px;border:1px solid color-mix(in srgb,var(--accent) 25%,var(--line));border-radius:var(--r-s);background:var(--surface)}
+.rs-empty{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.rs-h{display:flex;gap:10px;align-items:center;margin-bottom:8px}.rs-h .btn{margin-left:auto}
+table.rs-t{min-width:0;width:100%;font-size:12px;margin-bottom:10px}table.rs-t th,table.rs-t td{padding:5px 6px;white-space:normal}
+.rs-prim td{background:var(--good-soft)}
+.rs-title{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+.rs-title span:first-child{flex:1}.rs-score{font-family:var(--mono);font-weight:600}
+.rs-spin{display:inline-block;width:12px;height:12px;border-radius:50%;border:2px solid var(--line-2);border-top-color:var(--accent);animation:rsspin .8s linear infinite;margin-right:6px;vertical-align:-1px}
+@keyframes rsspin{to{transform:rotate(360deg)}}
+details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var(--accent-ink);margin-bottom:8px}
+.dr-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px;align-items:start}
+.dr-cols>.dr-col>.block:first-child,.dr-cols>.dr-col>.fld:first-child{margin-top:0}
+@media(max-width:900px){.dr-cols{grid-template-columns:minmax(0,1fr)}}
 .dr-h h3{font-size:18px;letter-spacing:-.025em}
 .fld{margin-bottom:12px}
 .fld label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:5px;font-weight:500}
@@ -273,10 +374,11 @@ tbody tr:hover{background:var(--surface-4)}
 .livegrid div{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-s);padding:8px 10px}
 .livegrid b{display:block;font-size:17px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
 
-.kwed{display:grid;grid-template-columns:1fr 92px 96px 30px;gap:7px;margin-bottom:7px;align-items:center}
+.kwed{display:grid;grid-template-columns:minmax(0,1fr) 84px 88px 104px 30px;gap:7px;margin-bottom:7px;align-items:center}
 .kwed input,.kwed select{width:100%;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-s);padding:7px 9px;font-size:12.5px}
 .kwed .x{border:1px solid var(--line-2);border-radius:var(--r-s);padding:6px 0;text-align:center;color:var(--ink-3);font-size:13px}
-.kwhead{display:grid;grid-template-columns:1fr 92px 96px 30px;gap:7px;margin-bottom:5px}
+.kwed.prim input[data-kk="kw"]{border-color:color-mix(in srgb,var(--good) 45%,var(--line-2));background:var(--good-soft)}
+.kwhead{display:grid;grid-template-columns:minmax(0,1fr) 84px 88px 104px 30px;gap:7px;margin-bottom:5px}
 .kwhead span{font-family:var(--mono);font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3)}
 
 .drop{border:1.5px dashed var(--line-2);border-radius:var(--r-s);padding:14px;text-align:center;background:var(--surface);margin-bottom:10px}
@@ -325,7 +427,7 @@ tbody tr:hover{background:var(--surface-4)}
 
 @media (max-width:860px){
   .grid2{grid-template-columns:1fr}
-  .kwed,.kwhead{grid-template-columns:1fr 80px 84px 28px}
+  .kwed,.kwhead{grid-template-columns:minmax(0,1fr) 70px 74px 92px 28px}
   .livegrid{grid-template-columns:1fr 1fr}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -338,9 +440,28 @@ const DEFAULT_REG = {
   source:   { keyword:"Keyword research", comment:"Student comment", trend:"Trend", product:"Product" },
   tool:     { vidiq:"vidIQ", trends:"Google Trends", suggest:"YouTube suggest", ahrefs:"Ahrefs", manual:"Manual / none" }
 };
+/* Content types: what an idea becomes. Each has its own icon, the platforms it can go to, its video types, and
+   whether Claude can edit it (only vertical videos that go to Shorts / Reels). Kept in space.sx.formats; the team
+   can add more (⚙ Content types on the Ideation tab). */
+const DEFAULT_FORMATS = [
+  { key:"short", name:"Shorts / Reels", icon:"📱", plats:["yt","ig"], defPlats:["yt","ig"], vtypes:["short","reel"], video:true, claude:true,
+    hint:"Vertical video up to 60s — a YouTube Short and/or an Instagram Reel. Claude can edit it." },
+  { key:"long", name:"Long video", icon:"🎬", plats:["yt"], defPlats:["yt"], vtypes:["long","live"], video:true, claude:false,
+    hint:"A full YouTube video (or a live stream). YouTube only." },
+  { key:"post", name:"Post", icon:"🖼️", plats:["yt","ig"], defPlats:["ig"], vtypes:["image","carousel"], video:false, claude:false,
+    hint:"An image or carousel — an Instagram post or a YouTube community post." },
+];
+let FORMATS=DEFAULT_FORMATS;
+const fmtOf = x => FORMATS.find(f=>f.key===(x&&x.format)) || FORMATS[0];
+// older records had no type: work it out from the video type
+function guessFormat(vtype){ return vtype==="long"||vtype==="live" ? "long" : vtype==="image"||vtype==="carousel" ? "post"
+  : (FORMATS.find(f=>(f.vtypes||[]).includes(vtype))||FORMATS[0]).key; }
+const fmtIcon = x => `<span class="ficon" title="${esc(fmtOf(x).name)}">${fmtOf(x).icon}</span>`;
+
 const STAGES = [
-  {id:"todo",label:"To Do"},{id:"draft",label:"Draft"},{id:"inprogress",label:"In Progress"},
-  {id:"inreview",label:"In Review"},{id:"approved",label:"Approved"},{id:"published",label:"Published"}
+  // the work as it really happens; ids kept from the old board (To Do · Draft · In Progress · In Review · Approved · Published)
+  {id:"todo",label:"Ideas"},{id:"draft",label:"To shoot"},{id:"inprogress",label:"Editing"},
+  {id:"inreview",label:"Your check"},{id:"approved",label:"Scheduled"},{id:"published",label:"Live"}
 ];
 const OLD_COL = { todo:"todo", draft:"draft", progress:"inprogress", review:"inreview", approved:"approved", published:"published" };
 const REJECT_REASONS = ["Keyword too broad","Search volume too low","Already covered","Off-brand for Dubuddy","Wrong format for the topic","Not enough to say","Timing is wrong"];
@@ -362,6 +483,10 @@ function normalize(space){
       s.cards.push(c); });
   }
   s.ideas = Array.isArray(s.ideas) ? s.ideas : [];
+  // content types: the built-in three (their settings can be changed) + any the team added
+  const fm = Array.isArray(s.formats) ? s.formats.filter(f=>f&&f.key&&f.name) : [];
+  s.formats = DEFAULT_FORMATS.map(d=>Object.assign({}, d, fm.find(f=>f.key===d.key)||{})).concat(fm.filter(f=>!DEFAULT_FORMATS.some(d=>d.key===f.key)));
+  FORMATS = s.formats.filter(f=>!f.hidden).length ? s.formats : DEFAULT_FORMATS;
   s.cards = Array.isArray(s.cards) ? s.cards : [];
   s.reg = s.reg && typeof s.reg==="object" ? s.reg : {};
   Object.keys(DEFAULT_REG).forEach(k=>{ s.reg[k] = Object.assign({}, DEFAULT_REG[k], s.reg[k]||{}); });
@@ -382,9 +507,14 @@ function normalize(space){
   const fill=(o,d)=>{ Object.keys(d).forEach(k=>{ if(o[k]===undefined || o[k]===null && typeof d[k]==="string") o[k]=d[k]; }); return o; };
   s.ideas.forEach(i=>{ fill(i, blankIdea({ id:i.id||uid("i"), created:i.created||today() }));
     i.comments = Array.isArray(i.comments) ? i.comments : []; i.keywords = Array.isArray(i.keywords) ? i.keywords : [];
-    if(!STATUS_UI[i.status]) i.status="new"; });
+    if(!STATUS_UI[i.status]) i.status="new";
+    i.platforms=plats(i); i.platform=i.platforms[0];
+    if(!i.format || !s.formats.some(f=>f.key===i.format)) i.format=guessFormat(i.vtype); });
   s.cards.forEach(c=>{ fill(c, blankCard({ id:c.id||uid("c") })); c.pre = c.pre || {}; c.pre.keywords = Array.isArray(c.pre.keywords) ? c.pre.keywords : [];
-    c.post = c.post || {reel:null,thumb:null,postUrl:""}; if(!STAGES.some(x=>x.id===c.stage)) c.stage="todo"; });
+    c.post = c.post || {reel:null,thumb:null,postUrl:""}; if(!STAGES.some(x=>x.id===c.stage)) c.stage="todo";
+    c.platforms=plats(c); c.platform=c.platforms[0];
+    if(!c.format || !s.formats.some(f=>f.key===c.format)) c.format=guessFormat(c.vtype);
+    c.post.links = c.post.links && typeof c.post.links==="object" ? c.post.links : (c.post.postUrl ? {[c.platform]:c.post.postUrl} : {}); });
   space.sx = s;
   return s;
 }
@@ -432,6 +562,44 @@ const vtag = v => `<span class="tag" style="background:color-mix(in srgb,${vtype
 function platColor(k){ return k==="yt"?"var(--c1)":k==="ig"?"var(--c3)":(hue(k)%2?"var(--c2)":"var(--c4)"); }
 function platShort(k){ const l=regLabel("platform",k)||k; return k==="yt"?"YT":k==="ig"?"INSTA":l.toUpperCase().slice(0,7); }
 const ptag = k => `<span class="plat" style="background:color-mix(in srgb,${platColor(k)} 15%,transparent);color:${platColor(k)}">${esc(platShort(k))}</span>`;
+/* One video can go to several platforms (a vertical video = a YouTube Short AND an Instagram Reel).
+   .platforms holds them all; .platform stays the first one, which the numbers and filters still use. */
+const plats = x => (x && Array.isArray(x.platforms) && x.platforms.length) ? x.platforms : [(x && x.platform) || "ig"];
+const both = x => plats(x).includes("yt") && plats(x).includes("ig");
+const ptags = x => plats(x).map(ptag).join("");
+// "short" on a card going to both = one vertical video, posted as a Short and as a Reel
+const vtagFor = x => both(x) && (x.vtype==="short"||x.vtype==="reel")
+  ? `<span class="tag" style="background:color-mix(in srgb,${vtypeColor("short")} 15%,transparent);color:${vtypeColor("short")}">short + reel</span>` : vtag(x.vtype);
+// which video types make sense for the chosen platforms (a type tied to one platform only shows for it)
+function vtypeOptions(pl,fmt){
+  if(fmt && (fmt.vtypes||[]).length){   // the type decides; on two platforms a Short and a Reel are the same vertical video
+    let v=fmt.vtypes.filter(k=>REG.vtype[k]!==undefined || k===fmt.key);
+    const set=new Set(pl);
+    v=v.filter(k=>!TYPE_PLAT[k] || set.has(TYPE_PLAT[k]) || (set.has("yt")&&set.has("ig")&&(k==="short"||k==="reel")));
+    if(set.has("yt")&&set.has("ig")) v=v.filter(k=>k!=="reel");
+    return v.length?v:[fmt.vtypes[0]];
+  }
+  const set=new Set(pl), on=k=>!TYPE_PLAT[k] || set.has(TYPE_PLAT[k]) || (k==="live");
+  const out=Object.keys(REG.vtype).filter(on);
+  if(set.has("yt")&&set.has("ig")) return out.filter(k=>k!=="reel" && k!=="long" && k!=="carousel" && k!=="image");
+  return out;
+}
+function vtypeSelect(id,val,pl,fmt){
+  const isBoth=pl.includes("yt")&&pl.includes("ig"), opts=vtypeOptions(pl,fmt);
+  if(isBoth && val==="reel") val="short";
+  if(!opts.includes(val)) val=opts[0];
+  return `<select id="${id}">${opts.map(k=>`<option value="${k}" ${val===k?"selected":""}>${esc(isBoth&&k==="short"?"Short + Reel (vertical video)":vtypeLabel(k))}</option>`).join("")}
+    <option value="__other">+ Write another…</option></select>
+   <input id="${id}-other" class="otherin" placeholder="e.g. Podcast clip, Story" hidden>`;
+}
+// platform checkboxes (YouTube, Instagram, and any the team added)
+function platPicker(id,pl,fmt){
+  const allowed=fmt&&(fmt.plats||[]).length?fmt.plats:Object.keys(REG.platform);
+  return `<div class="platpick" id="${id}">${allowed.filter(k=>REG.platform[k]!==undefined).map(k=>`<label class="pp-chk ${pl.includes(k)?"on":""}">
+    <input type="checkbox" value="${k}" ${pl.includes(k)?"checked":""}> ${ptag(k)} ${esc(regLabel("platform",k))}</label>`).join("")}</div>`;
+}
+function readPlats(id,fallback){ const el=$("#"+id); if(!el) return fallback;
+  const v=[...el.querySelectorAll("input:checked")].map(x=>x.value); return v.length?v:fallback; }
 function toast(m){ const t=$("#toast"); if(!t) return; t.textContent=m; t.classList.add("on"); clearTimeout(t._x); t._x=setTimeout(()=>t.classList.remove("on"),m.length>80?6000:2600); }
 
 // every change goes through here: the app re-draws and saves for the team
@@ -455,13 +623,22 @@ function regAdd(kind,label){
 function gResearch(p){ const k=p.keywords||[]; const prim=k.find(x=>x.rank==="primary")||k[0];
   return !!(p.source && p.tool && prim && prim.kw && prim.vol!=null && p.why); }
 function gCopy(p){ return !!(p.title && p.desc && p.hashtags); }
-function gAssets(c){ return !!(c.post?.reel && c.post?.postUrl && (c.platform!=="yt" || c.post?.thumb)); }
-function gateFor(f){ return f==="todo"?"research":f==="inprogress"?"copy":f==="approved"?"assets":null; }
+function gEdited(c){   // an edited video (Claude's or your own) + a thumbnail where YouTube needs one
+  const j=window.PIPE&&PIPE.job(c.id), byClaude=!!(j&&j.media&&(j.media.yt||j.media.ig));
+  return !!((c.post?.reel||byClaude) && (!plats(c).includes("yt") || c.vtype!=="long" || c.post?.thumb)); }
+function gAssets(c){
+  const j=window.PIPE&&PIPE.job(c.id), byClaude=!!(j&&j.media&&(j.media.yt||j.media.ig));   // Claude's render counts as the edited file
+  return !!((c.post?.reel||byClaude) && c.post?.postUrl && (!plats(c).includes("yt") || c.vtype!=="long" || c.post?.thumb)); }
+// leaving Ideas needs research · leaving Editing needs the edited video · leaving Your check needs the copy · going Live needs the link
+function gateFor(f){ return f==="todo"?"research":f==="inprogress"?"edited":f==="inreview"?"copy":f==="approved"?"live":null; }
 function gatePass(c,g){ if(g==="research") return gResearch(c.pre)||!!c.override;
-  if(g==="copy") return gCopy(c.pre); if(g==="assets") return gAssets(c); return true; }
+  if(g==="copy") return gCopy(c.pre); if(g==="edited") return gEdited(c); if(g==="live") return !!c.post?.postUrl;
+  if(g==="assets") return gAssets(c); return true; }
 const GATE_MSG = { research:"Research block incomplete — needs idea source, research tool, a primary keyword with its volume, and why this idea.",
-  copy:"Title, description and hashtags must be confirmed before review.",
-  assets:"Post-production incomplete — needs the edited file, the post link, and a thumbnail for YouTube." };
+  copy:"Title, description and hashtags must be set before it's scheduled.",
+  edited:"Needs the edited video (Claude's or your own) — and a thumbnail for long YouTube videos.",
+  live:"Needs the live post link — Claude adds it when it posts.",
+  assets:"Post-production incomplete — needs the edited video (Claude's or your own), the post link, and a thumbnail for long YouTube videos." };
 function canMove(c,to){ const fi=STAGES.findIndex(s=>s.id===c.stage), ti=STAGES.findIndex(s=>s.id===to);
   if(ti<=fi) return {ok:true};
   for(let i=fi;i<ti;i++){ const g=gateFor(STAGES[i].id); if(g&&!gatePass(c,g)) return {ok:false,msg:GATE_MSG[g]}; }
@@ -496,12 +673,13 @@ function ytId(url){
 }
 // Instagram links: /p/<code>/, /reel/<code>/, /reels/<code>/, /tv/<code>/
 function igCode(url){ const m=/instagram\.com\/(?:[^/]+\/)?(?:p|reels?|tv)\/([A-Za-z0-9_-]+)/.exec(String(url||"")); return m?m[1]:null; }
-function livePost(c){ if(!c) return null; const u=c.post&&c.post.postUrl;
+function livePost(c){ if(!c) return null; const u=(c.post&&c.post.links&&c.post.links[c.platform])||(c.post&&c.post.postUrl);
   if(c.platform==="yt"){ const id=ytId(u); return id ? LIVE.posts.find(p=>p.platform==="youtube"&&p.external_id===id) || null : null; }
   if(c.platform==="ig"){ const k=igCode(u); return k ? LIVE.posts.find(p=>p.platform==="instagram"&&igCode(p.url)===k) || null : null; }
   return null; }
-function cardForVideo(id){ return CARDS.find(c=>c.platform==="yt" && ytId(c.post&&c.post.postUrl)===id) || null; }
-function cardForIg(url){ const k=igCode(url); return k ? CARDS.find(c=>c.platform==="ig" && igCode(c.post&&c.post.postUrl)===k) || null : null; }
+const linkOf = (c,pl) => (c.post&&c.post.links&&c.post.links[pl]) || (c.platform===pl&&c.post&&c.post.postUrl) || "";
+function cardForVideo(id){ return CARDS.find(c=>plats(c).includes("yt") && ytId(linkOf(c,"yt"))===id) || null; }
+function cardForIg(url){ const k=igCode(url); return k ? CARDS.find(c=>plats(c).includes("ig") && igCode(linkOf(c,"ig"))===k) || null : null; }
 // Instagram counts as connected once the sync has brought anything back
 function igLive(){ return LIVE.snaps.some(r=>r.platform==="instagram") || LIVE.posts.some(p=>p.platform==="instagram"); }
 
@@ -1500,7 +1678,7 @@ function detailHTML(key){
     color:k==="accepted"?"var(--good)":k==="rejected"?"var(--crit)":k==="under_review"?"var(--warn)":"var(--ink-3)"}));
   const ideaRow=i=>{ const c=vC.find(x=>x.ideaId===i.id);
     return `<tr ${c?`data-card="${c.id}" style="cursor:pointer"`:""}><td class="td-idea">${esc(i.idea)}</td><td>${who(i.by)}</td><td class="vol">${dmy(i.created)}</td>
-      <td>${ptag(i.platform)} ${vtag(i.vtype)}</td><td><span class="badge ${STATUS_UI[i.status].cls||"mute"}">${STATUS_UI[i.status].label}</span></td>
+      <td>${ptags(i)} ${vtagFor(i)}</td><td><span class="badge ${STATUS_UI[i.status].cls||"mute"}">${STATUS_UI[i.status].label}</span></td>
       <td>${c?`<span class="badge mute">${esc(STAGES.find(s=>s.id===c.stage).label)}</span>`:"—"}</td></tr>`; };
 
   if(key==="ideas"){
@@ -1545,7 +1723,7 @@ function detailHTML(key){
           ["Fastest",done.length?done[done.length-1].d+" d":"—",done.length?cardTitle(done[done.length-1].c):""],["Slowest",done.length?done[0].d+" d":"—",done.length?cardTitle(done[0].c):""]])
       + `<div class="dgrid">${hbars("Average days by video type",g.map(x=>({label:x.label,v:avg(x.list,y=>y.d),color:x.color,text:r1(avg(x.list,y=>y.d))+" d"})))}</div>`
       + dtable("Each published card",["Card","Type","Accepted","Published","Days"],done.map(x=>`<tr data-card="${x.c.id}" style="cursor:pointer"><td class="td-idea">${cardTitle(x.c)}</td>
-          <td>${ptag(x.c.platform)} ${vtag(x.c.vtype)}</td><td class="vol">${dmy(x.c.acceptedOn)}</td><td class="vol">${dmy(x.c.published)}</td><td class="vol">${x.d}</td></tr>`),
+          <td>${ptags(x.c)} ${vtagFor(x.c)}</td><td class="vol">${dmy(x.c.acceptedOn)}</td><td class="vol">${dmy(x.c.published)}</td><td class="vol">${x.d}</td></tr>`),
           "No published cards yet. Cards count here once they are moved to Published.");
   }
 
@@ -1555,7 +1733,7 @@ function detailHTML(key){
     return head(`${pct(on,rows.length)}% shipped on the scheduled date`,`${rows.length} published card${rows.length===1?"":"s"}`)
       + dstats([["On time",on,""],["Late",late,late?`avg ${r1(avg(rows.filter(x=>x.diff>0),x=>x.diff))} days late`:""],["Early",early,""],["No date set",none,"never scheduled"]])
       + dtable("Scheduled vs published",["Card","Type","Scheduled","Published","Result"],rows.sort((a,b)=>(b.diff??-99)-(a.diff??-99)).map(x=>`<tr data-card="${x.c.id}" style="cursor:pointer">
-          <td class="td-idea">${cardTitle(x.c)}</td><td>${ptag(x.c.platform)} ${vtag(x.c.vtype)}</td><td class="vol">${dmy(x.c.scheduled)}</td><td class="vol">${dmy(x.c.published)}</td>
+          <td class="td-idea">${cardTitle(x.c)}</td><td>${ptags(x.c)} ${vtagFor(x.c)}</td><td class="vol">${dmy(x.c.scheduled)}</td><td class="vol">${dmy(x.c.published)}</td>
           <td>${x.diff==null?`<span class="badge mute">no date</span>`:x.diff===0?`<span class="badge good">on time</span>`:x.diff>0?`<span class="badge crit">${x.diff} d late</span>`:`<span class="badge warn">${-x.diff} d early</span>`}</td></tr>`),
           "No published cards yet.");
   }
@@ -1568,7 +1746,7 @@ function detailHTML(key){
     skipped.forEach(c=>miss(c).forEach(m=>counts[m]=(counts[m]||0)+1));
     return head(`${pct(allPub.length-skipped.length,allPub.length)}% published with full research`,`${allPub.length} published card${allPub.length===1?"":"s"}`)
       + dstats([["Full research",allPub.length-skipped.length,""],["Skipped",skipped.length,""],["Overridden",allPub.filter(c=>c.override).length,"head let it through with a reason"],
-          ["Cards in progress missing it",vC.filter(c=>c.stage!=="published"&&!gResearch(c.pre)).length,"will be blocked at To Do"]])
+          ["Cards in progress missing it",vC.filter(c=>c.stage!=="published"&&!gResearch(c.pre)).length,"will be blocked in Ideas"]])
       + `<div class="dgrid">${hbars("What was missing most",Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(([m,c])=>({label:m,v:c,color:"var(--crit)"})))}</div>`
       + dtable("Published without full research",["Card","Missing","Override"],skipped.map(c=>`<tr data-card="${c.id}" style="cursor:pointer"><td class="td-idea">${cardTitle(c)}</td>
           <td class="td-txt">${miss(c).join(", ")}</td><td class="td-txt">${c.override?`${esc(c.override.by)}: ${esc(c.override.reason)}`:"—"}</td></tr>`),"Every published card had its research done.");
@@ -1576,15 +1754,15 @@ function detailHTML(key){
 
   if(key==="backlog"){
     const todo=vC.filter(c=>c.stage==="todo").map(c=>({c,age:c.acceptedOn?days(c.acceptedOn,today()):null})).sort((a,b)=>(b.age??0)-(a.age??0));
-    return head(`${todo.length} card${todo.length===1?"":"s"} waiting in To Do`,"accepted, not started yet")
-      + dstats([["In To Do",todo.length,todo.length<3?"thin — log and accept more ideas":todo.length>20?"hoarding — too many waiting":"healthy"],
+    return head(`${todo.length} card${todo.length===1?"":"s"} waiting in Ideas`,"accepted, not started yet")
+      + dstats([["In Ideas",todo.length,todo.length<3?"thin — log and accept more ideas":todo.length>20?"hoarding — too many waiting":"healthy"],
           ["Oldest",todo.length&&todo[0].age!=null?todo[0].age+" d":"—","since it was accepted"],
-          ["Blocked by research",todo.filter(x=>!gatePass(x.c,"research")).length,"can't leave To Do yet"],
+          ["Blocked by research",todo.filter(x=>!gatePass(x.c,"research")).length,"can't leave Ideas yet"],
           ...STAGES.filter(st=>st.id!=="todo"&&st.id!=="published").map(st=>[st.label,vC.filter(c=>c.stage===st.id).length,"further along"])])
       + `<div class="dgrid">${hbars("Waiting, by video type",TYPES().map(k=>({label:vtypeLabel(k),v:todo.filter(x=>x.c.vtype===k).length,color:vtypeColor(k)})).filter(x=>x.v))}
          ${hbars("Waiting, by platform",PLATS().map(k=>({label:regLabel("platform",k),v:todo.filter(x=>x.c.platform===k).length,color:platColor(k)})).filter(x=>x.v))}</div>`
-      + dtable("Cards in To Do",["Card","Type","Waiting","Research gate"],todo.map(x=>`<tr data-card="${x.c.id}" style="cursor:pointer"><td class="td-idea">${cardTitle(x.c)}</td>
-          <td>${ptag(x.c.platform)} ${vtag(x.c.vtype)}</td><td class="vol">${x.age!=null?x.age+" days":"—"}</td>
+      + dtable("Cards in Ideas",["Card","Type","Waiting","Research gate"],todo.map(x=>`<tr data-card="${x.c.id}" style="cursor:pointer"><td class="td-idea">${cardTitle(x.c)}</td>
+          <td>${ptags(x.c)} ${vtagFor(x.c)}</td><td class="vol">${x.age!=null?x.age+" days":"—"}</td>
           <td>${gatePass(x.c,"research")?`<span class="badge good">ready</span>`:`<span class="badge crit">blocked</span>`}</td></tr>`),"Nothing waiting.");
   }
   return head("Details","")+`<p class="hint">No details for this box.</p>`;
@@ -1601,108 +1779,228 @@ function kwCell(list){
       <span class="k" style="color:var(--ink-3);font-size:11px">combined</span><span class="v">${fmt(tot)}</span></div>`:"");
 }
 
+// Content Process only shows cards whose idea is still accepted. A card from an idea that was moved back
+// (to decide, parked, rejected) is hidden — kept with all its work, and back on the board if the idea is accepted again.
+function onBoard(c){ if(!c.ideaId) return true; const i=IDEAS.find(x=>x.id===c.ideaId); return !i || i.status==="accepted"; }
+const boardCards=()=>CARDS.filter(onBoard);
+
+// posting slots come from Targets → Posting time (time + every day / weekdays / weekends)
+function slotPlan(pl){ const p=(TG&&TG.plan&&TG.plan[pl])||{}; return { time:p.time||"18:00", days:p.days||"all" }; }
+function nextSlot(pl,leadDays=3){   // pl: a platform or a list of them — a day is free only if none of them has a post that day
+  const list=Array.isArray(pl)?pl:[pl], plan=slotPlan(list[0]), fits=d=>plan.days==="weekdays"?d.getDay()%6!==0:plan.days==="weekends"?d.getDay()%6===0:true;
+  const taken=new Set(boardCards().filter(c=>plats(c).some(x=>list.includes(x))&&c.scheduled&&c.stage!=="published").map(c=>c.scheduled));
+  const d=new Date(); d.setDate(d.getDate()+leadDays);
+  for(let n=0;n<120;n++,d.setDate(d.getDate()+1)){ const k=iso(d); if(fits(d)&&!taken.has(k)) return k; }
+  return null;
+}
+function slotOf(c){   // {at: Date, label} for the card's posting slot, or null
+  if(!c.scheduled) return null;
+  const at=new Date(`${c.scheduled}T${c.time||slotPlan(c.platform).time}:00`);
+  return { at, iso:at.toISOString(), label:at.toLocaleString("en-GB",{weekday:"short",day:"numeric",month:"short",hour:"numeric",minute:"2-digit",hour12:true}) };
+}
+
+// moving an accepted idea back (to decide / parked / rejected): a card that's only booked (Ideas or To shoot,
+// nothing done by Claude) is taken off the board; a card that's further along stays where it is.
+function releaseCard(i){
+  const card=CARDS.find(c=>c.ideaId===i.id); if(!card || i.status!=="accepted") return true;
+  const label=STAGES.find(x=>x.id===card.stage).label, untouched=["todo","draft"].includes(card.stage) && !(window.PIPE&&PIPE.job(card.id));
+  if(untouched){
+    if(!confirm(`Move this idea back? Its card${card.scheduled?` (booked for ${dmy(card.scheduled)})`:""} comes off the board — nothing has been done on it yet.`)) return false;
+    CARDS.splice(CARDS.indexOf(card),1); return true; }
+  const running=window.PIPE && (PIPE.busy(card.id) || PIPE.busy(card.id+"__s"));
+  if(!confirm(`This idea's card is in “${label}”. It leaves Content Process now — its work is kept, and it comes back if you accept the idea again.${running?"\n\nClaude is working on it right now; that job will be stopped.":""}`)) return false;
+  if(running){ if(PIPE.busy(card.id)) PIPE.cancel(card.id).catch(()=>{}); if(PIPE.busy(card.id+"__s")) PIPE.cancel(card.id+"__s").catch(()=>{}); }
+  return true;
+}
 function setStatus(i,st){
   if(!canEdit()){ toast("You can view this space but not edit it"); refresh(); return; }
+  if(i.status===st){ refresh(); return; }
   if(st==="rejected"){ openReject(i); return; }
+  if(st!=="accepted" && !releaseCard(i)){ refresh(); return; }
   i.status=st;
   if(st==="accepted"&&!CARDS.find(c=>c.ideaId===i.id)){
-    CARDS.push(blankCard({ ideaId:i.id, idea:i.idea, platform:i.platform, vtype:i.vtype, stage:"todo",
+    const slot=nextSlot(plats(i));
+    CARDS.push(blankCard({ ideaId:i.id, idea:i.idea, format:i.format, platform:plats(i)[0], platforms:[...plats(i)], vtype:i.vtype, stage:"todo",
+      scheduled:slot, time:slotPlan(plats(i)[0]).time,
       pre:{ source:i.source, tool:i.tool, keywords:(i.keywords||[]).map(k=>({...k})),
             why:i.why, title:i.title, desc:i.desc, hashtags:i.hashtags } }));
-    toast("Accepted — card created in To Do with everything copied across");
+    toast(slot?`Accepted — booked for ${dow(slot)} ${dmy(slot)}, in Content Process → Ideas`:"Accepted — card created in Content Process → Ideas");
+  } else if(st==="accepted"){ const c=CARDS.find(x=>x.ideaId===i.id);
+    toast(`Accepted — its card is back on the board in ${STAGES.find(x=>x.id===c.stage).label}`);
   } else toast(`Status set to ${STATUS_UI[st].label.toLowerCase()}`);
   save();
 }
 
+// "🔎 Research" on an idea row: vidIQ fills its keywords, volumes, score and a title idea
+function ideaResearchCell(i){
+  const j=PIPE.job(i.id+"__r"), st=j&&j.status;
+  if(st==="researching") return `<div class="idea-rs"><span class="rs-spin"></span>vidIQ…</div>`;
+  return `<div class="idea-rs">${i.researchScore!=null?`<span class="badge good" title="vidIQ score of the best keyword">score ${Math.round(i.researchScore)}</span>`:""}
+    ${st==="failed"?`<span class="badge crit" title="${esc(j.error||"")}">failed</span>`:""}
+    ${canEdit()?`<button class="btn sm" data-iresearch="${i.id}" title="${i.researchApplied?"Research again with vidIQ":"Research with vidIQ"}">${i.researchApplied?"↻":"🔎 Research"}</button>`:""}</div>`;
+}
+// Ideation: a short table per section (To decide · Accepted · Parked · Rejected). Everything else about an
+// idea lives in its window, so Accept / Park / Reject sit right in the row without scrolling sideways.
+const IDEA_SECTIONS=[
+  { key:"open",     title:"To decide", hint:"new and under review — research, then accept, park or reject", test:i=>i.status==="new"||i.status==="under_review", open:true },
+  { key:"accepted", title:"Accepted",  hint:"on the Content Process board", test:i=>i.status==="accepted" },
+  { key:"parked",   title:"Parked",    hint:"good ideas kept for a better moment", test:i=>i.status==="parked" },
+  { key:"rejected", title:"Rejected",  hint:"with the reason, so rejections stay countable", test:i=>i.status==="rejected" },
+];
+let IDEA_OPEN_SECS=null;   // which sections are unfolded (remembered while the page is open)
+// "+ New idea": pick the type first; the idea page then fits that type
+function pickFormat(then){
+  openDrawer(`<div class="dr-h"><div><div class="lbl">New idea</div><h3 style="margin-top:4px">What kind of content is it?</h3></div>
+      <button class="btn sm" id="xClose">Close</button></div>
+    <div class="fpick">${FORMATS.filter(f=>!f.hidden).map(f=>`<button class="fpick-c" data-fmt="${esc(f.key)}">
+      <span class="fpick-i">${f.icon}</span><b>${esc(f.name)}</b>
+      <span class="fpick-p">${(f.plats||[]).map(ptag).join("")}${f.claude?`<span class="badge good">🤖 Claude edit</span>`:""}</span>
+      <span class="hint">${esc(f.hint||"")}</span></button>`).join("")}
+      ${canEdit()?`<button class="fpick-c add" data-fmt-add><span class="fpick-i">＋</span><b>Add a type</b><span class="hint">e.g. Story, Podcast clip, Webinar</span></button>`:""}</div>`);
+  $("#xClose").onclick=()=>closeDrawer();
+  $("#drawer").querySelectorAll("[data-fmt]").forEach(b=>b.onclick=()=>then(b.dataset.fmt));
+  const ad=$("#drawer").querySelector("[data-fmt-add]"); if(ad) ad.onclick=()=>openFormats(null, ()=>pickFormat(then));
+}
+
+// ⚙ Content types: change the built-in ones, add new ones
+function openFormats(editKey, back){
+  const f0=editKey?FORMATS.find(f=>f.key===editKey):null;
+  const f=f0?{...f0}:{ key:"", name:"", icon:"✨", plats:["yt","ig"], defPlats:["ig"], vtypes:[], video:true, claude:false, hint:"" };
+  const isBuiltin=!!f0 && DEFAULT_FORMATS.some(d=>d.key===f0.key);
+  openDrawer(`<div class="dr-h"><div><div class="lbl">Content types</div><h3 style="margin-top:4px">${f0?esc(f0.icon+" "+f0.name):"Add a type"}</h3></div>
+      <button class="btn sm" id="xClose">Close</button></div>
+    ${!f0?`<div class="ftypes">${FORMATS.map(x=>`<button class="btn sm" data-fedit="${esc(x.key)}">${x.icon} ${esc(x.name)}${x.hidden?" (hidden)":""}</button>`).join("")}</div>
+      <p class="hint" style="margin:6px 0 14px">Click one to change it, or fill in below to add a new one.</p>`:""}
+    <div class="grid2"><div class="fld"><label for="f-name">Name</label><input id="f-name" value="${esc(f.name)}" placeholder="e.g. Story"></div>
+      <div class="fld"><label for="f-icon">Icon (an emoji)</label><input id="f-icon" value="${esc(f.icon)}" maxlength="4" style="font-size:20px;width:80px"></div></div>
+    <div class="fld"><label>Can be posted on</label><div class="platpick" id="f-plats">${Object.keys(REG.platform).map(k=>`<label class="pp-chk ${f.plats.includes(k)?"on":""}">
+      <input type="checkbox" value="${k}" ${f.plats.includes(k)?"checked":""}> ${ptag(k)} ${esc(regLabel("platform",k))}</label>`).join("")}</div></div>
+    <div class="fld"><label for="f-hint">One-line description</label><input id="f-hint" value="${esc(f.hint||"")}" placeholder="Shown when someone picks a type"></div>
+    <div class="fld"><label class="pp-chk ${f.video?"on":""}"><input type="checkbox" id="f-video" ${f.video?"checked":""}> It's a video (gets a Shoot plan)</label></div>
+    <div class="fld"><label class="pp-chk ${f.claude?"on":""}"><input type="checkbox" id="f-claude" ${f.claude?"checked":""}> 🤖 Claude can edit it (vertical video for Shorts / Reels only)</label></div>
+    ${f0?`<div class="fld"><label class="pp-chk ${f.hidden?"on":""}"><input type="checkbox" id="f-hidden" ${f.hidden?"checked":""}> Hide this type from "+ New idea" (ideas already made keep it)</label></div>`:""}
+    <div class="row" style="margin-top:14px"><button class="btn pri" id="f-save">${f0?"Save type":"Add type"}</button>
+      <button class="btn" id="f-back">Back</button></div>`);
+  $("#xClose").onclick=()=>closeDrawer();
+  $("#f-back").onclick=()=>back?back():closeDrawer();
+  $("#drawer").querySelectorAll("[data-fedit]").forEach(b=>b.onclick=()=>openFormats(b.dataset.fedit, back));
+  $("#f-save").onclick=()=>{
+    const name=$("#f-name").value.trim(); if(!name){ toast("Give the type a name"); return; }
+    const pl=[...$("#f-plats").querySelectorAll("input:checked")].map(x=>x.value); if(!pl.length){ toast("Pick at least one platform"); return; }
+    const key=f0?f0.key:("f_"+name.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,20)+"_"+Date.now().toString(36).slice(-3));
+    const out=Object.assign({}, f, { key, name, icon:$("#f-icon").value.trim()||"✨", plats:pl, defPlats:f.defPlats.filter(x=>pl.includes(x)).length?f.defPlats.filter(x=>pl.includes(x)):[pl[0]],
+      hint:$("#f-hint").value.trim(), video:$("#f-video").checked, claude:$("#f-claude").checked, hidden:!!($("#f-hidden")&&$("#f-hidden").checked) });
+    if(!isBuiltin && !f0){ REG.vtype[key]=name; out.vtypes=[key]; }   // its own video type, so the numbers can tell it apart
+    const list=(S.formats||[]).filter(x=>x.key!==key); list.push(out);
+    S.formats=DEFAULT_FORMATS.map(d=>list.find(x=>x.key===d.key)||d).concat(list.filter(x=>!DEFAULT_FORMATS.some(d=>d.key===x.key)));
+    FORMATS=S.formats;
+    if(save()){ toast(f0?"Type saved":`“${name}” added`); back?back():closeDrawer(); }
+  };
+}
+
+let IDEA_FMT="all";
 function renderIdeation(){
   const ro=!canEdit();
-  const rows=IDEAS.map(i=>{ const card=CARDS.find(c=>c.ideaId===i.id);
-    return `<tr>
-      <td class="td-idea">${esc(i.idea)}
-        ${i.status==="rejected"&&i.rejectReason?`<div style="margin-top:5px"><span class="badge crit">${esc(i.rejectReason)}</span></div>`:""}
-        ${card?`<div style="margin-top:5px"><span class="badge mute">→ ${esc(STAGES.find(s=>s.id===card.stage).label)}</span></div>`:""}</td>
-      <td>${who(i.by)}</td>
-      <td class="vol">${dmy(i.created)}<small>${i.created?new Date(i.created+"T00:00:00").getFullYear():""}</small></td>
-      <td><span class="hook">${i.hook?esc(i.hook):`<span class="miss" style="font-family:var(--mono)">not set</span>`}</span></td>
-      <td class="cta">${i.cta?esc(i.cta):`<span class="miss">not set</span>`}</td>
-      <td>${ptag(i.platform)}</td>
-      <td>${vtag(i.vtype)}</td>
-      <td><span class="chip">${i.source?esc(regLabel("source",i.source)):"—"}</span></td>
-      <td class="vol">${i.tool?esc(regLabel("tool",i.tool)):"—"}</td>
-      <td class="td-kw">${kwCell(i.keywords)}</td>
-      <td class="td-txt" style="color:var(--ink);font-weight:600">${i.title?esc(i.title):`<span class="miss">not set</span>`}</td>
-      <td class="td-txt">${i.desc?esc(i.desc):`<span class="miss">not set</span>`}</td>
-      <td class="td-txt" style="font-family:var(--mono);font-size:11.5px">${i.hashtags?esc(i.hashtags):`<span class="miss">not set</span>`}</td>
-      <td class="td-txt">${i.studentWhy?esc(i.studentWhy):`<span class="miss">not set</span>`}</td>
-      <td class="td-txt">${i.why?esc(i.why):`<span class="miss">not set</span>`}</td>
-      <td><select class="stsel ${STATUS_UI[i.status].cls}" data-stidea="${i.id}" ${ro?"disabled":""}>
-        ${Object.entries(STATUS_UI).map(([k,v])=>`<option value="${k}" ${i.status===k?"selected":""}>${v.label}</option>`).join("")}</select></td>
-      <td><button class="cbtn ${i.comments.length?"has":""}" data-cmt="${i.id}">💬 ${i.comments.length||""}</button></td>
-      <td><button class="btn sm" data-edit="${i.id}">Open</button></td></tr>`; }).join("");
+  if(!IDEA_OPEN_SECS) IDEA_OPEN_SECS={ open:true, accepted:true };
+  const kwShort=i=>{ const k=(i.keywords||[]).find(x=>x.rank==="primary")||(i.keywords||[])[0];
+    return k&&k.kw?`<div class="kw1"><b>${esc(k.kw)}</b>${k.vol!=null?` <span>${kfmt(k.vol)}/mo</span>`:""}</div>`:`<span class="miss">no keyword yet</span>`; };
+  const row=(i,sec)=>{ const card=CARDS.find(c=>c.ideaId===i.id);
+    const decide = sec==="open" && !ro
+      ? `<div class="qdec"><button class="btn sm pri" data-qst="accepted" data-qid="${i.id}" title="Accept — books the next free posting slot">✓ Accept</button>
+          <button class="btn sm" data-qst="parked" data-qid="${i.id}" title="Park for later">⏸</button>
+          <button class="btn sm danger" data-qst="rejected" data-qid="${i.id}" title="Reject — pick a reason">✕</button></div>`
+      : `${sec==="accepted" ? (card?`<div><span class="badge mute">→ ${esc(STAGES.find(x=>x.id===card.stage).label)}</span>${card.scheduled?` <span class="hint">${esc(dmy(card.scheduled))}</span>`:""}</div>`:"")
+          : sec==="rejected" ? `<div><span class="badge crit">${esc(i.rejectReason||"rejected")}</span></div>` : ""}
+        ${ro?"":`<select class="stsel movesel" data-stidea="${i.id}" title="Move this idea">
+          <option value="" selected>Move to…</option>${Object.entries(STATUS_UI).filter(([k])=>k!==i.status).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join("")}</select>`}`;
+    return `<tr class="rowlink" data-open="${i.id}" title="Open this idea">
+      <td class="td-idea">${fmtIcon(i)} ${esc(i.idea)}${i.title?`<div class="sub">${esc(i.title)}</div>`:""}</td>
+      <td>${who(i.by)}<div class="sub vol">${dmy(i.created)}</div></td>
+      <td>${ptags(i)} ${vtagFor(i)}</td>
+      <td class="td-kw">${kwShort(i)}${window.PIPE?ideaResearchCell(i):""}</td>
+      <td>${decide}${sec==="open"&&i.status==="under_review"?`<div class="sub">under review</div>`:""}</td>
+      <td><button class="cbtn ${i.comments.length?"has":""}" data-cmt="${i.id}">💬 ${i.comments.length||""}</button></td></tr>`; };
+
+  // one block per content type: tabs on top, the ideas of the chosen type below
+  if(IDEA_FMT && IDEA_FMT!=="all" && !FORMATS.some(f=>f.key===IDEA_FMT)) IDEA_FMT="all";
+  const inFmt=i=>IDEA_FMT==="all"||i.format===IDEA_FMT;
+  const ftabs=`<div class="ftabs"><button class="ftab ${IDEA_FMT==="all"?"on":""}" data-ftab="all">All <span class="count">${IDEAS.length}</span></button>
+    ${FORMATS.filter(f=>!f.hidden||IDEAS.some(i=>i.format===f.key)).map(f=>`<button class="ftab ${IDEA_FMT===f.key?"on":""}" data-ftab="${esc(f.key)}">${f.icon} ${esc(f.name)}
+      <span class="count">${IDEAS.filter(i=>i.format===f.key).length}</span></button>`).join("")}
+    ${ro?"":`<button class="ftab ghost" id="fmtManage" title="Add or change content types">⚙ Types</button>`}</div>`;
+  const secs=IDEA_SECTIONS.map(S2=>{ const list=IDEAS.filter(S2.test).filter(inFmt); const open=!!IDEA_OPEN_SECS[S2.key];
+    if(!list.length && S2.key!=="open") return "";
+    return `<details class="isec" data-isec="${S2.key}" ${open?"open":""}>
+      <summary><h3>${S2.title}</h3><span class="count">${list.length}</span><span class="hint">${S2.hint}</span></summary>
+      ${list.length?`<div class="tw"><table class="ideas"><thead><tr><th>Idea</th><th>By</th><th>Platform</th><th>Research</th><th>${S2.key==="open"?"Decide":"Status"}</th><th>💬</th></tr></thead>
+        <tbody>${list.map(i=>row(i,S2.key)).join("")}</tbody></table></div>`
+      :`<p class="hint" style="margin:6px 0 0">Nothing waiting.${ro?"":" Press <b>+ New idea</b> to log one."}</p>`}</details>`; }).join("");
 
   $("#pane-ideation").innerHTML=`
-    <div class="sec"><div class="sec-h"><h3>All ideas</h3>
-      <span class="hint">${IDEAS.length} idea${IDEAS.length===1?"":"s"} · the creator writes the whole post here; the head sets the status afterwards</span>
-      ${ro?"":`<button class="btn pri" id="newIdea" style="margin-left:auto">+ New idea</button>`}</div>
-      <div class="tw"><table><thead><tr>
-        <th>Idea</th><th>Reported by</th><th>Reported on</th><th>Hook</th><th>CTA</th><th>Platform</th><th>Video type</th>
-        <th>Idea source</th><th>Research tool</th><th>Target keyword(s) &amp; volume</th>
-        <th>Title</th><th>Description</th><th>Hashtags</th><th>Why students should watch</th><th>Why this idea</th><th>Status</th><th>💬</th><th></th>
-      </tr></thead><tbody>${rows||`<tr><td colspan="18" style="color:var(--ink-3)">No ideas yet.${ro?"":" Press <b>+ New idea</b> to log the first one."}</td></tr>`}</tbody></table></div></div>
+    <div class="sec"><div class="sec-h"><h3>Ideas</h3>
+      <span class="hint">${IDEAS.length} idea${IDEAS.length===1?"":"s"} · click one to see and edit everything about it</span>
+      ${ro?"":`<button class="btn pri" id="newIdea" style="margin-left:auto">+ New ${IDEA_FMT!=="all"?esc(fmtOf({format:IDEA_FMT}).name.toLowerCase())+" ":""}idea</button>`}</div>
+      ${ftabs}
+      ${secs}</div>`;
 
-    <div class="sec"><div class="card" style="background:var(--surface-4)">
-      <div class="lbl" style="margin-bottom:7px">How this table works</div>
-      <p class="hint" style="margin:0;max-width:78ch">
-      The creator owns every column here — research, hook, CTA, title, description and hashtags are written once, at idea stage.
-      A new idea arrives with no status; the head sets it from the dropdown in this table, or from inside the idea.
-      <b style="color:var(--ink)">Accepted</b> builds a card in Content Process → To Do with everything copied across, so nothing is
-      typed twice. <b style="color:var(--ink)">Rejected</b> asks for a reason from a fixed list, which is what makes rejections
-      countable. <b style="color:var(--ink)">Parked</b> keeps a good idea for a better moment. Nothing is ever deleted — the idea
-      stays here after acceptance so the funnel keeps its denominator.</p></div></div>`;
-
-  const ni=$("#newIdea"); if(ni) ni.onclick=()=>openIdea(null);
+  const ni=$("#newIdea"); if(ni) ni.onclick=()=> IDEA_FMT!=="all" ? openIdea(null,false,IDEA_FMT) : pickFormat(k=>openIdea(null,false,k));
+  $("#pane-ideation").querySelectorAll("[data-ftab]").forEach(b=>b.onclick=()=>{ IDEA_FMT=b.dataset.ftab; renderIdeation(); });
+  const fmm=$("#fmtManage"); if(fmm) fmm.onclick=()=>openFormats(null);
   const P=$("#pane-ideation");
-  P.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openIdea(b.dataset.edit));
+  P.querySelectorAll("details.isec").forEach(d=>d.ontoggle=()=>{ IDEA_OPEN_SECS[d.dataset.isec]=d.open; });
+  P.querySelectorAll("[data-qst]").forEach(b=>b.onclick=()=>{ const i=IDEAS.find(x=>x.id===b.dataset.qid); if(i) setStatus(i,b.dataset.qst); });
+  P.querySelectorAll("[data-iresearch]").forEach(b=>b.onclick=async()=>{ const i=IDEAS.find(x=>x.id===b.dataset.iresearch); if(!i) return;
+    b.disabled=true; b.textContent="…";
+    try{ await PIPE.research({ id:i.id, idea:i.idea, platform:i.platform, vtype:i.vtype, scheduled:null,
+        pre:{ title:i.title, desc:i.desc, hashtags:i.hashtags, keywords:i.keywords, why:i.why } }, { idea:()=>i });
+      refresh(); toast("vidIQ is researching this idea — results land in the row in a minute"); }
+    catch(e){ toast(e.message); b.disabled=false; b.textContent="🔎 Research"; } });
+  // the whole row opens the idea, except clicks on its own controls
+  P.querySelectorAll("tr[data-open]").forEach(tr=>tr.onclick=e=>{
+    if(e.target.closest("button,select,a,input,label")) return;
+    openIdea(tr.dataset.open); });
   P.querySelectorAll("[data-cmt]").forEach(b=>b.onclick=()=>openIdea(b.dataset.cmt,true));
-  P.querySelectorAll("[data-stidea]").forEach(s=>s.onchange=()=>{
+  P.querySelectorAll("[data-stidea]").forEach(s=>s.onchange=()=>{ if(!s.value) return;
     const i=IDEAS.find(x=>x.id===s.dataset.stidea); setStatus(i,s.value); });
 }
 
 /* ------------------------------------------------------------ CONTENT PROCESS */
 let DRAG=null;
-function gateChips(c){ const r=gResearch(c.pre)||!!c.override, cp=gCopy(c.pre), a=gAssets(c);
+function gateChips(c){ const r=gResearch(c.pre)||!!c.override, e=gEdited(c), cp=gCopy(c.pre);
   return `<div class="gates">
     <span class="gchip ${r?"ok":"no"}">${r?"✓":"×"} research${c.override&&!gResearch(c.pre)?" (ovr)":""}</span>
-    <span class="gchip ${cp?"ok":"no"}">${cp?"✓":"×"} copy</span>
-    <span class="gchip ${a?"ok":""}">${a?"✓":"·"} assets</span></div>`; }
+    <span class="gchip ${e?"ok":""}">${e?"✓":"·"} edited</span>
+    <span class="gchip ${cp?"ok":"no"}">${cp?"✓":"×"} copy</span></div>`; }
 
 function renderProcess(){
   const ro=!canEdit();
-  const cols=STAGES.map(s=>{ const items=CARDS.filter(c=>c.stage===s.id);
+  const BC=boardCards();
+  const cols=STAGES.map(s=>{ const items=BC.filter(c=>c.stage===s.id);
     return `<div class="col" data-stage="${s.id}">
       <div class="col-h"><h4>${s.label}</h4><span class="count">${items.length}</span></div>
       ${items.map(c=>{ const lp=livePost(c); return `<div class="kcard ${ro?"ro":""} ${c.priority==="high"?"hot":""}" draggable="${ro?"false":"true"}" data-card="${c.id}">
         ${c.priority==="high"?`<div class="hotbar">🔔 High priority${c.fromCampaign?` · from ${esc(c.fromCampaign)}`:""}</div>`:""}
-        <h5>${esc(c.pre.title||c.idea)}</h5>
-        <div class="meta">${ptag(c.platform)}${vtag(c.vtype)}
+        <h5>${fmtIcon(c)} ${esc(c.pre.title||c.idea)}</h5>
+        <div class="meta">${ptags(c)}${vtagFor(c)}
           ${c.override?`<span class="badge crit">override</span>`:""}
           ${c.scheduled?`<span class="chip">${dmy(c.scheduled)}</span>`:""}
-          ${lp?`<span class="badge good">${kfmt(lp.views)} views</span>`:""}</div>
+          ${lp?`<span class="badge good">${kfmt(lp.views)} views</span>`:""}
+          ${window.PIPE?PIPE.badge(c.id):""}</div>
         ${gateChips(c)}
         ${s.id==="todo"&&!gatePass(c,"research")?`<div class="hint" style="margin-top:7px;color:var(--crit);font-size:11px">Fill the research block to move it on</div>`:""}</div>`; }).join("")||`<div class="dashed" style="margin:0">${ro?"empty":"drop here"}</div>`}
       </div>`;}).join("");
 
-  const blocked=CARDS.filter(c=>c.stage==="todo"&&!gatePass(c,"research")).length;
+  const blocked=BC.filter(c=>c.stage==="todo"&&!gatePass(c,"research")).length;
   $("#pane-process").innerHTML=`
     <div class="apibar" style="background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 30%,transparent)">
-      <span class="ic" style="color:var(--accent);border-color:var(--accent)">GATES</span>
-      <p><b>Three gates, each blocking one move.</b> A card leaves <b>To Do</b> only with its research block complete;
-      leaves <b>In Progress</b> only with title, description and hashtags confirmed; and leaves <b>Approved</b> only with the
-      edited file, the post link, and a thumbnail if it is going to YouTube. The head can override the research gate with a written
-      reason, which is recorded on the card.
-      ${blocked?`<br><span style="color:var(--accent-ink);font-weight:600">${blocked} card${blocked>1?"s":""} currently blocked in To Do.</span>`:""}</p></div>
+      <span class="ic" style="color:var(--accent);border-color:var(--accent)">FLOW</span>
+      <p><b>Ideas → To shoot → Editing → Your check → Scheduled → Live.</b> Accepting an idea books the next free posting slot.
+      Claude moves cards through Editing and Your check by itself; you approve the edit, then post now or at the slot.
+      A card leaves <b>Ideas</b> only with its research done (the head can override with a reason), leaves <b>Editing</b> only with an edited
+      video, and leaves <b>Your check</b> only with title, description and hashtags.
+      ${blocked?`<br><span style="color:var(--accent-ink);font-weight:600">${blocked} card${blocked>1?"s":""} waiting for research in Ideas.</span>`:""}</p></div>
     <div class="sec"><div class="sec-h"><h3>Content Process</h3>
-      <span class="hint">${CARDS.length} card${CARDS.length===1?"":"s"} · ${ro?"click a card to open it":"drag cards between columns, or click one to open it"}</span>
+      <span class="hint">${BC.length} card${BC.length===1?"":"s"} · ${ro?"click a card to open it":"drag cards between columns, or click one to open it"}</span>
       ${ro?"":`<button class="btn pri" id="newCard" style="margin-left:auto">+ New card</button>`}</div>
       <div class="board">${cols}</div></div>`;
 
@@ -1734,7 +2032,7 @@ function renderProcess(){
 }
 
 /* ------------------------------------------------------------ SCHEDULE */
-const schedCards=()=>CARDS.filter(c=>c.scheduled&&SCHED.vtypes.includes(c.vtype)&&SCHED.platforms.includes(c.platform));
+const schedCards=()=>boardCards().filter(c=>c.scheduled&&SCHED.vtypes.includes(c.vtype)&&plats(c).some(p=>SCHED.platforms.includes(p)));
 function weekRange(cur){ const d=new Date(cur+"T00:00:00"), off=(d.getDay()+6)%7;
   const s=new Date(d); s.setDate(d.getDate()-off); const e=new Date(s); e.setDate(s.getDate()+6); return [s,e]; }
 
@@ -1756,8 +2054,8 @@ function schedSummary(){
   const sorted=[...list].sort((a,b)=>a.scheduled.localeCompare(b.scheduled));
   const next=sorted.find(c=>c.scheduled>=TODAY);
   const dayNames=[...new Set(sorted.map(c=>dow(c.scheduled)))];
-  const notReady=list.filter(c=>c.stage!=="published"&&!gAssets(c)).length;
-  const unsched=CARDS.filter(c=>!c.scheduled&&c.stage!=="published").length;
+  const notReady=list.filter(c=>c.stage!=="published"&&!gEdited(c)).length;
+  const unsched=boardCards().filter(c=>!c.scheduled&&c.stage!=="published").length;
 
   return `<div class="note"><div class="lbl">Scheduled content · ${label}</div>
     ${typeStr} going out across ${dayNames.length} day${dayNames.length>1?"s":""} — ${platStr},
@@ -1779,7 +2077,7 @@ function renderSchedule(){
       cells+=`<div class="wday ${key===TODAY?"today":""}">
         <div class="wh"><span class="lbl">${d.toLocaleDateString("en-GB",{weekday:"short"})}</span><b>${d.getDate()}</b></div>
         ${evts.map(c=>`<button class="wevt" style="border-left-color:${vtypeColor(c.vtype)}" data-card="${c.id}">
-          <h6>${esc(c.pre.title||c.idea)}</h6><div class="meta">${ptag(c.platform)}${vtag(c.vtype)}</div></button>`).join("")
+          <h6>${esc(c.pre.title||c.idea)}</h6><div class="meta">${ptags(c)}${vtagFor(c)}</div></button>`).join("")
           ||`<span class="hint" style="font-size:11px">—</span>`}</div>`; }
     grid=`<div style="overflow-x:auto"><div class="weekgrid">${cells}</div></div>`;
   } else {
@@ -1836,8 +2134,12 @@ function renderSchedule(){
 }
 
 /* ------------------------------------------------------------ DRAWERS */
-function closeDrawer(){ $("#drawer").classList.remove("on"); $("#scrim").classList.remove("on"); }
-function openDrawer(h){ const d=$("#drawer"); d.innerHTML=h; d.classList.add("on"); $("#scrim").classList.add("on"); d.scrollTop=0; }
+let OPEN=null;   // what the window shows ({kind:"card"|"idea", id}), so a refresh can reopen it
+let CLOSE_GUARD=null;   // the open card's "discard unsaved changes?" check
+function closeDrawer(force){
+  if(force!==true && CLOSE_GUARD && !CLOSE_GUARD()) return;
+  CLOSE_GUARD=null; OPEN=null; $("#drawer").classList.remove("on"); $("#scrim").classList.remove("on"); }
+function openDrawer(h,wide){ const d=$("#drawer"); d.oninput=d.onchange=null; CLOSE_GUARD=null; d.innerHTML=h; d.classList.toggle("wide",!!wide); d.classList.add("on"); $("#scrim").classList.add("on"); d.scrollTop=0; }
 // the team's members, from the app's user list (profiles + memberships)
 function teamNames(){ let l=[]; try{ l=(OPT.people && OPT.people()) || []; }catch(_){ }
   return [...new Set(l.filter(Boolean))].sort((a,b)=>a.localeCompare(b)); }
@@ -1850,12 +2152,13 @@ function peopleSelect(id,val){
 
 function kwEditor(list,prefix){
   const rows=(list.length?list:[{kw:"",vol:null,rank:"primary"}]).map((k,i)=>`
-    <div class="kwed"><input data-kk="kw" value="${esc(k.kw)}" placeholder="keyword">
+    <div class="kwed ${k.rank==="primary"?"prim":""}"><input data-kk="kw" value="${esc(k.kw)}" placeholder="keyword">
       <input data-kk="vol" type="number" value="${k.vol??""}" placeholder="volume">
-      <select data-kk="rank"><option value="primary" ${k.rank==="primary"?"selected":""}>Primary</option>
+      <select data-kk="comp"><option value="">—</option>${["low","medium","high"].map(v=>`<option value="${v}" ${k.comp===v?"selected":""}>${v}</option>`).join("")}</select>
+      <select data-kk="rank"><option value="primary" ${k.rank==="primary"?"selected":""}>★ Primary</option>
         <option value="secondary" ${k.rank!=="primary"?"selected":""}>Secondary</option></select>
       <button class="x" data-kwdel="${i}" title="Remove">×</button></div>`).join("");
-  return `<div class="kwhead"><span>Keyword</span><span>Vol / month</span><span>Rank</span><span></span></div>
+  return `<div class="kwhead"><span>Keyword</span><span>Vol / month</span><span>Competition</span><span>Rank</span><span></span></div>
     <div id="${prefix}kwlist">${rows}</div>
     <button class="btn sm" id="${prefix}kwadd" style="margin-top:4px">+ Add keyword</button>`;
 }
@@ -1864,7 +2167,7 @@ function readKw(prefix){
   $("#drawer").querySelectorAll(`#${prefix}kwlist .kwed`).forEach(row=>{
     const g=k=>row.querySelector(`[data-kk="${k}"]`).value;
     const t=g("kw").trim(); if(!t) return;
-    const v=g("vol"); out.push({kw:t,vol:v===""?null:Number(v),rank:g("rank"),on:today()});
+    const v=g("vol"), cp=row.querySelector('[data-kk="comp"]'); out.push({kw:t,vol:v===""?null:Number(v),comp:cp?cp.value||null:null,rank:g("rank"),on:today()});
   });
   if(out.length&&!out.some(k=>k.rank==="primary")) out[0].rank="primary";
   const pi=out.findIndex(k=>k.rank==="primary"); out.forEach((k,i)=>{ if(i!==pi) k.rank="secondary"; });
@@ -1881,92 +2184,144 @@ function lockDrawer(){ if(canEdit()) return;
   $("#drawer").querySelectorAll("[data-w]").forEach(e=>e.remove()); }
 
 /* ---- idea drawer ---- */
-function openIdea(id,focusComments){
+let IDEA_REDRAW=null;   // the open idea's redraw, for when its vidIQ research comes back
+function openIdea(id,focusComments,fmtKey){
+  if(id) setTimeout(()=>{ OPEN={kind:"idea",id}; });
   const isNew=!id;
-  const i=isNew ? blankIdea({ by:meName() }) : IDEAS.find(x=>x.id===id);
+  const F0=fmtOf({format:fmtKey});
+  const i=isNew ? blankIdea({ by:meName(), format:F0.key, platforms:[...(F0.defPlats||F0.plats)], platform:(F0.defPlats||F0.plats)[0], vtype:(F0.vtypes||[])[0]||F0.key }) : IDEAS.find(x=>x.id===id);
   if(!i) return;
+  // the form's fields as they were when opened, so "discard changes" really discards
+  const FORM=["idea","studentWhy","by","created","format","platform","platforms","vtype","hook","cta","source","tool","keywords","title","desc","hashtags","why"];
+  const snap=()=>JSON.stringify(FORM.map(k=>i[k])), restore=t=>JSON.parse(t).forEach((v,n)=>{ i[FORM[n]]=v; });
+  let opened=snap(), dirty=false;
+  const markDirty=()=>{ if(dirty) return; dirty=true; const d=$("#dirtyDot"); if(d) d.hidden=false; };
 
-  const draw=(kwList)=>{
+  const draw=(kwList0)=>{ let kwList=kwList0;
+    // vidIQ research for this idea ("<idea>__r"): new results go straight in, like on a card
+    const rjob=(!isNew&&window.PIPE)?PIPE.job(i.id+"__r"):null;
+    const rBusy=!!rjob&&rjob.status==="researching", rFail=!!rjob&&rjob.status==="failed";
+    const rData=rjob&&rjob.status==="research_ready"?rjob.research:null;
+    if(rData && i.researchApplied!==rData.at && canEdit() && !isNew){
+      applyResearch(i,rData); i.researchApplied=rData.at;
+      const pk=(rData.keywords||[]).find(k=>k.keyword===rData.primary)||(rData.keywords||[])[0]; i.researchScore=pk&&pk.score!=null?Number(pk.score):null;
+      if(save()){ dirty=false; opened=snap(); } kwList=i.keywords;
+      setTimeout(()=>toast("vidIQ research added to the idea"),50); }
+    const F=fmtOf(i);
+    const prim=(kwList||[]).find(k=>k.rank==="primary")||(kwList||[])[0];
+    const researched=!!(prim&&prim.kw&&prim.vol!=null), decided=["accepted","rejected","parked"].includes(i.status);
+    const card=CARDS.find(c=>c.ideaId===i.id), slotNext=!(card&&i.status==="accepted")?nextSlot(plats(i)):null;
+    const missing=[!(prim&&prim.kw)&&"a primary keyword",prim&&prim.kw&&prim.vol==null&&`volume for “${prim.kw}”`,!i.why&&"why this idea",
+      !i.title&&"title",!i.desc&&"description",!i.hashtags&&"hashtags"].filter(Boolean);
+    const cpOk=!!(i.title&&i.desc&&i.hashtags);
+    const steps=[["Logged",!isNew],["Researched",researched],[decided?STATUS_UI[i.status].label:"Decided",decided]];
+    const next = isNew ? "Write the idea in one line, then Log idea."
+      : card&&i.status==="accepted" ? `It's on the board in <b>${esc(STAGES.find(x=>x.id===card.stage).label)}</b>${card.scheduled?` — goes live ${esc(dow(card.scheduled).slice(0,3))} ${esc(dmy(card.scheduled))}`:""}. Open the card to carry on.`
+      : i.status==="rejected" ? `Rejected${i.rejectReason?" — "+esc(i.rejectReason):""}. Accept it later if things change.`
+      : i.status==="parked" ? "Parked for a better moment. Accept it when it's time."
+      : !researched ? "Next: <b>🔎 Fill with vidIQ</b> (or type the keyword and volume), then decide."
+      : `Next: decide. <b>Accept</b> books the next free slot${slotNext?` (${esc(dow(slotNext).slice(0,3))} ${esc(dmy(slotNext))})`:""}.`;
+
     openDrawer(`
-    <div class="dr-h"><div><div class="lbl">${isNew?"New idea":"Idea"}</div>
-      <h3 style="margin-top:4px">${isNew?"Log an idea":esc(i.idea)}</h3></div>
+    <div class="dr-h"><div style="min-width:0;flex:1"><div class="lbl">${esc(F.icon+" "+F.name)} · ${isNew?"new idea":"idea"}${i.by?" · by "+esc(i.by):""}
+        ${canEdit()?`<button class="linkbtn" id="i-fmt" data-w="1">change type</button>`:""}</div>
+      <h3 style="margin-top:4px">${isNew?`Log a ${esc(F.name.toLowerCase())} idea`:esc(i.idea)}</h3>
+      <div class="steps">${steps.map(([l,ok],k)=>`<span class="step ${ok?"done":steps.findIndex(x=>!x[1])===k?"now":""}">${ok?"✓ ":""}${l}</span>`).join('<span class="step-sep">›</span>')}
+        ${card&&i.status==="accepted"?`<span class="step-sep">›</span><span class="step now">On the board · ${esc(STAGES.find(x=>x.id===card.stage).label)}</span>`:""}</div>
+      <p class="idea-next">${next}</p></div>
       <button class="btn sm" id="xClose">Close</button></div>
 
+    <div class="dr-cols"><div class="dr-col">
     <div class="fld"><label for="i-idea">Idea</label>
-      <input id="i-idea" value="${esc(i.idea)}" placeholder="What is the video, in one line?"></div>
+      <input id="i-idea" value="${esc(i.idea)}" placeholder="${F.video?"What is the video, in one line?":"What is the post about, in one line?"}"></div>
     <div class="fld"><label for="i-studentwhy">Why should students watch this video?</label>
       <textarea id="i-studentwhy" placeholder="Would you suggest this video to your little brother or cousin? Why?">${esc(i.studentWhy||"")}</textarea></div>
     <div class="grid2">
-      <div class="fld"><label for="i-by">Reported by</label>
-        ${peopleSelect("i-by",i.by)}</div>
-      <div class="fld"><label for="i-created">Reported on</label>
-        <input id="i-created" type="date" value="${esc(i.created||today())}"></div>
-      <div class="fld"><label for="i-vtype">Video type</label>
-        ${regSelect("vtype","i-vtype",i.vtype,"e.g. Podcast clip, Story, Live",false)}</div>
+      <div class="fld"><label for="i-by">Reported by</label>${peopleSelect("i-by",i.by)}</div>
+      <div class="fld"><label for="i-created">Reported on</label><input id="i-created" type="date" value="${esc(i.created||today())}"></div>
+      <div class="fld"><label>Post on</label>${platPicker("i-platform",plats(i),F)}</div>
+      <div class="fld" ${vtypeOptions(plats(i),F).length<2?"hidden":""}><label for="i-vtype">${F.video?"Video type":"Format"}</label>${vtypeSelect("i-vtype",i.vtype,plats(i),F)}</div>
     </div>
-    <div class="fld"><label for="i-platform">Platform</label>
-      ${regSelect("platform","i-platform",i.platform,"e.g. LinkedIn, X, WhatsApp channel",false)}</div>
 
     <div class="block">
-      <div class="block-h"><h4>Hook &amp; CTA</h4><span class="hint">The first three seconds and the ask</span></div>
-      <div class="fld"><label for="i-hook">Hook</label>
-        <textarea id="i-hook" class="hookin" placeholder="What stops the scroll?">${esc(i.hook)}</textarea></div>
+      <div class="block-h"><h4>${F.video?"Hook &amp; CTA":"What the post shows &amp; CTA"}</h4><span class="hint">${F.video?"The first three seconds and the ask":"The image or slides, and the ask"}</span></div>
+      <div class="fld"><label for="i-hook">${F.video?"Hook":"Image / slides idea"}</label>
+        <textarea id="i-hook" class="hookin" placeholder="${F.video?"What stops the scroll?":"e.g. Slide 1: the question · Slides 2–5: one tip each · Last: the CTA"}">${esc(i.hook)}</textarea></div>
       <div class="fld" style="margin-bottom:0"><label for="i-cta">CTA</label>
         <input id="i-cta" value="${esc(i.cta)}" placeholder="What do they do next?"></div></div>
 
-    <div class="block">
-      <div class="block-h"><h4>Research</h4><span class="hint">Fill these and the card clears its first gate on day one</span></div>
-      <div class="grid2">
-        <div class="fld"><label for="i-source">Idea source</label>
-          ${regSelect("source","i-source",i.source,"e.g. college WhatsApp group, a parent's email")}</div>
-        <div class="fld"><label for="i-tool">Research tool</label>
-          ${regSelect("tool","i-tool",i.tool,"e.g. Semrush, TubeBuddy, Meta Insights")}</div></div>
-      <div class="fld"><label>Target keyword(s) &amp; search volume</label>${kwEditor(kwList,"i-")}</div>
-      <p class="hint" style="margin:-2px 0 10px">One primary, as many secondaries as you like. Volumes are typed by hand and go
-        stale — saving stamps today's date against each one.</p>
-      <div class="fld" style="margin-bottom:0"><label for="i-why">Why this idea</label>
-        <textarea id="i-why" placeholder="One line. What does this win us?">${esc(i.why)}</textarea></div></div>
-
-    <div class="block">
-      <div class="block-h"><h4>The post itself</h4><span class="hint">Written once, here — the card inherits it</span></div>
-      <div class="fld"><label for="i-title">Title</label>
-        <input id="i-title" value="${esc(i.title)}" placeholder="The title as it will appear"></div>
-      <div class="fld"><label for="i-desc">Description</label>
-        <textarea id="i-desc" placeholder="The description / caption as it will be posted">${esc(i.desc)}</textarea></div>
-      <div class="fld" style="margin-bottom:0"><label for="i-hashtags">Hashtags</label>
-        <input id="i-hashtags" value="${esc(i.hashtags)}" placeholder="#delhiuniversity #csas …"></div></div>
-
-    ${isNew?`<p class="hint" style="margin:0 0 14px;padding:11px 13px;background:var(--surface-2);border-radius:var(--r)">
-      A new idea is logged with no status. The head sets it to accepted, rejected or parked afterwards, from the
-      status column in the table or from this panel once the idea exists.</p>`
-    :`<div class="block">
-      <div class="block-h"><h4>Status</h4><span class="badge ${STATUS_UI[i.status].cls||"mute"}">${STATUS_UI[i.status].label}</span></div>
-      ${i.status==="rejected"&&i.rejectReason?`<p class="hint" style="margin:0 0 10px">
-        <b style="color:var(--crit)">${esc(i.rejectReason)}</b> — ${esc(i.rejectNote||"")}</p>`:""}
-      <div class="row" data-w="1">
-        <button class="btn" data-st="new">New</button><button class="btn" data-st="under_review">Under review</button>
-        <button class="btn pri" data-st="accepted">Accept</button><button class="btn danger" data-st="rejected">Reject</button>
-        <button class="btn" data-st="parked">Park</button></div>
-      <p class="hint" style="margin:10px 0 0">Accepting creates a card in Content Process → To Do and copies everything above into it.
-        The idea stays here either way.</p></div>`}
-
-    <div class="block" id="cmtBlock">
+    ${isNew?"":`<div class="block" id="cmtBlock">
       <div class="block-h"><h4>Comments</h4><span class="hint">${i.comments.length} on this idea</span></div>
       ${i.comments.map(c=>`<div class="cmt">${who(c.by)}<p style="margin-top:3px">${esc(c.text)}</p></div>`).join("")||`<p class="hint" style="margin:0">No comments yet.</p>`}
       <div data-w="1"><div class="grid2" style="margin-top:12px">
-        <div class="fld" style="margin-bottom:0"><label for="i-cmtby">Comment as</label>
-          ${peopleSelect("i-cmtby",meName())}</div></div>
+        <div class="fld" style="margin-bottom:0"><label for="i-cmtby">Comment as</label>${peopleSelect("i-cmtby",meName())}</div></div>
       <div class="fld" style="margin-top:10px"><label for="i-newcmt">Add a comment</label>
         <textarea id="i-newcmt" placeholder="Write a note…"></textarea></div>
-      <button class="btn sm" id="addCmt">Post comment</button></div></div>
+      <button class="btn sm" id="addCmt">Post comment</button></div></div>`}
+    </div><div class="dr-col">
 
-    <div class="row" style="margin-top:18px">
+    ${isNew?`<p class="hint" style="margin:0 0 14px;padding:11px 13px;background:var(--surface-2);border-radius:var(--r)">
+      A new idea is logged with no status. Research it, then the head accepts, parks or rejects it.</p>`
+    :`<div class="block decide">
+      <div class="block-h"><h4>Decision</h4><span class="badge ${STATUS_UI[i.status].cls||"mute"}">${STATUS_UI[i.status].label}</span></div>
+      ${i.status==="rejected"&&i.rejectReason?`<p class="hint" style="margin:0 0 10px"><b style="color:var(--crit)">${esc(i.rejectReason)}</b> — ${esc(i.rejectNote||"")}</p>`:""}
+      ${card&&i.status!=="accepted"?`<p class="hint" style="margin:0 0 10px">Its card (${esc(STAGES.find(x=>x.id===card.stage).label)}) is hidden from Content Process — accept the idea again to bring it back.</p>`:""}
+      ${card&&i.status==="accepted"?`<div class="pp-row"><button class="btn pri" data-opencard="${card.id}">Open card →</button>
+          <span class="hint">On the board in ${esc(STAGES.find(x=>x.id===card.stage).label)}${card.scheduled?` · goes live ${esc(dow(card.scheduled).slice(0,3))} ${esc(dmy(card.scheduled))}`:""}</span></div>
+        <div class="pp-row" style="margin-top:10px" data-w="1"><span class="hint">Move back to:</span>
+          <button class="btn sm" data-st="new">To decide</button><button class="btn sm" data-st="parked">Park</button><button class="btn sm danger" data-st="rejected">Reject</button></div>`
+        :`<div class="decide-row" data-w="1">
+          <button class="btn pri decide-acc" data-st="accepted">✓ Accept<small>${slotNext?`books ${esc(dow(slotNext).slice(0,3))} ${esc(dmy(slotNext))}`:"creates the card"}</small></button>
+          <button class="btn" data-st="parked">⏸ Park<small>keep for later</small></button>
+          <button class="btn danger" data-st="rejected">✕ Reject<small>pick a reason</small></button></div>
+        <div class="pp-row" style="margin-top:8px" data-w="1">
+          ${i.status!=="under_review"?`<button class="btn sm" data-st="under_review">Mark as under review</button>`:""}
+          ${["parked","rejected"].includes(i.status)?`<button class="btn sm" data-st="new">Back to To decide</button>`:""}</div>
+        ${!researched?`<p class="hint" style="margin:8px 0 0">Tip: research it first so the decision has numbers behind it.</p>`:""}`}
+      </div>`}
+
+    <div class="block" data-gate="pre" style="border-color:${researched&&cpOk?"color-mix(in srgb,var(--good) 40%,var(--line))":"var(--line)"}">
+      <div class="block-h"><h4>Pre-production</h4>
+        ${missing.length?`<span class="pre-miss">Missing: ${esc(missing.join(", "))}</span>`:`<span class="badge good">✓ ready</span>`}</div>
+      <p class="hint" style="margin:-4px 0 10px">Written once here — the card copies all of it when the idea is accepted.</p>
+      <div class="pre-step">
+        <div class="pre-h"><span class="pre-n ${researched?"ok":""}">${researched?"✓":"1"}</span><b>Research</b>
+          ${!isNew&&window.PIPE?`<button class="btn sm ${kwList.some(k=>k.kw)?"":"pri"}" data-research data-w="1" ${rBusy?"disabled":""}>${rBusy?"Asking vidIQ…":kwList.some(k=>k.kw)?"🔎 Refresh with vidIQ":"🔎 Fill with vidIQ"}</button>`:""}</div>
+        ${isNew&&window.PIPE?`<p class="hint pre-note">Log the idea first, then 🔎 Fill with vidIQ appears here.</p>`:""}
+        ${rBusy?`<p class="hint pre-note"><span class="rs-spin"></span>vidIQ is researching this idea — keywords, volumes and titles land below by themselves.</p>`
+          :rFail?`<p class="hint pre-note" style="color:var(--crit)">vidIQ research didn't work: ${esc(rjob.error||"")}</p>`
+          :rData?`<p class="hint pre-note">Filled by vidIQ on ${esc(dmy((rData.at||"").slice(0,10)))}${i.researchScore!=null?` · score <b>${Math.round(i.researchScore)}</b>`:""}${rData.why?" — "+esc(rData.why):""}.</p>`:""}
+        <div class="fld" style="margin-bottom:10px">${kwEditor(kwList,"i-")}</div>
+        <details class="srcd" ${i.source&&i.tool?"":"open"}><summary>Source: <b>${esc(regLabel("source",i.source)||"not set")}</b> · Tool: <b>${esc(regLabel("tool",i.tool)||"not set")}</b> <span class="srcd-ch">change</span></summary>
+          <div class="grid2" style="margin-top:8px">
+            <div class="fld"><label for="i-source">Idea source</label>${regSelect("source","i-source",i.source,"e.g. college WhatsApp group, a parent's email")}</div>
+            <div class="fld"><label for="i-tool">Research tool</label>${regSelect("tool","i-tool",i.tool,"e.g. Semrush, TubeBuddy, Meta Insights")}</div></div></details>
+        <div class="fld ${i.why?"":"bad"}" style="margin:10px 0 0"><label for="i-why">Why this idea</label>
+          <textarea id="i-why" placeholder="One line. What does this win us?">${esc(i.why)}</textarea></div>
+      </div>
+      <div class="pre-step">
+        <div class="pre-h"><span class="pre-n ${cpOk?"ok":""}">${cpOk?"✓":"2"}</span><b>Draft copy</b>
+          <span class="hint">${window.PIPE?"Claude polishes this at the final check":"The card inherits it"}</span></div>
+        <div class="fld"><label for="i-title">Title</label>
+          <input id="i-title" value="${esc(i.title)}" placeholder="The title as it will appear">
+          ${rData&&(rData.titles||[]).length?`<div class="ttl-ideas"><span class="hint">vidIQ ideas:</span>
+            ${rData.titles.map(t=>`<button class="ttl-chip ${t.title===i.title?"on":""}" data-rs-title="${esc(t.title)}" data-w="1">${esc(t.title)}${t.score!=null?` <b>${Math.round(t.score)}</b>`:""}</button>`).join("")}</div>`:""}</div>
+        <div class="fld"><label for="i-desc">Description</label>
+          <textarea id="i-desc" placeholder="The description / caption as it will be posted">${esc(i.desc)}</textarea></div>
+        <div class="fld" style="margin-bottom:0"><label for="i-hashtags">Hashtags</label>
+          <input id="i-hashtags" value="${esc(i.hashtags)}" placeholder="#delhiuniversity #csas …"></div>
+      </div></div>
+    </div></div>
+
+    <div class="row dr-foot">
       <button class="btn pri" id="saveIdea" data-w="1">${isNew?"Log idea":"Save changes"}</button>
-      <button class="btn" id="xClose2">${canEdit()?"Cancel":"Close"}</button></div>`);
+      <button class="btn" id="xClose2">${canEdit()?"Cancel":"Close"}</button>
+      <span id="dirtyDot" class="dirty" ${dirty?"":"hidden"}>● Unsaved changes</span>
+      ${!isNew?`<button class="btn danger" id="delIdea" style="margin-left:auto" data-w="1">Delete</button>`:""}</div>`,true);
 
     const read=()=>{
       i.idea=$("#i-idea").value.trim(); i.studentWhy=$("#i-studentwhy").value.trim(); i.by=$("#i-by").value.trim(); i.created=$("#i-created").value||today();
-      i.platform=readReg("platform","i-platform",i.platform)||"ig"; i.vtype=readReg("vtype","i-vtype",i.vtype)||"reel";
+      i.platforms=readPlats("i-platform",plats(i)); i.platform=i.platforms[0]; i.vtype=readReg("vtype","i-vtype",i.vtype)||(fmtOf(i).vtypes||[])[0]||i.format;
       i.hook=$("#i-hook").value.trim(); i.cta=$("#i-cta").value.trim();
       i.source=readReg("source","i-source"); i.tool=readReg("tool","i-tool"); i.keywords=readKw("i-");
       i.title=$("#i-title").value.trim(); i.desc=$("#i-desc").value.trim();
@@ -1974,20 +2329,56 @@ function openIdea(id,focusComments){
     };
     const exists=()=>!!IDEAS.find(x=>x.id===i.id);
     const persist=()=>{ if(!exists()) IDEAS.unshift(i); };
+    const saved=()=>{ dirty=false; opened=snap(); };
 
-    $("#xClose").onclick=$("#xClose2").onclick=closeDrawer;
-    ["i-platform","i-vtype","i-source","i-tool"].forEach(wireReg);
-    wireKw("i-", l=>{ read(); draw(l); });
+    $("#xClose").onclick=$("#xClose2").onclick=()=>closeDrawer();
+    $("#drawer").oninput=$("#drawer").onchange=e=>{ if(!e.target.closest("#cmtBlock")) markDirty(); };
+    const fb=$("#i-fmt"); if(fb) fb.onclick=()=>{ read(); const keep={...i};
+      pickFormat(k=>{ Object.assign(i,keep); const nf=fmtOf({format:k}); i.format=k;
+        i.platforms=plats(i).filter(x=>nf.plats.includes(x)); if(!i.platforms.length) i.platforms=[...(nf.defPlats||nf.plats)]; i.platform=i.platforms[0];
+        if(!(nf.vtypes||[]).includes(i.vtype)) i.vtype=(nf.vtypes||[])[0]||k; dirty=true; draw(i.keywords); }); };
+    CLOSE_GUARD=()=>{ if(!dirty || !canEdit()) return true;
+      if(!confirm("Discard your unsaved changes to this idea?")) return false;
+      restore(opened); return true; };
+    IDEA_REDRAW=()=>{ const a=R.activeElement;          // research came back: redraw unless someone is typing
+      if(!$("#drawer").classList.contains("on") || !exists()) return;
+      if(a && $("#drawer").contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) return;
+      if(dirty) read(); draw(i.keywords); };
+    ["i-vtype","i-source","i-tool"].forEach(wireReg);
+    $("#i-platform").onchange=()=>{ const pl=readPlats("i-platform",plats(i)); const box=$("#i-vtype").parentElement;
+      const v=$("#i-vtype").value; box.querySelector("select").remove(); box.querySelector(".otherin").remove();
+      box.insertAdjacentHTML("beforeend", vtypeSelect("i-vtype",v,pl)); wireReg("i-vtype");
+      $("#i-platform").querySelectorAll(".pp-chk").forEach(l=>l.classList.toggle("on", l.querySelector("input").checked)); };
+    wireKw("i-", l=>{ read(); markDirty(); draw(l); });
     const ac=$("#addCmt"); if(ac) ac.onclick=()=>{ const t=$("#i-newcmt").value.trim(); if(!t) return;
       const n=$("#i-cmtby").value.trim()||meName()||"Someone";
       read(); if(!i.idea){ toast("Give the idea a one-line summary first"); return; }
-      persist(); i.comments.push({by:n,text:t,on:today()}); if(save()) openIdea(i.id,true); };
+      persist(); i.comments.push({by:n,text:t,on:today()}); if(save()){ saved(); openIdea(i.id,true); } };
     const si=$("#saveIdea"); if(si) si.onclick=()=>{ read(); if(!i.idea){toast("An idea needs a one-line summary");return;}
       if(!i.by){toast("Add who is reporting this idea");return;}
-      persist(); if(save()){ closeDrawer(); toast(isNew?"Idea logged — the head sets its status":"Saved"); } };
+      persist(); if(save()){ saved(); closeDrawer(true); toast(isNew?"Idea logged — research it, then the head decides":"Saved"); } };
     $("#drawer").querySelectorAll("[data-st]").forEach(b=>b.onclick=()=>{
       read(); if(!i.idea){toast("An idea needs a one-line summary");return;}
-      persist(); closeDrawer(); setStatus(i,b.dataset.st); });
+      persist(); const st=b.dataset.st; saved();
+      if(st==="rejected"){ closeDrawer(true); setStatus(i,st); return; }   // the reject form opens instead
+      setStatus(i,st); draw(i.keywords); });
+    const di=$("#delIdea"); if(di) di.onclick=()=>{
+      const card=CARDS.find(c=>c.ideaId===i.id);
+      if(!confirm(card?"Delete this idea? Its card on the Content Process board stays (it just won't link back here).":"Delete this idea? This can't be undone.")) return;
+      if(window.PIPE && PIPE.busy(i.id+"__r")) PIPE.cancel(i.id+"__r").catch(()=>{});
+      const k=IDEAS.findIndex(x=>x.id===i.id); if(k>=0) IDEAS.splice(k,1);
+      if(card) card.ideaId=null;
+      if(save()){ dirty=false; closeDrawer(true); toast("Idea deleted"); } };
+    const oc=$("#drawer").querySelector("[data-opencard]");
+    if(oc) oc.onclick=()=>{ if(CLOSE_GUARD && !CLOSE_GUARD()) return; openCard(oc.dataset.opencard); };
+    const rb=$("#drawer").querySelector("[data-research]");
+    if(rb) rb.onclick=async()=>{ read(); persist(); if(save()) saved();
+      rb.disabled=true; rb.textContent="Asking vidIQ…";
+      try{ await PIPE.research({ id:i.id, idea:i.idea, platform:i.platform, vtype:i.vtype, scheduled:null,
+          pre:{ title:i.title, desc:i.desc, hashtags:i.hashtags, keywords:i.keywords, why:i.why } }, { idea:()=>i }); draw(i.keywords); }
+      catch(e){ toast(e.message); rb.disabled=false; rb.textContent="🔎 Fill with vidIQ"; } };
+    $("#drawer").querySelectorAll("[data-rs-title]").forEach(b=>b.onclick=()=>{ read(); i.title=b.dataset.rsTitle; markDirty(); draw(i.keywords);
+      toast("Title filled in — press Save to keep it"); });
     lockDrawer();
     if(focusComments) setTimeout(()=>{ const cb=$("#cmtBlock"); if(cb) cb.scrollIntoView({block:"center"}); },60);
   };
@@ -2006,19 +2397,116 @@ function openReject(i){
     <div class="row" style="margin-top:14px"><button class="btn danger" id="doReject">Reject idea</button>
       <button class="btn" id="cancelReject">Back</button></div>`);
   $("#cancelReject").onclick=()=>{ closeDrawer(); refresh(); };
-  $("#doReject").onclick=()=>{ i.status="rejected"; i.rejectReason=$("#r-reason").value; i.rejectNote=$("#r-note").value.trim();
+  $("#doReject").onclick=()=>{ if(!releaseCard(i)) return;
+    i.status="rejected"; i.rejectReason=$("#r-reason").value; i.rejectNote=$("#r-note").value.trim();
     if(save()){ closeDrawer(); toast("Rejected with a reason on record"); } };
+}
+
+/* ---- Claude pipeline → board ----
+   A card moves forward by itself as its Claude job does. Never backwards, and only once per job step,
+   so a card moved back by hand stays there until the job moves on. */
+const PIPE_STAGE = { planning:"inprogress", brief_ready:"inprogress", rendering:"inprogress", seo_running:"inprogress",
+  final_review:"inreview", post_failed:"inreview", scheduled:"approved", posting:"approved", posted:"published" };
+let IDEA_JOBS_SIG="";
+function syncPipelineStages(jobs){
+  if(!canEdit() || !CARDS) return;
+  let moved=0;
+  CARDS.forEach(c=>{
+    const j=jobs[c.id]; if(!j || c.pipeSeen===j.status) return;
+    c.pipeSeen=j.status;
+    if(j.status==="posted"){ const p=j.posted||{}, url=(p[c.platform]&&p[c.platform].url)||(p.yt&&p.yt.url)||(p.ig&&p.ig.url)||"";
+      c.post.links=c.post.links||{}; ["yt","ig"].forEach(t=>{ if(p[t]&&p[t].url&&!c.post.links[t]){ c.post.links[t]=p[t].url; moved++; } });
+      if(url && !c.post.postUrl){ c.post.postUrl=url; moved++; }
+      if(!c.published){ c.published=today(); moved++; }
+      // the card shows what actually went live (the earlier draft is kept in preDraft)
+      const pr=j.post_request||{}, ok=t=>p[t]&&p[t].status==="posted";
+      const title=ok("yt")&&pr.yt?pr.yt.title:null, desc=ok("yt")&&pr.yt?pr.yt.description:ok("ig")&&pr.ig?pr.ig.caption:null;
+      const tags=[...new Set(((ok("yt")&&pr.yt?pr.yt.description:"")+" "+(ok("ig")&&pr.ig?pr.ig.caption:"")).match(/#[\p{L}\p{N}_]+/gu)||[])].join(" ");
+      if(title||desc||tags){ c.preDraft=c.preDraft||{ title:c.pre.title, desc:c.pre.desc, hashtags:c.pre.hashtags };
+        if(title) c.pre.title=title; if(desc) c.pre.desc=desc; if(tags) c.pre.hashtags=tags; moved++; } }
+    const t=PIPE_STAGE[j.status];
+    if(t && STAGES.findIndex(x=>x.id===t) > STAGES.findIndex(x=>x.id===c.stage)){ c.stage=t; moved++; }
+  });
+  // ideas: vidIQ research results go into the idea itself
+  const openIdeaId=OPEN&&OPEN.kind==="idea"?OPEN.id:null;
+  IDEAS.forEach(i=>{ const j=jobs[i.id+"__r"], r=j&&j.status==="research_ready"&&j.research; if(!r || i.researchApplied===r.at || i.id===openIdeaId) return;
+    applyResearch(i,r); i.researchApplied=r.at;
+    const pk=(r.keywords||[]).find(k=>k.keyword===r.primary)||(r.keywords||[])[0]; i.researchScore=pk&&pk.score!=null?Number(pk.score):null;
+    if(!i.title && r.titles && r.titles[0]) i.title=r.titles[0].title;
+    moved++; });
+  if(moved) save();
+  else{ const sig=IDEAS.map(i=>{ const j=jobs[i.id+"__r"]; return j?j.status:""; }).join("|");   // show running / failed in the table
+    if(sig!==IDEA_JOBS_SIG){ IDEA_JOBS_SIG=sig; if(TAB==="ideation") refresh(); if(openIdeaId && IDEA_REDRAW) IDEA_REDRAW(); } }
+}
+
+/* "✍️ Draft hook & talking points": Claude's speaking plan for the shoot */
+function applyScript(c,r){
+  c.shoot={ hook:r.hook||"", points:(r.points||[]).join("\n"), cta:r.cta||"", tips:(r.tips||[]).join(" · ") };
+  c.scriptApplied=r.at;
+}
+
+/* "🔎 Fill with vidIQ": Claude asks vidIQ for keywords, volumes and titles. The results go straight into the
+   card's research: vidIQ's keywords lead the table (its best one is the primary), keywords typed by hand stay
+   below them, and source / why / hashtags are filled only where they're still empty. */
+function applyResearch(pre,r){   // pre = a card's .pre, or an idea (same field names)
+  const c={pre};
+  const found=(r.keywords||[]).filter(k=>k&&k.keyword).slice(0,6).map(k=>({ kw:k.keyword, vol:Number(k.volume)||null,
+    comp:["low","medium","high"].includes(String(k.competition).toLowerCase())?String(k.competition).toLowerCase():null,
+    rank:k.keyword===r.primary?"primary":"secondary", on:today(), by:"vidiq" }));
+  if(found.length && !found.some(k=>k.rank==="primary")) found[0].rank="primary";
+  const mine=(c.pre.keywords||[]).filter(k=>k.kw && k.by!=="vidiq" && !found.some(f=>f.kw.toLowerCase()===k.kw.toLowerCase()))
+    .map(k=>({...k,rank:found.length?"secondary":k.rank}));
+  c.pre.keywords=found.concat(mine).slice(0,8);
+  if(!c.pre.source) c.pre.source="keyword";
+  c.pre.tool="vidiq";
+  if(!c.pre.why && r.why) c.pre.why=r.why;
+  if(!c.pre.hashtags && r.hashtags) c.pre.hashtags=String(r.hashtags).trim();
 }
 
 /* ---- card drawer ---- */
 function openCard(id,showGate){
+  if(id) setTimeout(()=>{ OPEN={kind:"card",id}; });
   const isNew=!id;
   const c=isNew ? blankCard() : CARDS.find(x=>x.id===id);
   if(!c) return;
+  // the form's fields as they were when opened, so "discard changes" really discards
+  const FORM=["idea","format","platform","platforms","vtype","scheduled","time","pre","metrics","shoot"];
+  const snap=()=>JSON.stringify(FORM.map(k=>c[k])), restore=t=>JSON.parse(t).forEach((v,i)=>{ c[FORM[i]]=v; });
+  let opened=snap(), dirty=false;
+  const markDirty=()=>{ if(dirty) return; dirty=true; const d=$("#dirtyDot"); if(d) d.hidden=false; };
 
-  const draw=(kwList)=>{
-    const rOk=gResearch(c.pre)||!!c.override, cOk=gCopy(c.pre), aOk=gAssets(c);
+  const draw=(kwList0)=>{ let kwList=kwList0;
+    let rOk=gResearch(c.pre)||!!c.override, cOk=gCopy(c.pre), aOk=gAssets(c);
     const idx=STAGES.findIndex(s=>s.id===c.stage);
+    // Claude pipeline (pipeline.js): at a check, the review takes the whole window and the card details fold away
+    const F=fmtOf(c), useClaude=!!F.claude&&!!window.PIPE;   // Claude edits only types marked for it (Shorts / Reels)
+    const job=(!isNew&&window.PIPE)?PIPE.job(c.id):null, jobM=(job&&job.media)||{}, claudeDone=!!(jobM.yt||jobM.ig);
+    const reviewing=!!job&&["brief_ready","final_review","post_failed"].includes(job.status);
+    const rjob=(!isNew&&window.PIPE)?PIPE.job(c.id+"__r"):null;   // "🔎 Fill with vidIQ" research
+    const sjob=(!isNew&&window.PIPE)?PIPE.job(c.id+"__s"):null;   // "✍️ Draft hook & talking points"
+    c.shoot=c.shoot||{hook:"",points:"",cta:"",tips:""};
+    const sData=sjob&&sjob.status==="script_ready"?sjob.script:null, sBusy=!!sjob&&sjob.status==="scripting";
+    const shootEmpty=!c.shoot.hook&&!c.shoot.points&&!c.shoot.cta;
+    if(sData && c.scriptApplied!==sData.at && shootEmpty && canEdit()){    // a first draft goes straight in; later ones wait for "Replace"
+      applyScript(c,sData); if(save()){ dirty=false; opened=snap(); } }
+    const slot=slotOf(c), due=c.scheduled?(()=>{ const d=new Date(c.scheduled+"T00:00:00"); d.setDate(d.getDate()-2); return iso(d); })():null;
+    const rBusy=!!rjob&&rjob.status==="researching", rFail=!!rjob&&rjob.status==="failed";
+    const rData=rjob&&rjob.status==="research_ready"?rjob.research:null;
+    if(rData && c.researchApplied!==rData.at && canEdit()){            // new results: put them in the card and keep them
+      applyResearch(c.pre,rData); c.researchApplied=rData.at;
+      if(save()){ dirty=false; opened=snap(); } kwList=c.pre.keywords;
+      setTimeout(()=>toast("vidIQ research added to the card"),50); }
+    // post-production: what's edited, what's live, what's still missing
+    const edited=claudeDone||!!c.post.reel, needThumb=plats(c).includes("yt")&&F.video&&c.vtype==="long";
+    const pj=job&&job.posted||{}, posts=["yt","ig"].filter(t=>pj[t]&&pj[t].status&&pj[t].status!=="skipped")
+      .map(t=>({ pl:t==="yt"?"YouTube":"Instagram", status:pj[t].status, url:pj[t].url, error:pj[t].error }));
+    const pMissing=[!edited&&(fmtOf(c).video?"edited video":"finished design"),needThumb&&!c.post.thumb&&"thumbnail",
+      ...plats(c).filter(pl=>!linkOf(c,pl)).map(pl=>`${regLabel("platform",pl)||pl} link`)].filter(Boolean);
+    const prim=(kwList||[]).find(k=>k.rank==="primary")||(kwList||[])[0];
+    const missing=[!c.pre.source&&"idea source",!c.pre.tool&&"research tool",!(prim&&prim.kw)&&"a primary keyword",
+      prim&&prim.kw&&prim.vol==null&&`volume for “${prim.kw}”`,!c.pre.why&&"why this idea",
+      !c.pre.title&&"title",!c.pre.desc&&"description",!c.pre.hashtags&&"hashtags"].filter(Boolean);
+    if(rData){ rOk=gResearch(c.pre)||!!c.override; cOk=gCopy(c.pre); }
     const srcIdea=c.ideaId?IDEAS.find(x=>x.id===c.ideaId):null;
     const lp=livePost(c);
     const fileSlot=(key,label,accept,note)=>{ const f=c.post[key];
@@ -2032,58 +2520,119 @@ function openCard(id,showGate){
             <div class="hint" style="margin-top:7px">${note}</div>`}</div>`; };
 
     openDrawer(`
-    <div class="dr-h"><div><div class="lbl">${STAGES[idx].label}${srcIdea?" · from Ideation":""}</div>
-      <h3 style="margin-top:4px">${isNew?"New card":esc(c.pre.title||c.idea)}</h3></div>
+    <div class="dr-h"><div style="min-width:0;flex:1"><div class="lbl">${esc(F.icon+" "+F.name)} · ${STAGES[idx].label}${srcIdea?" · from Ideation":""}</div>
+      <h3 style="margin-top:4px">${isNew?"New card":esc(c.pre.title||c.idea)}</h3>
+      ${isNew?"":`<div class="steps">${STAGES.map((st,k)=>`<span class="step ${k<idx?"done":k===idx?"now":""}">${k<idx?"✓ ":""}${st.label}</span>`).join('<span class="step-sep">›</span>')}
+        ${window.PIPE?`<span class="step-pipe">${PIPE.badge(c.id)}</span>`:""}</div>`}</div>
       <button class="btn sm" id="xClose">Close</button></div>
 
+    ${reviewing&&useClaude?`<div id="pipePanel"></div>
+    <details class="dr-more"><summary>Card details — idea, pre-production, post-production</summary>`:""}
+    <div class="dr-cols"><div class="dr-col">
     <div class="fld"><label for="c-idea">Idea</label>
       <input id="c-idea" value="${esc(c.idea)}" placeholder="What is this video, in one line?"></div>
     <div class="grid2">
-      <div class="fld"><label for="c-platform">Platform</label>
-        ${regSelect("platform","c-platform",c.platform,"e.g. LinkedIn, X, WhatsApp channel",false)}</div>
-      <div class="fld"><label for="c-vtype">Video type</label>
-        ${regSelect("vtype","c-vtype",c.vtype,"e.g. Podcast clip, Story, Live",false)}</div></div>
-    <div class="fld"><label for="c-sched">Scheduled date</label><input id="c-sched" type="date" value="${c.scheduled||""}"></div>
+      <div class="fld"><label>Post on</label>${platPicker("c-platform",plats(c),F)}</div>
+      <div class="fld" ${vtypeOptions(plats(c),F).length<2?"hidden":""}><label for="c-vtype">${F.video?"Video type":"Format"}</label>
+        ${vtypeSelect("c-vtype",c.vtype,plats(c),F)}</div></div>
+    <div class="grid2">
+      <div class="fld"><label for="c-sched">Goes live on</label><input id="c-sched" type="date" value="${c.scheduled||""}"></div>
+      <div class="fld"><label for="c-time">at</label><input id="c-time" type="time" value="${esc(c.time||slotPlan(c.platform).time)}"></div></div>
 
     <div class="block" data-gate="pre" style="border-color:${rOk&&cOk?"color-mix(in srgb,var(--good) 40%,var(--line))":"color-mix(in srgb,var(--crit) 35%,var(--line))"}">
       <div class="block-h"><h4>Pre-production</h4>
-        <span class="badge ${rOk?"good":"crit"}">${rOk?"research ✓":"research ×"}</span>
-        <span class="badge ${cOk?"good":"crit"}">${cOk?"copy ✓":"copy ×"}</span></div>
+        ${missing.length?`<span class="pre-miss">Missing: ${esc(missing.join(", "))}</span>`:`<span class="badge good">✓ ready</span>`}</div>
       ${srcIdea?`<p class="hint" style="margin:-3px 0 11px;padding:8px 10px;background:var(--surface-2);border-radius:var(--r-s)">
         Copied from the idea when it was accepted. Edit freely here — the original idea is left untouched.
         <button class="btn sm" id="repull" style="margin-left:6px" data-w="1">Re-pull from idea</button></p>`:""}
-      <div class="grid2">
-        <div class="fld ${c.pre.source?"":"bad"}"><label for="r-source">Idea source<span class="req">required</span></label>
-          ${regSelect("source","r-source",c.pre.source,"e.g. college WhatsApp group")}</div>
-        <div class="fld ${c.pre.tool?"":"bad"}"><label for="r-tool">Research tool<span class="req">required</span></label>
-          ${regSelect("tool","r-tool",c.pre.tool,"e.g. Semrush, TubeBuddy")}</div></div>
-      <div class="fld"><label>Target keyword(s) &amp; search volume<span class="req">primary required</span></label>${kwEditor(kwList,"c-")}</div>
-      <div class="fld ${c.pre.why?"":"bad"}"><label for="r-why">Why this idea<span class="req">required</span></label>
-        <textarea id="r-why" placeholder="One line.">${esc(c.pre.why)}</textarea></div>
-      <div class="fld ${c.pre.title?"":"bad"}"><label for="r-title">Title<span class="req">required</span></label>
-        <input id="r-title" value="${esc(c.pre.title)}"></div>
-      <div class="fld ${c.pre.desc?"":"bad"}"><label for="r-desc">Description<span class="req">required</span></label>
-        <textarea id="r-desc">${esc(c.pre.desc)}</textarea></div>
-      <div class="fld ${c.pre.hashtags?"":"bad"}" style="margin-bottom:0"><label for="r-hashtags">Hashtags<span class="req">required</span></label>
-        <input id="r-hashtags" value="${esc(c.pre.hashtags)}"></div>
+
+      <div class="pre-step">
+        <div class="pre-h"><span class="pre-n ${rOk?"ok":""}">${rOk?"✓":"1"}</span><b>Research</b>
+          ${!isNew&&window.PIPE?`<button class="btn sm ${kwList.some(k=>k.kw)?"":"pri"}" data-research data-w="1" ${rBusy?"disabled":""}>${rBusy?"Asking vidIQ…":kwList.some(k=>k.kw)?"🔎 Refresh with vidIQ":"🔎 Fill with vidIQ"}</button>`:""}</div>
+        ${rBusy?`<p class="hint pre-note"><span class="rs-spin"></span>vidIQ is researching this idea — keywords, volumes and titles land in the table below by themselves.</p>`
+          :rFail?`<p class="hint pre-note" style="color:var(--crit)">vidIQ research didn't work: ${esc(rjob.error||"")}</p>`
+          :rData?`<p class="hint pre-note">Filled by vidIQ on ${esc(dmy((rData.at||"").slice(0,10)))}${rData.why?" — "+esc(rData.why):""}. Edit anything.</p>`:""}
+        <div class="fld" style="margin-bottom:10px">${kwEditor(kwList,"c-")}</div>
+        <details class="srcd" ${c.pre.source&&c.pre.tool?"":"open"}><summary>Source: <b>${esc(regLabel("source",c.pre.source)||"not set")}</b> · Tool: <b>${esc(regLabel("tool",c.pre.tool)||"not set")}</b> <span class="srcd-ch">change</span></summary>
+          <div class="grid2" style="margin-top:8px">
+            <div class="fld ${c.pre.source?"":"bad"}"><label for="r-source">Idea source</label>
+              ${regSelect("source","r-source",c.pre.source,"e.g. college WhatsApp group")}</div>
+            <div class="fld ${c.pre.tool?"":"bad"}"><label for="r-tool">Research tool</label>
+              ${regSelect("tool","r-tool",c.pre.tool,"e.g. Semrush, TubeBuddy")}</div></div></details>
+        <div class="fld ${c.pre.why?"":"bad"}" style="margin:10px 0 0"><label for="r-why">Why this idea</label>
+          <textarea id="r-why" placeholder="One line: why students will watch this now.">${esc(c.pre.why)}</textarea></div>
+      </div>
+
+      <div class="pre-step">
+        <div class="pre-h"><span class="pre-n ${cOk?"ok":""}">${cOk?"✓":"2"}</span><b>Draft copy</b>
+          <span class="hint">${window.PIPE?"Claude polishes this at the final check":"Title, description and hashtags"}</span></div>
+        <div class="fld ${c.pre.title?"":"bad"}"><label for="r-title">Title</label>
+          <input id="r-title" value="${esc(c.pre.title)}">
+          ${rData&&(rData.titles||[]).length?`<div class="ttl-ideas"><span class="hint">vidIQ ideas:</span>
+            ${rData.titles.map(t=>`<button class="ttl-chip ${t.title===c.pre.title?"on":""}" data-rs-title="${esc(t.title)}" data-w="1">${esc(t.title)}${t.score!=null?` <b>${Math.round(t.score)}</b>`:""}</button>`).join("")}</div>`:""}</div>
+        <div class="fld ${c.pre.desc?"":"bad"}"><label for="r-desc">Description</label>
+          <textarea id="r-desc">${esc(c.pre.desc)}</textarea></div>
+        <div class="fld ${c.pre.hashtags?"":"bad"}" style="margin-bottom:0"><label for="r-hashtags">Hashtags</label>
+          <input id="r-hashtags" value="${esc(c.pre.hashtags)}" placeholder="#cuet #du"></div>
+      </div>
       ${c.override?`<p class="hint" style="margin:12px 0 0;padding:9px;background:var(--crit-soft);border-radius:var(--r-s);color:var(--crit)">
         <b>Research gate overridden</b> by ${esc(c.override.by)} on ${dmy(c.override.on)} — ${esc(c.override.reason)}</p>`:""}</div>
 
+    ${F.video?`<div class="block">
+      <div class="block-h"><h4>Shoot</h4>
+        ${!["todo","draft"].includes(c.stage)?`<span class="badge good">✓ shot</span>`
+          :slot?`<span class="badge ${due<today()?"crit":"warn"}">shoot by ${esc(dow(due).slice(0,3))} ${esc(dmy(due))}</span>`:`<span class="hint">no slot yet</span>`}</div>
+      <p class="hint pre-note" style="margin:0 0 10px">${slot?`Goes live <b>${esc(slot.label)}</b> — the posting slot. Shoot two days before so the edit has time.`
+        :`Set the scheduled date above (or accept the idea again) to book a posting slot.`}</p>
+      ${!isNew&&window.PIPE?`<div class="pp-row" style="margin-bottom:10px">
+        <button class="btn sm" data-script data-w="1" ${sBusy?"disabled":""}>${sBusy?"Claude is writing…":"✍️ Draft hook & talking points"}</button>
+        ${sData&&c.scriptApplied!==sData.at&&!shootEmpty?`<button class="btn sm pri" data-script-use data-w="1">Replace with Claude's new draft</button>`:""}
+        <span class="hint">optional — a speaking plan, not a word-for-word script</span></div>`:""}
+      <div class="fld"><label for="s-hook">Hook (first 2 seconds)</label><input id="s-hook" value="${esc(c.shoot.hook)}" placeholder="A question or a surprising fact"></div>
+      <div class="fld"><label for="s-points">Talking points — one per line</label><textarea id="s-points" rows="4">${esc(c.shoot.points)}</textarea></div>
+      <div class="grid2">
+        <div class="fld" style="margin-bottom:0"><label for="s-cta">Closing line</label><input id="s-cta" value="${esc(c.shoot.cta)}" placeholder="Comment your doubt 👇"></div>
+        <div class="fld" style="margin-bottom:0"><label for="s-tips">Shooting notes</label><input id="s-tips" value="${esc(c.shoot.tips)}" placeholder="e.g. show the form on screen"></div></div>
+    </div>`:""}
+
+    </div><div class="dr-col">
+    ${!isNew&&useClaude&&!reviewing?`<div id="pipePanel"></div>`:""}
+
     <div class="block" style="border-color:${aOk?"color-mix(in srgb,var(--good) 40%,var(--line))":"var(--line)"}">
-      <div class="block-h"><h4>Post-production</h4><span class="badge ${aOk?"good":"mute"}">${aOk?"ready to publish":"incomplete"}</span></div>
-      ${fileSlot("reel", c.vtype==="long"?"Edited video":"Edited reel","video/*","Pick the final cut — its name and size are recorded on the card (the file itself stays with you).")}
-      ${c.platform==="yt"
-        ? fileSlot("thumb","Thumbnail","image/*","Required for YouTube. A small preview is kept on the card.")
-        : `<div class="drop" style="opacity:.55;text-align:left"><div class="lbl" style="margin:0 0 3px">Thumbnail</div>
-           <div class="hint">Not required on ${esc(regLabel("platform",c.platform)||c.platform)} — attach one anyway by switching the platform to YouTube.</div></div>`}
-      <div class="fld" style="margin-bottom:6px"><label for="p-url">Final post link</label>
-        <input id="p-url" value="${esc(c.post.postUrl)}" placeholder="https://…"></div>
-      <p class="hint" style="margin:0">${c.platform==="yt"
-        ? (lp?`<b style="color:var(--good)">Linked to YouTube</b> — “${esc(lp.title)}”. Its numbers fill in below by themselves.`
-             :`The post link is the join key. Paste the YouTube link and this card's numbers fill in from the next sync.`)
-        : c.platform==="ig" ? (lp?`<b style="color:var(--good)">Linked to Instagram</b> — “${esc(lp.title)}”. Its numbers fill in below by themselves.`
-             :`The post link is the join key. Paste the Instagram link and this card's numbers fill in from the next sync.`)
-        : `The post link is the join key.`}</p></div>
+      <div class="block-h"><h4>Post-production</h4>
+        ${c.stage==="published"&&c.post.postUrl?`<span class="badge good">✓ published</span>`
+          :pMissing.length?`<span class="pre-miss">Missing: ${esc(pMissing.join(", "))}</span>`:`<span class="badge good">✓ ready to publish</span>`}</div>
+
+      <div class="pre-step">
+        <div class="pre-h"><span class="pre-n ${edited?"ok":""}">${edited?"✓":"1"}</span><b>${F.video?"Edited video":"Finished design"}</b>
+          ${claudeDone?`<span class="hint">by Claude</span>`:c.post.reel?`<span class="hint">your own edit</span>`:""}</div>
+        ${claudeDone?`<div class="pp-mini">
+            ${jobM.yt?`<div><div class="lbl">YouTube</div><video controls preload="metadata" src="${esc(jobM.yt)}"></video></div>`:""}
+            ${jobM.ig?`<div><div class="lbl">Instagram</div><video controls preload="metadata" src="${esc(jobM.ig)}"></video></div>`:""}</div>`
+          :!c.post.reel?`<p class="hint pre-note">${useClaude?`Not edited yet. Upload the raw clip in <b>🤖 Claude edit &amp; post</b>${!isNew?(reviewing?" above":" (top of this column)"):""} — or add your own edit below.`
+              :F.video?"Not edited yet — add the finished video below once it's edited.":"Not designed yet — add the finished image or slides below."}</p>`:""}
+        <details class="manual" ${c.post.reel||!useClaude?"open":""}><summary>${claudeDone?"Use my own edit instead":c.post.reel?(F.video?"Your own edit":"The design"):useClaude?"I edited it myself":F.video?"The finished video":"The finished design"}</summary>
+          ${fileSlot("reel", !F.video?"Image / slides":c.vtype==="long"?"Edited video":"Edited reel", F.video?"video/*":"image/*,application/pdf",
+            F.video?"Pick the final cut. Its name and size are noted on the card — the file itself stays on your computer."
+              :"Pick the finished image (or a PDF of the slides). A small preview is kept on the card.")}
+          ${plats(c).includes("yt")&&c.vtype==="short"?fileSlot("thumb","Thumbnail (optional)","image/*","Optional for Shorts — YouTube picks a frame if you skip it."):""}
+        </details>
+        ${needThumb?fileSlot("thumb","Thumbnail","image/*","Needed for long YouTube videos. A small preview is kept on the card."):""}
+      </div>
+
+      <div class="pre-step">
+        <div class="pre-h"><span class="pre-n ${c.post.postUrl?"ok":""}">${c.post.postUrl?"✓":"2"}</span><b>Published</b>
+          ${lp?`<span class="badge good" style="margin-left:auto">linked · ${fmt(lp.views)} views</span>`:""}</div>
+        ${posts.length?`<div class="pub-list">${posts.map(x=>`<div class="pub-row"><span class="pub-pl">${x.pl}</span>
+            <span class="badge ${x.status==="posted"?"good":"crit"}">${esc(x.status)}</span>
+            ${x.url?`<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.url.replace(/^https?:\/\//,""))}</a>`:`<span class="hint">${esc(x.error||"")}</span>`}</div>`).join("")}</div>`:""}
+        ${plats(c).map(pl=>`<div class="fld" style="margin-bottom:6px"><label>${esc(regLabel("platform",pl)||pl)} link</label>
+          <input data-plink="${pl}" value="${esc(linkOf(c,pl))}" placeholder="https://…"></div>`).join("")}
+        <p class="hint" style="margin:0">${lp?`<b style="color:var(--good)">Linked</b> to “${esc(lp.title)}” — its views, likes and watch time show in Performance below and update every morning.`
+          :c.post.postUrl?`Linked. The views, likes and watch time show up here after the next morning sync.`
+          :window.PIPE?`Filled in by itself when Claude posts. Posted it yourself? Paste the link — the views and likes on this card come from it.`
+          :`Paste the link once it's live — the views and likes on this card come from it.`}</p>
+      </div></div>
 
     ${lp?`
     <div class="block"><div class="block-h"><h4>Performance</h4><span class="badge good">live from ${c.platform==="ig"?"Instagram":"YouTube"}</span></div>
@@ -2116,30 +2665,68 @@ function openCard(id,showGate){
       ${idx<STAGES.length-1&&!canMove(c,STAGES[idx+1].id).ok?`<p class="hint" style="margin:10px 0 0;color:var(--crit)">${esc(canMove(c,STAGES[idx+1].id).msg)}</p>`:""}
       ${c.stage==="todo"&&!rOk?`<button class="btn danger sm" id="override" style="margin-top:8px">Override research gate (head only)</button>`:""}</div>
 
-    <div class="row" style="margin-top:18px">
+    </div></div>
+    ${reviewing&&useClaude?"</details>":""}
+    <div class="row dr-foot">
       <button class="btn pri" id="saveCard" data-w="1">${isNew?"Create card":"Save changes"}</button>
       <button class="btn" id="xClose2">${canEdit()?"Cancel":"Close"}</button>
-      ${!isNew?`<button class="btn danger" id="delCard" style="margin-left:auto" data-w="1">Delete</button>`:""}</div>`);
+      <span id="dirtyDot" class="dirty" ${dirty?"":"hidden"}>● Unsaved changes</span>
+      ${!isNew?`<button class="btn danger" id="delCard" style="margin-left:auto" data-w="1">Delete</button>`:""}</div>`,true);
 
     const read=()=>{
-      c.idea=$("#c-idea").value.trim(); c.platform=readReg("platform","c-platform",c.platform)||"ig"; c.vtype=readReg("vtype","c-vtype",c.vtype)||"reel";
-      c.scheduled=$("#c-sched").value||null;
+      c.idea=$("#c-idea").value.trim(); c.platforms=readPlats("c-platform",plats(c)); c.platform=c.platforms[0];
+      c.vtype=readReg("vtype","c-vtype",c.vtype)||"short";
+      if(both(c) && c.vtype==="reel") c.vtype="short";   // one vertical video for both
+      c.scheduled=$("#c-sched").value||null; c.time=$("#c-time").value||null;
       c.pre.source=readReg("source","r-source"); c.pre.tool=readReg("tool","r-tool"); c.pre.keywords=readKw("c-");
       c.pre.why=$("#r-why").value.trim(); c.pre.title=$("#r-title").value.trim();
       c.pre.desc=$("#r-desc").value.trim(); c.pre.hashtags=$("#r-hashtags").value.trim();
-      c.post.postUrl=$("#p-url").value.trim();
+      $("#drawer").querySelectorAll("[data-plink]").forEach(e=>{ c.post.links[e.dataset.plink]=e.value.trim(); });
+      c.post.postUrl=c.post.links[c.platform]||Object.values(c.post.links).find(Boolean)||"";
+      c.shoot={ hook:$("#s-hook").value.trim(), points:$("#s-points").value.trim(), cta:$("#s-cta").value.trim(), tips:$("#s-tips").value.trim() };
       if(c.stage==="published" && $("#m-views")){ const n=s=>{const e=$(s); return !e||e.value===""?null:Number(e.value);};
         c.metrics={ views:n("#m-views"), likes:n("#m-likes"), comments:n("#m-comments"),
           shares:n("#m-shares"), watch:($("#m-watch")&&$("#m-watch").value.trim())||null, ctr:n("#m-ctr") }; }
     };
     const persist=()=>{ if(!CARDS.find(x=>x.id===c.id)) CARDS.push(c); };
 
-    $("#xClose").onclick=$("#xClose2").onclick=closeDrawer;
-    ["c-platform","c-vtype","r-source","r-tool"].forEach(wireReg);
+    $("#xClose").onclick=$("#xClose2").onclick=()=>closeDrawer();
+    // typing anywhere in the card (not in the Claude panel) = unsaved changes; closing asks first
+    $("#drawer").oninput=$("#drawer").onchange=e=>{ if(!e.target.closest("#pipePanel")) markDirty(); };
+    CLOSE_GUARD=()=>{ if(!dirty || !canEdit()) return true;
+      if(!confirm("Discard your unsaved changes to this card?")) return false;
+      restore(opened); return true; };
+    const rb=$("#drawer").querySelector("[data-research]");
+    if(rb) rb.onclick=async()=>{ read(); persist(); if(save()){ dirty=false; opened=snap(); }
+      rb.disabled=true; rb.textContent="Asking vidIQ…";
+      try{ await PIPE.research(c,{ idea:x=>x.ideaId?IDEAS.find(i=>i.id===x.ideaId):null }); }
+      catch(e){ toast(e.message); rb.disabled=false; rb.textContent="🔎 Fill with vidIQ"; } };
+    const sb=$("#drawer").querySelector("[data-script]");
+    if(sb) sb.onclick=async()=>{ read(); persist(); if(save()){ dirty=false; opened=snap(); }
+      sb.disabled=true; sb.textContent="Claude is writing…";
+      try{ await PIPE.script(c,{ idea:x=>x.ideaId?IDEAS.find(i=>i.id===x.ideaId):null }); }
+      catch(e){ toast(e.message); sb.disabled=false; sb.textContent="✍️ Draft hook & talking points"; } };
+    const su=$("#drawer").querySelector("[data-script-use]");
+    if(su) su.onclick=()=>{ read(); applyScript(c,sjob.script); dirty=true; draw(c.pre.keywords); toast("Claude's draft is in — press Save to keep it"); };
+    $("#drawer").querySelectorAll("[data-rs-title]").forEach(b=>b.onclick=()=>{ read(); c.pre.title=b.dataset.rsTitle;
+      dirty=true; draw(c.pre.keywords); toast("Title filled in — press Save to keep it"); });
+    // Claude pipeline (pipeline.js): raw video → edit → your checks → post
+    if(window.PIPE && $("#pipePanel")) PIPE.mount($("#pipePanel"), c, {
+      canEdit, toast, idea: x=>x.ideaId?IDEAS.find(i=>i.id===x.ideaId):null,
+      beforeStart: ()=>{ read(); persist(); if(save()){ dirty=false; opened=snap(); } },
+      slot: ()=>slotOf(c),
+      onJob: ()=>{ const a=R.activeElement;               // the job moved on: redraw the card, unless someone is typing in it
+        if(!$("#drawer").classList.contains("on") || !CARDS.includes(c)) return true;   // closed or deleted: nothing to redraw
+        if(a && $("#drawer").contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) return false;
+        if(dirty) read(); draw(c.pre.keywords); return true; },
+      onPosted: (url,links)=>{ c.post.links=Object.assign({},c.post.links,links||{}); if(url) c.post.postUrl=url;
+        c.published=c.published||today(); c.stage="published"; persist(); return save(); } });
+    ["c-vtype","r-source","r-tool"].forEach(wireReg);
     wireKw("c-", l=>{ read(); draw(l); });
     ["c-platform","c-vtype"].forEach(id=>$("#"+id).addEventListener("change",()=>{
       if($("#"+id).value!=="__other"){ read(); draw(c.pre.keywords); } }));
-    $("#p-url").addEventListener("change",()=>{ read(); draw(c.pre.keywords); });
+    $("#c-time").addEventListener("change",()=>{ read(); draw(c.pre.keywords); });
+    $("#drawer").querySelectorAll("[data-plink]").forEach(e=>e.addEventListener("change",()=>{ read(); draw(c.pre.keywords); }));
 
     const rp=$("#repull"); if(rp) rp.onclick=()=>{ const s=IDEAS.find(x=>x.id===c.ideaId);
       if(!s){toast("The source idea is gone");return;}
@@ -2163,13 +2750,17 @@ function openCard(id,showGate){
     $("#drawer").querySelectorAll("[data-clear]").forEach(b=>b.onclick=()=>{ read(); c.post[b.dataset.clear]=null; draw(c.pre.keywords); });
 
     const sc=$("#saveCard"); if(sc) sc.onclick=()=>{ read(); if(!c.idea&&!c.pre.title){toast("A card needs an idea or a title");return;}
-      persist(); if(save()){ closeDrawer(); toast(isNew?"Card created":"Saved"); } };
-    const del=$("#delCard"); if(del) del.onclick=()=>{ if(!confirm("Delete this card? The idea it came from stays in Ideation.")) return;
-      const k=CARDS.findIndex(x=>x.id===c.id); if(k>=0) CARDS.splice(k,1); if(save()){ closeDrawer(); toast("Card deleted"); } };
+      persist(); if(save()){ dirty=false; closeDrawer(true); toast(isNew?"Card created":"Saved"); } };
+    const del=$("#delCard"); if(del) del.onclick=()=>{
+      const running=window.PIPE && (PIPE.busy(c.id) || PIPE.busy(c.id+"__r"));   // a Claude job working on this card gets stopped first
+      if(!confirm(running?"Claude is working on this card right now. Deleting it stops that job (files already made are kept). Delete the card?"
+        :"Delete this card? The idea it came from stays in Ideation.")) return;
+      if(running){ if(PIPE.busy(c.id)) PIPE.cancel(c.id).catch(()=>{}); if(PIPE.busy(c.id+"__r")) PIPE.cancel(c.id+"__r").catch(()=>{}); }
+      const k=CARDS.findIndex(x=>x.id===c.id); if(k>=0) CARDS.splice(k,1); if(save()){ closeDrawer(true); toast("Card deleted"); } };
     const ov=$("#override"); if(ov) ov.onclick=()=>{ read(); persist(); openOverride(c); };
     $("#drawer").querySelectorAll("[data-move]").forEach(b=>b.onclick=()=>{
       read(); if(!c.idea&&!c.pre.title){toast("A card needs an idea or a title");return;}
-      persist(); const to=b.dataset.move; if(moveCard(c,to)){ closeDrawer(); toast(`Moved to ${STAGES.find(s=>s.id===to).label}`); } });
+      persist(); const to=b.dataset.move; if(moveCard(c,to)){ dirty=false; closeDrawer(true); toast(`Moved to ${STAGES.find(s=>s.id===to).label}`); } });
     lockDrawer();
   };
   draw(c.pre.keywords||[]);
@@ -2375,11 +2966,13 @@ function mount(){
     ${PANES.map(p=>`<section id="pane-${p}" hidden></section>`).join("")}
     <div class="scrim" id="scrim"></div><aside class="drawer" id="drawer"></aside>
     <div class="tt" id="tt"></div><div class="toast" id="toast"></div></div>`;
-  $("#scrim").onclick=closeDrawer;
+  $("#scrim").onclick=()=>closeDrawer();
   document.addEventListener("keydown",e=>{ if(e.key==="Escape" && HOST.isConnected) closeDrawer(); });
 }
 
 window.SX = {
+  openState: ()=>OPEN,
+  reopen: o=>{ if(!o||!R) return; if(o.kind==="card"&&CARDS.some(c=>c.id===o.id)) openCard(o.id); else if(o.kind==="idea"&&IDEAS.some(i=>i.id===o.id)) openIdea(o.id); },
   normalize: normalize,
   tabs: [["targets","Our agreement"],["summary","Summary"],["ideation","Ideation"],["process","Content Process"],["schedule","Schedule"],["rivals","Keep an Eye on 2nd Love"]],
   /* draw the space. opt: {tab, team, supa, canEdit(), isMember(), me(), people(), save(),
@@ -2387,7 +2980,7 @@ window.SX = {
   render: function(space, wrap, opt){
     mount();
     OPT = opt || {};
-    if(SPACE!==space){ SPACE=space; if(R) closeDrawer(); }
+    if(SPACE!==space){ SPACE=space; if(R) closeDrawer(true); }
     S = normalize(space); IDEAS=S.ideas; CARDS=S.cards; REG=S.reg;
     // targets: their own saved copy, or (before anyone has saved one) what the space held
     const tRaw = (OPT.targets && OPT.targets(space)) || { targets:S.targets, goals:S.goals };
@@ -2401,6 +2994,8 @@ window.SX = {
     if(HOST.parentNode!==wrap) wrap.appendChild(HOST);
     if(LIVE.team!==OPT.team || LIVE.status==="idle") loadLive(false);
     refresh();
+    if(window.PIPE) PIPE.attach(R, { onJobs: syncPipelineStages });
+    if(window.DICTATE) DICTATE.attach(R);   // 🎤 in every text box of this space
   },
   // board counts for the team dashboard: {stageId: n}
   stageCounts: function(space){ const out={}; STAGES.forEach(x=>out[x.id]=0);
