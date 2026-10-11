@@ -651,8 +651,8 @@ function gEdited(c){   // an edited video (Claude's or your own) + a thumbnail w
 function gAssets(c){
   const j=window.PIPE&&PIPE.job(c.id), byClaude=!!(j&&j.media&&(j.media.yt||j.media.ig));   // Claude's render counts as the edited file
   return !!((c.post?.reel||byClaude) && c.post?.postUrl && (!plats(c).includes("yt") || c.vtype!=="long" || c.post?.thumb)); }
-// leaving Ideas needs research · leaving Editing needs the edited video · leaving Your check needs the copy · going Live needs the link
-function gateFor(f){ return f==="todo"?"research":f==="inprogress"?"edited":f==="inreview"?"copy":f==="approved"?"live":null; }
+// Ideas → To shoot is free (research is a reminder, not a block) · leaving Editing needs the edited video · leaving Your check needs the copy · going Live needs the link
+function gateFor(f){ return f==="inprogress"?"edited":f==="inreview"?"copy":f==="approved"?"live":null; }
 function gatePass(c,g){ if(g==="research") return gResearch(c.pre)||!!c.override;
   if(g==="copy") return gCopy(c.pre); if(g==="edited") return gEdited(c); if(g==="live") return !!c.post?.postUrl;
   if(g==="assets") return gAssets(c); return true; }
@@ -1769,7 +1769,7 @@ function detailHTML(key){
     skipped.forEach(c=>miss(c).forEach(m=>counts[m]=(counts[m]||0)+1));
     return head(`${pct(allPub.length-skipped.length,allPub.length)}% published with full research`,`${allPub.length} published card${allPub.length===1?"":"s"}`)
       + dstats([["Full research",allPub.length-skipped.length,""],["Skipped",skipped.length,""],["Overridden",allPub.filter(c=>c.override).length,"head let it through with a reason"],
-          ["Cards in progress missing it",vC.filter(c=>c.stage!=="published"&&!gResearch(c.pre)).length,"will be blocked in Ideas"]])
+          ["Cards in progress missing it",vC.filter(c=>c.stage!=="published"&&!gResearch(c.pre)).length,"research not filled in yet"]])
       + `<div class="dgrid">${hbars("What was missing most",Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(([m,c])=>({label:m,v:c,color:"var(--crit)"})))}</div>`
       + dtable("Published without full research",["Card","Missing","Override"],skipped.map(c=>`<tr data-card="${c.id}" style="cursor:pointer"><td class="td-idea">${cardTitle(c)}</td>
           <td class="td-txt">${miss(c).join(", ")}</td><td class="td-txt">${c.override?`${esc(c.override.by)}: ${esc(c.override.reason)}`:"—"}</td></tr>`),"Every published card had its research done.");
@@ -1780,13 +1780,13 @@ function detailHTML(key){
     return head(`${todo.length} card${todo.length===1?"":"s"} waiting in Ideas`,"accepted, not started yet")
       + dstats([["In Ideas",todo.length,todo.length<3?"thin — log and accept more ideas":todo.length>20?"hoarding — too many waiting":"healthy"],
           ["Oldest",todo.length&&todo[0].age!=null?todo[0].age+" d":"—","since it was accepted"],
-          ["Blocked by research",todo.filter(x=>!gatePass(x.c,"research")).length,"can't leave Ideas yet"],
+          ["Research not done",todo.filter(x=>!gatePass(x.c,"research")).length,"a reminder; it doesn't block the move"],
           ...STAGES.filter(st=>st.id!=="todo"&&st.id!=="published").map(st=>[st.label,vC.filter(c=>c.stage===st.id).length,"further along"])])
       + `<div class="dgrid">${hbars("Waiting, by video type",TYPES().map(k=>({label:vtypeLabel(k),v:todo.filter(x=>x.c.vtype===k).length,color:vtypeColor(k)})).filter(x=>x.v))}
          ${hbars("Waiting, by platform",PLATS().map(k=>({label:regLabel("platform",k),v:todo.filter(x=>x.c.platform===k).length,color:platColor(k)})).filter(x=>x.v))}</div>`
-      + dtable("Cards in Ideas",["Card","Type","Waiting","Research gate"],todo.map(x=>`<tr data-card="${x.c.id}" style="cursor:pointer"><td class="td-idea">${cardTitle(x.c)}</td>
+      + dtable("Cards in Ideas",["Card","Type","Waiting","Research"],todo.map(x=>`<tr data-card="${x.c.id}" style="cursor:pointer"><td class="td-idea">${cardTitle(x.c)}</td>
           <td>${ptags(x.c)} ${vtagFor(x.c)}</td><td class="vol">${x.age!=null?x.age+" days":"—"}</td>
-          <td>${gatePass(x.c,"research")?`<span class="badge good">ready</span>`:`<span class="badge crit">blocked</span>`}</td></tr>`),"Nothing waiting.");
+          <td>${gatePass(x.c,"research")?`<span class="badge good">ready</span>`:`<span class="badge warn">not done</span>`}</td></tr>`),"Nothing waiting.");
   }
   return head("Details","")+`<p class="hint">No details for this box.</p>`;
 }
@@ -2014,15 +2014,13 @@ function renderProcess(){
         ${s.id==="todo"&&!gatePass(c,"research")?`<div class="hint" style="margin-top:7px;color:var(--crit);font-size:11px">Fill the research block to move it on</div>`:""}</div>`; }).join("")||`<div class="dashed" style="margin:0">${ro?"empty":"drop here"}</div>`}
       </div>`;}).join("");
 
-  const blocked=BC.filter(c=>c.stage==="todo"&&!gatePass(c,"research")).length;
   $("#pane-process").innerHTML=`
     <div class="apibar" style="background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 30%,transparent)">
       <span class="ic" style="color:var(--accent);border-color:var(--accent)">FLOW</span>
       <p><b>Ideas → To shoot → Editing → Your check → Scheduled → Live.</b> Accepting an idea books the next free posting slot.
       Claude moves cards through Editing and Your check by itself; you approve the edit, then post now or at the slot.
-      A card leaves <b>Ideas</b> only with its research done (the head can override with a reason), leaves <b>Editing</b> only with an edited
-      video, and leaves <b>Your check</b> only with title, description and hashtags.
-      ${blocked?`<br><span style="color:var(--accent-ink);font-weight:600">${blocked} card${blocked>1?"s":""} waiting for research in Ideas.</span>`:""}</p></div>
+      A card moves from <b>Ideas</b> to <b>To shoot</b> freely, leaves <b>Editing</b> only with an edited
+      video, and leaves <b>Your check</b> only with title, description and hashtags.</p></div>
     <div class="sec"><div class="sec-h"><h3>Content Process</h3>
       <span class="hint">${BC.length} card${BC.length===1?"":"s"} · ${ro?"click a card to open it":"drag cards between columns, or click one to open it"}</span>
       ${ro?"":`<button class="btn pri" id="newCard" style="margin-left:auto">+ New card</button>`}</div>
@@ -2697,7 +2695,7 @@ function openCard(id,showGate){
         ${idx>0?`<button class="btn" data-move="${STAGES[idx-1].id}">← ${STAGES[idx-1].label}</button>`:""}
         ${idx<STAGES.length-1?`<button class="btn pri" data-move="${STAGES[idx+1].id}" ${canMove(c,STAGES[idx+1].id).ok?"":"disabled"}>${STAGES[idx+1].label} →</button>`:""}</div>
       ${idx<STAGES.length-1&&!canMove(c,STAGES[idx+1].id).ok?`<p class="hint" style="margin:10px 0 0;color:var(--crit)">${esc(canMove(c,STAGES[idx+1].id).msg)}</p>`:""}
-      ${c.stage==="todo"&&!rOk?`<button class="btn danger sm" id="override" style="margin-top:8px">Override research gate (head only)</button>`:""}</div>
+</div>
 
     </div></div>
     ${reviewing&&useClaude?"</details>":""}
