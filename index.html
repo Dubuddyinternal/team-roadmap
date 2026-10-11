@@ -25,6 +25,8 @@
 <script src="student-ideas.js"></script>
 <!-- Marketing mega space: campaigns (Details · Assignment · Calendar · Dashboard) — campaign-space.js -->
 <script src="campaign-space.js"></script>
+<!-- Keep an Eye: a fixed template for studying role-model and competitor companies, inside Marketing — watch-space.js -->
+<script src="watch-space.js"></script>
 <!-- Monthly feedback (My Team tab + Administration) and the suggestion box to Sumit (monthly-feedback.js) -->
 <script src="monthly-feedback.js"></script>
 <script>
@@ -4504,6 +4506,7 @@ function currentSpaceRef(){
   if(view==="cbugs"){ const cs=(CSPACES.list||[]).find(x=>x.id===activeCspace); return cs?{key:"cs:"+cs.id,obj:cs,name:cs.name}:null; }
   if(view==="disc"){ const cs=currentDisc(); return cs?{key:"cs:"+cs.id,obj:cs,name:cs.name}:null; }
   if(view==="campaign"){ const cs=currentCampaign(); return cs?{key:"cs:"+cs.id,obj:cs,name:cs.name}:null; }
+  if(view==="watch"){ const cs=currentWatch(); return cs?{key:"cs:"+cs.id,obj:cs,name:cs.name}:null; }
   if(view==="csnode"){ const cs=(CSPACES.list||[]).find(x=>x.id===activeCspace); return cs?{key:"cs:"+cs.id,obj:cs,name:cs.name}:null; }
   if(view==="content"){ const cs=(CSPACES.list||[]).find(x=>x.type==="content" && x.sectionKey===activeSection); return cs?{key:"cs:"+cs.id,obj:cs,name:cs.name}:null; }
   if(view==="roadmap"){ const topKey=String(activeModule).split("::")[0]; const cs=(CSPACES.list||[]).find(x=>x.type==="module" && x.moduleKey===topKey); return cs?{key:"cs:"+cs.id,obj:cs,name:cs.name}:null; }
@@ -5037,8 +5040,9 @@ function normalizeCspaces(c){
   c.list = c.list || [];
   c.list.forEach(x=>{
     if(!x.id) x.id = "cs-" + Math.random().toString(36).slice(2,8);
-    x.type = ["scrum","discovery","content","module","research","competitor","social","pdt","marketing","campaign"].includes(x.type) ? x.type : "bugs";
+    x.type = ["scrum","discovery","content","module","research","competitor","social","pdt","marketing","campaign","watch"].includes(x.type) ? x.type : "bugs";
     if(x.type === "campaign" && window.CX) CX.normalize(x);   // campaign-space.js
+    if(x.type === "watch" && window.WX) WX.normalize(x);      // watch-space.js
     x.members = x.members || {};   // per-space role assignments {email: role}
     if(x.type === "research" || x.type === "competitor"){
       // these spaces host their research/analysis on their own node (like a module node, but not in the module list)
@@ -5141,6 +5145,7 @@ function convertModuleToIdeas(mod, disc){
 let discView = "ideas";   // sub-view inside a discovery space: ideas | roadmap | timeline
 let socialView = "summary";    // Social Media space: summary | ideation | process | schedule (social-space.js)
 let campView = "details";      // Campaign space: details | assign | calendar | dash (campaign-space.js)
+let watchView = "companies";   // Keep an Eye space: companies | fill | updates | compare (watch-space.js)
 const MKT_OPEN = {};           // Marketing spaces open in the sidebar (this visit)
 // the Marketing space a space lives inside (or null)
 function mktParentOf(cs){ return (cs && cs.parent) ? ((CSPACES.list||[]).find(x=>x.id===cs.parent && x.type==="marketing") || null) : null; }
@@ -5149,6 +5154,7 @@ function mktOpen(cs){ return MKT_OPEN[cs.id] !== false; }
 function openMarketingTemplates(parent){
   const T = [
     { id:"campaign",   emo:"📣", name:"Create campaign",     meta:"Details · Contents · Calendar", desc:"One sale, one place. Fill in the offer once, list everything that goes out, then arrange it day by day." },
+    { id:"watch",      emo:"👀", name:"Keep an Eye",         meta:"Companies · Template · What changed · Compare", desc:"Study companies we want to be like and our competitors. Every company gets the same fixed template, so interns know exactly what to fill." },
     { id:"social",     emo:"🎯", name:"Social media",        meta:"Ideation · Process · Schedule", desc:"Every post has a reason before it is made and a verdict after it ships — research, hook, CTA, then a board and a calendar." },
     { id:"content",    emo:"📚", name:"Educational content", meta:"Tasks · Budget · Kanban",       desc:"A content section with tasks, deadlines, budgets and the List / Board views — like your exam sections." },
     { id:"competitor", emo:"⚔️", name:"Competitor analysis", meta:"Product-level · Feature-level", desc:"Compare against competitors — product-level feature grids and feature-level deep dives, side by side." },
@@ -5180,6 +5186,16 @@ function openMarketingTemplates(parent){
           renderAll(); pushAll();
           toast("\u201C"+v.title+"\u201D created under "+parent.name);
         }, {hideExtras:true, titleLabel:"Campaign name (e.g. CUET Crash Course — Early Bird)"});
+        return;
+      }
+      if(t.id==="watch"){
+        openDialog("Name this space", {title:"Keep an Eye"}, v=>{
+          const cs = { id:"cs-"+Date.now().toString(36), name:v.title, type:"watch", parent:parent.id, access:"open", members:{}, companies:[] };
+          CSPACES.list.push(cs); MKT_OPEN[parent.id] = true;
+          view = "watch"; activeCspace = cs.id; watchView = "companies";
+          renderAll(); pushAll();
+          toast("\u201C"+v.title+"\u201D created under "+parent.name);
+        }, {hideExtras:true, titleLabel:"Space name (e.g. Keep an Eye)"});
         return;
       }
       window._pendingParent = parent.id;   // picked up when the space is created
@@ -6591,6 +6607,7 @@ function devBoardIsEmpty(){
 function csIsActive(cs){
   if(cs.type==="marketing") return (CSPACES.list||[]).some(x=>x.parent===cs.id && csIsActive(x));
   if(cs.type==="campaign") return view==="campaign" && activeCspace===cs.id;
+  if(cs.type==="watch") return view==="watch" && activeCspace===cs.id;
   return cs.type==="bugs" ? (view==="cbugs" && activeCspace===cs.id)
     : cs.type==="discovery" ? (view==="disc" && activeCspace===cs.id)
     : cs.type==="social" ? (view==="social" && activeCspace===cs.id)
@@ -6609,6 +6626,7 @@ function navToSpace(cs){
     renderAll(); return;
   }
   if(cs.type==="campaign"){ view = "campaign"; activeCspace = cs.id; campView = "details"; renderAll(); return; }
+  if(cs.type==="watch"){ view = "watch"; activeCspace = cs.id; watchView = "companies"; renderAll(); return; }
   if(cs.type==="bugs"){ view = "cbugs"; activeCspace = cs.id; }
   else if(cs.type==="discovery"){ view = "disc"; activeCspace = cs.id; discView = "ideas"; }
   else if(cs.type==="social"){ view = "social"; activeCspace = cs.id; socialView = "summary"; }
@@ -6706,13 +6724,14 @@ function workTabs(){
       : [{key:pdtView,label:pdtSectionLabel(pdtView)}];
   if(view==="social") return SX.tabs.map(([key,label])=>({key, label}));
   if(view==="campaign" && window.CX) return CX.tabs.map(([key,label])=>({key, label}));
+  if(view==="watch" && window.WX) return WX.tabs.map(([key,label])=>({key, label}));
   const l = view==="rmap" ? "Timeline" : view==="okr" ? "Objectives"
     : view==="dev" ? "Board" : (view==="bugs"||view==="cbugs") ? "Board" : view==="content" ? "Board"
     : view==="ideas" ? "Ideas" : view==="admin" ? "Admin" : "Board";
   return [{key:"work",label:l}];
 }
 // which work tab is highlighted while the work pane is showing
-function workTabActiveKey(){ return view==="disc" ? discView : view==="social" ? socialView : view==="campaign" ? campView : view==="pdt" ? pdtView : "work"; }
+function workTabActiveKey(){ return view==="disc" ? discView : view==="social" ? socialView : view==="campaign" ? campView : view==="watch" ? watchView : view==="pdt" ? pdtView : "work"; }
 function applyPaneTab(){
   const su=$("pane-summary"), wk=$("pane-work");
   if(su) su.classList.toggle("show", paneTab==="summary");
@@ -6723,6 +6742,7 @@ function selectWorkTab(key){
   if(view==="disc" && discView!==key){ discView=key; renderAll(); return; }  // re-render the sub-view
   if(view==="social" && socialView!==key){ socialView=key; renderAll(); return; }
   if(view==="campaign" && campView!==key){ campView=key; renderAll(); return; }
+  if(view==="watch" && watchView!==key){ watchView=key; renderAll(); return; }
   if(view==="pdt" && pdtView!==key){ pdtView=key; renderAll(); return; }
   applyPaneTab(); renderTabs();
 }
@@ -6732,7 +6752,7 @@ function renderTabs(){
   if(sig!==_lastNavSig){ _lastNavSig=sig; paneTab="work"; }
   strip.innerHTML="";
   const actKey = workTabActiveKey();
-  ((view==="social" || view==="campaign") ? [] : [{summary:true,label:"Summary"}]).concat(workTabs()).forEach(t=>{
+  ((view==="social" || view==="campaign" || view==="watch") ? [] : [{summary:true,label:"Summary"}]).concat(workTabs()).forEach(t=>{
     const b=document.createElement("button");
     const on = t.summary ? (paneTab==="summary") : (paneTab==="work" && t.key===actKey);
     b.className="tab"+(on?" active":"");
@@ -6746,7 +6766,7 @@ function renderTabs(){
 }
 function renderHeader(){
   const _rm = view==="rmap" ? RMAPS.maps.find(m=>m.id===activeRmap) : null;
-  $("rm-title").textContent = view==="admin" ? "Administration" : view==="okr" ? "Team OKRs" : view==="content" ? "Educational Content Roadmap" : view==="ideas" ? "Team Ideas" : view==="dev" ? "Development Board" : view==="bugs" ? "Bugs & Issues" : view==="cbugs" ? ((CSPACES.list.find(x=>x.id===activeCspace)||{}).name || "Bugs board") : view==="disc" ? (((currentDisc()||{}).name) || "Product roadmap") : view==="social" ? (((currentSocial()||{}).name) || "Social Media") : view==="campaign" ? (((currentCampaign()||{}).name) || "Campaign") : view==="pdt" ? (((currentPdt()||{}).name) || "Product All in One") : view==="rmap" ? ((_rm && _rm.name) || "Roadmap") : (DATA.title || "Product Roadmap");
+  $("rm-title").textContent = view==="admin" ? "Administration" : view==="okr" ? "Team OKRs" : view==="content" ? "Educational Content Roadmap" : view==="ideas" ? "Team Ideas" : view==="dev" ? "Development Board" : view==="bugs" ? "Bugs & Issues" : view==="cbugs" ? ((CSPACES.list.find(x=>x.id===activeCspace)||{}).name || "Bugs board") : view==="disc" ? (((currentDisc()||{}).name) || "Product roadmap") : view==="social" ? (((currentSocial()||{}).name) || "Social Media") : view==="campaign" ? (((currentCampaign()||{}).name) || "Campaign") : view==="watch" ? (((currentWatch()||{}).name) || "Keep an Eye") : view==="pdt" ? (((currentPdt()||{}).name) || "Product All in One") : view==="rmap" ? ((_rm && _rm.name) || "Roadmap") : (DATA.title || "Product Roadmap");
   $("rm-subtitle").textContent = view==="okr"
     ? "Objectives for this cycle and the measurable key results that tell us if we're getting there."
     : view==="content"
@@ -6761,6 +6781,8 @@ function renderHeader(){
     ? "Every post has a reason before it is made and a verdict after it ships. Two people, one record."
     : view==="campaign"
     ? (((currentCampaign()||{}).details||{}).tagline || "Fill in the offer once. Everything that goes out gets listed below, then arranged by date.")
+    : view==="watch"
+    ? "Companies we want to be like and companies we compete with. Same template for every one, so nothing gets missed."
     : (view==="bugs" || view==="cbugs")
     ? "Reported by the team and by students \u2014 triage, fix, verify, close."
     : view==="ideas"
@@ -12695,6 +12717,31 @@ function renderContentCampaign(){
     goProcess: c=>{ const soc = campaignSocial(c); if(!soc) return; view = "social"; activeCspace = soc.id; socialView = "process"; renderAll(); },
   });
 }
+/* ---------- Keep an Eye space (watch-space.js), inside a Marketing space ---------- */
+function currentWatch(){ return (CSPACES.list||[]).find(x=>x.id===activeCspace && x.type==="watch") || null; }
+function renderContentWatch(){
+  const wrap = $("content"); wrap.innerHTML = "";
+  const cs = currentWatch();
+  if(!cs){ view = "roadmap"; renderAll(); return; }
+  WX.render(cs, wrap, {
+    tab: watchView,
+    canEdit: canEditHere,
+    me: ()=>{ const u=currentUser(); return u ? userDisplayName(u) : ""; },
+    people: ()=> USERS.filter(u=>isMember(u, TEAM)).map(u=>({ id:u.id, name:userDisplayName(u), role:(u.profile&&u.profile.title)||roleLabel(roleOf(u,TEAM)) })),
+    save: ()=> pushAll(),
+    saveQuiet: ()=> saveQuiet(),
+    setTab: t=>{ watchView = t; renderAll(); },
+    // the person studying a company gets an email + a 🔔 (idea-mail function, action "assign")
+    notify: async (c, co)=>{
+      try{
+        const r = await SUPA.functions.invoke("idea-mail", { body: { action:"assign", team:TEAM, user_id:co.ownerId,
+          campaign: c.name, item: { name:"Study "+co.name, kind:"Company study", date:co.due||"", platform:"",
+          details:"Open "+c.name+" → Fill the template, and fill every MUST FILL box for "+co.name+"." } } });
+        return r.data || { sent:false, reason:(r.error && r.error.message) || "unknown" };
+      }catch(e){ return { sent:false, reason:e.message }; }
+    },
+  });
+}
 function renderContentSocial(){
   const wrap = $("content"); wrap.innerHTML = "";
   const cs = currentSocial();
@@ -13516,7 +13563,7 @@ function renderAll(){
           b.insertBefore(chev, b.firstChild);
           b.querySelector(".dot").outerHTML = '<span class="ws-kid-ico">📢</span>';
         } else if(_nested){
-          b.querySelector(".dot").outerHTML = '<span class="ws-kid-ico">'+(cs.type==="social" ? "\uD83C\uDFAF" : cs.type==="campaign" ? "\uD83D\uDCE3" : "\u2022")+'</span>';
+          b.querySelector(".dot").outerHTML = '<span class="ws-kid-ico">'+(cs.type==="social" ? "\uD83C\uDFAF" : cs.type==="campaign" ? "\uD83D\uDCE3" : cs.type==="watch" ? "\uD83D\uDC40" : "\u2022")+'</span>';
         }
         if(editMode){
           const doDelete = ()=>{
@@ -13534,6 +13581,8 @@ function renderAll(){
               ? "Delete the \u201C"+cs.name+"\u201D space? The spaces inside it are NOT deleted \u2014 they go back to the sidebar."
               : cs.type==="campaign"
               ? "Delete the campaign \u201C"+cs.name+"\u201D and its "+((cs.items||[]).length)+" item(s)? This can't be undone."
+              : cs.type==="watch"
+              ? "Delete \u201C"+cs.name+"\u201D and the "+((cs.companies||[]).length)+" company stud"+((cs.companies||[]).length===1?"y":"ies")+" in it? This can't be undone."
               : "Remove \u201C"+cs.name+"\u201D from the sidebar? Its board and cards stay under Development.";
             if(!confirm(msg)) return;
             if(cs.type==="bugs"){
@@ -13555,6 +13604,7 @@ function renderAll(){
             }
             if(cs.type==="marketing") CSPACES.list.forEach(x=>{ if(x.parent===cs.id) delete x.parent; });
             if(cs.type==="campaign" && view==="campaign" && activeCspace===cs.id) view = "roadmap";
+            if(cs.type==="watch" && view==="watch" && activeCspace===cs.id) view = "roadmap";
             CSPACES.list.splice(CSPACES.list.indexOf(cs),1);
             renderAll(); pushAll(); toast("Space removed");
           };
@@ -13651,6 +13701,15 @@ function renderAll(){
             _host.appendChild(sub);
           });
         }
+        if(cs.type==="watch" && view==="watch" && activeCspace===cs.id && window.WX){
+          [["companies","\uD83C\uDFE2 Companies"],["fill","\uD83D\uDCDD Fill the template"],["updates","\uD83D\uDC40 What changed"],["compare","\u2696\uFE0F Compare"]].forEach(([k,lbl])=>{
+            const sub=document.createElement("button");
+            sub.className="ws-sub"+(_nested?" ws-sub-nested":"")+(watchView===k?" active":"");
+            sub.textContent=lbl;
+            sub.onclick=()=>{ watchView=k; renderAll(); };
+            _host.appendChild(sub);
+          });
+        }
         if(cs.type==="marketing" && mktOpen(cs)){
           const _kids = document.createElement("div"); _kids.className = "ws-kids";
           _host.appendChild(_kids);
@@ -13728,6 +13787,12 @@ function renderAll(){
     $("mods").innerHTML = "";
     if(!spaceViewAllowed() || !currentCampaign() || !window.CX) { activeCspace = null; view = "roadmap"; defaultView(); if(view==="campaign"){ view = "okr"; } renderAll(); return; }
     renderContentCampaign();
+  }
+  else if(view==="watch"){
+    $("side-title").style.display = "none";
+    $("mods").innerHTML = "";
+    if(!spaceViewAllowed() || !currentWatch() || !window.WX) { activeCspace = null; view = "roadmap"; defaultView(); if(view==="watch"){ view = "okr"; } renderAll(); return; }
+    renderContentWatch();
   }
   else if(view==="pdt"){
     $("side-title").style.display = "none";
