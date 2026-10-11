@@ -58,3 +58,13 @@ Wording: YouTube says **subscribers** and Instagram says **followers**.
 ## Clean-up you can do any time
 
 - In Supabase → Edge Functions, delete the old `ig-debug` function. It's already switched off.
+
+## Keep an Eye on 2nd Love
+
+This is the last tab in the Social Media space. It starts with the line "1st love is our users. 2nd love is our competitors."
+
+- **Us vs them:** a table of each competitor's Instagram followers, YouTube subscribers, posts per week and top post views, next to ours. **Log numbers** saves a reading each week, and the small green or red number is the change since the reading before.
+- **Their study:** the same boxes for every competitor: what they post, when, their best post this week, hooks, look and feel, what they ask viewers to do, what students say in their comments, and what we'll try. Four of them are must fill.
+- **→ Send to Ideation:** turns "What we'll try" into an idea on the Ideation tab.
+
+Data is saved in `space.sx.rivals`. Code: `renderRivals` in `social-space.js`.
