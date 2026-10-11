@@ -3870,6 +3870,12 @@ body{margin:0}
           <span class="tpl-desc">Compare against competitors — product-level feature grids and feature-level deep dives, side by side.</span>
           <span class="tpl-by">Product-level · Feature-level</span>
         </button>
+        <button class="tpl-card" data-tpl="watch">
+          <span class="tpl-emoji">👀</span>
+          <span class="tpl-name">Keep an Eye</span>
+          <span class="tpl-desc">Study companies we want to be like and our competitors. Every company gets the same fixed template, so interns know exactly what to fill.</span>
+          <span class="tpl-by">Companies · Template · What changed · Compare</span>
+        </button>
         <button class="tpl-card" data-tpl="pdt">
           <span class="tpl-emoji">🧩</span>
           <span class="tpl-name">Product All in One</span>
@@ -5042,7 +5048,7 @@ function normalizeCspaces(c){
     if(!x.id) x.id = "cs-" + Math.random().toString(36).slice(2,8);
     x.type = ["scrum","discovery","content","module","research","competitor","social","pdt","marketing","campaign","watch"].includes(x.type) ? x.type : "bugs";
     if(x.type === "campaign" && window.CX) CX.normalize(x);   // campaign-space.js
-    if(x.type === "watch" && window.WX) WX.normalize(x);      // watch-space.js
+    if(x.type === "watch"){ delete x.parent; if(window.WX) WX.normalize(x); }   // watch-space.js — its own space, never inside Marketing
     x.members = x.members || {};   // per-space role assignments {email: role}
     if(x.type === "research" || x.type === "competitor"){
       // these spaces host their research/analysis on their own node (like a module node, but not in the module list)
@@ -5154,7 +5160,6 @@ function mktOpen(cs){ return MKT_OPEN[cs.id] !== false; }
 function openMarketingTemplates(parent){
   const T = [
     { id:"campaign",   emo:"📣", name:"Create campaign",     meta:"Details · Contents · Calendar", desc:"One sale, one place. Fill in the offer once, list everything that goes out, then arrange it day by day." },
-    { id:"watch",      emo:"👀", name:"Keep an Eye",         meta:"Companies · Template · What changed · Compare", desc:"Study companies we want to be like and our competitors. Every company gets the same fixed template, so interns know exactly what to fill." },
     { id:"social",     emo:"🎯", name:"Social media",        meta:"Ideation · Process · Schedule", desc:"Every post has a reason before it is made and a verdict after it ships — research, hook, CTA, then a board and a calendar." },
     { id:"content",    emo:"📚", name:"Educational content", meta:"Tasks · Budget · Kanban",       desc:"A content section with tasks, deadlines, budgets and the List / Board views — like your exam sections." },
     { id:"competitor", emo:"⚔️", name:"Competitor analysis", meta:"Product-level · Feature-level", desc:"Compare against competitors — product-level feature grids and feature-level deep dives, side by side." },
@@ -5186,16 +5191,6 @@ function openMarketingTemplates(parent){
           renderAll(); pushAll();
           toast("\u201C"+v.title+"\u201D created under "+parent.name);
         }, {hideExtras:true, titleLabel:"Campaign name (e.g. CUET Crash Course — Early Bird)"});
-        return;
-      }
-      if(t.id==="watch"){
-        openDialog("Name this space", {title:"Keep an Eye"}, v=>{
-          const cs = { id:"cs-"+Date.now().toString(36), name:v.title, type:"watch", parent:parent.id, access:"open", members:{}, companies:[] };
-          CSPACES.list.push(cs); MKT_OPEN[parent.id] = true;
-          view = "watch"; activeCspace = cs.id; watchView = "companies";
-          renderAll(); pushAll();
-          toast("\u201C"+v.title+"\u201D created under "+parent.name);
-        }, {hideExtras:true, titleLabel:"Space name (e.g. Keep an Eye)"});
         return;
       }
       window._pendingParent = parent.id;   // picked up when the space is created
@@ -6637,7 +6632,7 @@ function navToSpace(cs){
   else { view = "dev"; devSpace = cs.devId || null; devSprint = null; }
   renderAll();
 }
-function csTypeLabel(t){ return t==="scrum"?"Scrum":t==="discovery"?"Product":t==="content"?"Content":t==="module"?"Module":t==="research"?"Research":t==="competitor"?"Competitor":t==="social"?"Social":t==="pdt"?"Product All in One":"Bugs"; }
+function csTypeLabel(t){ return t==="scrum"?"Scrum":t==="discovery"?"Product":t==="content"?"Content":t==="module"?"Module":t==="research"?"Research":t==="competitor"?"Competitor":t==="social"?"Social":t==="pdt"?"Product All in One":t==="watch"?"Keep an Eye":"Bugs"; }
 function closeAllList(){ const e=document.getElementById("alllist-back"); if(e) e.remove(); }
 function openAllList(kind){
   closeAllList();
@@ -12717,7 +12712,7 @@ function renderContentCampaign(){
     goProcess: c=>{ const soc = campaignSocial(c); if(!soc) return; view = "social"; activeCspace = soc.id; socialView = "process"; renderAll(); },
   });
 }
-/* ---------- Keep an Eye space (watch-space.js), inside a Marketing space ---------- */
+/* ---------- Keep an Eye space (watch-space.js) ---------- */
 function currentWatch(){ return (CSPACES.list||[]).find(x=>x.id===activeCspace && x.type==="watch") || null; }
 function renderContentWatch(){
   const wrap = $("content"); wrap.innerHTML = "";
@@ -13619,7 +13614,7 @@ function renderAll(){
           if(hasPerm("add_spaces")){   // put a space inside a Marketing space, or take it out
             const _par = mktParentOf(cs);
             if(_par) _items.push({label:"Move out of \u201C"+_par.name+"\u201D", onClick:()=>{ delete cs.parent; pushAll(); toast("\u201C"+cs.name+"\u201D moved back to the sidebar"); }});
-            else if(cs.type!=="marketing") CSPACES.list.filter(x=>x.type==="marketing" && x.id!==cs.id).forEach(m=>{
+            else if(cs.type!=="marketing" && cs.type!=="watch") CSPACES.list.filter(x=>x.type==="marketing" && x.id!==cs.id).forEach(m=>{
               _items.push({label:"Move into \u201C"+m.name+"\u201D", onClick:()=>{ cs.parent = m.id; MKT_OPEN[m.id] = true; pushAll(); toast("\u201C"+cs.name+"\u201D is now inside \u201C"+m.name+"\u201D"); }});
             });
           }
@@ -18808,11 +18803,11 @@ document.querySelectorAll("#tpl-overlay .tpl-card").forEach(card=>{
   card.onclick = ()=>{
     const type = card.getAttribute("data-tpl");
     $("tpl-overlay").classList.remove("show");
-    openDialog(type==="marketing" ? "New Marketing space" : type==="pdt" ? "New Product All in One space" : type==="social" ? "New Social Media space" : type==="scrum" ? "New Scrum space" : type==="discovery" ? "New Product roadmap space" : type==="content" ? "New Educational content space" : type==="research" ? "New Product Research space" : type==="competitor" ? "New Competitor Analysis space" : "New Bugs space", {}, v=>{
+    openDialog(type==="marketing" ? "New Marketing space" : type==="pdt" ? "New Product All in One space" : type==="social" ? "New Social Media space" : type==="scrum" ? "New Scrum space" : type==="discovery" ? "New Product roadmap space" : type==="content" ? "New Educational content space" : type==="research" ? "New Product Research space" : type==="competitor" ? "New Competitor Analysis space" : type==="watch" ? "New Keep an Eye space" : "New Bugs space", type==="watch" ? {title:"Keep an Eye"} : {}, v=>{
      chooseAccess(v.title, (access, members)=>{
       const cs = { id:"cs-"+Date.now().toString(36), name:v.title, type, access, members: members||{} };
-      // made from a Marketing space's "＋ Add space": it lives inside that space
-      if(window._pendingParent && type!=="marketing"){ cs.parent = window._pendingParent; MKT_OPEN[cs.parent] = true; }
+      // made from a Marketing space's "＋ Add space": it lives inside that space (Keep an Eye is always its own space)
+      if(window._pendingParent && type!=="marketing" && type!=="watch"){ cs.parent = window._pendingParent; MKT_OPEN[cs.parent] = true; }
       window._pendingParent = null;
       if(type==="marketing"){
         CSPACES.list.push(cs);
@@ -18858,6 +18853,11 @@ document.querySelectorAll("#tpl-overlay .tpl-card").forEach(card=>{
         CSPACES.list.push(cs);
         view = "csnode"; activeCspace = cs.id; activeAnalysis = null; researchOpen = false;
         renderAll(); pushAll();
+      } else if(type==="watch"){
+        cs.companies = [];
+        CSPACES.list.push(cs);
+        view = "watch"; activeCspace = cs.id; watchView = "companies";
+        renderAll(); pushAll();
       } else if(type==="content"){
         const key = v.title.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"") + "-" + Date.now().toString(36).slice(-3);
         CONTENT.sections.push({name:v.title, key, tasks:[], spends:[]});
@@ -18873,7 +18873,7 @@ document.querySelectorAll("#tpl-overlay .tpl-card").forEach(card=>{
       }
       toast("\u201C"+v.title+"\u201D added to Spaces");
      });
-    }, {hideExtras:true, titleLabel: type==="scrum" ? "Space name (e.g. DYNG Tech Team)" : type==="discovery" ? "Space name (e.g. Dubuddy Product Roadmap)" : type==="content" ? "Space name (e.g. NEET Content)" : type==="research" ? "Space name (e.g. Dubuddy Discovery)" : type==="competitor" ? "Space name (e.g. Test-prep landscape)" : "Space name (e.g. Panel Bugs)"});
+    }, {hideExtras:true, titleLabel: type==="scrum" ? "Space name (e.g. DYNG Tech Team)" : type==="discovery" ? "Space name (e.g. Dubuddy Product Roadmap)" : type==="content" ? "Space name (e.g. NEET Content)" : type==="research" ? "Space name (e.g. Dubuddy Discovery)" : type==="competitor" ? "Space name (e.g. Test-prep landscape)" : type==="watch" ? "Space name (e.g. Keep an Eye)" : "Space name (e.g. Panel Bugs)"});
   };
 });
 $("cmt-post").onclick = ()=> postComment();
@@ -19182,7 +19182,7 @@ function renderAdminSpaces(wrap){
   const hr = document.createElement("div"); hr.className = "au-row au-head";
   ["Space","Type",""].forEach(t=>{ const c = document.createElement("div"); c.className = "au-cell"; c.textContent = t; hr.appendChild(c); });
   list.appendChild(hr);
-  const TYPE = { social:"Social Media", discovery:"Product roadmap", scrum:"Scrum", pdt:"Product All in One", content:"Educational content", research:"Product Research", competitor:"Competitor Analysis", bugs:"Bugs", module:"Roadmap module" };
+  const TYPE = { social:"Social Media", discovery:"Product roadmap", scrum:"Scrum", pdt:"Product All in One", content:"Educational content", research:"Product Research", competitor:"Competitor Analysis", watch:"Keep an Eye", bugs:"Bugs", module:"Roadmap module" };
   (CSPACES.list || []).forEach(cs=>{
     const r = document.createElement("div"); r.className = "au-row";
     const n = document.createElement("div"); n.className = "au-cell au-name"; n.textContent = cs.name;

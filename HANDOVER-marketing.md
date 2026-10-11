@@ -12,7 +12,7 @@
 
 1. Go to Administration → Spaces → **＋ Add space** → **Marketing**, and give it a name, for example "Dubuddy Marketing".
 2. Every Social Media space that isn't already inside a Marketing space moves into it automatically.
-3. To add more inside it, use **＋ Add space** under the Marketing space in the sidebar. You can choose Create campaign, Keep an Eye, Social media, Educational content, Competitor analysis or Product roadmap. Push automations and Influencer pipeline show as "coming soon".
+3. To add more inside it, use **＋ Add space** under the Marketing space in the sidebar. You can choose Create campaign, Social media, Educational content, Competitor analysis or Product roadmap. Push automations and Influencer pipeline show as "coming soon".
 4. To move an existing space in or out of Marketing, use its **⋯** menu → Move into / out of Marketing.
 
 Adding or moving spaces needs the **Add spaces** permission. Deleting a Marketing space doesn't delete the spaces inside it; they go back to the sidebar.
@@ -26,9 +26,9 @@ Adding or moving spaces needs the **Add spaces** permission. Deleting a Marketin
 | Calendar | A grid or list of every month the campaign covers. You can filter by type, platform or person, and make a flowchart. |
 | Dashboard | Counts from what you entered. The **Campaign success** sales block shows example numbers ("NOT LIVE") until it is connected to the orders database. |
 
-## Keep an Eye
+## Keep an Eye (its own space, not inside Marketing)
 
-For studying companies we want to be like (🌟) and competitors (⚔️). Every company gets the same fixed template, so an intern knows what to fill.
+Add it from Administration → Spaces → **＋ Add space** → **Keep an Eye**. It sits in the sidebar on its own and can't be moved into Marketing. It's for studying companies we want to be like (🌟) and competitors (⚔️). Every company gets the same fixed template, so an intern knows what to fill.
 
 | Tab | What |
 |---|---|
