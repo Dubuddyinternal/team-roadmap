@@ -2390,12 +2390,18 @@ function openIdea(id,focusComments,fmtKey){
       if(st==="rejected"){ closeDrawer(true); setStatus(i,st); return; }   // the reject form opens instead
       setStatus(i,st); draw(i.keywords); });
     const di=$("#delIdea"); if(di) di.onclick=()=>{
+      // an idea and its Content Process card go together: deleting the idea deletes the card too
       const card=CARDS.find(c=>c.ideaId===i.id);
-      if(!confirm(card?"Delete this idea? Its card on the Content Process board stays (it just won't link back here).":"Delete this idea? This can't be undone.")) return;
+      const where=card?(STAGES.find(x=>x.id===card.stage)||{}).label||card.stage:"";
+      if(card && !canDeleteCards()){ toast(`This idea has a card in Content Process (${where}). Only Admins can delete it, because the card goes too.`); return; }
+      const running=card && window.PIPE && (PIPE.busy(card.id) || PIPE.busy(card.id+"__r") || PIPE.busy(card.id+"__s"));
+      if(!confirm(card?`Delete this idea and its card in Content Process (${where})?${running?"\n\nClaude is working on that card right now; the job will be stopped.":""}\n\nThis can't be undone.`
+        :"Delete this idea? This can't be undone.")) return;
       if(window.PIPE && PIPE.busy(i.id+"__r")) PIPE.cancel(i.id+"__r").catch(()=>{});
+      if(running) [card.id, card.id+"__r", card.id+"__s"].forEach(k=>{ if(PIPE.busy(k)) PIPE.cancel(k).catch(()=>{}); });
       const k=IDEAS.findIndex(x=>x.id===i.id); if(k>=0) IDEAS.splice(k,1);
-      if(card) card.ideaId=null;
-      if(save()){ dirty=false; closeDrawer(true); toast("Idea deleted"); } };
+      if(card){ const ci=CARDS.indexOf(card); if(ci>=0) CARDS.splice(ci,1); }
+      if(save()){ dirty=false; closeDrawer(true); toast(card?"Idea and its card deleted":"Idea deleted"); } };
     const oc=$("#drawer").querySelector("[data-opencard]");
     if(oc) oc.onclick=()=>{ if(CLOSE_GUARD && !CLOSE_GUARD()) return; openCard(oc.dataset.opencard); };
     const rb=$("#drawer").querySelector("[data-research]");
