@@ -651,9 +651,18 @@ function gEdited(c){   // an edited video (Claude's or your own) + a thumbnail w
 function gAssets(c){
   const j=window.PIPE&&PIPE.job(c.id), byClaude=!!(j&&j.media&&(j.media.yt||j.media.ig));   // Claude's render counts as the edited file
   return !!((c.post?.reel||byClaude) && c.post?.postUrl && (!plats(c).includes("yt") || c.vtype!=="long" || c.post?.thumb)); }
-// Ideas → To shoot is free (research is a reminder, not a block) · leaving Editing needs the edited video · leaving Your check needs the copy · going Live needs the link
-function gateFor(f){ return f==="inprogress"?"edited":f==="inreview"?"copy":f==="approved"?"live":null; }
+// Ideas → To shoot is free · leaving To shoot needs the research AND the title, description and hashtags ·
+// leaving Editing needs the edited video · leaving Your check needs the copy · going Live needs the link
+function gateFor(f){ return f==="draft"?"prep":f==="inprogress"?"edited":f==="inreview"?"copy":f==="approved"?"live":null; }
+function prepMissing(c){ const p=c.pre||{}, k=p.keywords||[], prim=k.find(x=>x.rank==="primary")||k[0], out=[];
+  if(!(gResearch(p)||c.override)){
+    if(!p.source) out.push("idea source"); if(!p.tool) out.push("research tool");
+    if(!prim||!prim.kw) out.push("primary keyword"); else if(prim.vol==null) out.push("keyword volume");
+    if(!p.why) out.push("why this idea"); }
+  if(!p.title) out.push("title"); if(!p.desc) out.push("description"); if(!p.hashtags) out.push("hashtags");
+  return out; }
 function gatePass(c,g){ if(g==="research") return gResearch(c.pre)||!!c.override;
+  if(g==="prep") return !prepMissing(c).length;
   if(g==="copy") return gCopy(c.pre); if(g==="edited") return gEdited(c); if(g==="live") return !!c.post?.postUrl;
   if(g==="assets") return gAssets(c); return true; }
 const GATE_MSG = { research:"Research block incomplete — needs idea source, research tool, a primary keyword with its volume, and why this idea.",
@@ -663,7 +672,8 @@ const GATE_MSG = { research:"Research block incomplete — needs idea source, re
   assets:"Post-production incomplete — needs the edited video (Claude's or your own), the post link, and a thumbnail for long YouTube videos." };
 function canMove(c,to){ const fi=STAGES.findIndex(s=>s.id===c.stage), ti=STAGES.findIndex(s=>s.id===to);
   if(ti<=fi) return {ok:true};
-  for(let i=fi;i<ti;i++){ const g=gateFor(STAGES[i].id); if(g&&!gatePass(c,g)) return {ok:false,msg:GATE_MSG[g]}; }
+  for(let i=fi;i<ti;i++){ const g=gateFor(STAGES[i].id); if(g&&!gatePass(c,g))
+    return {ok:false,msg:g==="prep"?`Fill in the research and copy before Editing. Missing: ${prepMissing(c).join(", ")}.`:GATE_MSG[g]}; }
   return {ok:true}; }
 function moveCard(c,to){ if(!canEdit()){ toast("You can view this space but not edit it"); return false; }
   const v=canMove(c,to); if(!v.ok){ toast(v.msg); return false; }
@@ -1769,7 +1779,7 @@ function detailHTML(key){
     skipped.forEach(c=>miss(c).forEach(m=>counts[m]=(counts[m]||0)+1));
     return head(`${pct(allPub.length-skipped.length,allPub.length)}% published with full research`,`${allPub.length} published card${allPub.length===1?"":"s"}`)
       + dstats([["Full research",allPub.length-skipped.length,""],["Skipped",skipped.length,""],["Overridden",allPub.filter(c=>c.override).length,"head let it through with a reason"],
-          ["Cards in progress missing it",vC.filter(c=>c.stage!=="published"&&!gResearch(c.pre)).length,"research not filled in yet"]])
+          ["Cards in progress missing it",vC.filter(c=>c.stage!=="published"&&!gResearch(c.pre)).length,"needed before Editing"]])
       + `<div class="dgrid">${hbars("What was missing most",Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(([m,c])=>({label:m,v:c,color:"var(--crit)"})))}</div>`
       + dtable("Published without full research",["Card","Missing","Override"],skipped.map(c=>`<tr data-card="${c.id}" style="cursor:pointer"><td class="td-idea">${cardTitle(c)}</td>
           <td class="td-txt">${miss(c).join(", ")}</td><td class="td-txt">${c.override?`${esc(c.override.by)}: ${esc(c.override.reason)}`:"—"}</td></tr>`),"Every published card had its research done.");
@@ -1780,7 +1790,7 @@ function detailHTML(key){
     return head(`${todo.length} card${todo.length===1?"":"s"} waiting in Ideas`,"accepted, not started yet")
       + dstats([["In Ideas",todo.length,todo.length<3?"thin — log and accept more ideas":todo.length>20?"hoarding — too many waiting":"healthy"],
           ["Oldest",todo.length&&todo[0].age!=null?todo[0].age+" d":"—","since it was accepted"],
-          ["Research not done",todo.filter(x=>!gatePass(x.c,"research")).length,"a reminder; it doesn't block the move"],
+          ["Research not done",todo.filter(x=>!gatePass(x.c,"research")).length,"needed before Editing"],
           ...STAGES.filter(st=>st.id!=="todo"&&st.id!=="published").map(st=>[st.label,vC.filter(c=>c.stage===st.id).length,"further along"])])
       + `<div class="dgrid">${hbars("Waiting, by video type",TYPES().map(k=>({label:vtypeLabel(k),v:todo.filter(x=>x.c.vtype===k).length,color:vtypeColor(k)})).filter(x=>x.v))}
          ${hbars("Waiting, by platform",PLATS().map(k=>({label:regLabel("platform",k),v:todo.filter(x=>x.c.platform===k).length,color:platColor(k)})).filter(x=>x.v))}</div>`
@@ -2019,8 +2029,8 @@ function renderProcess(){
       <span class="ic" style="color:var(--accent);border-color:var(--accent)">FLOW</span>
       <p><b>Ideas → To shoot → Editing → Your check → Scheduled → Live.</b> Accepting an idea books the next free posting slot.
       Claude moves cards through Editing and Your check by itself; you approve the edit, then post now or at the slot.
-      A card moves from <b>Ideas</b> to <b>To shoot</b> freely, leaves <b>Editing</b> only with an edited
-      video, and leaves <b>Your check</b> only with title, description and hashtags.</p></div>
+      A card moves from <b>Ideas</b> to <b>To shoot</b> freely, leaves <b>To shoot</b> only with its research done and title,
+      description and hashtags filled in, leaves <b>Editing</b> only with an edited video, and leaves <b>Your check</b> only with the copy.</p></div>
     <div class="sec"><div class="sec-h"><h3>Content Process</h3>
       <span class="hint">${BC.length} card${BC.length===1?"":"s"} · ${ro?"click a card to open it":"drag cards between columns, or click one to open it"}</span>
       ${ro?"":`<button class="btn pri" id="newCard" style="margin-left:auto">+ New card</button>`}</div>
@@ -2455,8 +2465,10 @@ function syncPipelineStages(jobs){
       const tags=[...new Set(((ok("yt")&&pr.yt?pr.yt.description:"")+" "+(ok("ig")&&pr.ig?pr.ig.caption:"")).match(/#[\p{L}\p{N}_]+/gu)||[])].join(" ");
       if(title||desc||tags){ c.preDraft=c.preDraft||{ title:c.pre.title, desc:c.pre.desc, hashtags:c.pre.hashtags };
         if(title) c.pre.title=title; if(desc) c.pre.desc=desc; if(tags) c.pre.hashtags=tags; moved++; } }
-    const t=PIPE_STAGE[j.status];
-    if(t && STAGES.findIndex(x=>x.id===t) > STAGES.findIndex(x=>x.id===c.stage)){ c.stage=t; moved++; }
+    let t=PIPE_STAGE[j.status];
+    const at=s=>STAGES.findIndex(x=>x.id===s);
+    if(t && at(t)>at("draft") && at(c.stage)<=at("draft") && !gatePass(c,"prep")) t="draft";   // held in To shoot until research + copy are in
+    if(t && at(t) > at(c.stage)){ c.stage=t; moved++; }
   });
   // ideas: vidIQ research results go into the idea itself
   const openIdeaId=OPEN&&OPEN.kind==="idea"?OPEN.id:null;
