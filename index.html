@@ -5159,7 +5159,7 @@ function convertModuleToIdeas(mod, disc){
   return leaves.length;
 }
 let discView = "ideas";   // sub-view inside a discovery space: ideas | roadmap | timeline
-let socialView = "summary";    // Social Media space: summary | ideation | process | schedule (social-space.js)
+let socialView = "summary";    // Social Media space: targets | summary | ideation | process | schedule | rivals (social-space.js)
 let campView = "details";      // Campaign space: details | assign | calendar | dash (campaign-space.js)
 let horizonView = "topics";    // Widen our Horizon space: topics | fill | check | learn (horizon-space.js)
 let watchView = "companies";   // Keep an Eye space: companies | fill | updates | compare (watch-space.js)
@@ -13772,7 +13772,7 @@ function renderAll(){
           }
         }
         if(cs.type==="social" && view==="social" && activeCspace===cs.id){
-          [["targets","🤝 Our agreement"],["summary","📊 Summary"],["ideation","💡 Ideation"],["process","🎬 Content Process"],["schedule","🗓 Schedule"]].forEach(([k,lbl])=>{
+          [["targets","🤝 Our agreement"],["summary","📊 Summary"],["ideation","💡 Ideation"],["process","🎬 Content Process"],["schedule","🗓 Schedule"],["rivals","👀 Keep an Eye on 2nd Love"]].forEach(([k,lbl])=>{
             const sub=document.createElement("button");
             const on = socialView===k;
             sub.className="ws-sub"+(on?" active":"");

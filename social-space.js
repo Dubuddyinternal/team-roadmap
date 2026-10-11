@@ -305,6 +305,16 @@ tbody tr:hover{background:var(--surface-4)}
 .wevt h6{margin:0 0 5px;font-size:11.5px;font-weight:600;line-height:1.35}
 .wevt .meta{display:flex;gap:4px;flex-wrap:wrap}
 
+.rvgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.rvcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:15px 16px;display:flex;flex-direction:column;gap:10px}
+.rvcard h4{font-size:15px;margin:0}
+.rvcard a.chip{text-decoration:none}
+.rvtry{background:var(--accent-soft);border-radius:var(--r-s);padding:9px 11px}
+.rvtry p{margin:3px 0 8px;font-size:12.5px;color:var(--ink);line-height:1.45}
+.rvtab{min-width:860px}
+.rvtab tr.us td{background:var(--good-soft)}
+.rvname{font-weight:600;text-align:left;color:var(--ink)}
+.rvname:hover{color:var(--accent)}
 .note{background:var(--note);border:1px solid var(--note-line);border-radius:var(--r);padding:16px 18px;font-family:var(--hand);font-size:19px;color:var(--note-ink);line-height:1.42}
 .note .lbl{color:var(--note-lbl);margin-bottom:7px}
 .note b{font-weight:700}
@@ -360,6 +370,9 @@ function normalize(space){
   // other targets: [{id, platform:"yt"|"ig", metric, period:"week"|"month"|"quarter", target}]
   s.goals = Array.isArray(s.goals) ? s.goals.filter(g=>g && GOAL_METRICS[g.metric]) : [];
   s.culture = typeof s.culture==="string" ? s.culture : "";
+  // Keep an Eye on 2nd Love: competitor accounts [{id, name, ig, yt, readings:[{d,ig,yt,igPosts,ytPosts,topViews}], f:{…}, ideaId}]
+  s.rivals = Array.isArray(s.rivals) ? s.rivals.filter(r=>r && r.name) : [];
+  s.rivals.forEach(r=>{ if(!r.id) r.id=uid("rv"); r.f = r.f && typeof r.f==="object" ? r.f : {}; r.readings = Array.isArray(r.readings) ? r.readings.filter(x=>x && x.d) : []; });
   s.manual = s.manual && typeof s.manual==="object" ? s.manual : {};   // typed-in counts: "yt:webinars:2026-10-06" -> n
   s.postTags = s.postTags && typeof s.postTags==="object" ? s.postTags : {};
   // Reels' new followers, typed in from Instagram Insights (Meta's API won't give them): post key -> n
@@ -2217,12 +2230,142 @@ function openCulture(){
   $("#saveCu").onclick=()=>{ S.culture=$("#cu").value.trim(); if(save()){ closeDrawer(); toast("Saved"); } };
 }
 
+/* ------------------------------------------------------------ Keep an Eye on 2nd Love */
+/* 1st love is our users, 2nd love is our competitors: their accounts, their numbers week
+   by week, a fixed study of what works for them, and "Try this" straight into Ideation. */
+const RIVAL_FIELDS = [
+  { k:"formats", label:"What they post", must:true, ask:"Their mix of formats over the last 2 weeks: reels, long videos, shorts, carousels, lives.", ph:"IG: 2 reels a day, 1 carousel a week · YT: 3 long videos + daily shorts" },
+  { k:"timing",  label:"When they post", ask:"Days and times. Look at the timestamps of the last 10 posts.", ph:"Reels at 7 PM every day · long videos Tue & Fri 6 PM" },
+  { k:"best",    label:"Their best post this week", must:true, ask:"Link, views, and in one line why it worked.", ph:"instagram.com/reel/… · 820k views · a topper's routine in 30 seconds, face to camera" },
+  { k:"hooks",   label:"Hooks they use", must:true, ask:"Copy 3 opening lines word for word.", ph:"“Stop doing this if you want 700+ in CUET”" },
+  { k:"visual",  label:"Look and feel", ask:"Thumbnails, captions on screen, faces, colours, editing pace.", ph:"Big yellow text, same teacher's face on every thumbnail, fast cuts" },
+  { k:"cta",     label:"What they ask viewers to do", ask:"Follow, comment a word, link in bio, join Telegram, buy a course…", ph:"“Comment NOTES and we'll DM you the PDF”" },
+  { k:"comments",label:"What students say in their comments", ask:"Read the top comments. What do students love, ask for or complain about?", ph:"Lots of “please make one for Economics”" },
+  { k:"try",     label:"What we'll try from this", must:true, ask:"One thing we'll make or change, so our users get something better.", ph:"A 30-second “topper's routine” reel series for CUET, posted at 7 PM" }
+];
+const RIVAL_MUST = RIVAL_FIELDS.filter(f=>f.must);
+const rivalFilled = r => RIVAL_MUST.filter(f=>String((r.f||{})[f.k]||"").trim()).length;
+const lastReading = r => [...(r.readings||[])].sort((a,b)=>a.d.localeCompare(b.d)).slice(-2);
+function delta(now, before){ if(now==null || before==null) return ""; const d=now-before; if(!d) return `<small class="hint">±0</small>`;
+  return `<small style="color:${d>0?"var(--good)":"var(--crit)"};font-family:var(--mono);font-size:10.5px">${d>0?"+":""}${kfmt(d)}</small>`; }
+const handleUrl = (pl, h) => { h=String(h||"").trim(); if(!h) return ""; if(/^https?:\/\//i.test(h)) return h;
+  h=h.replace(/^@/,""); return pl==="ig" ? "https://www.instagram.com/"+encodeURIComponent(h)+"/" : "https://www.youtube.com/@"+encodeURIComponent(h); };
+
+function renderRivals(){
+  const P=$("#pane-rivals"), ro=!canEdit(), rivals=S.rivals;
+  const igL=igSeries(), ytL=ytSeries(), igU=igL[igL.length-1], ytU=ytL[ytL.length-1];
+  const num = (v, prev) => v==null||v==="" ? `<span class="hint">—</span>` : `<b class="num">${fmt(v)}</b> ${delta(v, prev)}`;
+  const rows = rivals.map(r=>{ const [a,b] = lastReading(r).length===2 ? lastReading(r) : [null, lastReading(r)[0]];
+    return { r, now:b||{}, prev:a||{} }; });
+  P.innerHTML = `
+    <div class="note" style="margin-bottom:18px">
+      <div class="lbl">Keep an eye on 2nd love</div>
+      <b>1st love is our users.</b> <b>2nd love is our competitors.</b><br>
+      We watch what they post, how fast they grow and what works for them, then make something <em>better for our users</em>.
+    </div>
+
+    <div class="sec-h"><h3>Us vs them</h3><span class="hint">latest numbers · the small number is the change since the reading before</span>
+      ${ro?"":`<button class="btn pri" id="rvAdd" style="margin-left:auto">+ Add a competitor</button>`}</div>
+    ${rivals.length ? `<div class="tw" style="margin-bottom:24px"><table class="mini rvtab">
+      <thead><tr><th>Account</th><th>Instagram followers</th><th>YouTube subscribers</th><th>IG posts / week</th><th>YT videos / week</th><th>Top post views</th><th>Last checked</th></tr></thead>
+      <tbody>
+        <tr class="us"><td><b>Dubuddy (us)</b></td><td>${igU?num(igU.v):`<span class="hint">—</span>`}</td><td>${ytU?num(ytU.v):`<span class="hint">—</span>`}</td>
+          <td><span class="hint">see Summary</span></td><td><span class="hint">see Summary</span></td><td><span class="hint">see Summary</span></td><td class="hint">${igU||ytU?dmy((ytU||igU).d):"—"}</td></tr>
+        ${rows.map(({r,now,prev})=>`<tr><td><button class="rvname" data-rvopen="${esc(r.id)}">${esc(r.name)}</button></td>
+          <td>${num(now.ig, prev.ig)}</td><td>${num(now.yt, prev.yt)}</td><td>${num(now.igPosts)}</td><td>${num(now.ytPosts)}</td><td>${num(now.topViews)}</td>
+          <td class="hint">${now.d?dmy(now.d):"never"}${ro?"":` <button class="btn sm" data-rvlog="${esc(r.id)}" style="margin-left:6px">Log numbers</button>`}</td></tr>`).join("")}
+      </tbody></table></div>` : ""}
+
+    ${rivals.length ? `<div class="sec-h"><h3>Their study</h3><span class="hint">the same boxes for every competitor · ${RIVAL_MUST.length} must fill</span></div>
+    <div class="rvgrid">${rivals.map(r=>{ const n=rivalFilled(r), ig=handleUrl("ig",r.ig), yt=handleUrl("yt",r.yt), tr=String((r.f||{}).try||"").trim();
+      return `<div class="rvcard">
+        <div class="row" style="justify-content:space-between"><h4>${esc(r.name)}</h4>
+          <span class="badge ${n===RIVAL_MUST.length?"good":"warn"}">${n===RIVAL_MUST.length?"✓ study done":`${n} of ${RIVAL_MUST.length} must-fill`}</span></div>
+        <div class="row" style="gap:6px">${ig?`<a class="chip" href="${esc(ig)}" target="_blank" rel="noopener">Instagram ↗</a>`:""}${yt?`<a class="chip" href="${esc(yt)}" target="_blank" rel="noopener">YouTube ↗</a>`:""}</div>
+        ${tr?`<div class="rvtry"><span class="lbl">We'll try</span><p>${esc(tr)}</p>
+          ${ro?"":r.ideaId && IDEAS.some(i=>i.id===r.ideaId)?`<span class="badge good">in Ideation ✓</span>`:`<button class="btn sm pri" data-rvidea="${esc(r.id)}">→ Send to Ideation</button>`}</div>`
+          :`<p class="hint" style="margin:0">Not studied yet. Open it and fill the boxes.</p>`}
+        <div class="row" style="margin-top:auto"><button class="btn sm" data-rvopen="${esc(r.id)}">${ro?"Read the study":"Open study"}</button>
+          ${ro?"":`<button class="btn sm" data-rvlog="${esc(r.id)}">Log numbers</button>`}</div>
+      </div>`; }).join("")}</div>`
+    : `<div class="empty" style="border:1px dashed var(--line-2);border-radius:var(--r);padding:28px 20px;text-align:center;color:var(--ink-3)">
+        <h4 style="color:var(--ink-2);margin-bottom:5px">No competitors yet</h4>
+        <p style="margin:0 auto 14px;max-width:52ch;font-size:12.5px">Add the accounts students also follow. Log their numbers every week and fill one short study for each.</p>
+        ${ro?"":`<button class="btn pri" id="rvAdd2">+ Add the first competitor</button>`}</div>`}`;
+  [$("#rvAdd"),$("#rvAdd2")].forEach(b=>{ if(b) b.onclick=()=>openRival(null); });
+  P.querySelectorAll("[data-rvopen]").forEach(b=>b.onclick=()=>openRival(b.dataset.rvopen));
+  P.querySelectorAll("[data-rvlog]").forEach(b=>b.onclick=()=>openRivalLog(b.dataset.rvlog));
+  P.querySelectorAll("[data-rvidea]").forEach(b=>b.onclick=()=>{
+    const r=rivals.find(x=>x.id===b.dataset.rvidea); if(!r) return;
+    const i=blankIdea({ idea:String(r.f.try).trim().slice(0,140), by:meName(), why:"Seen at "+r.name+(r.f.best?": "+r.f.best:""), source:"Competitor: "+r.name });
+    IDEAS.unshift(i); r.ideaId=i.id;
+    if(save()) toast("Sent to Ideation");
+  });
+}
+/* the study of one competitor (or a new one), in the drawer */
+function openRival(id){
+  const r = id ? S.rivals.find(x=>x.id===id) : null;
+  openDrawer(`<div class="dr-h"><div><div class="lbl">Keep an eye on 2nd love</div>
+      <h3 style="margin-top:4px">${r?esc(r.name):"New competitor"}</h3></div><button class="btn sm" id="xClose">Close</button></div>
+    <div class="fld"><label for="rv-name">Name<span class="req">*</span></label><input id="rv-name" value="${esc(r?r.name:"")}" placeholder="Physics Wallah, Unacademy CUET…"></div>
+    <div class="grid2">
+      <div class="fld"><label for="rv-ig">Instagram handle</label><input id="rv-ig" value="${esc(r?r.ig:"")}" placeholder="@handle"></div>
+      <div class="fld"><label for="rv-yt">YouTube handle</label><input id="rv-yt" value="${esc(r?r.yt:"")}" placeholder="@channel"></div></div>
+    <div class="lbl" style="margin:8px 0 10px">The study · same boxes for every competitor</div>
+    ${RIVAL_FIELDS.map(f=>`<div class="fld"><label for="rv-${f.k}">${esc(f.label)}${f.must?`<span class="req">must fill</span>`:""}</label>
+      <p class="hint" style="margin:0 0 5px">${esc(f.ask)}</p>
+      <textarea id="rv-${f.k}" placeholder="e.g. ${esc(f.ph)}">${esc(r?(r.f[f.k]||""):"")}</textarea></div>`).join("")}
+    <div class="row" data-w="1"><button class="btn pri" id="rvSave">Save</button>
+      ${r?`<button class="btn danger sm" id="rvDel" style="margin-left:auto">Remove ${esc(r.name)}</button>`:""}</div>`);
+  $("#xClose").onclick=closeDrawer;
+  const sv=$("#rvSave"); if(sv) sv.onclick=()=>{
+    const name=$("#rv-name").value.trim(); if(!name){ toast("Give the competitor a name"); return; }
+    const t = r || { id:uid("rv"), readings:[], f:{}, created:today() };
+    t.name=name; t.ig=$("#rv-ig").value.trim(); t.yt=$("#rv-yt").value.trim();
+    RIVAL_FIELDS.forEach(f=>{ t.f[f.k]=$("#rv-"+f.k).value.trim(); });
+    t.updated=today(); t.by=meName();
+    if(!r) S.rivals.push(t);
+    if(save()){ closeDrawer(); toast(r?"Saved":"“"+name+"” added"); }
+  };
+  const dl=$("#rvDel"); if(dl) dl.onclick=()=>{ if(!confirm("Remove "+r.name+" and its numbers?")) return;
+    S.rivals.splice(S.rivals.indexOf(r),1); if(save()){ closeDrawer(); toast("Removed"); } };
+  lockDrawer();
+}
+/* this week's numbers for one competitor */
+function openRivalLog(id){
+  const r=S.rivals.find(x=>x.id===id); if(!r) return;
+  const last=lastReading(r).pop()||{};
+  openDrawer(`<div class="dr-h"><div><div class="lbl">Log numbers</div><h3 style="margin-top:4px">${esc(r.name)}</h3></div>
+      <button class="btn sm" id="xClose">Close</button></div>
+    <p class="hint" style="margin:0 0 12px">Read these off their profiles once a week. Every reading is kept, so we can see who's growing faster.</p>
+    <div class="fld"><label for="rl-d">Date</label><input id="rl-d" type="date" value="${today()}"></div>
+    <div class="grid2">
+      <div class="fld"><label for="rl-ig">Instagram followers</label><input id="rl-ig" type="number" min="0" placeholder="${last.ig??""}"></div>
+      <div class="fld"><label for="rl-yt">YouTube subscribers</label><input id="rl-yt" type="number" min="0" placeholder="${last.yt??""}"></div>
+      <div class="fld"><label for="rl-igp">IG posts in the last 7 days</label><input id="rl-igp" type="number" min="0"></div>
+      <div class="fld"><label for="rl-ytp">YT videos in the last 7 days</label><input id="rl-ytp" type="number" min="0"></div>
+      <div class="fld"><label for="rl-tv">Views on their top post this week</label><input id="rl-tv" type="number" min="0"></div></div>
+    <div class="row" data-w="1"><button class="btn pri" id="rlSave">Save reading</button></div>
+    ${(r.readings||[]).length?`<div style="margin-top:14px">${[...r.readings].sort((a,b)=>b.d.localeCompare(a.d)).slice(0,8).map(x=>`<div class="cmt" style="display:flex;justify-content:space-between;gap:10px">
+      <span>${dmy(x.d)}</span><span style="font-family:var(--mono);font-size:12px;color:var(--ink-2)">IG ${fmt(x.ig)} · YT ${fmt(x.yt)}</span></div>`).join("")}</div>`:""}`);
+  $("#xClose").onclick=closeDrawer;
+  const n = id => { const v=$("#"+id).value; return v==="" ? null : Number(v); };
+  const sv=$("#rlSave"); if(sv) sv.onclick=()=>{
+    const d=$("#rl-d").value; if(!d){ toast("Pick a date"); return; }
+    const x={ d, ig:n("rl-ig"), yt:n("rl-yt"), igPosts:n("rl-igp"), ytPosts:n("rl-ytp"), topViews:n("rl-tv") };
+    if([x.ig,x.yt,x.igPosts,x.ytPosts,x.topViews].every(v=>v==null)){ toast("Fill in at least one number"); return; }
+    r.readings = (r.readings||[]).filter(y=>y.d!==d); r.readings.push(x);
+    if(save()){ closeDrawer(); toast("Reading saved"); }
+  };
+  lockDrawer();
+}
+
 /* ------------------------------------------------------------ mount */
-const PANES=["targets","summary","ideation","process","schedule"];
+const PANES=["targets","summary","ideation","process","schedule","rivals"];
 function refresh(){
   if(!R || !S) return;
   PANES.forEach(p=>{ const el=$("#pane-"+p); if(el) el.hidden = p!==TAB; });
-  ({targets:renderTargets,summary:renderSummary,ideation:renderIdeation,process:renderProcess,schedule:renderSchedule})[TAB]();
+  ({targets:renderTargets,summary:renderSummary,ideation:renderIdeation,process:renderProcess,schedule:renderSchedule,rivals:renderRivals})[TAB]();
 }
 function mount(){
   if(HOST) return;
@@ -2238,7 +2381,7 @@ function mount(){
 
 window.SX = {
   normalize: normalize,
-  tabs: [["targets","Our agreement"],["summary","Summary"],["ideation","Ideation"],["process","Content Process"],["schedule","Schedule"]],
+  tabs: [["targets","Our agreement"],["summary","Summary"],["ideation","Ideation"],["process","Content Process"],["schedule","Schedule"],["rivals","Keep an Eye on 2nd Love"]],
   /* draw the space. opt: {tab, team, supa, canEdit(), isMember(), me(), people(), save(),
        targets(space), canEditTargets(), saveTargets(space, obj)} */
   render: function(space, wrap, opt){
