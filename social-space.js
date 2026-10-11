@@ -507,10 +507,11 @@ function normalize(space){
   const fill=(o,d)=>{ Object.keys(d).forEach(k=>{ if(o[k]===undefined || o[k]===null && typeof d[k]==="string") o[k]=d[k]; }); return o; };
   s.ideas.forEach(i=>{ fill(i, blankIdea({ id:i.id||uid("i"), created:i.created||today() }));
     i.comments = Array.isArray(i.comments) ? i.comments : []; i.keywords = Array.isArray(i.keywords) ? i.keywords : [];
+    i.extra = Array.isArray(i.extra) ? i.extra.filter(x=>x && x.label) : [];
     if(!STATUS_UI[i.status]) i.status="new";
     i.platforms=plats(i); i.platform=i.platforms[0];
     if(!i.format || !s.formats.some(f=>f.key===i.format)) i.format=guessFormat(i.vtype); });
-  s.cards.forEach(c=>{ fill(c, blankCard({ id:c.id||uid("c") })); c.pre = c.pre || {}; c.pre.keywords = Array.isArray(c.pre.keywords) ? c.pre.keywords : [];
+  s.cards.forEach(c=>{ fill(c, blankCard({ id:c.id||uid("c") })); c.extra = Array.isArray(c.extra) ? c.extra.filter(x=>x && x.label) : []; c.pre = c.pre || {}; c.pre.keywords = Array.isArray(c.pre.keywords) ? c.pre.keywords : [];
     c.post = c.post || {reel:null,thumb:null,postUrl:""}; if(!STAGES.some(x=>x.id===c.stage)) c.stage="todo";
     c.platforms=plats(c); c.platform=c.platforms[0];
     if(!c.format || !s.formats.some(f=>f.key===c.format)) c.format=guessFormat(c.vtype);
@@ -519,8 +520,26 @@ function normalize(space){
   return s;
 }
 function uid(p){ return p + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+/* "Your own boxes" on an idea or a card: [{label, value}] — anything the fixed boxes don't cover */
+function ownBoxes(list){
+  return `<div class="block" id="ownBoxes"><div class="block-h"><h4>Your own boxes</h4><span class="hint">Thumbnail text, pinned comment, anything the boxes above don't cover</span></div>
+    ${list.map((x,k)=>`<div class="fld" data-xbox="${k}" data-label="${esc(x.label)}"><label for="xb-${k}" style="display:flex;gap:8px;align-items:center">${esc(x.label)}
+        <button type="button" class="linkbtn" data-xdel="${k}" data-w="1" style="margin-left:auto">remove</button></label>
+      <textarea id="xb-${k}">${esc(x.value||"")}</textarea></div>`).join("")}
+    <button type="button" class="btn sm" data-xadd data-w="1">+ Add a box</button></div>`;
+}
+const readOwn = () => [...$("#drawer").querySelectorAll("[data-xbox]")].map(el=>({ label:el.dataset.label, value:el.querySelector("textarea").value.trim() }));
+function wireOwn(obj, read, markDirty, redraw){
+  const a=$("#drawer").querySelector("[data-xadd]");
+  if(a) a.onclick=()=>{ const label=(prompt("What should the new box be called?","Thumbnail text")||"").trim(); if(!label) return;
+    read(); obj.extra.push({ label, value:"" }); markDirty(); redraw();
+    setTimeout(()=>{ const t=$("#xb-"+(obj.extra.length-1)); if(t) t.focus(); }, 60); };
+  $("#drawer").querySelectorAll("[data-xdel]").forEach(b=>b.onclick=()=>{ read();
+    const x=obj.extra[Number(b.dataset.xdel)]; if(x && x.value && !confirm(`Remove the box “${x.label}” and what's written in it?`)) return;
+    obj.extra.splice(Number(b.dataset.xdel),1); markDirty(); redraw(); });
+}
 function blankIdea(o){ return Object.assign({ id:uid("i"), idea:"", by:"", created:today(), hook:"", cta:"", platform:"ig", vtype:"reel",
-  source:"", tool:"", keywords:[], title:"", desc:"", hashtags:"", why:"", studentWhy:"", status:"new", comments:[] }, o||{}); }
+  source:"", tool:"", keywords:[], title:"", desc:"", hashtags:"", why:"", studentWhy:"", status:"new", comments:[], extra:[] }, o||{}); }
 function blankCard(o){ return Object.assign({ id:uid("c"), ideaId:null, idea:"", platform:"ig", vtype:"reel", stage:"todo",
   pre:{source:"",tool:"",keywords:[],why:"",title:"",desc:"",hashtags:""},
   post:{reel:null,thumb:null,postUrl:""}, scheduled:null, published:null, acceptedOn:today(), metrics:null, override:null }, o||{}); }
@@ -540,6 +559,9 @@ const kfmt = n => n==null ? "—" : n>=1000 ? (n/1000).toFixed(n>=10000?0:1)+"k"
 const mb = b => b==null ? "" : b>=1e9 ? (b/1e9).toFixed(1)+" GB" : (b/1e6).toFixed(0)+" MB";
 const dmy = s => s ? new Date(s+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"}) : "—";
 const dow = s => s ? new Date(s+"T00:00:00").toLocaleDateString("en-GB",{weekday:"long"}) : "";
+
+// text from a rich-text box (richtext.js keeps light markdown): shown formatted
+const rich = v => window.RT ? RT.html(v) : esc(v);
 const days = (a,b) => Math.round((new Date(b)-new Date(a))/86400000);
 const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 function today(){ return iso(new Date()); }
@@ -1824,7 +1846,8 @@ function setStatus(i,st){
     CARDS.push(blankCard({ ideaId:i.id, idea:i.idea, format:i.format, platform:plats(i)[0], platforms:[...plats(i)], vtype:i.vtype, stage:"todo",
       scheduled:slot, time:slotPlan(plats(i)[0]).time,
       pre:{ source:i.source, tool:i.tool, keywords:(i.keywords||[]).map(k=>({...k})),
-            why:i.why, title:i.title, desc:i.desc, hashtags:i.hashtags } }));
+            why:i.why, title:i.title, desc:i.desc, hashtags:i.hashtags },
+      extra:(i.extra||[]).map(x=>({ label:x.label, value:x.value })) }));
     toast(slot?`Accepted — booked for ${dow(slot)} ${dmy(slot)}, in Content Process → Ideas`:"Accepted — card created in Content Process → Ideas");
   } else if(st==="accepted"){ const c=CARDS.find(x=>x.ideaId===i.id);
     toast(`Accepted — its card is back on the board in ${STAGES.find(x=>x.id===c.stage).label}`);
@@ -2253,12 +2276,13 @@ function openIdea(id,focusComments,fmtKey){
 
     ${isNew?"":`<div class="block" id="cmtBlock">
       <div class="block-h"><h4>Comments</h4><span class="hint">${i.comments.length} on this idea</span></div>
-      ${i.comments.map(c=>`<div class="cmt">${who(c.by)}<p style="margin-top:3px">${esc(c.text)}</p></div>`).join("")||`<p class="hint" style="margin:0">No comments yet.</p>`}
+      ${i.comments.map(c=>`<div class="cmt">${who(c.by)}<p style="margin-top:3px">${rich(c.text)}</p></div>`).join("")||`<p class="hint" style="margin:0">No comments yet.</p>`}
       <div data-w="1"><div class="grid2" style="margin-top:12px">
         <div class="fld" style="margin-bottom:0"><label for="i-cmtby">Comment as</label>${peopleSelect("i-cmtby",meName())}</div></div>
       <div class="fld" style="margin-top:10px"><label for="i-newcmt">Add a comment</label>
         <textarea id="i-newcmt" placeholder="Write a note…"></textarea></div>
       <button class="btn sm" id="addCmt">Post comment</button></div></div>`}
+    ${i.extra.length||canEdit()?ownBoxes(i.extra):""}
     </div><div class="dr-col">
 
     ${isNew?`<p class="hint" style="margin:0 0 14px;padding:11px 13px;background:var(--surface-2);border-radius:var(--r)">
@@ -2327,6 +2351,7 @@ function openIdea(id,focusComments,fmtKey){
       i.source=readReg("source","i-source"); i.tool=readReg("tool","i-tool"); i.keywords=readKw("i-");
       i.title=$("#i-title").value.trim(); i.desc=$("#i-desc").value.trim();
       i.hashtags=$("#i-hashtags").value.trim(); i.why=$("#i-why").value.trim();
+      i.extra=readOwn();
     };
     const exists=()=>!!IDEAS.find(x=>x.id===i.id);
     const persist=()=>{ if(!exists()) IDEAS.unshift(i); };
@@ -2334,6 +2359,7 @@ function openIdea(id,focusComments,fmtKey){
 
     $("#xClose").onclick=$("#xClose2").onclick=()=>closeDrawer();
     $("#drawer").oninput=$("#drawer").onchange=e=>{ if(!e.target.closest("#cmtBlock")) markDirty(); };
+    wireOwn(i, read, markDirty, ()=>draw(i.keywords));
     const fb=$("#i-fmt"); if(fb) fb.onclick=()=>{ read(); const keep={...i};
       pickFormat(k=>{ Object.assign(i,keep); const nf=fmtOf({format:k}); i.format=k;
         i.platforms=plats(i).filter(x=>nf.plats.includes(x)); if(!i.platforms.length) i.platforms=[...(nf.defPlats||nf.plats)]; i.platform=i.platforms[0];
@@ -2364,12 +2390,18 @@ function openIdea(id,focusComments,fmtKey){
       if(st==="rejected"){ closeDrawer(true); setStatus(i,st); return; }   // the reject form opens instead
       setStatus(i,st); draw(i.keywords); });
     const di=$("#delIdea"); if(di) di.onclick=()=>{
+      // an idea and its Content Process card go together: deleting the idea deletes the card too
       const card=CARDS.find(c=>c.ideaId===i.id);
-      if(!confirm(card?"Delete this idea? Its card on the Content Process board stays (it just won't link back here).":"Delete this idea? This can't be undone.")) return;
+      const where=card?(STAGES.find(x=>x.id===card.stage)||{}).label||card.stage:"";
+      if(card && !canDeleteCards()){ toast(`This idea has a card in Content Process (${where}). Only Admins can delete it, because the card goes too.`); return; }
+      const running=card && window.PIPE && (PIPE.busy(card.id) || PIPE.busy(card.id+"__r") || PIPE.busy(card.id+"__s"));
+      if(!confirm(card?`Delete this idea and its card in Content Process (${where})?${running?"\n\nClaude is working on that card right now; the job will be stopped.":""}\n\nThis can't be undone.`
+        :"Delete this idea? This can't be undone.")) return;
       if(window.PIPE && PIPE.busy(i.id+"__r")) PIPE.cancel(i.id+"__r").catch(()=>{});
+      if(running) [card.id, card.id+"__r", card.id+"__s"].forEach(k=>{ if(PIPE.busy(k)) PIPE.cancel(k).catch(()=>{}); });
       const k=IDEAS.findIndex(x=>x.id===i.id); if(k>=0) IDEAS.splice(k,1);
-      if(card) card.ideaId=null;
-      if(save()){ dirty=false; closeDrawer(true); toast("Idea deleted"); } };
+      if(card){ const ci=CARDS.indexOf(card); if(ci>=0) CARDS.splice(ci,1); }
+      if(save()){ dirty=false; closeDrawer(true); toast(card?"Idea and its card deleted":"Idea deleted"); } };
     const oc=$("#drawer").querySelector("[data-opencard]");
     if(oc) oc.onclick=()=>{ if(CLOSE_GUARD && !CLOSE_GUARD()) return; openCard(oc.dataset.opencard); };
     const rb=$("#drawer").querySelector("[data-research]");
@@ -2595,6 +2627,7 @@ function openCard(id,showGate){
         <div class="fld" style="margin-bottom:0"><label for="s-cta">Closing line</label><input id="s-cta" value="${esc(c.shoot.cta)}" placeholder="Comment your doubt 👇"></div>
         <div class="fld" style="margin-bottom:0"><label for="s-tips">Shooting notes</label><input id="s-tips" value="${esc(c.shoot.tips)}" placeholder="e.g. show the form on screen"></div></div>
     </div>`:""}
+    ${c.extra.length||canEdit()?ownBoxes(c.extra):""}
 
     </div><div class="dr-col">
     ${!isNew&&useClaude&&!reviewing?`<div id="pipePanel"></div>`:""}
@@ -2685,6 +2718,7 @@ function openCard(id,showGate){
       $("#drawer").querySelectorAll("[data-plink]").forEach(e=>{ c.post.links[e.dataset.plink]=e.value.trim(); });
       c.post.postUrl=c.post.links[c.platform]||Object.values(c.post.links).find(Boolean)||"";
       c.shoot={ hook:$("#s-hook").value.trim(), points:$("#s-points").value.trim(), cta:$("#s-cta").value.trim(), tips:$("#s-tips").value.trim() };
+      c.extra=readOwn();
       if(c.stage==="published" && $("#m-views")){ const n=s=>{const e=$(s); return !e||e.value===""?null:Number(e.value);};
         c.metrics={ views:n("#m-views"), likes:n("#m-likes"), comments:n("#m-comments"),
           shares:n("#m-shares"), watch:($("#m-watch")&&$("#m-watch").value.trim())||null, ctr:n("#m-ctr") }; }
@@ -2694,6 +2728,7 @@ function openCard(id,showGate){
     $("#xClose").onclick=$("#xClose2").onclick=()=>closeDrawer();
     // typing anywhere in the card (not in the Claude panel) = unsaved changes; closing asks first
     $("#drawer").oninput=$("#drawer").onchange=e=>{ if(!e.target.closest("#pipePanel")) markDirty(); };
+    wireOwn(c, read, markDirty, ()=>draw(c.pre.keywords));
     CLOSE_GUARD=()=>{ if(!dirty || !canEdit()) return true;
       if(!confirm("Discard your unsaved changes to this card?")) return false;
       restore(opened); return true; };
@@ -2875,7 +2910,7 @@ function renderRivals(){
         <div class="row" style="justify-content:space-between"><h4>${esc(r.name)}</h4>
           <span class="badge ${n===RIVAL_MUST.length?"good":"warn"}">${n===RIVAL_MUST.length?"✓ study done":`${n} of ${RIVAL_MUST.length} must-fill`}</span></div>
         <div class="row" style="gap:6px">${ig?`<a class="chip" href="${esc(ig)}" target="_blank" rel="noopener">Instagram ↗</a>`:""}${yt?`<a class="chip" href="${esc(yt)}" target="_blank" rel="noopener">YouTube ↗</a>`:""}</div>
-        ${tr?`<div class="rvtry"><span class="lbl">We'll try</span><p>${esc(tr)}</p>
+        ${tr?`<div class="rvtry"><span class="lbl">We'll try</span><p>${rich(tr)}</p>
           ${ro?"":r.ideaId && IDEAS.some(i=>i.id===r.ideaId)?`<span class="badge good">in Ideation ✓</span>`:`<button class="btn sm pri" data-rvidea="${esc(r.id)}">→ Send to Ideation</button>`}</div>`
           :`<p class="hint" style="margin:0">Not studied yet. Open it and fill the boxes.</p>`}
         <div class="row" style="margin-top:auto"><button class="btn sm" data-rvopen="${esc(r.id)}">${ro?"Read the study":"Open study"}</button>
@@ -2890,7 +2925,7 @@ function renderRivals(){
   P.querySelectorAll("[data-rvlog]").forEach(b=>b.onclick=()=>openRivalLog(b.dataset.rvlog));
   P.querySelectorAll("[data-rvidea]").forEach(b=>b.onclick=()=>{
     const r=rivals.find(x=>x.id===b.dataset.rvidea); if(!r) return;
-    const i=blankIdea({ idea:String(r.f.try).trim().slice(0,140), by:meName(), why:"Seen at "+r.name+(r.f.best?": "+r.f.best:""), source:"Competitor: "+r.name });
+    const i=blankIdea({ idea:(window.RT?RT.plain(r.f.try):String(r.f.try)).trim().slice(0,140), by:meName(), why:"Seen at "+r.name+(r.f.best?": "+r.f.best:""), source:"Competitor: "+r.name });
     IDEAS.unshift(i); r.ideaId=i.id;
     if(save()) toast("Sent to Ideation");
   });

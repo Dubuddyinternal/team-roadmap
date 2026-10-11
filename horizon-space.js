@@ -257,6 +257,9 @@ const STATUS = {
 
 /* ------------------------------------------------------------ helpers */
 const esc = s => String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+
+// text from a rich-text box (richtext.js keeps light markdown): shown formatted
+const rich = v => window.RT ? RT.html(v) : esc(v);
 const isoD = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 const today = () => isoD(new Date());
 /* weeks run Monday → Sunday; a week is named by its Monday */
@@ -523,8 +526,8 @@ function fillPane(c){
     <div class="sec-h"><h3>${esc(wkShort(wk))}</h3><span class="hint">${esc(wkName(wk))}</span>
       <span class="st ${STATUS[st].cls}" style="margin-left:auto">${esc(STATUS[st].label)}</span></div>
 
-    ${e && e.status==="redo" ? `<div class="review redo"><b>↩ ${esc(e.checkedBy||"The checker")} asked for more</b>${e.comment?`<p>${esc(e.comment)}</p>`:""}</div>` : ""}
-    ${e && e.status==="checked" ? `<div class="review checked"><b>✓ Checked by ${esc(e.checkedBy||"")}${e.checkedAt?" on "+esc(new Date(e.checkedAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"})):""}</b>${e.comment?`<p>${esc(e.comment)}</p>`:""}</div>` : ""}
+    ${e && e.status==="redo" ? `<div class="review redo"><b>↩ ${esc(e.checkedBy||"The checker")} asked for more</b>${e.comment?`<p>${rich(e.comment)}</p>`:""}</div>` : ""}
+    ${e && e.status==="checked" ? `<div class="review checked"><b>✓ Checked by ${esc(e.checkedBy||"")}${e.checkedAt?" on "+esc(new Date(e.checkedAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"})):""}</b>${e.comment?`<p>${rich(e.comment)}</p>`:""}</div>` : ""}
 
     <div class="panel"><div class="fgrid">${boxesFor(t).map(box).join("")}</div>
       ${!t.questions.length && !ro ? `<p class="hint" style="margin:10px 0 0">This topic has no weekly questions of its own yet. Add them in <b>Topic settings</b>.</p>` : ""}
@@ -651,7 +654,7 @@ function learnPane(c){
           <span class="row" style="gap:6px"><span class="dchip">${esc(wkName(e.week))}</span><span class="st ${STATUS[e.status].cls}">${esc(STATUS[e.status].label)}</span>
             <button class="btn sm" data-open="${esc(t.id)}|${esc(e.week)}">Open</button></span>
         </div>
-        <div class="two"><div><b>What we can take away</b>${esc(e.f.takeaway||"—")}</div><div><b>Something we could build</b>${esc(e.f.build||"—")}</div></div>
+        <div class="two"><div><b>What we can take away</b>${rich(e.f.takeaway||"—")}</div><div><b>Something we could build</b>${rich(e.f.build||"—")}</div></div>
       </div>`).join("")
     : `<div class="empty"><h4>No learnings yet</h4><p>Once weekly answers are submitted, their takeaways and ideas collect here.</p></div>`}`;
 }

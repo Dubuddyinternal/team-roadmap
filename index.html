@@ -13,6 +13,7 @@
 <!-- Supabase: logins, people and roles (Stage 3). Loaded from a public CDN. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Social Media space: Summary (live YouTube numbers) / Ideation / Content Process / Schedule -->
+<script src="richtext.js"></script><!-- rich text + "Show all" in every multi-line text box (load before the spaces) -->
 <script src="social-space.js"></script>
 <script src="pipeline.js"></script><!-- Claude edit & post panel on Content Process cards -->
 <script src="hinglish.js"></script><script src="dictate.js"></script><!-- 🎤 dictation in every text box -->
@@ -6498,7 +6499,7 @@ function renderComments(){
     head.appendChild(del);
     row.appendChild(head);
     const body = document.createElement("div");
-    body.className = "cmt-body"; body.textContent = c.text;
+    body.className = "cmt-body"; if(window.RT) body.innerHTML = RT.html(c.text); else body.textContent = c.text;   // rich text (richtext.js)
     row.appendChild(body);
     list.appendChild(row);
   });
@@ -7223,7 +7224,7 @@ function nodeEl(node, parentArr, idx, numPath, modKey){
   body.appendChild(titleEl);
   if(node.note){
     const noteEl = document.createElement("div");
-    noteEl.className = "note"; noteEl.textContent = node.note;
+    noteEl.className = "note"; if(window.RT) noteEl.innerHTML = RT.html(node.note); else noteEl.textContent = node.note;
     body.appendChild(noteEl);
   }
   const nps = photoStrip(node.photos);

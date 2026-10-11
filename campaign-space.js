@@ -502,6 +502,9 @@ const SALES_DEMO = {
 
 /* ------------------------------------------------------------ helpers */
 const esc = s => String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+
+// text from a rich-text box (richtext.js keeps light markdown): shown formatted
+const rich = v => window.RT ? RT.html(v) : esc(v);
 const isoD = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 const TODAY = isoD(new Date());
 const dmy = s => s ? new Date(s+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"}) : "";
@@ -642,7 +645,7 @@ function detailsPane(c){
             ${it.platform?`<span class="chip">${esc(it.platform)}</span>`:""}
             ${on?`<span class="who">${avatar(on)}${esc(on)}</span>`:`<span class="badge mute">nobody accountable</span>`}
           </div>
-          ${it.details?`<p>${esc(it.details)}</p>`:""}
+          ${it.details?`<p>${rich(it.details)}</p>`:""}
         </div>
         ${ro?"":`<div class="row" style="flex-wrap:nowrap">
           <button class="btn sm" data-edititem="${esc(it.id)}">Edit</button>
@@ -1017,7 +1020,7 @@ function listView(c, shown){
         <td><span class="tag" style="background:color-mix(in srgb,${k.c} 15%,transparent);color:${k.c}">${esc(kindName(it).toLowerCase())}</span></td>
         <td>${it.platform?`<span class="chip">${esc(it.platform)}</span>`:"—"}</td>
         <td>${on?`<span class="who">${avatar(on)}${esc(on)}</span>`:`<span class="miss">nobody</span>`}</td>
-        <td class="td-txt">${it.details?esc(it.details):"—"}</td></tr>`;}).join("")}
+        <td class="td-txt">${it.details?rich(it.details):"—"}</td></tr>`;}).join("")}
     </tbody></table></div>`;
 }
 function flowView(c, shown){

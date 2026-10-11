@@ -130,13 +130,15 @@ function macLoginHelp(){
     <div class="pp-step">3. Check it can see vidIQ</div>${copyBlock("node ~/Claud/dubuddy-tools-site/local/runner.mjs --doctor")}
     <div class="pp-step">Then press <b>Retry</b>.</div></div>`;
 }
+// rich-text boxes keep light markdown (richtext.js); what goes to Claude and to YouTube / Instagram is plain text
+const P = v => window.RT ? RT.plain(v||"") : (v||"");
 function cardInfo(c, h){
   const idea = h.idea && h.idea(c);
-  return { id:c.id, idea:c.idea, title:c.pre.title, description:c.pre.desc, hashtags:c.pre.hashtags,
+  return { id:c.id, idea:c.idea, title:P(c.pre.title), description:P(c.pre.desc), hashtags:c.pre.hashtags,
     keywords:(c.pre.keywords||[]).map(k=>k.kw||k.keyword||k.term||k.text||k).filter(x=>typeof x==="string"),
-    why:c.pre.why, platform:c.platform, platforms:(c.platforms&&c.platforms.length?c.platforms:[c.platform]),
+    why:P(c.pre.why), platform:c.platform, platforms:(c.platforms&&c.platforms.length?c.platforms:[c.platform]),
     video_type:c.vtype, scheduled:c.scheduled, time:c.time||null,
-    hook: idea ? idea.hook : "", cta: idea ? idea.cta : "" };
+    hook: idea ? P(idea.hook) : "", cta: idea ? P(idea.cta) : "" };
 }
 // the skill's hook markup: *word* = orange, | = new line
 const hookHtml = t => esc(t).replace(/\*([^*]+)\*/g, '<span class="pp-em">$1</span>').replace(/\s*\|\s*/g, " / ");
@@ -423,8 +425,8 @@ function wire(){
       if(!confirm(act==="schedule" ? `Schedule this for ${where} at ${sl.label}?\n\n${t.includes("yt")?"YouTube title: "+d.yt_title+"\n":""}It goes live by itself at that time.`
         : `Post this to ${where} now?\n\n${t.includes("yt")?"YouTube title: "+d.yt_title+"\n":""}This goes live publicly.`)) return;
       return run(b, act, { targets: t, post_at: sl ? sl.iso : undefined,
-        yt: { title: d.yt_title.trim(), description: d.yt_desc, tags: d.yt_tags.split(",").map(s=>s.trim()).filter(Boolean) },
-        ig: { caption: d.ig_caption } });
+        yt: { title: P(d.yt_title).trim(), description: P(d.yt_desc), tags: d.yt_tags.split(",").map(s=>s.trim()).filter(Boolean) },
+        ig: { caption: P(d.ig_caption) } });
     }
     run(b, act);
   });
