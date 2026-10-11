@@ -4,8 +4,8 @@
 
    WHAT THIS IS: a fixed template for studying another company — one we
    want to be like (🌟 role model) or one that takes our students
-   (⚔️ competitor). It lives inside a Marketing space (index.html, type
-   "watch" with parent = that space). The template is the same for every
+   (⚔️ competitor). It is its own space in the sidebar (index.html, type
+   "watch", added from Administration → Spaces). The template is the same for every
    company, so an intern always knows what to fill and in what order:
      * Companies — every company we watch, who is studying it, by when,
        and how much of the template is filled.
