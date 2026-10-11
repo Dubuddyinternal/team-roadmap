@@ -445,6 +445,8 @@ window.PIPE = {
   job(cardId){ return S.jobs[cardId] || null; },
   busy(cardId){ const j = S.jobs[cardId]; return !!j && BUSY.includes(j.status); },
   cancel(cardId){ return action(cardId, "cancel"); },
+  // a scheduled post follows its card to a new day / time (iso = the new posting moment)
+  reschedule(cardId, iso){ return action(cardId, "reschedule", { post_at: iso }); },
   // "✍️ Draft hook & talking points": a helper job of its own (<card>__s)
   async script(card, h){ await action(card.id + "__s", "script", { card_info: cardInfo(card, h||{}) }); poll(); },
   // "🔎 Fill with vidIQ": a small research job of its own (<card>__r)

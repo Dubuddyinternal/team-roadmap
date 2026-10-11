@@ -395,6 +395,9 @@ details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var
 .day{border:1px solid var(--line);border-radius:var(--r-s);min-height:92px;padding:7px;background:var(--surface);display:flex;flex-direction:column;gap:4px}
 .day.pad{background:transparent;border-color:transparent}
 .day.today{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.day.dropon,.wday.dropon{background:var(--accent-soft);border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.evt[draggable=true],.wevt[draggable=true]{cursor:grab}
+.evt.dragging,.wevt.dragging{opacity:.4}
 .day .dn{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
 .evt{font-size:10.5px;border-radius:4px;padding:4px 6px;line-height:1.3;border-left:2.5px solid;background:var(--surface-2);color:var(--ink-2);text-align:left;width:100%;display:block}
 .evt b{display:block;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1818,6 +1821,25 @@ function onBoard(c){ if(!c.ideaId) return true; const i=IDEAS.find(x=>x.id===c.i
 const boardCards=()=>CARDS.filter(onBoard);
 
 // posting slots come from Targets → Posting time (time + every day / weekdays / weekends)
+/* ---- moving a card to another day on the Schedule ---- */
+const dragAttr = c => canEdit() && c.stage!=="published" ? `draggable="true" title="Drag to another day"` : "";
+async function moveCardToDay(c, day){
+  if(!canEdit()){ toast("You can view this space but not edit it"); return; }
+  if(!day || c.scheduled===day) return;
+  if(c.stage==="published"){ toast("This one is already live, so its date can't move"); return; }
+  const time = c.time || slotPlan(c.platform).time;            // the time never changes on a move
+  const at = new Date(`${day}T${time}:00`);
+  const job = window.PIPE && PIPE.job(c.id);
+  if(job && job.status==="posting"){ toast("It's being posted right now, so it can't move"); return; }
+  const timed = job && job.status==="scheduled";               // Claude will post it by itself at the slot: move that too
+  if(timed){
+    if(at <= new Date(Date.now()+5*60000)){ toast("This post goes out by itself — pick a day still ahead"); return; }
+    try{ await PIPE.reschedule(c.id, at.toISOString()); }
+    catch(e){ toast("Couldn't move the scheduled post: "+(e.message||e)); return; }
+  }
+  c.scheduled=day; c.time=time;
+  if(save()) toast(`Moved to ${dow(day).slice(0,3)} ${dmy(day)}, still at ${new Date(`${day}T${time}:00`).toLocaleTimeString("en-GB",{hour:"numeric",minute:"2-digit",hour12:true})}${timed?" · the scheduled post moved too":""}`);
+}
 function slotPlan(pl){ const p=(TG&&TG.plan&&TG.plan[pl])||{}; return { time:p.time||"18:00", days:p.days||"all" }; }
 function nextSlot(pl,leadDays=3){   // pl: a platform or a list of them — a day is free only if none of them has a post that day
   const list=Array.isArray(pl)?pl:[pl], plan=slotPlan(list[0]), fits=d=>plan.days==="weekdays"?d.getDay()%6!==0:plan.days==="weekends"?d.getDay()%6===0:true;
@@ -2106,9 +2128,9 @@ function renderSchedule(){
     let cells="";
     for(let i=0;i<7;i++){ const d=new Date(s); d.setDate(s.getDate()+i); const key=iso(d);
       const evts=all.filter(c=>c.scheduled===key);
-      cells+=`<div class="wday ${key===TODAY?"today":""}">
+      cells+=`<div class="wday ${key===TODAY?"today":""}" data-date="${key}">
         <div class="wh"><span class="lbl">${d.toLocaleDateString("en-GB",{weekday:"short"})}</span><b>${d.getDate()}</b></div>
-        ${evts.map(c=>`<button class="wevt" style="border-left-color:${vtypeColor(c.vtype)}" data-card="${c.id}">
+        ${evts.map(c=>`<button class="wevt" style="border-left-color:${vtypeColor(c.vtype)}" data-card="${c.id}" ${dragAttr(c)}>
           <h6>${esc(c.pre.title||c.idea)}</h6><div class="meta">${ptags(c)}${vtagFor(c)}</div></button>`).join("")
           ||`<span class="hint" style="font-size:11px">—</span>`}</div>`; }
     grid=`<div style="overflow-x:auto"><div class="weekgrid">${cells}</div></div>`;
@@ -2118,8 +2140,8 @@ function renderSchedule(){
     const start=(new Date(y,m,1).getDay()+6)%7, dim=new Date(y,m+1,0).getDate();
     let cells=""; for(let i=0;i<start;i++) cells+=`<div class="day pad"></div>`;
     for(let dd=1;dd<=dim;dd++){ const key=iso(new Date(y,m,dd)); const evts=all.filter(c=>c.scheduled===key);
-      cells+=`<div class="day ${key===TODAY?"today":""}"><span class="dn">${dd}</span>
-        ${evts.map(c=>`<button class="evt" style="border-left-color:${vtypeColor(c.vtype)}" data-card="${c.id}">
+      cells+=`<div class="day ${key===TODAY?"today":""}" data-date="${key}"><span class="dn">${dd}</span>
+        ${evts.map(c=>`<button class="evt" style="border-left-color:${vtypeColor(c.vtype)}" data-card="${c.id}" ${dragAttr(c)}>
           <b>${esc(c.pre.title||c.idea)}</b>${esc(platShort(c.platform))} · ${esc(vtypeLabel(c.vtype))}</button>`).join("")}</div>`; }
     grid=`<div style="overflow-x:auto"><div class="cal">
       ${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=>`<div class="dow">${d}</div>`).join("")}${cells}</div></div>`;
@@ -2147,7 +2169,7 @@ function renderSchedule(){
     <div class="sec"><div class="sec-h">
       <button class="btn sm" id="prev">←</button><h3>${heading}</h3><button class="btn sm" id="next">→</button>
       <button class="btn sm" id="todayBtn">Today</button>
-      <span class="hint" style="margin-left:auto">${all.length} scheduled card${all.length===1?"":"s"} match these filters</span></div>
+      <span class="hint" style="margin-left:auto">${canEdit()?"Drag a card to another day to move it — its time stays the same · ":""}${all.length} scheduled card${all.length===1?"":"s"} match these filters</span></div>
       ${grid}
       <div class="legend" style="margin-top:14px">
         ${Object.keys(REG.vtype).map(k=>`<span><i style="background:${vtypeColor(k)}"></i>${esc(vtypeLabel(k))}</span>`).join("")}</div></div>`;
@@ -2157,6 +2179,18 @@ function renderSchedule(){
   P.querySelectorAll("[data-splat]").forEach(b=>b.onclick=()=>{toggle(SCHED.platforms,b.dataset.splat);renderSchedule();});
   P.querySelectorAll("[data-svt]").forEach(b=>b.onclick=()=>{toggle(SCHED.vtypes,b.dataset.svt);renderSchedule();});
   P.querySelectorAll("[data-card]").forEach(b=>b.onclick=()=>openCard(b.dataset.card));
+  // drag a card onto another day: the date changes, the time doesn't
+  let dragId=null;
+  P.querySelectorAll("[data-card][draggable=true]").forEach(b=>{
+    b.addEventListener("dragstart",e=>{ dragId=b.dataset.card; b.classList.add("dragging"); e.dataTransfer.effectAllowed="move"; try{ e.dataTransfer.setData("text/plain",dragId); }catch(_){ } });
+    b.addEventListener("dragend",()=>{ b.classList.remove("dragging"); P.querySelectorAll(".dropon").forEach(x=>x.classList.remove("dropon")); });
+  });
+  P.querySelectorAll("[data-date]").forEach(day=>{
+    day.addEventListener("dragover",e=>{ if(!dragId) return; e.preventDefault(); e.dataTransfer.dropEffect="move"; day.classList.add("dropon"); });
+    day.addEventListener("dragleave",e=>{ if(!day.contains(e.relatedTarget)) day.classList.remove("dropon"); });
+    day.addEventListener("drop",e=>{ e.preventDefault(); day.classList.remove("dropon");
+      const c=CARDS.find(x=>x.id===dragId); dragId=null; if(c) moveCardToDay(c, day.dataset.date); });
+  });
   const step=n=>{ const d=new Date(SCHED.cursor+"T00:00:00");
     if(SCHED.view==="week") d.setDate(d.getDate()+7*n); else { d.setDate(1); d.setMonth(d.getMonth()+n); }
     SCHED.cursor=iso(d); renderSchedule(); };
@@ -2795,8 +2829,13 @@ function openCard(id,showGate){
     });
     $("#drawer").querySelectorAll("[data-clear]").forEach(b=>b.onclick=()=>{ read(); c.post[b.dataset.clear]=null; draw(c.pre.keywords); });
 
-    const sc=$("#saveCard"); if(sc) sc.onclick=()=>{ read(); if(!c.idea&&!c.pre.title){toast("A card needs an idea or a title");return;}
-      persist(); if(save()){ dirty=false; closeDrawer(true); toast(isNew?"Card created":"Saved"); } };
+    const sc=$("#saveCard"); if(sc) sc.onclick=()=>{ const was=slotOf(c); read(); if(!c.idea&&!c.pre.title){toast("A card needs an idea or a title");return;}
+      persist(); if(save()){ dirty=false; closeDrawer(true); toast(isNew?"Card created":"Saved");
+        // a post Claude will publish at the slot follows the card's new date / time
+        const j=window.PIPE&&PIPE.job(c.id), now=slotOf(c);
+        if(j && j.status==="scheduled" && now && (!was || was.iso!==now.iso))
+          PIPE.reschedule(c.id, now.iso).then(()=>toast("Saved · the scheduled post moved to "+now.label))
+            .catch(e=>toast("Saved, but the scheduled post didn't move: "+(e.message||e))); } };
     const del=$("#delCard"); if(del) del.onclick=()=>{
       if(!canDeleteCards()){ toast("Only Admins can delete cards"); return; }
       const running=window.PIPE && (PIPE.busy(c.id) || PIPE.busy(c.id+"__r"));   // a Claude job working on this card gets stopped first
