@@ -879,6 +879,7 @@ function normTargets(o){
   t.goals.forEach(g=>{ if(!g.id) g.id=uid("g"); });
   return t;
 }
+function canDeleteCards(){ return canEdit() && !!(OPT.canDeleteCards && OPT.canDeleteCards()); }
 function canEditTargets(){ return !!(OPT.canEditTargets && OPT.canEditTargets()); }
 
 const manualKey=g=>`${g.platform}:${g.metric}:${calStart(g.period)}`;
@@ -2671,7 +2672,7 @@ function openCard(id,showGate){
       <button class="btn pri" id="saveCard" data-w="1">${isNew?"Create card":"Save changes"}</button>
       <button class="btn" id="xClose2">${canEdit()?"Cancel":"Close"}</button>
       <span id="dirtyDot" class="dirty" ${dirty?"":"hidden"}>● Unsaved changes</span>
-      ${!isNew?`<button class="btn danger" id="delCard" style="margin-left:auto" data-w="1">Delete</button>`:""}</div>`,true);
+      ${!isNew&&canDeleteCards()?`<button class="btn danger" id="delCard" style="margin-left:auto" data-w="1">Delete</button>`:""}</div>`,true);
 
     const read=()=>{
       c.idea=$("#c-idea").value.trim(); c.platforms=readPlats("c-platform",plats(c)); c.platform=c.platforms[0];
@@ -2752,6 +2753,7 @@ function openCard(id,showGate){
     const sc=$("#saveCard"); if(sc) sc.onclick=()=>{ read(); if(!c.idea&&!c.pre.title){toast("A card needs an idea or a title");return;}
       persist(); if(save()){ dirty=false; closeDrawer(true); toast(isNew?"Card created":"Saved"); } };
     const del=$("#delCard"); if(del) del.onclick=()=>{
+      if(!canDeleteCards()){ toast("Only Admins can delete cards"); return; }
       const running=window.PIPE && (PIPE.busy(c.id) || PIPE.busy(c.id+"__r"));   // a Claude job working on this card gets stopped first
       if(!confirm(running?"Claude is working on this card right now. Deleting it stops that job (files already made are kept). Delete the card?"
         :"Delete this card? The idea it came from stays in Ideation.")) return;
@@ -2976,7 +2978,7 @@ window.SX = {
   normalize: normalize,
   tabs: [["targets","Our agreement"],["summary","Summary"],["ideation","Ideation"],["process","Content Process"],["schedule","Schedule"],["rivals","Keep an Eye on 2nd Love"]],
   /* draw the space. opt: {tab, team, supa, canEdit(), isMember(), me(), people(), save(),
-       targets(space), canEditTargets(), saveTargets(space, obj)} */
+       targets(space), canEditTargets(), saveTargets(space, obj), canDeleteCards()} */
   render: function(space, wrap, opt){
     mount();
     OPT = opt || {};

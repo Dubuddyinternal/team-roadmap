@@ -4171,6 +4171,7 @@ const PERMS = [
   {key:"delete_roadmaps",  label:"Delete roadmaps",       hint:"See “Delete roadmap” in a roadmap's ⋯ menu"},
   {key:"add_spaces",       label:"Add spaces",            hint:"Create new spaces (Administration → Spaces). Nobody else sees an Add space button"},
   {key:"delete_spaces",    label:"Delete spaces",         hint:"See “Delete…” in a space's ⋯ menu and remove whole spaces"},
+  {key:"delete_social_cards", label:"Delete Social Media cards", hint:"See “Delete” on a Content Process card in Social Media. Owners and Admins always can"},
   {key:"review_student_ideas", label:"Review student ideas", hint:"Approve, merge or reject ideas students send from tools.dubuddy.in/ideas (product space → From students)"},
   {key:"manage_learning",  label:"Run LMS",               hint:"Plan learning drops — videos, articles, polls, quizzes — in Administration → LMS, and see everyone's answers"},
 ];
@@ -12804,6 +12805,8 @@ function renderContentSocial(){
     people: ()=>USERS.filter(u=>isMember(u, TEAM)).map(userDisplayName),
     targets: sp=>SOCIAL_TARGETS[sp.id] || null,
     canEditTargets: ()=>hasPerm("edit_targets"),
+    // deleting a Content Process card: Owners and Admins, plus any role given "Delete Social Media cards"
+    canDeleteCards: ()=>{ const r = roleOf(currentUser(), TEAM); return r==="owner" || r==="admin" || hasPerm("delete_social_cards"); },
     saveTargets: (sp, obj)=>{ SOCIAL_TARGETS[sp.id] = obj; pushAll(); },
     save: saveSocial,
   });
