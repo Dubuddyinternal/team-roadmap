@@ -235,6 +235,9 @@ const AD_LIBRARY = "https://www.facebook.com/ads/library/?active_status=active&a
 
 /* ------------------------------------------------------------ helpers */
 const esc = s => String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+
+// text from a rich-text box (richtext.js keeps light markdown): shown formatted
+const rich = v => window.RT ? RT.html(v) : esc(v);
 const isoD = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 const today = () => isoD(new Date());
 const dmy = s => s ? new Date(s+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}) : "";
@@ -382,7 +385,7 @@ function companiesPane(c){
     const last = co.updates.map(u=>u.date||"").sort().pop();
     return `<button class="co ${k.cls}" data-openco="${esc(co.id)}">
       <div class="row" style="justify-content:space-between"><h4>${esc(co.name)}</h4><span class="badge ${k.cls}">${k.emo} ${esc(k.label)}</span></div>
-      <p>${filled(co,"oneLine") ? esc(co.f.oneLine) : `<span style="color:var(--ink-3)">Not filled yet. Open it to start.</span>`}</p>
+      <p>${filled(co,"oneLine") ? esc(window.RT ? RT.plain(co.f.oneLine) : co.f.oneLine) : `<span style="color:var(--ink-3)">Not filled yet. Open it to start.</span>`}</p>
       <div class="meter ${pg.n===pg.of?"done":""}"><i style="width:${pg.pct}%"></i></div>
       <div class="foot">
         <span>${pg.n===pg.of ? "✓ template done" : `${pg.n} of ${pg.of} must-fill boxes`}</span>
@@ -574,7 +577,7 @@ function updatesPane(c){
           <div class="row" style="gap:6px"><span class="badge ${KINDS[co.kind].cls}">${esc(co.name)}</span><span class="dchip">${esc(k.label)}</span>
             ${u.by?`<span class="who">${avatar(u.by)}${esc(u.by)}</span>`:""}</div>
           ${link?`<p><a href="${esc(link)}" target="_blank" rel="noopener">${esc(link)}</a></p>`:""}
-          ${u.why?`<p><b>What it means for us:</b> ${esc(u.why)}</p>`:""}
+          ${u.why?`<p><b>What it means for us:</b> ${rich(u.why)}</p>`:""}
         </div>
         ${ro?"":`<button class="btn sm danger" data-rmupd="${esc(co.id)}|${esc(u.id)}" title="Remove">✕</button>`}
       </div>`; }).join("")
@@ -620,7 +623,7 @@ function comparePane(c){
       <thead><tr><th class="rowh"></th>${cos.map(co=>{ const k=KINDS[co.kind], pg=progress(co);
         return `<th><button data-openco="${esc(co.id)}" style="font-weight:700;font-size:14px;text-align:left">${esc(co.name)}</button>
           <div class="row" style="gap:6px;margin-top:5px"><span class="badge ${k.cls}">${k.emo} ${esc(k.label)}</span><span class="hint">${pg.pct}% filled</span></div></th>`; }).join("")}</tr></thead>
-      <tbody>${rows.map(f=>`<tr><td class="rowh">${esc(f.label)}</td>${cos.map(co=>`<td>${filled(co,f.k)?esc(co.f[f.k]):`<span class="blank">not filled</span>`}</td>`).join("")}</tr>`).join("")}
+      <tbody>${rows.map(f=>`<tr><td class="rowh">${esc(f.label)}</td>${cos.map(co=>`<td style="white-space:normal">${filled(co,f.k)?rich(co.f[f.k]):`<span class="blank">not filled</span>`}</td>`).join("")}</tr>`).join("")}
         <tr><td class="rowh">Last update</td>${cos.map(co=>{ const u=[...co.updates].sort((a,b)=>(b.date||"").localeCompare(a.date||""))[0];
           return `<td>${u?`${esc(dmy(u.date))}: ${esc(u.text)}`:`<span class="hint">none</span>`}</td>`; }).join("")}</tr>
       </tbody>

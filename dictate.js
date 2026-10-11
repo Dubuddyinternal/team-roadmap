@@ -20,8 +20,9 @@
 
 const ROOTS = new WeakSet();
 const MAX_SECONDS = 180;
-const ok = el => el && !el.disabled && !el.readOnly && !el.closest("[data-nodictate]") &&
-  (el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && /^(text|search|url|email|)$/i.test(el.getAttribute("type") || "")));
+const isEd = el => el && el.classList && el.classList.contains("rt-ed");   // a rich-text box (richtext.js)
+const ok = el => el && !el.closest("[data-nodictate]") && (isEd(el) ? el.isContentEditable :
+  !el.disabled && !el.readOnly && (el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && /^(text|search|url|email|)$/i.test(el.getAttribute("type") || ""))));
 
 const CSS = `
 .dict-mic{position:fixed;z-index:99999;width:26px;height:26px;border-radius:50%;border:1px solid #D2CCC0;background:#fff;color:#56514A;
@@ -84,7 +85,7 @@ function attach(root){
     if(r.bottom < 0 || r.top > innerHeight){ mic.style.visibility = "hidden"; lang.hidden = true; return; }
     mic.style.visibility = "";
     const h = mic.offsetHeight || 26, w = mic.offsetWidth || 26;
-    const top = target.tagName === "TEXTAREA" ? r.top + 6 : r.top + (r.height - h) / 2;
+    const top = target.tagName === "TEXTAREA" || isEd(target) ? r.top + 6 : r.top + (r.height - h) / 2;
     mic.style.left = Math.round(r.right - w - 6) + "px"; mic.style.top = Math.round(top) + "px";
     lang.hidden = mic.hidden || state !== "idle";
     if(!lang.hidden){ lang.style.left = Math.round(r.right - (lang.offsetWidth || 56)) + "px"; lang.style.top = Math.round(r.top > 30 ? r.top - 23 : r.bottom + 3) + "px"; }
@@ -106,11 +107,13 @@ function attach(root){
   // where the spoken words go: the text before and after the cursor when recording started
   let spot = null;
   function markSpot(){
+    if(isEd(target) && window.RT){ spot = { el: target, rt: RT.dictation(target) }; return; }
     const el = target, v = el.value, a = el.selectionStart ?? v.length, b = el.selectionEnd ?? v.length;
     spot = { el, before: v.slice(0, a), after: v.slice(b) };
   }
   function write(text, final){
     if(!spot || !spot.el.isConnected) return;
+    if(spot.rt){ spot.rt.write(text, final); return; }
     const { el, before, after } = spot, t = text || "";
     const pre = t && before && !/\s$/.test(before) ? " " : "", post = t && after && !/^\s/.test(after) ? " " : "";
     el.value = before + pre + t + post + after;
