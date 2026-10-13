@@ -388,6 +388,10 @@ details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var
 .drop .lbl{margin-bottom:5px}
 .drop img{width:62px;height:35px;object-fit:cover;border-radius:5px;flex-shrink:0;border:1px solid var(--line)}
 .drop input[type=file]{display:none}
+.rawseg{display:inline-flex;margin:2px 0 9px}
+.rawseg button{padding:5px 12px;font-size:11.5px}
+.rawbox .pp-bar{height:6px;background:var(--surface-2);border-radius:999px;overflow:hidden;margin-top:8px}
+.rawbox .pp-bar i{display:block;height:100%;width:0;background:var(--accent)}
 .filebtn{display:inline-block;border:1px solid var(--line-2);border-radius:var(--r-s);padding:6px 12px;font-size:12px;font-weight:600;color:var(--ink-2);cursor:pointer;background:var(--surface-2)}
 
 .cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;min-width:660px}
@@ -543,7 +547,7 @@ function wireOwn(obj, read, markDirty, redraw){
 }
 function blankIdea(o){ return Object.assign({ id:uid("i"), idea:"", by:"", created:today(), hook:"", cta:"", platform:"ig", vtype:"reel",
   source:"", tool:"", keywords:[], title:"", desc:"", hashtags:"", why:"", studentWhy:"", status:"new", comments:[], extra:[] }, o||{}); }
-function blankCard(o){ return Object.assign({ id:uid("c"), ideaId:null, idea:"", platform:"ig", vtype:"reel", stage:"todo",
+function blankCard(o){ return Object.assign({ id:uid("c"), ideaId:null, idea:"", platform:"ig", vtype:"reel", stage:"todo", raw:null,
   pre:{source:"",tool:"",keywords:[],why:"",title:"",desc:"",hashtags:""},
   post:{reel:null,thumb:null,postUrl:""}, scheduled:null, published:null, acceptedOn:today(), metrics:null, override:null }, o||{}); }
 
@@ -2200,6 +2204,7 @@ function renderSchedule(){
 }
 
 /* ------------------------------------------------------------ DRAWERS */
+const RAWMODE={};   // card id → "link" | "file": which Raw video option is showing
 let OPEN=null;   // what the window shows ({kind:"card"|"idea", id}), so a refresh can reopen it
 let CLOSE_GUARD=null;   // the open card's "discard unsaved changes?" check
 function closeDrawer(force){
@@ -2586,6 +2591,27 @@ function openCard(id,showGate){
     if(rData){ rOk=gResearch(c.pre)||!!c.override; cOk=gCopy(c.pre); }
     const srcIdea=c.ideaId?IDEAS.find(x=>x.id===c.ideaId):null;
     const lp=livePost(c);
+    // the raw footage, before any edit: a shared link, or the file itself uploaded to the video storage (the one Claude edits)
+    const rawBox=()=>{ const r=c.raw||null, mode=RAWMODE[c.id]||(r&&r.kind)||"link", link=r&&r.kind==="link"?r.url:"";
+      const off=!window.PIPE||PIPE.mode()==="off", okUrl=/^https?:\/\//i.test(link);
+      return `<div class="pre-step rawbox">
+        <div class="pre-h"><span class="pre-n ${r?"ok":""}">${r?"✓":"1"}</span><b>Raw video</b><span class="hint">the footage before editing — a link or the file</span></div>
+        <div class="seg rawseg" data-w="1"><button type="button" data-rawmode="link" class="${mode==="link"?"on":""}">🔗 Paste a link</button>
+          <button type="button" data-rawmode="file" class="${mode==="file"?"on":""}">⬆ Upload the file</button></div>
+        ${mode==="link"?`<div class="fld" style="margin:0"><input id="raw-url" value="${esc(link)}" placeholder="Google Drive, Dropbox or WeTransfer link to the raw clip">
+            <p class="hint" style="margin:5px 0 0">${okUrl?`<a href="${esc(link)}" target="_blank" rel="noopener">Open the raw video ↗</a> · `:""}Set the link so anyone in the team can open it.</p></div>`
+        :r&&r.kind==="file"?`<div class="drop has"><span style="font-size:22px">🎞️</span>
+            <div style="flex:1;min-width:0"><div class="lbl" style="margin:0 0 2px">Raw video · uploaded</div>
+              <div class="nm">${esc(r.name)}</div><div class="sz">${mb(r.size)}${r.by?" · by "+esc(r.by):""}${r.at?" · "+esc(dmy(r.at)):""}</div></div>
+            <label class="btn sm" data-w="1" style="cursor:pointer">Replace<input type="file" accept="video/*" data-rawfile hidden></label></div>
+            ${useClaude?`<p class="hint" style="margin:6px 0 0">🤖 Claude edit uses this file.</p>`:""}`
+        :isNew?`<p class="hint pre-note">Create the card first, then upload the raw video here.</p>`
+        :off?`<p class="hint pre-note">Uploading needs the video storage switched on (an owner sets it up once — <b>routine/SETUP.md</b>). Paste a link for now.</p>`
+        :`<div class="drop" data-rawdrop><div class="lbl">Raw video</div>
+            <label class="filebtn" data-w="1">Choose file<input type="file" accept="video/*" data-rawfile></label>
+            <div class="hint" style="margin-top:7px" data-rawup>MP4 or MOV, straight from the phone or camera. It's stored for the team${useClaude?" and Claude edit uses it":""}.</div>
+            <div class="pp-bar" data-rawbar hidden><i></i></div></div>`}
+      </div>`; };
     const fileSlot=(key,label,accept,note)=>{ const f=c.post[key];
       return `<div class="drop ${f?"has":""}">
         ${f?`${f.preview?`<img src="${f.preview}" alt="">`:`<span style="font-size:22px">${key==="reel"?"🎬":"🖼"}</span>`}
@@ -2681,13 +2707,14 @@ function openCard(id,showGate){
         ${c.stage==="published"&&c.post.postUrl?`<span class="badge good">✓ published</span>`
           :pMissing.length?`<span class="pre-miss">Missing: ${esc(pMissing.join(", "))}</span>`:`<span class="badge good">✓ ready to publish</span>`}</div>
 
+      ${F.video?rawBox():""}
       <div class="pre-step">
-        <div class="pre-h"><span class="pre-n ${edited?"ok":""}">${edited?"✓":"1"}</span><b>${F.video?"Edited video":"Finished design"}</b>
+        <div class="pre-h"><span class="pre-n ${edited?"ok":""}">${edited?"✓":F.video?"2":"1"}</span><b>${F.video?"Edited video":"Finished design"}</b>
           ${claudeDone?`<span class="hint">by Claude</span>`:c.post.reel?`<span class="hint">your own edit</span>`:""}</div>
         ${claudeDone?`<div class="pp-mini">
             ${jobM.yt?`<div><div class="lbl">YouTube</div><video controls preload="metadata" src="${esc(jobM.yt)}"></video></div>`:""}
             ${jobM.ig?`<div><div class="lbl">Instagram</div><video controls preload="metadata" src="${esc(jobM.ig)}"></video></div>`:""}</div>`
-          :!c.post.reel?`<p class="hint pre-note">${useClaude?`Not edited yet. Upload the raw clip in <b>🤖 Claude edit &amp; post</b>${!isNew?(reviewing?" above":" (top of this column)"):""} — or add your own edit below.`
+          :!c.post.reel?`<p class="hint pre-note">${useClaude?`Not edited yet. Add the raw video above, then start <b>🤖 Claude edit &amp; post</b>${!isNew?(reviewing?" above":" (top of this column)"):""} — or add your own edit below.`
               :F.video?"Not edited yet — add the finished video below once it's edited.":"Not designed yet — add the finished image or slides below."}</p>`:""}
         <details class="manual" ${c.post.reel||!useClaude?"open":""}><summary>${claudeDone?"Use my own edit instead":c.post.reel?(F.video?"Your own edit":"The design"):useClaude?"I edited it myself":F.video?"The finished video":"The finished design"}</summary>
           ${fileSlot("reel", !F.video?"Image / slides":c.vtype==="long"?"Edited video":"Edited reel", F.video?"video/*":"image/*,application/pdf",
@@ -2699,7 +2726,7 @@ function openCard(id,showGate){
       </div>
 
       <div class="pre-step">
-        <div class="pre-h"><span class="pre-n ${c.post.postUrl?"ok":""}">${c.post.postUrl?"✓":"2"}</span><b>Published</b>
+        <div class="pre-h"><span class="pre-n ${c.post.postUrl?"ok":""}">${c.post.postUrl?"✓":F.video?"3":"2"}</span><b>Published</b>
           ${lp?`<span class="badge good" style="margin-left:auto">linked · ${fmt(lp.views)} views</span>`:""}</div>
         ${posts.length?`<div class="pub-list">${posts.map(x=>`<div class="pub-row"><span class="pub-pl">${x.pl}</span>
             <span class="badge ${x.status==="posted"?"good":"crit"}">${esc(x.status)}</span>
@@ -2763,6 +2790,7 @@ function openCard(id,showGate){
       c.post.postUrl=c.post.links[c.platform]||Object.values(c.post.links).find(Boolean)||"";
       c.shoot={ hook:$("#s-hook").value.trim(), points:$("#s-points").value.trim(), cta:$("#s-cta").value.trim(), tips:$("#s-tips").value.trim() };
       c.extra=readOwn();
+      const ru=$("#raw-url"); if(ru){ const u=ru.value.trim(); c.raw = u ? { kind:"link", url:u } : (c.raw && c.raw.kind==="file" ? c.raw : null); }
       if(c.stage==="published" && $("#m-views")){ const n=s=>{const e=$(s); return !e||e.value===""?null:Number(e.value);};
         c.metrics={ views:n("#m-views"), likes:n("#m-likes"), comments:n("#m-comments"),
           shares:n("#m-shares"), watch:($("#m-watch")&&$("#m-watch").value.trim())||null, ctr:n("#m-ctr") }; }
@@ -2790,14 +2818,31 @@ function openCard(id,showGate){
     if(su) su.onclick=()=>{ read(); applyScript(c,sjob.script); dirty=true; draw(c.pre.keywords); toast("Claude's draft is in — press Save to keep it"); };
     $("#drawer").querySelectorAll("[data-rs-title]").forEach(b=>b.onclick=()=>{ read(); c.pre.title=b.dataset.rsTitle;
       dirty=true; draw(c.pre.keywords); toast("Title filled in — press Save to keep it"); });
+    // Raw video box: switch link / upload, and upload the file to the video storage
+    $("#drawer").querySelectorAll("[data-rawmode]").forEach(b=>b.onclick=()=>{ read(); RAWMODE[c.id]=b.dataset.rawmode; draw(c.pre.keywords); });
+    const keepRaw=up=>{ read(); persist(); c.raw=Object.assign({ kind:"file" }, up, { at:today(), by:meName() }); RAWMODE[c.id]="file";
+      if(save()){ dirty=false; opened=snap(); } draw(c.pre.keywords); toast("Raw video uploaded"); };
+    const rawUpload=async f=>{
+      if(!window.PIPE || PIPE.mode()==="off"){ toast("Uploading needs the video storage set up first — paste a link for now"); return; }
+      if(!(/^video\//.test(f.type) || /\.(mp4|mov|m4v|mkv)$/i.test(f.name))){ toast("Pick a video file (.mp4 / .mov)"); return; }
+      const st=$("#drawer").querySelector("[data-rawup]"), bar=$("#drawer").querySelector("[data-rawbar]");
+      if(bar) bar.hidden=false; if(st) st.textContent="Getting an upload link…";
+      try{ const up=await PIPE.uploadRaw(c.id, f, pc=>{ if(bar) bar.firstChild.style.width=pc+"%"; if(st) st.textContent=`Uploading ${f.name}… ${pc}%`; });
+        keepRaw(up); }
+      catch(e){ if(st) st.textContent=e.message; if(bar) bar.hidden=true; toast("Upload didn't work: "+e.message); } };
+    $("#drawer").querySelectorAll("[data-rawfile]").forEach(inp=>inp.onchange=()=>{ if(inp.files[0]) rawUpload(inp.files[0]); });
+    const rd=$("#drawer").querySelector("[data-rawdrop]");
+    if(rd){ rd.ondragover=e=>{ e.preventDefault(); rd.style.borderColor="var(--accent)"; }; rd.ondragleave=()=>{ rd.style.borderColor=""; };
+      rd.ondrop=e=>{ e.preventDefault(); rd.style.borderColor=""; const f=(e.dataTransfer.files||[])[0]; if(f) rawUpload(f); }; }
     // Claude pipeline (pipeline.js): raw video → edit → your checks → post
     if(window.PIPE && $("#pipePanel")) PIPE.mount($("#pipePanel"), c, {
+      raw: ()=>c.raw, onRaw: up=>keepRaw(up),
       canEdit, toast, idea: x=>x.ideaId?IDEAS.find(i=>i.id===x.ideaId):null,
       beforeStart: ()=>{ read(); persist(); if(save()){ dirty=false; opened=snap(); } },
       slot: ()=>slotOf(c),
       onJob: ()=>{ const a=R.activeElement;               // the job moved on: redraw the card, unless someone is typing in it
         if(!$("#drawer").classList.contains("on") || !CARDS.includes(c)) return true;   // closed or deleted: nothing to redraw
-        if(a && $("#drawer").contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) return false;
+        if(a && $("#drawer").contains(a) && (/INPUT|TEXTAREA|SELECT/.test(a.tagName) || a.isContentEditable)) return false;
         if(dirty) read(); draw(c.pre.keywords); return true; },
       onPosted: (url,links)=>{ c.post.links=Object.assign({},c.post.links,links||{}); if(url) c.post.postUrl=url;
         c.published=c.published||today(); c.stage="published"; persist(); return save(); } });

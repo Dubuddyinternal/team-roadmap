@@ -51,6 +51,18 @@ async function action(card, act, extra){
   const j = await call("/api/pipeline/action", Object.assign({ team: team(), job: card, action: act }, extra||{}));
   S.jobs[card] = Object.assign({}, S.jobs[card], j.data); kick(); return j.data;
 }
+// the raw clip: a one-file upload link, then the file goes straight to storage (also used by the card's Raw video box)
+async function uploadRaw(cardId, f, onProgress){
+  const { data } = await call("/api/pipeline/upload-url", { team: team(), job: cardId, name: f.name, size: f.size });
+  await new Promise((ok, bad) => {
+    const x = new XMLHttpRequest(); x.open("PUT", data.url);
+    x.upload.onprogress = e => { if(e.lengthComputable && onProgress) onProgress(Math.round(e.loaded/e.total*100)); };
+    x.onload = () => x.status < 300 ? ok() : bad(new Error("Upload refused (" + x.status + ")"));
+    x.onerror = () => bad(new Error("Upload failed — check the connection"));
+    x.send(f);
+  });
+  return { file: data.file, name: f.name, size: f.size };
+}
 // first frame + length of a local video file, for the upload preview (best effort)
 function preview(f){
   return new Promise(ok => {
@@ -381,15 +393,9 @@ function wire(){
     const meta = preview(f);
     if(go) go.disabled = true; bar.hidden = false; st.textContent = `Getting an upload link…`;
     try{
-      const { data } = await call("/api/pipeline/upload-url", { team: team(), job: c.id, name: f.name, size: f.size });
-      await new Promise((ok, bad) => {
-        const x = new XMLHttpRequest(); x.open("PUT", data.url);
-        x.upload.onprogress = e => { if(e.lengthComputable){ const pc = Math.round(e.loaded/e.total*100); bar.firstChild.style.width = pc+"%"; st.textContent = `Uploading ${f.name}… ${pc}%`; } };
-        x.onload = () => x.status < 300 ? ok() : bad(new Error("Upload refused (" + x.status + ")"));
-        x.onerror = () => bad(new Error("Upload failed — check the connection"));
-        x.send(f);
-      });
-      m.raw = Object.assign({ file: data.file, name: f.name, size: f.size }, await meta);
+      const up = await uploadRaw(c.id, f, pc => { bar.firstChild.style.width = pc+"%"; st.textContent = `Uploading ${f.name}… ${pc}%`; });
+      m.raw = Object.assign(up, await meta);
+      if(h.onRaw) h.onRaw(up);            // the card keeps it too (its Raw video box)
       render();
     }catch(e){ st.textContent = e.message; bar.hidden = true; }
   }
@@ -445,6 +451,8 @@ window.PIPE = {
   job(cardId){ return S.jobs[cardId] || null; },
   busy(cardId){ const j = S.jobs[cardId]; return !!j && BUSY.includes(j.status); },
   cancel(cardId){ return action(cardId, "cancel"); },
+  mode(){ return S.mode; },                                    // "off" until the pipeline is set up on this site
+  uploadRaw(cardId, file, onProgress){ return uploadRaw(cardId, file, onProgress); },
   // a scheduled post follows its card to a new day / time (iso = the new posting moment)
   reschedule(cardId, iso){ return action(cardId, "reschedule", { post_at: iso }); },
   // "✍️ Draft hook & talking points": a helper job of its own (<card>__s)
@@ -455,7 +463,10 @@ window.PIPE = {
   mount(host, card, helpers){
     if(!host) return;
     const keep = S.mounted && S.mounted.card.id===card.id ? S.mounted : {};
-    S.mounted = { host, card, h: helpers||{}, raw: keep.raw, draft: keep.draft, rsig: keep.rsig };
+    // a raw video already uploaded in the card's Raw video box is the one Claude edits
+    const cr = helpers && helpers.raw && helpers.raw();
+    const raw = keep.raw || (cr && cr.kind === "file" && cr.file ? { file: cr.file, name: cr.name, size: cr.size } : undefined);
+    S.mounted = { host, card, h: helpers||{}, raw, draft: keep.draft, rsig: keep.rsig };
     ensurePolling(); render(); poll();     // fresh status as soon as a card opens
   },
 };
