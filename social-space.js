@@ -2594,8 +2594,8 @@ function openCard(id,showGate){
     // the raw footage, before any edit: a shared link, or the file itself uploaded to the video storage (the one Claude edits)
     const rawBox=()=>{ const r=c.raw||null, mode=RAWMODE[c.id]||(r&&r.kind)||"link", link=r&&r.kind==="link"?r.url:"";
       const off=!window.PIPE||PIPE.mode()==="off", okUrl=/^https?:\/\//i.test(link);
-      return `<div class="pre-step rawbox">
-        <div class="pre-h"><span class="pre-n ${r?"ok":""}">${r?"✓":"1"}</span><b>Raw video</b><span class="hint">the footage before editing — a link or the file</span></div>
+      return `<div class="block rawbox" style="border-color:${r?"color-mix(in srgb,var(--good) 40%,var(--line))":"var(--line)"}">
+        <div class="block-h"><h4>${r?"✓ ":""}Raw video</h4><span class="hint">the footage before editing — a link or the file${useClaude?" · Claude edits it":""}</span></div>
         <div class="seg rawseg" data-w="1"><button type="button" data-rawmode="link" class="${mode==="link"?"on":""}">🔗 Paste a link</button>
           <button type="button" data-rawmode="file" class="${mode==="file"?"on":""}">⬆ Upload the file</button></div>
         ${mode==="link"?`<div class="fld" style="margin:0"><input id="raw-url" value="${esc(link)}" placeholder="Google Drive, Dropbox or WeTransfer link to the raw clip">
@@ -2700,6 +2700,7 @@ function openCard(id,showGate){
     ${c.extra.length||canEdit()?ownBoxes(c.extra):""}
 
     </div><div class="dr-col">
+    ${F.video?rawBox():""}
     ${!isNew&&useClaude&&!reviewing?`<div id="pipePanel"></div>`:""}
 
     <div class="block" style="border-color:${aOk?"color-mix(in srgb,var(--good) 40%,var(--line))":"var(--line)"}">
@@ -2707,14 +2708,13 @@ function openCard(id,showGate){
         ${c.stage==="published"&&c.post.postUrl?`<span class="badge good">✓ published</span>`
           :pMissing.length?`<span class="pre-miss">Missing: ${esc(pMissing.join(", "))}</span>`:`<span class="badge good">✓ ready to publish</span>`}</div>
 
-      ${F.video?rawBox():""}
       <div class="pre-step">
-        <div class="pre-h"><span class="pre-n ${edited?"ok":""}">${edited?"✓":F.video?"2":"1"}</span><b>${F.video?"Edited video":"Finished design"}</b>
+        <div class="pre-h"><span class="pre-n ${edited?"ok":""}">${edited?"✓":"1"}</span><b>${F.video?"Edited video":"Finished design"}</b>
           ${claudeDone?`<span class="hint">by Claude</span>`:c.post.reel?`<span class="hint">your own edit</span>`:""}</div>
         ${claudeDone?`<div class="pp-mini">
             ${jobM.yt?`<div><div class="lbl">YouTube</div><video controls preload="metadata" src="${esc(jobM.yt)}"></video></div>`:""}
             ${jobM.ig?`<div><div class="lbl">Instagram</div><video controls preload="metadata" src="${esc(jobM.ig)}"></video></div>`:""}</div>`
-          :!c.post.reel?`<p class="hint pre-note">${useClaude?`Not edited yet. Add the raw video above, then start <b>🤖 Claude edit &amp; post</b>${!isNew?(reviewing?" above":" (top of this column)"):""} — or add your own edit below.`
+          :!c.post.reel?`<p class="hint pre-note">${useClaude?`Not edited yet. Add the raw video at the top of this column, then start <b>🤖 Claude edit &amp; post</b>${!isNew?(reviewing?" above":" (top of this column)"):""} — or add your own edit below.`
               :F.video?"Not edited yet — add the finished video below once it's edited.":"Not designed yet — add the finished image or slides below."}</p>`:""}
         <details class="manual" ${c.post.reel||!useClaude?"open":""}><summary>${claudeDone?"Use my own edit instead":c.post.reel?(F.video?"Your own edit":"The design"):useClaude?"I edited it myself":F.video?"The finished video":"The finished design"}</summary>
           ${fileSlot("reel", !F.video?"Image / slides":c.vtype==="long"?"Edited video":"Edited reel", F.video?"video/*":"image/*,application/pdf",
@@ -2726,7 +2726,7 @@ function openCard(id,showGate){
       </div>
 
       <div class="pre-step">
-        <div class="pre-h"><span class="pre-n ${c.post.postUrl?"ok":""}">${c.post.postUrl?"✓":F.video?"3":"2"}</span><b>Published</b>
+        <div class="pre-h"><span class="pre-n ${c.post.postUrl?"ok":""}">${c.post.postUrl?"✓":"2"}</span><b>Published</b>
           ${lp?`<span class="badge good" style="margin-left:auto">linked · ${fmt(lp.views)} views</span>`:""}</div>
         ${posts.length?`<div class="pub-list">${posts.map(x=>`<div class="pub-row"><span class="pub-pl">${x.pl}</span>
             <span class="badge ${x.status==="posted"?"good":"crit"}">${esc(x.status)}</span>
