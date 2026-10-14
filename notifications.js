@@ -90,6 +90,7 @@ function ntfUnread() { return ntfMine().filter(function (n) { var r = NTF.receip
   + ".ntf-b{font-size:13.5px;color:var(--ink);white-space:pre-wrap;word-wrap:break-word;margin-top:3px}"
   + ".ntf-item:not(.expanded) .ntf-b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}"
   + ".ntf-m{font-size:12px;color:var(--muted);margin-top:4px}"
+  + ".ntf-go{float:right;color:var(--indigo,#E8622B);font-weight:600}"
   + ".ntf-empty{padding:28px 16px;text-align:center;color:var(--muted);font-size:14px}"
   + ".ntf-pf{padding:10px 16px;border-top:1px solid var(--line);text-align:center}"
   + ".ntf-pf button{font-size:13px;font-weight:600;color:var(--indigo)}"
@@ -262,6 +263,37 @@ function ntfShowBox(n, asPopup) {
   setTimeout(function () { ok.focus(); }, 30);
 }
 
+/* ---------- clicking a notification takes you where it's about ----------
+   From n.ref when it has one, otherwise from the wording (every automatic
+   bell names its place, e.g. "My HR file → Equipment"), so older
+   notifications work too. Returns a function that goes there, or null. */
+function ntfRoute(n) {
+  var t = (n.title || "") + "\n" + (n.body || ""), ref = n.ref || "";
+  var has = function (f) { return typeof window[f] === "function"; };
+  var leave = function () {   // close whatever full page is open first
+    if (has("hrClosePage")) { var hp = document.getElementById("hr-page"); if (hp && hp.style.display !== "none") hrClosePage(); }
+    if (has("closeTeam")) closeTeam();
+  };
+  var admin = function (k, after) { return has("openAdmin") ? function () { leave(); if (after) after(); openAdmin(k); } : null; };
+  var myhr = function (step) { return has("openMyHrFile") ? function () { leave(); if (has("closeAdmin")) closeAdmin(); openMyHrFile(step && has("hrStepIx") ? hrStepIx(step) : undefined); } : null; };
+  var hrPerson = function () { return admin("hr", function () { if (typeof HRA !== "undefined" && n.created_by) { HRA.open = n.created_by; HRA.rows = null; } }); };
+  var isHr = has("hrIsAdmin") && hrIsAdmin();
+  if (/^feedback:/.test(ref)) return admin("myfeedback");
+  if (/^hr:/.test(ref)) return myhr(ref.slice(3) || null);
+  if (/^admin:/.test(ref)) return admin(ref.slice(6));
+  // HR
+  if (/^🎒/.test(n.title || "")) return /My HR file/.test(t) || !isHr ? myhr("equipment") : admin("hrequipment");
+  if (/My HR file → Offer letter|offer letter is in your email|offer letter is waiting/i.test(t)) return myhr("contract");
+  if (/My HR file/.test(t) || /^(🗂️|✅|✏️) (HR |Your HR file)/.test(n.title || "")) return myhr(null);
+  if (/Employees \(HR\)/.test(t)) return hrPerson();
+  // feedback, suggestions, ideas
+  if (/My monthly feedback/.test(t)) return admin("myfeedback");
+  if (/My Team → Monthly feedback/.test(t) && has("openTeam")) return function () { leave(); if (has("closeAdmin")) closeAdmin(); openTeam(); if (has("mtSetView")) mtSetView("feedback"); };
+  if (/Suggestion box/.test(t)) return admin("suggestbox");
+  if (/your idea/i.test(n.title || "")) return admin("myideas");
+  return null;
+}
+
 /* ---------- banners pinned on a page ---------- */
 /* the pages a banner can go on: [key, label] — each Social Media space's tabs */
 function ntfPlaces() {
@@ -418,9 +450,16 @@ function ntfDrawPanel() {
     it.appendChild(ntfEl("div", "ntf-t", n.title));
     if (n.body) it.appendChild(ntfEl("div", "ntf-b", n.body));
     if (n.video_id) it.appendChild(ntfThumb(n.video_id));
-    it.appendChild(ntfEl("div", "ntf-m", (ntfSender(n) ? ntfSender(n) + " · " : "") + ntfWhen(n.created_at) + (n.audience === "team" ? " · whole team" : " · just you")));
+    var go = ntfRoute(n);
+    var meta = ntfEl("div", "ntf-m", (ntfSender(n) ? ntfSender(n) + " · " : "") + ntfWhen(n.created_at) + (n.audience === "team" ? " · whole team" : " · just you"));
+    if (go) meta.appendChild(ntfEl("span", "ntf-go", "Open →"));
+    it.appendChild(meta);
     it.onclick = function () {
       if (n.video_id || ntfDrop(n)) { ntfClosePanel(); ntfShowBox(n, false); return; }   /* open it big, to watch / answer */
+      if (go) {   /* straight to the page it's about */
+        if (unread) ntfMark(n, "read").then(ntfRenderBell);
+        ntfClosePanel(); go(); return;
+      }
       it.classList.toggle("expanded");
       if (!unread) return;
       unread = false; it.classList.remove("unread");
