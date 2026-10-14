@@ -33,7 +33,7 @@ function accChip(st) { var s = ACC_STATUS[st] || [st, "grey"]; return accEl("spa
     + ".acc-tabs button.on{background:var(--indigo-soft);border-color:#F5CDB6;color:var(--indigo)}"
     + ".acc-amt{font-weight:800;font-size:15px;white-space:nowrap}.acc-row{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-top:1px solid var(--line)}"
     + ".acc-row:first-child{border-top:0}.acc-row .main{flex:1;min-width:0}.acc-row .t{font-weight:700}.acc-row .h{color:var(--muted);font-size:12.5px;margin-top:2px;overflow-wrap:anywhere}"
-    + ".acc-row .side{display:flex;flex-direction:column;align-items:flex-end;gap:6px}.acc-row .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}"
+    + ".acc-row .side{display:flex;flex-direction:column;align-items:flex-end;gap:6px}.acc-row .acc-acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}"
     + ".acc-kind{display:flex;gap:8px;margin:10px 0}.acc-kind button{flex:1;border:1.5px solid var(--line-strong);background:#fff;border-radius:12px;padding:12px;text-align:left;cursor:pointer;font:13px var(--sans);color:var(--ink)}"
     + ".acc-kind button b{display:block;font-size:14px;margin-bottom:2px}.acc-kind button.on{border-color:var(--indigo);background:var(--indigo-soft)}"
     + ".acc-tbl{width:100%;border-collapse:collapse;font-size:13.5px}.acc-tbl th{text-align:left;font:600 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:8px 6px;border-bottom:1px solid var(--line)}"
@@ -144,7 +144,7 @@ function accRequestRow(r, files, opts) {
   var fs = (files || []).filter(function (f) { return f.request_id === r.id; });
   if (fs.length) main.appendChild(accFileLinks(fs));
   side.append(accEl("div", "acc-amt", accInr(r.amount)), accChip(r.status));
-  if (opts.acts) { var a = accEl("div", "acts"); opts.acts(a); if (a.children.length) side.appendChild(a); }
+  if (opts.acts) { var a = accEl("div", "acc-acts"); opts.acts(a); if (a.children.length) side.appendChild(a); }
   row.append(main, side);
   return row;
 }
