@@ -84,20 +84,20 @@ Deno.serve(async (req) => {
   const name = (prof.profile && prof.profile.displayName) || prof.name || "there";
   const link = APP_URL.replace(/\/?$/, "/") + "?hr=1";
 
-  const subject = "Your work contract with Cyberflow Tech";
+  const subject = "Your offer letter from Cyberflow Tech";
   const steps = [
-    "Read the contract below.",
+    "Read your offer letter below.",
     "Print it, sign every page, and scan it or take clear photos. (Or sign the PDF digitally.)",
-    "Open tools.dubuddy.in → your account menu → 🗂️ My HR file, and upload the signed copy in the Contract step.",
+    "Open tools.dubuddy.in → your account menu → 🗂️ My HR file, and upload the signed copy in the Offer letter step.",
   ];
   const mail = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1A1614;max-width:720px">'
     + '<div style="font-weight:800;font-size:18px;margin-bottom:14px">DU <span style="color:#E8622B">Buddy</span></div>'
-    + "<p>Hi " + esc(name) + ",</p><p>Here is your work contract. Three steps:</p><ol>"
+    + "<p>Hi " + esc(name) + ",</p><p>Here is your offer letter. Three steps:</p><ol>"
     + steps.map((s) => "<li>" + esc(s) + "</li>").join("") + "</ol>"
     + '<p style="margin:18px 0"><a href="' + esc(link) + '" style="background:#E8622B;color:#fff;text-decoration:none;font-weight:700;padding:11px 18px;border-radius:10px;display:inline-block">Upload the signed copy</a></p>'
     + '<div style="border:1px solid #E5DDD5;border-radius:10px;padding:22px 24px;margin-top:20px;background:#fff">' + html + "</div>"
     + '<p style="color:#8C7F75;font-size:12.5px;margin-top:22px">You got this because you work with Cyberflow Tech Pvt Ltd. Questions? Reply to this email.</p></div>';
-  const text = "Hi " + name + ",\n\nYour work contract is in this email (open it in a mail app that shows formatting) and in tools.dubuddy.in → My HR file.\n\n" + steps.map((s, i) => (i + 1) + ". " + s).join("\n")
+  const text = "Hi " + name + ",\n\nYour offer letter is in this email (open it in a mail app that shows formatting) and in tools.dubuddy.in → My HR file.\n\n" + steps.map((s, i) => (i + 1) + ". " + s).join("\n")
     + "\n\nUpload it here: " + link;
 
   const err = await sendMail(prof.email, subject, text, mail);

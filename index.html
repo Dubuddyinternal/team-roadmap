@@ -19195,6 +19195,7 @@ function adminSections(){
     { k:"users",       ico:"👥", lbl:"Users",                show: people,                         render: renderAdminUsers },
     { k:"hr",          ico:"🗂️", lbl:"Employees (HR)",       show: !!me && !!SUPA && typeof renderAdminHr === "function" && (sup || hasPerm("manage_hr")), render: renderAdminHr },
     { k:"myhr",        ico:"🪪", lbl:"My HR file",           show: !!me && !!SUPA && typeof renderAdminMyHr === "function", render: renderAdminMyHr },
+    { k:"policies",    ico:"📜", lbl:"Company policies",     show: !!me && !!SUPA && typeof renderAdminPolicies === "function", render: renderAdminPolicies },
     { k:"requests",    ico:"🙋", lbl:"Requests" + (PENDING_REQUESTS ? " (" + PENDING_REQUESTS + ")" : ""), crumb:"Requests",
                                                                         show: hasPerm("approve_requests"),    render: renderAdminRequests },
     { k:"request",     ico:"➕",       lbl:"Request a teammate",   show: hasPerm("request_members"),     render: renderRequestTeammate },

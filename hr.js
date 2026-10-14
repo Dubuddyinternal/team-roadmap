@@ -15,7 +15,7 @@
    through short-lived signed links. Nothing here is stored in profiles.
    ===================================================================== */
 
-var HR = { rec: null, docs: [], step: 0, dirty: false, saveTimer: null, settings: null };
+var HR = { rec: null, docs: [], step: 0, dirty: false, saveTimer: null, settings: null, policies: [], signs: [], company: {} };
 
 /* ---------- what we ask for ---------- */
 var HR_STATES = ["Andaman and Nicobar Islands","Andhra Pradesh","Arunachal Pradesh","Assam","Bihar","Chandigarh","Chhattisgarh",
@@ -76,7 +76,8 @@ var HR_STEPS = [
     { k: "linkedin", lbl: "LinkedIn profile (optional)", ph: "https://linkedin.com/in/…" } ] },
   { k: "docs", ico: "📎", lbl: "Documents" },
   { k: "submit", ico: "✅", lbl: "Check and submit" },
-  { k: "contract", ico: "✍️", lbl: "Contract" }
+  { k: "policies", ico: "📜", lbl: "Company policies" },
+  { k: "contract", ico: "✍️", lbl: "Offer letter" }
 ];
 var HR_DOCS = [
   { k: "photo", lbl: "Passport-size photo", hint: "A clear photo of your face, plain background.", req: true },
@@ -102,38 +103,27 @@ var HR_JOB = [
   { k: "department", lbl: "Department", ph: "e.g. Marketing" },
   { k: "employment_type", lbl: "Type", type: "select", opts: ["Full-time employee", "Intern", "Consultant / freelancer", "Part-time"] },
   { k: "joining_date", lbl: "Joining date", type: "date" },
-  { k: "pay", lbl: "Monthly pay / stipend (₹)", ph: "e.g. 25,000" },
-  { k: "probation", lbl: "Probation", ph: "e.g. 3 months" },
-  { k: "notice", lbl: "Notice period", ph: "e.g. 30 days" },
+  { k: "ctc", lbl: "Annual CTC (INR)", ph: "e.g. 12,00,000" },
+  { k: "apl_days", lbl: "Leave during probation (APL days)", ph: "3" },
+  { k: "probation", lbl: "Confirmed after", ph: "e.g. 4 months" },
+  { k: "notice", lbl: "Notice during probation", ph: "e.g. 15 days" },
   { k: "location", lbl: "Work location", ph: "e.g. Delhi office / Remote" },
   { k: "reporting_to", lbl: "Reports to", ph: "e.g. Sumit" },
   { k: "hours", lbl: "Working hours", ph: "e.g. 10 am – 7 pm, Monday to Saturday" }
 ];
 var HR_DEFAULT_TEMPLATE = [
-  "# Letter of Appointment and Work Agreement",
-  "Date: {date}",
-  "This agreement is between {company}, {company_address} (\"the Company\"), and {full_name}, child of {father_name}, living at {address} (\"you\").",
-  "## 1. Your role",
-  "You are appointed as {designation} in the {department} team, as {employment_type}, starting on {joining_date}. You will report to {reporting_to}. Your place of work is {location}.",
-  "## 2. Pay",
-  "You will be paid ₹{pay} a month, less any taxes and deductions the law requires, by bank transfer to the account you gave us.",
-  "## 3. Probation",
-  "Your first {probation} are a probation period. During it, either side may end this agreement with 7 days' written notice.",
-  "## 4. Working hours and leave",
-  "Your working hours are {hours}. Leave and holidays follow the Company's leave policy, as updated from time to time.",
-  "## 5. Confidentiality",
-  "You will keep the Company's business information, student data, product plans, code, content and finances confidential, during and after your time with the Company, and use them only for your work here.",
-  "## 6. Work you create",
-  "Everything you create for the Company in the course of your work — including content, videos, designs, code and documents — belongs to the Company.",
-  "## 7. Conduct",
-  "You will follow the Company's policies and code of conduct, and treat students, colleagues and partners with respect.",
-  "## 8. Ending the agreement",
-  "After probation, either side may end this agreement by giving {notice} of written notice, or pay in place of notice. The Company may end it immediately for serious misconduct. When you leave, you will return all Company property and data.",
-  "## 9. Law",
-  "This agreement is governed by the laws of India. Courts at {company_city} have jurisdiction.",
-  "## Signatures",
-  "For {company}\n\n\n______________________________\n{signatory}, {signatory_title}",
-  "Accepted by\n\n\n______________________________\n{full_name}\nDate:"
+  "# Appointment on Probation: Offer Letter",
+  "Dear {full_name},\n{date}",
+  "Congratulations! And welcome to {company_short}.",
+  "This has reference to our recent discussions. We are pleased to offer you the position of \"{designation}\" as a probationer. Your annual CTC will be INR {ctc}/- p.a.",
+  "1. Leaves: You shall be eligible for {apl_days} days of All Purpose Leave (APL) during your probation period, which can be availed in proportion to the number of months worked.\n2. Notice period: During probation, either party may terminate the service by giving {notice} written notice.\n3. Appointment letter: A detailed letter of appointment will be issued to you on your confirmation after {probation}, on completion of the probationary period with a satisfactory performance evaluation.",
+  "{company_short} believes in and practises a pay-for-performance culture. Apart from the target compensation, you will also be entitled to various rewards, recognitions, incentives and training initiatives, as per company policy applicable from time to time. The Company is committed to investing in the careers of top performers by giving them significant organizational responsibilities over time.",
+  "You are required to furnish copies of the following documents on the date of joining (you can upload them in My HR file):\na. Qualification (graduation, post-graduation, professional etc.).\nb. Proof of date of birth, 10th mark card.\nc. Experience (any document relating to previous employment, service certificate).\nd. Last compensation package (Form 16, salary slip or annual pay revision letter).\ne. Relieving letter from your previous employer.\nf. Address proof – Aadhaar card, ration card, voter ID, PAN, driving licence.\ng. Passport-size photos with a white background.",
+  "## Note",
+  "1. {company_short} has a zero-tolerance policy towards breach of our Code of Conduct.\n2. Neither {company_short} nor our associates charge any registration fee or placement fee for the service that we provide our employees. We request you to notify us on priority in case anyone from {company_short} or representing {company_short} (employee / external agency / freelancer) has contacted you to collect any such charges or promised you employment in lieu of such a fee.\n3. We do not engage or employ any individual who is less than 18 years old, and have a zero-tolerance policy towards any form of discrimination / workplace harassment / forced or bonded labour.\n4. We respect the privacy of every employee, and all data collected from our employees during the recruiting and onboarding process is governed by our data security and privacy policy. Your data is not shared with any external agency at any time during or after your employment with {company_short}, and is protected as per our policy guidelines. We reserve the right to share relevant data with our insurance vendors and banks only to open your salary account and cover you as per the insurance requirements, payroll processing vendors, and ID card vendors for procuring your ID card or business cards as required by the process.\n5. As part of your onboarding process, we do not collect any original documents or any form of documents or payment cheques as collateral for your commitment or guarantee of employment with {company_short}. We request, collect, document and process your data only through your joining kit and collect copies of all documents as per the onboarding document checklist, to validate the same and complete your background verification as per {company_short}'s requirements.\n6. If you come across any irregularities or suspect any breach of our policy guidelines, please report the same to HR.",
+  "This letter of offer is valid subject to your joining us on {joining_date}. Kindly sign a copy of this letter and return it as a token of your acceptance.",
+  "Thanks & Regards,\nFor {company}\n\n\n{signatory}\n{signatory_title}",
+  "Accepted the offer and terms, and will report for duty on: ______________\n\nSignature: ______________________    Date: ______________"
 ].join("\n\n");
 
 /* ---------- helpers ---------- */
@@ -281,6 +271,7 @@ async function hrLoadMine() {
   if (d.error) throw d.error;
   HR.rec = r.data || { user_id: me.id, details: {}, status: "draft", _new: true };
   HR.docs = d.data || [];
+  await hrLoadPolicies();
 }
 function hrClean(d) {
   var out = {};
@@ -326,6 +317,7 @@ async function hrUpload(kind, file) {
   if (ins.error) { await SUPA.storage.from("hr-docs").remove([path]); hrToast("Upload failed: " + hrErr(ins.error)); return; }
   HR.docs.push(ins.data);
   hrToast("Uploaded");
+  return ins.data;
 }
 async function hrRemoveDoc(doc) {
   var del = await SUPA.from("hr_documents").delete().eq("id", doc.id);
@@ -352,9 +344,10 @@ function hrAsk(title, ph, btn) {
 function hrAddress(d, pre) {
   return [d[pre + "_line"], d[pre + "_city"], d[pre + "_state"], d[pre + "_pin"]].filter(function (x) { return x && String(x).trim(); }).join(", ");
 }
-function hrContractHtml(template, company, d, job) {
+function hrContractHtml(template, company, d, job, extra) {
   d = d || {}; job = job || {}; company = company || {};
   var v = {
+    company_short: company.short || "Cyberflow", ctc: job.ctc || "[annual CTC]", apl_days: job.apl_days || "3",
     date: new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }),
     company: company.name || "Cyberflow Tech Pvt Ltd", company_address: company.address || "[company address]",
     company_city: company.city || "[city]", signatory: company.signatory || "[signatory]", signatory_title: company.signatory_title || "Director",
@@ -364,9 +357,10 @@ function hrContractHtml(template, company, d, job) {
     designation: job.designation || "[designation]", department: job.department || "[department]",
     employment_type: ({ "Full-time employee": "a full-time employee", "Intern": "an intern", "Consultant / freelancer": "a consultant", "Part-time": "a part-time employee" })[job.employment_type] || "[type]",
     joining_date: job.joining_date ? new Date(job.joining_date).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "[joining date]",
-    pay: job.pay || "[pay]", probation: job.probation || "3 months", notice: job.notice || "30 days",
+    pay: job.pay || "[pay]", probation: job.probation || "4 months", notice: job.notice || "15 days",
     location: job.location || "[work location]", reporting_to: job.reporting_to || "[manager]", hours: job.hours || "[working hours]"
   };
+  Object.keys(extra || {}).forEach(function (k) { v[k] = extra[k]; });
   var html = "";
   String(template || HR_DEFAULT_TEMPLATE).split(/\n{2,}/).forEach(function (block) {
     var t = hrEsc(block.trim()).replace(/\{(\w+)\}/g, function (m, k) { return v[k] != null ? hrEsc(v[k]) : m; });
@@ -430,7 +424,7 @@ function hrRenderMine() {
   if (rec.status === "changes" && rec.hr_note) {
     var n = hrEl("div", "hr-note warn"); n.textContent = "HR asked for changes: " + rec.hr_note; shell.appendChild(n);
   } else if (rec.status === "submitted") {
-    shell.appendChild(hrEl("div", "hr-note info", "Thanks! HR is checking your file. You'll get a 🔔 and an email when your contract is ready. Your details are locked while HR checks them."));
+    shell.appendChild(hrEl("div", "hr-note info", "Thanks! HR is checking your file. You'll get a 🔔 and an email when your offer letter is ready. Meanwhile, you can read and sign the company policies. Your details are locked while HR checks them."));
   } else if (rec.status === "complete") {
     shell.appendChild(hrEl("div", "hr-note ok", "✅ Your HR file is complete. Nothing more is needed from you."));
   }
@@ -443,6 +437,9 @@ function hrRenderMine() {
     if (x.s.fields) {
       var bad = hrStepIssues(x.s, d);
       b.appendChild(bad ? hrEl("span", "todo", bad + " left") : hrEl("span", "tick", "✓"));
+    } else if (x.s.k === "policies") {
+      var left = HR.policies.filter(function (p) { var st = hrPolicyState(p, HR.signs); return st === "todo" || st === "old"; }).length;
+      if (HR.policies.length) b.appendChild(left ? hrEl("span", "todo", left + " to sign") : hrEl("span", "tick", "✓"));
     } else if (x.s.k === "docs") {
       var miss = HR_DOCS.filter(function (z) { return z.req && !hrDocsHave(HR.docs, z.k); }).length;
       b.appendChild(miss ? hrEl("span", "todo", miss + " left") : hrEl("span", "tick", "✓"));
@@ -457,6 +454,7 @@ function hrRenderMine() {
   if (step.fields) hrRenderFields(card, step, d, editable);
   else if (step.k === "docs") hrRenderDocs(card, editable);
   else if (step.k === "submit") hrRenderSubmit(card, d, editable);
+  else if (step.k === "policies") hrRenderPolicies(card, hrRenderMine);
   else hrRenderContract(card);
 
   if (step.k !== "contract") {
@@ -598,7 +596,7 @@ function hrRenderSubmit(card, d, editable) {
 }
 function hrRenderContract(card) {
   var rec = HR.rec;
-  card.appendChild(hrEl("h3", null, "✍️ Your contract"));
+  card.appendChild(hrEl("h3", null, "✍️ Your offer letter"));
   if (rec.status === "complete") card.appendChild(hrEl("div", "hr-note ok", "Signed and checked. ✅"));
   else if (rec.status === "signed") card.appendChild(hrEl("div", "hr-note info", "Thanks! HR is checking your signed copy."));
   else card.appendChild(hrEl("div", "hint", "Sent to your email on " + hrDate(rec.contract_sent_at) + ". Read it, print it, sign every page, and upload the signed copy below."));
@@ -638,7 +636,7 @@ function hrRenderContract(card) {
 /* =====================================================================
    2. ADMINISTRATION → EMPLOYEES (HR)
    ===================================================================== */
-var HRA = { filter: "all", q: "", open: null, rows: null, docs: null, reveal: {} };
+var HRA = { filter: "all", q: "", open: null, rows: null, docs: null, reveal: {}, policies: [], signs: {} };
 async function hrLoadSettings() {
   var s = await SUPA.from("hr_settings").select("*").eq("id", 1).maybeSingle();
   HR.settings = s.data || { company: {}, contract_template: "" };
@@ -657,6 +655,13 @@ async function hrLoadAll() {
   if (d.error) throw d.error;
   HRA.rows = {}; (r.data || []).forEach(function (x) { HRA.rows[x.user_id] = x; });
   HRA.docs = {}; (d.data || []).forEach(function (x) { (HRA.docs[x.user_id] = HRA.docs[x.user_id] || []).push(x); });
+  var pol = await SUPA.from("hr_policies").select("*").eq("active", true).order("position");
+  HRA.policies = pol.error ? [] : (pol.data || []);
+  HRA.signs = {};
+  if (!pol.error) {
+    var sg = await SUPA.from("hr_policy_signs").select("*").in("user_id", ids);
+    (sg.data || []).forEach(function (x) { (HRA.signs[x.user_id] = HRA.signs[x.user_id] || []).push(x); });
+  }
 }
 function hrAvatar(u) {
   var av = hrEl("span", "hr-av");
@@ -675,9 +680,11 @@ function renderAdminHr(wrap) {
   if (HRA.open) { hrLoadAll().then(function () { renderAdminPage(); }).catch(function (e) { HRA.open = null; hrToast(hrErr(e)); }); return; }
   var head = hrEl("div", "module-head");
   var h2 = hrEl("h2", null, "Employees (HR)"); head.appendChild(h2);
+  head.style.cssText += ";display:flex;align-items:center;gap:10px;flex-wrap:wrap";
+  var pm = hrEl("button", "btn", "📜 Policies"); pm.style.marginLeft = "auto"; pm.onclick = function () { hrPolicyManager(); }; head.appendChild(pm);
   if (hrMe() && hrMe().super) {
-    var set = hrEl("button", "btn", "⚙️ Company and contract template"); set.style.marginLeft = "auto";
-    set.onclick = function () { hrSettingsDialog(); }; head.appendChild(set); head.style.display = "flex"; head.style.alignItems = "center"; head.style.gap = "10px";
+    var set = hrEl("button", "btn", "⚙️ Company and offer letter");
+    set.onclick = function () { hrSettingsDialog(); }; head.appendChild(set);
   }
   wrap.appendChild(head);
   wrap.appendChild(hrEl("div", "hint", "Everyone in this team fills in their own HR file from their account menu → 🗂️ My HR file. Open a person to check their details and documents, and send their contract."));
@@ -707,7 +714,7 @@ function hrDrawList(body) {
   function draw() {
     holder.innerHTML = "";
     var t = hrEl("table", "hr-tbl");
-    t.innerHTML = "<thead><tr><th>Person</th><th>Progress</th><th class='hide-s'>Documents</th><th>Status</th><th class='hide-s'>Updated</th></tr></thead>";
+    t.innerHTML = "<thead><tr><th>Person</th><th>Progress</th><th class='hide-s'>Documents</th><th class='hide-s'>Policies</th><th>Status</th><th class='hide-s'>Updated</th></tr></thead>";
     var tb = hrEl("tbody");
     var list = people.filter(function (u) {
       var rec = HRA.rows[u.id];
@@ -726,14 +733,18 @@ function hrDrawList(body) {
       mini.append(bar, hrEl("span", "hr-pct", pct + "%")); c2.appendChild(mini);
       var appr = docs.filter(function (z) { return z.status === "approved"; }).length;
       var c3 = hrEl("td", "hide-s", docs.length ? docs.length + " uploaded · " + appr + " approved" : "—");
+      var need = HRA.policies.filter(function (p) { return p.needs_sign; });
+      var signed = need.filter(function (p) { return hrPolicyState(p, HRA.signs[u.id]) === "done"; }).length;
+      var c3b = hrEl("td", "hide-s", need.length ? signed + " of " + need.length + " signed" : "—");
+      if (need.length && signed === need.length) c3b.style.color = "var(--done)";
       var c4 = hrEl("td"); c4.appendChild(hrChip(rec ? rec.status : "none"));
       var c5 = hrEl("td", "hide-s", rec ? hrDate(rec.updated_at) : "—");
-      tr.append(c1, c2, c3, c4, c5);
+      tr.append(c1, c2, c3, c3b, c4, c5);
       function go() { HRA.open = u.id; HRA.reveal = {}; renderAdminPage(); }
       tr.onclick = go; tr.onkeydown = function (e) { if (e.key === "Enter") go(); };
       tb.appendChild(tr);
     });
-    if (!list.length) { var tr0 = hrEl("tr"), td0 = hrEl("td", null, "Nobody here."); td0.colSpan = 5; td0.style.color = "var(--muted)"; tr0.appendChild(td0); tb.appendChild(tr0); }
+    if (!list.length) { var tr0 = hrEl("tr"), td0 = hrEl("td", null, "Nobody here."); td0.colSpan = 6; td0.style.color = "var(--muted)"; tr0.appendChild(td0); tb.appendChild(tr0); }
     t.appendChild(tb); holder.appendChild(t);
   }
   draw();
@@ -843,10 +854,30 @@ function hrRenderPerson(wrap, uid) {
   });
   wrap.appendChild(dc);
 
+  /* policies */
+  if (HRA.policies.length) {
+    var pc = hrEl("div", "hr-card"); pc.style.marginTop = "14px";
+    pc.appendChild(hrEl("h3", null, "Company policies"));
+    var mine = HRA.signs[uid] || [];
+    HRA.policies.forEach(function (p) {
+      var row = hrEl("div", "hr-doc"), left = hrEl("div");
+      left.appendChild(hrEl("div", "t", p.title));
+      var s = hrSignOf(p, mine), fl = hrEl("div", "hr-file"); fl.style.cssText = "background:none;padding:0;margin-top:4px";
+      fl.appendChild(hrPolicyChip(p, mine));
+      if (s) fl.appendChild(hrEl("span", null, "as “" + s.signed_name + "” · version " + s.version + (s.method === "upload" ? " · signed copy" : " · typed name")));
+      if (s && s.doc_id) {
+        var doc = docs.find(function (z) { return z.id === s.doc_id; });
+        if (doc) { var o = hrEl("button", "hr-reveal", "Open signed copy"); o.onclick = function () { hrOpenFile(doc.path); }; fl.appendChild(o); }
+      }
+      left.appendChild(fl); row.appendChild(left); pc.appendChild(row);
+    });
+    wrap.appendChild(pc);
+  }
+
   /* job terms + contract */
   var jc = hrEl("div", "hr-card"); jc.style.marginTop = "14px";
-  jc.appendChild(hrEl("h3", null, "Job terms and contract"));
-  jc.appendChild(hrEl("div", "hint", "Fill these in, then preview the contract. It goes to " + u.email + "."));
+  jc.appendChild(hrEl("h3", null, "Job terms and offer letter"));
+  jc.appendChild(hrEl("div", "hint", "Fill these in, then preview the offer letter. It goes to " + u.email + "."));
   var box = hrEl("div", "hr-fields");
   HR_JOB.forEach(function (f) {
     var w = hrEl("div", "field"), id = "hr-j-" + f.k, l = hrEl("label", null, f.lbl); l.htmlFor = id; w.appendChild(l);
@@ -861,7 +892,7 @@ function hrRenderPerson(wrap, uid) {
   var jf = hrEl("div", "hr-foot");
   var sj = hrEl("button", "btn", "Save job terms");
   sj.onclick = async function () { if (await act("save_job", { p_job: job })) hrToast("Job terms saved"); };
-  var pv = hrEl("button", "btn save", "📄 Preview contract");
+  var pv = hrEl("button", "btn save", "📄 Preview offer letter");
   pv.onclick = async function () {
     if (!rec || ["submitted", "contract_sent", "signed", "complete"].indexOf(rec.status) < 0) { hrToast("They need to submit their HR file first"); return; }
     await act("save_job", { p_job: job });
@@ -870,7 +901,7 @@ function hrRenderPerson(wrap, uid) {
   };
   jf.append(sj, hrEl("div", "grow"), pv);
   if (rec && rec.contract_html) {
-    var last = hrEl("button", "btn", "See the contract they got"); last.onclick = function () { hrContractDialog(u, rec.contract_html, null); };
+    var last = hrEl("button", "btn", "See the offer letter they got"); last.onclick = function () { hrContractDialog(u, rec.contract_html, null); };
     jf.insertBefore(last, pv);
   }
   jc.appendChild(jf);
@@ -878,7 +909,7 @@ function hrRenderPerson(wrap, uid) {
 }
 function hrContractDialog(u, html, act) {
   var ov = hrEl("div", "hr-ask"), bx = hrEl("div", "box"); bx.style.width = "min(820px,100%)"; ov.setAttribute("data-plain", "");
-  bx.appendChild(hrEl("h3", null, act ? "Contract for " + userDisplayName(u) : "Contract sent to " + userDisplayName(u)));
+  bx.appendChild(hrEl("h3", null, act ? "Offer letter for " + userDisplayName(u) : "Offer letter sent to " + userDisplayName(u)));
   if (act) bx.appendChild(hrEl("div", "hint", "Check every line. Anything in [brackets] is still missing — fill in the job terms or the company details first."));
   var view = hrEl("div", "hr-contract"); view.style.margin = "10px 0"; view.innerHTML = html; bx.appendChild(view);
   var row = hrEl("div", "hr-foot");
@@ -894,7 +925,7 @@ function hrContractDialog(u, html, act) {
       var err = r.error ? r.error.message : (r.data && r.data.error);
       if (r.error) { try { var j = await r.error.context.json(); if (j && j.error) err = j.error; } catch (_) { } }
       if (err) { hrToast("Couldn't send: " + err); send.disabled = false; send.textContent = "✉️ Email it to " + u.email; return; }
-      ov.remove(); hrToast("Contract emailed to " + u.email);
+      ov.remove(); hrToast("Offer letter emailed to " + u.email);
       await hrLoadAll(); renderAdminPage();
     };
     row.appendChild(send);
@@ -907,15 +938,15 @@ async function hrSettingsDialog() {
   var s = await hrLoadSettings();
   var c = Object.assign({}, s.company || {});
   var ov = hrEl("div", "hr-ask"), bx = hrEl("div", "box"); ov.setAttribute("data-plain", ""); bx.style.width = "min(820px,100%)"; bx.style.maxHeight = "92vh"; bx.style.overflowY = "auto";
-  bx.appendChild(hrEl("h3", null, "Company details and contract template"));
+  bx.appendChild(hrEl("h3", null, "Company details and offer letter template"));
   var box = hrEl("div", "hr-fields"); box.style.margin = "12px 0";
-  [["name", "Company name"], ["address", "Registered address"], ["city", "City (for the courts clause)"], ["signatory", "Who signs for the company"], ["signatory_title", "Their title"], ["email", "HR email"]].forEach(function (x) {
+  [["name", "Company name"], ["short", "Short name used in policies (e.g. Cyberflow)"], ["address", "Registered address"], ["city", "City (for the courts clause)"], ["signatory", "Who signs for the company"], ["signatory_title", "Their title"], ["email", "HR email"]].forEach(function (x) {
     var w = hrEl("div", "field" + (x[0] === "address" ? " wide" : "")), id = "hr-c-" + x[0], l = hrEl("label", null, x[1]); l.htmlFor = id;
     var i = hrEl("input"); i.id = id; i.value = c[x[0]] || ""; i.oninput = function () { c[x[0]] = i.value; };
     w.append(l, i); box.appendChild(w);
   });
   bx.appendChild(box);
-  bx.appendChild(hrEl("div", "hint", "Template: a blank line starts a new paragraph. # makes the title, ## a heading. Placeholders: {date} {company} {company_address} {company_city} {signatory} {signatory_title} {full_name} {father_name} {address} {pan} {email} {mobile} {designation} {department} {employment_type} {joining_date} {pay} {probation} {notice} {location} {reporting_to} {hours}. Have a lawyer check the wording before you use it."));
+  bx.appendChild(hrEl("div", "hint", "Template: a blank line starts a new paragraph. # makes the title, ## a heading. Placeholders: {date} {company} {company_short} {company_address} {company_city} {signatory} {signatory_title} {full_name} {father_name} {address} {pan} {email} {mobile} {designation} {department} {employment_type} {joining_date} {ctc} {apl_days} {probation} {notice} {location} {reporting_to} {hours}. Have a lawyer check the wording before you use it."));
   var ta = hrEl("textarea", "hr-tpl"); ta.value = s.contract_template || HR_DEFAULT_TEMPLATE; ta.style.marginTop = "8px"; bx.appendChild(ta);
   var row = hrEl("div", "hr-foot");
   var rs = hrEl("button", "btn", "Reset to the starting template"); rs.onclick = function () { ta.value = HR_DEFAULT_TEMPLATE; };
@@ -979,4 +1010,213 @@ function renderAdminMyHr(wrap) {
     var st = (r.data && r.data.status) || "none";
     txt.textContent = "Your personal details, documents and work contract. Status: " + (HR_STATUS[st] || HR_STATUS.none)[0] + ".";
   });
+}
+
+/* =====================================================================
+   3. COMPANY POLICIES  (database: supabase/stage18b_hr_policies.sql)
+   Everyone reads each policy and signs it: by typing their name, or by
+   uploading a signed copy. HR edits the library; "new version" asks
+   everyone to sign again.
+   ===================================================================== */
+async function hrLoadPolicies() {
+  var me = hrMe(); if (!me || !SUPA) return;
+  var p = await SUPA.from("hr_policies").select("*").eq("active", true).order("position");
+  if (p.error) { HR.policies = []; HR.signs = []; return; }   // stage18b not run yet: the step just stays empty
+  var s = await SUPA.from("hr_policy_signs").select("*").eq("user_id", me.id);
+  var c = await SUPA.rpc("hr_company");
+  HR.policies = p.data || []; HR.signs = s.data || []; HR.company = (c && c.data) || {};
+}
+function hrSignOf(p, signs) {
+  return (signs || []).filter(function (x) { return x.policy_id === p.id; }).sort(function (a, b) { return b.version - a.version; })[0] || null;
+}
+// todo | old (signed an earlier version) | done | read (no signature needed)
+function hrPolicyState(p, signs) {
+  if (!p.needs_sign) return "read";
+  var s = hrSignOf(p, signs);
+  return !s ? "todo" : s.version < p.version ? "old" : "done";
+}
+function hrPolicyChip(p, signs) {
+  var st = hrPolicyState(p, signs), s = hrSignOf(p, signs);
+  if (st === "done") return hrEl("span", "hr-chip hr-green", (s.method === "upload" ? "Signed copy uploaded · " : "Signed · ") + hrDate(s.signed_at));
+  if (st === "old") return hrEl("span", "hr-chip hr-amber", "New version: sign again");
+  if (st === "read") return hrEl("span", "hr-chip hr-grey", "Read only");
+  return hrEl("span", "hr-chip hr-red", "To sign");
+}
+function hrPolicyList(policies) {
+  return (policies || []).filter(function (x) { return x.slug !== "acknowledgement" && x.active !== false; })
+    .map(function (x, i) { return (i + 1) + ". " + x.title; }).join("\n");
+}
+function hrPolicyHtml(p, d, company, policies) {
+  d = Object.assign({}, d || {});
+  if (!d.full_name && hrMe()) d.full_name = hrMe().name || "";
+  return hrContractHtml(p.body, company, d, {}, { policy_list: hrPolicyList(policies) });
+}
+function hrMyName() { return ((HR.rec && HR.rec.details && HR.rec.details.full_name) || (hrMe() && hrMe().name) || "").trim(); }
+async function hrSign(p, name, docId) {
+  var r = await SUPA.rpc("hr_sign_policy", { p_policy: p.id, p_name: name, p_doc: docId || null });
+  if (r.error) { hrToast(hrErr(r.error)); return false; }
+  HR.signs = HR.signs.filter(function (x) { return !(x.policy_id === p.id && x.version === r.data.version); });
+  HR.signs.push(r.data);
+  return true;
+}
+function hrRenderPolicies(card, rerender) {
+  card.appendChild(hrEl("h3", null, "📜 Company policies"));
+  card.appendChild(hrEl("div", "hint", "Read each policy and sign it. Sign online by typing your name, or print it, sign it and upload the signed copy."));
+  if (!HR.policies.length) { card.appendChild(hrEl("div", "hr-note info", "HR hasn't added the policies yet.")); return; }
+  var need = HR.policies.filter(function (p) { return p.needs_sign; });
+  var done = need.filter(function (p) { return hrPolicyState(p, HR.signs) === "done"; }).length;
+  var top = hrEl("div", "hr-mini"); top.style.margin = "4px 0 10px";
+  var bar = hrEl("div", "hr-bar"), f = hrEl("i"); f.style.width = (need.length ? Math.round(done * 100 / need.length) : 100) + "%"; bar.appendChild(f);
+  top.append(bar, hrEl("span", "hr-pct", done + " of " + need.length + " signed"));
+  card.appendChild(top);
+  HR.policies.forEach(function (p) {
+    var row = hrEl("div", "hr-doc"), left = hrEl("div");
+    var t = hrEl("div", "t", p.title); left.appendChild(t);
+    left.appendChild(hrEl("div", "h", [p.code, "version " + p.version].filter(Boolean).join(" · ")));
+    var line = hrEl("div", "hr-files"), fl = hrEl("div", "hr-file"); fl.style.background = "none"; fl.style.padding = "0";
+    fl.appendChild(hrPolicyChip(p, HR.signs));
+    var s = hrSignOf(p, HR.signs);
+    if (s && s.doc_id) {
+      var doc = HR.docs.find(function (z) { return z.id === s.doc_id; });
+      if (doc) { var o = hrEl("button", "n", "Open signed copy"); o.type = "button"; o.onclick = function () { hrOpenFile(doc.path); }; fl.appendChild(o); }
+    }
+    line.appendChild(fl); left.appendChild(line);
+    row.appendChild(left);
+    var acts = hrEl("div"); acts.style.cssText = "display:flex;flex-direction:column;gap:6px;align-items:stretch";
+    var st = hrPolicyState(p, HR.signs);
+    var rd = hrEl("button", "btn" + (st === "todo" || st === "old" ? " save" : ""), st === "todo" || st === "old" ? "Read and sign" : "Read");
+    rd.onclick = function () { hrPolicyDialog(p, rerender); };
+    acts.appendChild(rd);
+    if (p.needs_sign) {
+      var inp = hrEl("input"); inp.type = "file"; inp.accept = "application/pdf,image/jpeg,image/png,image/webp"; inp.hidden = true;
+      var up = hrEl("button", "btn", "Upload signed copy"); up.onclick = function () { inp.click(); };
+      inp.onchange = async function () {
+        var file = inp.files[0]; if (!file) return;
+        var name = hrMyName();
+        if (name.length < 2) { hrToast("Add your full name in About you first"); return; }
+        up.disabled = true; up.textContent = "Uploading…";
+        var docRow = await hrUpload("policy", file);
+        if (docRow && await hrSign(p, name, docRow.id)) hrToast("Signed copy saved");
+        rerender();
+      };
+      acts.append(up, inp);
+    }
+    row.appendChild(acts);
+    card.appendChild(row);
+  });
+}
+function hrPolicyDialog(p, after) {
+  var html = hrPolicyHtml(p, HR.rec && HR.rec.details, HR.company, HR.policies);
+  var ov = hrEl("div", "hr-ask"), bx = hrEl("div", "box"); ov.setAttribute("data-plain", "");
+  bx.style.cssText = "width:min(860px,100%);max-height:94vh;display:flex;flex-direction:column";
+  var head = hrEl("div", "hr-top"); head.style.margin = "0";
+  var h = hrEl("h3", null, p.title); h.style.flex = "1"; head.append(h, hrPolicyChip(p, HR.signs));
+  bx.appendChild(head);
+  var view = hrEl("div", "hr-contract"); view.style.cssText = "margin:10px 0;flex:1;max-height:none;min-height:0"; view.innerHTML = html;
+  bx.appendChild(view);
+  var st = hrPolicyState(p, HR.signs);
+  if (p.needs_sign && st !== "done") {
+    var sign = hrEl("div"); sign.style.cssText = "display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:10px";
+    var lab = hrEl("label", "hr-check"); var cb = hrEl("input"); cb.type = "checkbox";
+    lab.append(cb, document.createTextNode("I have read and understood this policy, and I agree to follow it."));
+    var nm = hrEl("input", "login-input"); nm.placeholder = "Type your full name to sign"; nm.value = ""; nm.setAttribute("aria-label", "Your full name");
+    sign.append(lab, nm); bx.appendChild(sign);
+  }
+  var row = hrEl("div", "hr-foot");
+  var pr = hrEl("button", "btn", "🖨 Print or save as PDF"); pr.onclick = function () { hrPrint(html, p.title); };
+  var cl = hrEl("button", "btn", "Close"); cl.onclick = function () { ov.remove(); };
+  row.append(pr, hrEl("div", "grow"), cl);
+  if (p.needs_sign && st !== "done") {
+    var go = hrEl("button", "btn save", "Sign");
+    go.onclick = async function () {
+      if (!cb.checked) { hrToast("Tick the box first"); return; }
+      if (nm.value.trim().length < 2) { hrToast("Type your full name"); nm.focus(); return; }
+      go.disabled = true;
+      if (await hrSign(p, nm.value.trim(), null)) { ov.remove(); hrToast("Signed: " + p.title); if (after) after(); }
+      else go.disabled = false;
+    };
+    row.appendChild(go);
+  }
+  bx.appendChild(row); ov.appendChild(bx);
+  ov.addEventListener("click", function (e) { if (e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+}
+// Administration → 📜 Company policies (everyone)
+function renderAdminPolicies(wrap) {
+  var head = hrEl("div", "module-head"); head.appendChild(hrEl("h2", null, "Company policies")); wrap.appendChild(head);
+  var card = hrEl("div", "hr-card"); card.style.maxWidth = "880px"; card.setAttribute("data-plain", "");
+  card.appendChild(hrEl("div", "hint", "Loading…")); wrap.appendChild(card);
+  function draw() { card.innerHTML = ""; hrRenderPolicies(card, draw); }
+  hrLoadMine().then(draw).catch(function (e) { card.innerHTML = ""; card.appendChild(hrEl("div", "hr-note warn", "Couldn't load the policies: " + hrErr(e))); });
+}
+
+/* ---------- HR: the policy library ---------- */
+async function hrPolicyManager() {
+  var r = await SUPA.from("hr_policies").select("*").order("position");
+  if (r.error) { hrToast("Run supabase/stage18b_hr_policies.sql first (" + hrErr(r.error) + ")"); return; }
+  var list = r.data || [];
+  var ov = hrEl("div", "hr-ask"), bx = hrEl("div", "box"); ov.setAttribute("data-plain", "");
+  bx.style.cssText = "width:min(760px,100%);max-height:92vh;overflow-y:auto";
+  bx.appendChild(hrEl("h3", null, "📜 Policies"));
+  bx.appendChild(hrEl("div", "hint", "Everyone in the team sees the active ones in My HR file → Company policies. Open one to change its wording."));
+  list.forEach(function (p) {
+    var row = hrEl("div", "hr-doc"), left = hrEl("div");
+    left.appendChild(hrEl("div", "t", p.title + (p.active ? "" : " (hidden)")));
+    left.appendChild(hrEl("div", "h", [p.code, "version " + p.version, p.needs_sign ? "needs a signature" : "read only"].filter(Boolean).join(" · ")));
+    var ed = hrEl("button", "btn", "Edit"); ed.onclick = function () { ov.remove(); hrPolicyEditor(p); };
+    row.append(left, ed); bx.appendChild(row);
+  });
+  var foot = hrEl("div", "hr-foot");
+  var add = hrEl("button", "btn save", "＋ New policy"); add.onclick = function () { ov.remove(); hrPolicyEditor(null); };
+  var cl = hrEl("button", "btn", "Close"); cl.onclick = function () { ov.remove(); };
+  foot.append(add, hrEl("div", "grow"), cl); bx.appendChild(foot);
+  ov.appendChild(bx); document.body.appendChild(ov);
+}
+function hrPolicyEditor(p) {
+  var isNew = !p; p = p || { title: "", code: "", body: "# New policy\n\nWrite the policy here.", needs_sign: true, active: true, position: 60, version: 1 };
+  var ov = hrEl("div", "hr-ask"), bx = hrEl("div", "box"); ov.setAttribute("data-plain", "");
+  bx.style.cssText = "width:min(880px,100%);max-height:94vh;overflow-y:auto";
+  bx.appendChild(hrEl("h3", null, isNew ? "New policy" : "Edit: " + p.title));
+  var box = hrEl("div", "hr-fields"); box.style.margin = "10px 0";
+  function fld(label, el, wide) { var w = hrEl("div", "field" + (wide ? " wide" : "")), l = hrEl("label", null, label); w.append(l, el); box.appendChild(w); return el; }
+  var ti = fld("Title", Object.assign(hrEl("input"), { value: p.title }));
+  var co = fld("Code (optional)", Object.assign(hrEl("input"), { value: p.code, placeholder: "e.g. HR/WS/Ver1.0" }));
+  var po = fld("Order in the list", Object.assign(hrEl("input"), { type: "number", value: p.position }));
+  var opts = hrEl("div"); opts.style.cssText = "display:flex;flex-direction:column;gap:6px;justify-content:center";
+  var ns = hrEl("input"); ns.type = "checkbox"; ns.checked = p.needs_sign; var l1 = hrEl("label", "hr-check"); l1.append(ns, document.createTextNode("Everyone must sign it"));
+  var ac = hrEl("input"); ac.type = "checkbox"; ac.checked = p.active; var l2 = hrEl("label", "hr-check"); l2.append(ac, document.createTextNode("Show it to the team"));
+  opts.append(l1, l2); fld("Options", opts);
+  bx.appendChild(box);
+  bx.appendChild(hrEl("div", "hint", "A blank line starts a new paragraph. # makes the title, ## a heading. Placeholders: {company} {company_short} {full_name} {date} {policy_list} (the list of all other policies)."));
+  var ta = hrEl("textarea", "hr-tpl"); ta.value = p.body; ta.style.marginTop = "8px"; bx.appendChild(ta);
+  var foot = hrEl("div", "hr-foot");
+  var pv = hrEl("button", "btn", "Preview");
+  pv.onclick = function () { hrPolicyDialogPreview(Object.assign({}, p, { title: ti.value, body: ta.value })); };
+  var cl = hrEl("button", "btn", "Cancel"); cl.onclick = function () { ov.remove(); hrPolicyManager(); };
+  foot.append(pv, hrEl("div", "grow"), cl);
+  async function save(newVersion) {
+    if (!ti.value.trim()) { hrToast("Give it a title"); return; }
+    var slug = isNew ? ti.value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 50) || ("policy-" + Date.now().toString(36)) : p.slug;
+    var r = await SUPA.rpc("hr_save_policy", { p_id: isNew ? null : p.id, p_slug: slug, p_title: ti.value.trim(), p_code: co.value.trim(), p_body: ta.value,
+      p_needs_sign: ns.checked, p_position: parseInt(po.value, 10) || 100, p_active: ac.checked, p_new_version: !!newVersion });
+    if (r.error) { hrToast(hrErr(r.error)); return; }
+    ov.remove(); hrToast(newVersion ? "Saved as version " + r.data.version + ". Everyone will be asked to sign again" : "Saved");
+    hrPolicyManager();
+  }
+  var sv = hrEl("button", "btn save", "Save"); sv.onclick = function () { save(false); };
+  foot.appendChild(sv);
+  if (!isNew && p.needs_sign) {
+    var nv = hrEl("button", "btn", "Save as a new version"); nv.title = "Everyone signs it again";
+    nv.onclick = function () { save(true); };
+    foot.insertBefore(nv, sv);
+  }
+  bx.appendChild(foot); ov.appendChild(bx); document.body.appendChild(ov);
+}
+function hrPolicyDialogPreview(p) {
+  var html = hrContractHtml(p.body, HR.settings ? HR.settings.company : HR.company, { full_name: "[their name]" }, {}, { policy_list: "1. Work Systems Policy\n2. Leave Policy\n3. …" });
+  var ov = hrEl("div", "hr-ask"), bx = hrEl("div", "box"); bx.style.width = "min(820px,100%)";
+  bx.appendChild(hrEl("h3", null, "Preview: " + p.title));
+  var view = hrEl("div", "hr-contract"); view.style.margin = "10px 0"; view.innerHTML = html; bx.appendChild(view);
+  var c = hrEl("button", "btn", "Close"); c.onclick = function () { ov.remove(); }; bx.appendChild(c);
+  ov.appendChild(bx); ov.style.zIndex = "9600"; document.body.appendChild(ov);
 }

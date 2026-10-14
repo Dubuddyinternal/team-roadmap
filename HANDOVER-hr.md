@@ -56,6 +56,15 @@ Files can be PDF, JPG, PNG or WEBP, up to 10 MB each.
 4. **Contract wording:** the starting template is a plain-English draft. **Have a lawyer or CA check it** before the first contract goes out. The wording can be edited on the same screen, and the placeholders are listed there.
 5. **HR access (optional):** to let someone other than owners act as HR, tick **Manage HR files** on their role.
 
+## Company policies (stage 18b)
+
+- **Where:** Administration → 📜 Company policies (everyone can read), and step 8 of My HR file. HR sees "x of y signed" per person in Employees (HR).
+- **Signing:** a person ticks "I have read this", types their full name and presses Sign, or uploads a signed scan. Both are stored in `hr_policy_signs` against the policy's version.
+- **Editing:** HR presses **📜 Policies** → edit. **Save** fixes wording without asking anyone to re-sign; **Save as a new version** asks everyone to sign again.
+- **Placeholders:** `{company}`, `{company_short}`, `{full_name}`, `{date}`, `{policy_list}` (acknowledgement only). Change the short company name in ⚙️ Company and offer letter.
+- **Seeded:** Work Systems, Leave, Code of Conduct, POSH (placeholder text: paste the real policy in) and the Acknowledgement & Agreement.
+- **Database:** `supabase/stage18b_hr_policies.sql`. Safe to run again.
+
 ## Notes for the next developer
 
 - **Front end:** `hr.js`, loaded after `monthly-feedback.js`. It adds its own styles. The admin section is registered in `adminSections()` in `index.html` (`k:"hr"`).
