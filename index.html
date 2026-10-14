@@ -4181,7 +4181,7 @@ const PERMS = [
   {key:"manage_learning",  label:"Run LMS",               hint:"Plan learning drops — videos, articles, polls, quizzes — in Administration → LMS, and see everyone's answers"},
   {key:"view_hr",          label:"HR: see employee files", hint:"Read everyone's HR details, documents and signed policies in Administration → HR → Employees. Can't change anything"},
   {key:"manage_hr",        label:"HR: manage employee files", hint:"Everything in “see employee files”, plus approve documents, send files back, answer ✏️ change requests, and send offer letters"},
-  {key:"manage_policies",  label:"HR: edit company policies", hint:"Add and edit policies in Administration → HR → Company policies, and ask everyone to sign a new version"},
+  {key:"manage_policies",  label:"HR: edit company policies", hint:"Add and edit policies in Administration → HR → Policies, and ask everyone to sign a new version"},
   {key:"hr_settings",      label:"HR: company details & offer letter", hint:"Change the company details and the offer letter wording in Administration → HR → Company and offer letter"},
 ];
 // what the 5 old role names meant, for anyone not yet on a custom role
@@ -19209,9 +19209,11 @@ function adminSections(){
     { k:"requests",    ico:"🙋", lbl:"Requests" + (PENDING_REQUESTS ? " (" + PENDING_REQUESTS + ")" : ""), crumb:"Requests",
                                                                         show: hasPerm("approve_requests"),    group:"it", render: renderAdminRequests },
     { k:"request",     ico:"➕",       lbl:"Request a teammate",   show: hasPerm("request_members"),     group:"it", render: renderRequestTeammate },
+    { k:"roadmaps",    ico:"🗺️", lbl:"Roadmaps",             show: hasPerm("add_roadmaps"),        group:"it", render: renderAdminRoadmaps },
+    { k:"spaces",      ico:"🗂️", lbl:"Spaces",               show: hasPerm("add_spaces"),          group:"it", render: renderAdminSpaces },
     // HR: one dropdown in the sidebar (My HR file lives in the profile menu)
     { k:"hr",          ico:"🗂️", lbl:"Employees", group:"hr", show: !!me && !!SUPA && typeof renderAdminHr === "function" && (hasPerm("manage_hr") || hasPerm("view_hr")), render: renderAdminHr },
-    { k:"policies",    ico:"📜", lbl:"Company policies", group:"hr", show: !!me && !!SUPA && typeof renderAdminPolicies === "function", render: renderAdminPolicies },
+    { k:"hrpolicies",  ico:"📜", lbl:"Policies", group:"hr", show: !!me && !!SUPA && typeof renderAdminPolicyLibrary === "function" && hasPerm("manage_policies"), render: renderAdminPolicyLibrary },
     { k:"hrsettings",  ico:"🏢", lbl:"Company and offer letter", group:"hr", show: !!me && !!SUPA && typeof renderAdminHrSettings === "function" && hasPerm("hr_settings"), render: renderAdminHrSettings },
     { k:"lms",         ico:"🎓", lbl:"LMS", group:"hr",  show: hasPerm("manage_learning") && !!SUPA, render: renderAdminLms },
     // Product: ideas from students and the team
@@ -19220,13 +19222,12 @@ function adminSections(){
     { k:"sendbox",     ico:"📮", lbl:"Send to " + (typeof fbBoss === "function" ? fbBoss() : "Sumit"), crumb:"Send to Sumit",
                                                                         show: !!me && !!SUPA && !sup && typeof renderAdminSendBox === "function", group:"product", render: renderAdminSendBox },
     // For me: things about your own account and work
+    { k:"policies",    ico:"📜", lbl:"Company policies", group:"me", show: !!me && !!SUPA && typeof renderAdminPolicies === "function", render: renderAdminPolicies },
     { k:"myaccess",    ico:"🔎", lbl:"My access",            show: !!me,                           group:"me", render: renderMyAccess },
     { k:"myideas",     ico:"💡", lbl:"My product ideas",     show: !!me && !!SUPA && typeof pitchTarget === "function" && !!pitchTarget(), group:"me", render: renderAdminMyIdeas },
     { k:"myfeedback",  ico:"📝", lbl:"My monthly feedback",  show: !!me && !!SUPA && typeof renderAdminMyFeedback === "function", group:"me", render: renderAdminMyFeedback },
     { k:"notifications", ico:"📣", lbl:"Notifications",      show: hasPerm("send_notifications") && !!SUPA, group:"me", render: renderAdminNotifications },
     { k:"mygames",     ico:"\uD83C\uDFAE", lbl:"My games",             show: hasPerm("create_games"),        group:"me", render: renderMyGames },
-    { k:"roadmaps",    ico:"🗺️", lbl:"Roadmaps",             show: hasPerm("add_roadmaps"),        render: renderAdminRoadmaps },
-    { k:"spaces",      ico:"🗂️", lbl:"Spaces",               show: hasPerm("add_spaces"),          render: renderAdminSpaces },
     { k:"reviewgames", ico:"\uD83D\uDD79\uFE0F", lbl:"Review games" + (gamesWaiting() ? " (" + gamesWaiting() + ")" : ""), crumb:"Review games",
                                                                         show: sup,                            render: renderReviewGames },
     { k:"danger",      ico:"⚠️", lbl:"Danger zone",          show: sup,                            render: renderAdminDanger },
