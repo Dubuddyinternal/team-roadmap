@@ -293,6 +293,9 @@ function ntfRoute(n) {
   if (/My HR file → Offer letter|offer letter is in your email|offer letter is waiting/i.test(t)) return myhr("contract");
   if (/My HR file/.test(t) || /^(🗂️|✅|✏️) (HR |Your HR file)/.test(n.title || "")) return myhr(null);
   if (/Employees \(HR\)/.test(t)) return hrPerson();
+  // accounts
+  if (/Accounts → Payment requests/.test(t)) return admin("accrequests");
+  if (/My payments|salary is paid/.test(t)) return admin("mypayments");
   // feedback, suggestions, ideas
   if (/My monthly feedback/.test(t)) return admin("myfeedback");
   if (/My Team → Monthly feedback/.test(t) && has("openTeam")) return function () { leave(); if (has("closeAdmin")) closeAdmin(); openTeam(); if (has("mtSetView")) mtSetView("feedback"); };

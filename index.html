@@ -35,6 +35,7 @@
 <!-- Monthly feedback (My Team tab + Administration) and the suggestion box to Sumit (monthly-feedback.js) -->
 <script src="monthly-feedback.js"></script>
 <script src="hr.js"></script><!-- HR files: My HR file + Administration → Employees (HR) -->
+<script src="accounts.js"></script><!-- Accounts: payment requests, payroll, My payments -->
 <script>
 /* ============================================================
    ONE-TIME SETUP with JSONBin (~3 minutes)
@@ -4182,6 +4183,7 @@ const PERMS = [
   {key:"view_hr",          label:"HR: see employee files", hint:"Read everyone's HR details, documents and signed policies in Administration → HR → Employees. Can't change anything"},
   {key:"manage_hr",        label:"HR: manage employee files", hint:"Everything in “see employee files”, plus approve documents, send files back, answer ✏️ change requests, and send offer letters"},
   {key:"manage_policies",  label:"HR: edit company policies", hint:"Add and edit policies in Administration → HR → Policies, and ask everyone to sign a new version"},
+  {key:"accounts",         label:"Accounts: payments & payroll", hint:"See and approve everyone's payment requests, mark them paid, run payroll and download bank files (Administration → Accounts). Includes people's bank details"},
   {key:"hr_settings",      label:"HR: company details & offer letter", hint:"Change the company details and the offer letter wording in Administration → HR → Company and offer letter"},
 ];
 // what the 5 old role names meant, for anyone not yet on a custom role
@@ -19195,7 +19197,7 @@ function roleOptions(sel, current, maxRole){
    to add a new kind of section later (e.g. "Raise a request", "Game support"),
    add one line here and a render function. */
 // sidebar dropdowns in Administration (sections with a matching group)
-const ADMIN_GROUPS = { it: { ico:"🛠️", lbl:"IT support" }, hr: { ico:"🧑‍💼", lbl:"HR" }, product: { ico:"💡", lbl:"Product" }, me: { ico:"👤", lbl:"For me" } };
+const ADMIN_GROUPS = { it: { ico:"🛠️", lbl:"IT support" }, hr: { ico:"🧑‍💼", lbl:"HR" }, accounts: { ico:"💰", lbl:"Accounts" }, product: { ico:"💡", lbl:"Product" }, me: { ico:"👤", lbl:"For me" } };
 let adminOpenGroups = {};
 function adminSections(){
   const me = currentUser(), sup = !!(me && me.super), people = canManagePeople();
@@ -19220,6 +19222,9 @@ function adminSections(){
     { k:"hrrules",     ico:"📏", lbl:"Rules", group:"hr", show: !!me && !!SUPA && typeof renderAdminHrRules === "function" && (hasPerm("manage_hr") || hasPerm("view_hr")), render: renderAdminHrRules },
     { k:"hrsettings",  ico:"🏢", lbl:"Company and offer letter", group:"hr", show: !!me && !!SUPA && typeof renderAdminHrSettings === "function" && hasPerm("hr_settings"), render: renderAdminHrSettings },
     { k:"lms",         ico:"🎓", lbl:"LMS", group:"hr",  show: hasPerm("manage_learning") && !!SUPA, render: renderAdminLms },
+    // Accounts: payment requests and payroll ("Accounts: payments & payroll")
+    { k:"accrequests", ico:"🧾", lbl:"Payment requests", group:"accounts", show: !!me && !!SUPA && typeof renderAdminAccRequests === "function" && hasPerm("accounts"), render: renderAdminAccRequests },
+    { k:"accpayroll",  ico:"💵", lbl:"Payroll", group:"accounts", show: !!me && !!SUPA && typeof renderAdminAccPayroll === "function" && hasPerm("accounts"), render: renderAdminAccPayroll },
     // Product: ideas from students and the team
     { k:"ideaemails",  ico:"✉️", lbl:"Idea emails",          show: hasPerm("review_student_ideas") && !!SUPA, group:"product", render: renderAdminIdeaEmails },
     { k:"suggestbox",  ico:"📮", lbl:"Suggestion box",       show: sup && !!SUPA && typeof renderAdminSuggestionBox === "function", group:"product", render: renderAdminSuggestionBox },
@@ -19227,6 +19232,7 @@ function adminSections(){
                                                                         show: !!me && !!SUPA && !sup && typeof renderAdminSendBox === "function", group:"product", render: renderAdminSendBox },
     // For me: things about your own account and work
     { k:"policies",    ico:"📜", lbl:"Company policies", group:"me", show: !!me && !!SUPA && typeof renderAdminPolicies === "function", render: renderAdminPolicies },
+    { k:"mypayments",  ico:"💸", lbl:"My payments", group:"me", show: !!me && !!SUPA && typeof renderAdminMyPayments === "function", render: renderAdminMyPayments },
     { k:"myaccess",    ico:"🔎", lbl:"My access",            show: !!me,                           group:"me", render: renderMyAccess },
     { k:"myideas",     ico:"💡", lbl:"My product ideas",     show: !!me && !!SUPA && typeof pitchTarget === "function" && !!pitchTarget(), group:"me", render: renderAdminMyIdeas },
     { k:"myfeedback",  ico:"📝", lbl:"My monthly feedback",  show: !!me && !!SUPA && typeof renderAdminMyFeedback === "function", group:"me", render: renderAdminMyFeedback },
