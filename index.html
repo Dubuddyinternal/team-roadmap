@@ -19195,7 +19195,7 @@ function roleOptions(sel, current, maxRole){
    to add a new kind of section later (e.g. "Raise a request", "Game support"),
    add one line here and a render function. */
 // sidebar dropdowns in Administration (sections with a matching group)
-const ADMIN_GROUPS = { hr: { ico:"🧑‍💼", lbl:"HR" } };
+const ADMIN_GROUPS = { hr: { ico:"🧑‍💼", lbl:"HR" }, it: { ico:"🛠️", lbl:"IT support" } };
 let adminOpenGroups = {};
 function adminSections(){
   const me = currentUser(), sup = !!(me && me.super), people = canManagePeople();
@@ -19205,9 +19205,14 @@ function adminSections(){
     { k:"hr",          ico:"🗂️", lbl:"Employees", group:"hr", show: !!me && !!SUPA && typeof renderAdminHr === "function" && (hasPerm("manage_hr") || hasPerm("view_hr")), render: renderAdminHr },
     { k:"policies",    ico:"📜", lbl:"Company policies", group:"hr", show: !!me && !!SUPA && typeof renderAdminPolicies === "function", render: renderAdminPolicies },
     { k:"hrsettings",  ico:"🏢", lbl:"Company and offer letter", group:"hr", show: !!me && !!SUPA && typeof renderAdminHrSettings === "function" && hasPerm("hr_settings"), render: renderAdminHrSettings },
+    // IT support: one dropdown for access, accounts and structure
+    { k:"permissions", ico:"🔐", lbl:"Roles & permissions",  show: people,                         group:"it", render: renderAdminPermissions },
+    { k:"password",    ico:"🔑", lbl:"Change password",      show: !!me,                           group:"it", render: renderChangePassword },
+    { k:"okrlevels",   ico:"🪜", lbl:"OKR levels",           show: people,                         group:"it", render: renderAdminOkrLevels },
+    { k:"org",         ico:"🏢", lbl:"Org structure",        show: sup,                            group:"it", render: renderAdminOrg },
     { k:"requests",    ico:"🙋", lbl:"Requests" + (PENDING_REQUESTS ? " (" + PENDING_REQUESTS + ")" : ""), crumb:"Requests",
-                                                                        show: hasPerm("approve_requests"),    render: renderAdminRequests },
-    { k:"request",     ico:"➕",       lbl:"Request a teammate",   show: hasPerm("request_members"),     render: renderRequestTeammate },
+                                                                        show: hasPerm("approve_requests"),    group:"it", render: renderAdminRequests },
+    { k:"request",     ico:"➕",       lbl:"Request a teammate",   show: hasPerm("request_members"),     group:"it", render: renderRequestTeammate },
     { k:"notifications", ico:"📣", lbl:"Notifications",      show: hasPerm("send_notifications") && !!SUPA, render: renderAdminNotifications },
     { k:"ideaemails",  ico:"✉️", lbl:"Idea emails",          show: hasPerm("review_student_ideas") && !!SUPA, render: renderAdminIdeaEmails },
     { k:"myfeedback",  ico:"📝", lbl:"My monthly feedback",  show: !!me && !!SUPA && typeof renderAdminMyFeedback === "function", render: renderAdminMyFeedback },
@@ -19218,14 +19223,10 @@ function adminSections(){
     { k:"roadmaps",    ico:"🗺️", lbl:"Roadmaps",             show: hasPerm("add_roadmaps"),        render: renderAdminRoadmaps },
     { k:"spaces",      ico:"🗂️", lbl:"Spaces",               show: hasPerm("add_spaces"),          render: renderAdminSpaces },
     { k:"lms",         ico:"🎓", lbl:"LMS",                  show: hasPerm("manage_learning") && !!SUPA, render: renderAdminLms },
-    { k:"permissions", ico:"🔐", lbl:"Roles & permissions",  show: people,                         render: renderAdminPermissions },
-    { k:"okrlevels",   ico:"🪜", lbl:"OKR levels",           show: people,                         render: renderAdminOkrLevels },
     { k:"myaccess",    ico:"🔎", lbl:"My access",            show: !!me,                           render: renderMyAccess },
-    { k:"password",    ico:"🔑", lbl:"Change password",      show: !!me,                           render: renderChangePassword },
     { k:"mygames",     ico:"\uD83C\uDFAE", lbl:"My games",             show: hasPerm("create_games"),        render: renderMyGames },
     { k:"reviewgames", ico:"\uD83D\uDD79\uFE0F", lbl:"Review games" + (gamesWaiting() ? " (" + gamesWaiting() + ")" : ""), crumb:"Review games",
                                                                         show: sup,                            render: renderReviewGames },
-    { k:"org",         ico:"🏢", lbl:"Org structure",        show: sup,                            render: renderAdminOrg },
     { k:"danger",      ico:"⚠️", lbl:"Danger zone",          show: sup,                            render: renderAdminDanger },
   ].filter(x=> x.show);
 }
@@ -19333,7 +19334,8 @@ function renderAdminPage(){
     h.className = "admin-navitem admin-group" + (inside && !open ? " active" : "");
     h.setAttribute("aria-expanded", open ? "true" : "false");
     h.innerHTML = '<span></span><span></span><span class="admin-caret"></span>';
-    h.children[0].textContent = g.ico; h.children[1].textContent = g.lbl; h.children[2].textContent = open ? "▾" : "▸";
+    const waiting = kids.reduce((n,x)=> n + (+((x.lbl.match(/\((\d+)\)$/) || [])[1] || 0)), 0);   // e.g. "Requests (2)"
+    h.children[0].textContent = g.ico; h.children[1].textContent = g.lbl + (!open && waiting ? " (" + waiting + ")" : ""); h.children[2].textContent = open ? "▾" : "▸";
     h.onclick = ()=>{ adminOpenGroups[sec.group] = !open; renderAdminPage(); };
     nav.appendChild(h);
     if(open) kids.forEach(k=> nav.appendChild(item(k, true)));
