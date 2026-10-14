@@ -995,7 +995,8 @@ function openDialog({ title, sub, fields, okLabel="Save", onSave }){
       : `<input id="d-${f.k}" value="${esc(f.value||"")}" placeholder="${esc(f.ph||"")}">`;
   /* a field's current value; a tick-box field gives the list that's ticked */
   const valOf = el => el && el.dataset && el.dataset.multi ? [...el.querySelectorAll("input:checked")].map(x=>x.value) : (el ? el.value : "");
-  const shows = (f, v) => f.showIf.notIn ? ![].concat(v==null?[]:v).some(x=>f.showIf.notIn.includes(x)) : v === f.showIf.equals;
+  const shows = (f, v) => f.showIf.notIn ? ![].concat(v==null?[]:v).some(x=>f.showIf.notIn.includes(x))
+    : f.showIf.has ? [].concat(v==null?[]:v).includes(f.showIf.has) : v === f.showIf.equals;
   const hidden = f => f.showIf && !shows(f, fields.find(x=>x.k===f.showIf.field)?.value);
   $("#dlgBody").innerHTML = fields.map(f=>`
     <div class="fbox" id="w-${f.k}" style="background:var(--surface-4);margin-bottom:10px" ${hidden(f)?"hidden":""}>
@@ -1635,7 +1636,10 @@ function itemDialog(c, idx, pre){
       { k:"kind", label:"Type", type:"select", value:it.kind, opts:Object.entries(ITEM_KINDS).map(([k,v])=>[k,v.emo+" "+v.label]) },
       { k:"kindOther", label:"If other, what is it?", ph:"Podcast clip, press release…", value:it.kindOther, showIf:{ field:"kind", equals:"other" } },
       { k:"date", label:"Day", type:"date", value:it.date },
-      { k:"platforms", label:"Platform / Category — tick every one it goes out on", type:"multi", value:platsOf(it), opts:PLATFORMS.map(p=>[p,p]) },
+      { k:"platforms", label:"Platform / Category — tick every one it goes out on", type:"multi", value:platsOf(it),
+        /* the usual ones, then any the team has typed in under "Other" on this campaign, then Other */
+        opts:[...PLATFORMS.filter(p=>p!=="Other"), ...allPlats(c).filter(p=>!PLATFORMS.includes(p)), "Other"].map(p=>[p,p]) },
+      { k:"platformOther", label:"Other — what is it? (separate several with commas)", ph:"Telegram, LinkedIn, Newspaper ad…", value:"", showIf:{ field:"platforms", has:"Other" } },
       { k:"ownerId", label:"Accountable person", type:"select", value:it.ownerId||"",
         opts:[["","— nobody yet —"]].concat(ppl.map(p=>[p.id, p.name + (p.role?" · "+p.role:"")])) },
       { k:"details", label:"More details", type:"area", value:it.details, ph:"The hook, where it links to — anything the person making it needs." },
@@ -1647,6 +1651,14 @@ function itemDialog(c, idx, pre){
       if(!v.name){ toast("The item needs a name"); return false; }
       if(v.actionUrl && !safeUrl(v.actionUrl)){ toast("The URL has to be a web link (https://…)"); return false; }
       if(v.actionUrl) v.actionUrl = safeUrl(v.actionUrl);
+      /* what's typed under Other becomes a platform of its own (and a tick box next time) */
+      const typed = String(v.platformOther||"").split(",").map(x=>x.trim()).filter(Boolean);
+      if(typed.length){
+        v.platforms = v.platforms.filter(p=>p!=="Other");
+        typed.forEach(t=>{ const hit = [...PLATFORMS, ...allPlats(c)].find(p=>p.toLowerCase()===t.toLowerCase()) || t;
+          if(!v.platforms.includes(hit)) v.platforms.push(hit); });
+      }
+      delete v.platformOther;
       if(!v.platforms.length){ toast("Tick at least one platform"); return false; }
       v.platform = v.platforms[0];
       if(v.actionLabel && !v.actionUrl && !v.platforms.some(p=>PROCESS_PLATFORMS.includes(p))){ toast("Add the URL the button opens"); return false; }
