@@ -256,6 +256,10 @@ function hrEditable(rec) { return !rec || rec.status === "draft" || rec.status =
     + ".hr-tpl{width:100%;min-height:360px;font-family:var(--mono);font-size:12.5px;padding:12px;border:1px solid var(--line-strong);border-radius:10px}"
     + ".hr-profile-link{display:flex;gap:10px;align-items:center;background:var(--indigo-soft);border:1px solid #F5CDB6;border-radius:12px;padding:10px 12px;margin-bottom:14px;font-size:13.5px}"
     + ".hr-profile-link .grow{flex:1}"
+    + ".hr-sig{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.hr-sig .pic{width:220px;height:76px;border:1.5px dashed var(--line-strong);border-radius:10px;background:#fff;display:grid;place-items:center;font-size:12.5px;color:var(--muted);overflow:hidden}"
+    + ".hr-sig .pic img{max-width:200px;max-height:66px}"
+    + ".hr-signgrid{display:flex;gap:18px;align-items:center;flex-wrap:wrap;justify-content:space-between}.hr-signgrid .meta{display:flex;flex-direction:column;align-items:flex-start;gap:4px;font-size:13.5px;order:2}"
+    + ".hr-signgrid .pl{display:flex;gap:8px;align-items:center}.hr-signgrid .pl input{max-width:200px;margin:0;padding:6px 10px}"
     + "@media(max-width:820px){.hr-grid{grid-template-columns:1fr}.hr-nav{position:static;flex-direction:row;overflow-x:auto}.hr-nav button{white-space:nowrap}"
     + ".hr-fields{grid-template-columns:1fr}.hr-stats{grid-template-columns:repeat(2,1fr)}.hr-kv{grid-template-columns:1fr}.hr-tbl .hide-s{display:none}.hr-contract{padding:18px}}";
   var st = document.createElement("style"); st.textContent = css;
@@ -864,10 +868,14 @@ function hrRenderPerson(wrap, uid) {
       left.appendChild(hrEl("div", "t", p.title));
       var s = hrSignOf(p, mine), fl = hrEl("div", "hr-file"); fl.style.cssText = "background:none;padding:0;margin-top:4px";
       fl.appendChild(hrPolicyChip(p, mine));
-      if (s) fl.appendChild(hrEl("span", null, "as “" + s.signed_name + "” · version " + s.version + (s.method === "upload" ? " · signed copy" : " · typed name")));
+      if (s) fl.appendChild(hrEl("span", null, "as “" + s.signed_name + "” · version " + s.version + (s.place ? " · " + s.place : "") + (s.method === "upload" ? " · signed copy" : s.method === "signature" ? " · signature" : " · typed name")));
       if (s && s.doc_id) {
         var doc = docs.find(function (z) { return z.id === s.doc_id; });
         if (doc) { var o = hrEl("button", "hr-reveal", "Open signed copy"); o.onclick = function () { hrOpenFile(doc.path); }; fl.appendChild(o); }
+      } else if (s) {
+        var v = hrEl("button", "hr-reveal", "View signed");
+        v.onclick = function () { hrPolicyDialog(p, null, { signs: mine, details: (rec && rec.details) || {}, docs: docs, company: (HR.settings && HR.settings.company) || HR.company || {}, policies: HRA.policies, mine: false }); };
+        fl.appendChild(v);
       }
       left.appendChild(fl); row.appendChild(left); pc.appendChild(row);
     });
@@ -1052,17 +1060,108 @@ function hrPolicyHtml(p, d, company, policies) {
   return hrContractHtml(p.body, company, d, {}, { policy_list: hrPolicyList(policies) });
 }
 function hrMyName() { return ((HR.rec && HR.rec.details && HR.rec.details.full_name) || (hrMe() && hrMe().name) || "").trim(); }
-async function hrSign(p, name, docId) {
-  var r = await SUPA.rpc("hr_sign_policy", { p_policy: p.id, p_name: name, p_doc: docId || null });
+function hrMyPlace() { var d = (HR.rec && HR.rec.details) || {}; return String(d.cur_city || d.perm_city || "").trim(); }
+async function hrSign(p, name, place, sigId, docId) {
+  var r = await SUPA.rpc("hr_policy_sign", { p_policy: p.id, p_name: name, p_place: place || null, p_sig: sigId || null, p_doc: docId || null });
   if (r.error) { hrToast(hrErr(r.error)); return false; }
   HR.signs = HR.signs.filter(function (x) { return !(x.policy_id === p.id && x.version === r.data.version); });
   HR.signs.push(r.data);
+  if (sigId) HR.docs.forEach(function (z) { if (z.id === sigId) z.status = "approved"; });
   return true;
+}
+
+/* ---------- the saved signature ---------- */
+// the newest signature photo in someone's documents
+function hrSigOf(docs) {
+  return (docs || []).filter(function (z) { return z.kind === "signature"; })
+    .sort(function (a, b) { return String(b.uploaded_at).localeCompare(String(a.uploaded_at)); })[0] || null;
+}
+HR.sigImg = {};
+// private file → data URL, so it shows in the page and in print without expiring
+async function hrImgData(path) {
+  if (HR.sigImg[path]) return HR.sigImg[path];
+  var r = await SUPA.storage.from("hr-docs").download(path);
+  if (r.error) throw r.error;
+  var url = await new Promise(function (ok, bad) { var fr = new FileReader(); fr.onload = function () { ok(fr.result); }; fr.onerror = bad; fr.readAsDataURL(r.data); });
+  return (HR.sigImg[path] = url);
+}
+// a phone photo of a signature on paper → a tidy PNG: paper made see-through, ink darkened, cropped
+async function hrCleanSignature(file) {
+  var src = URL.createObjectURL(file);
+  try {
+    var img = await new Promise(function (ok, bad) { var i = new Image(); i.onload = function () { ok(i); }; i.onerror = function () { bad(new Error("Use a JPG or PNG photo")); }; i.src = src; });
+    var k = Math.min(1, 1400 / Math.max(img.naturalWidth, img.naturalHeight));
+    var w = Math.max(1, Math.round(img.naturalWidth * k)), h = Math.max(1, Math.round(img.naturalHeight * k));
+    var cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+    var cx = cv.getContext("2d"); cx.drawImage(img, 0, 0, w, h);
+    var px = cx.getImageData(0, 0, w, h), a = px.data, lum = new Uint8Array(w * h), hist = new Uint32Array(256);
+    for (var i = 0; i < w * h; i++) { var L = Math.round(0.299 * a[i * 4] + 0.587 * a[i * 4 + 1] + 0.114 * a[i * 4 + 2]); lum[i] = L; hist[L]++; }
+    var acc = 0, paper = 255;   // the paper is the brightest big part of the photo
+    for (var v = 255; v >= 0; v--) { acc += hist[v]; if (acc >= w * h * 0.4) { paper = v; break; } }
+    var x0 = w, y0 = h, x1 = -1, y1 = -1, cut = paper * 0.72;
+    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) {
+      var j = y * w + x, al = Math.max(0, Math.min(1, (cut - lum[j]) / (cut * 0.45)));
+      a[j * 4] = 20; a[j * 4 + 1] = 28; a[j * 4 + 2] = 70; a[j * 4 + 3] = Math.round(al * 255);
+      if (al > 0.3) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    }
+    if (x1 < 0 || x1 - x0 < 20 || y1 - y0 < 6) throw new Error("We couldn't find a signature in that photo. Sign on plain white paper and try again.");
+    cx.putImageData(px, 0, 0);
+    var pad = 8; x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(w - 1, x1 + pad); y1 = Math.min(h - 1, y1 + pad);
+    var s = Math.min(1, 600 / (x1 - x0 + 1)), out = document.createElement("canvas");
+    out.width = Math.round((x1 - x0 + 1) * s); out.height = Math.round((y1 - y0 + 1) * s);
+    out.getContext("2d").drawImage(cv, x0, y0, x1 - x0 + 1, y1 - y0 + 1, 0, 0, out.width, out.height);
+    var blob = await new Promise(function (ok) { out.toBlob(ok, "image/png"); });
+    if (!blob) throw new Error("Couldn't read that photo");
+    return new File([blob], "signature.png", { type: "image/png" });
+  } finally { URL.revokeObjectURL(src); }
+}
+// pick a photo, clean it, save it to the profile; resolves to the new document or null
+function hrPickSignature() {
+  return new Promise(function (done) {
+    var inp = hrEl("input"); inp.type = "file"; inp.accept = "image/*"; inp.hidden = true;
+    document.body.appendChild(inp);   // some phones only open the picker for an input on the page
+    inp.onchange = async function () {
+      var f = inp.files[0]; inp.remove(); if (!f) return done(null);
+      try { var png = await hrCleanSignature(f); done(await hrUpload("signature", png) || null); }
+      catch (e) { hrToast(hrErr(e)); done(null); }
+    };
+    inp.click();
+  });
+}
+// the line under a signed policy: signature, name, date, place
+function hrSigBlock(name, when, place, img) {
+  return '<div style="margin-top:26px;padding-top:14px;border-top:1px solid #d8d0c8;display:flex;gap:28px;flex-wrap:wrap;align-items:flex-end">'
+    + '<div style="min-width:220px">' + (img ? '<img src="' + hrEsc(img) + '" alt="Signature" style="display:block;max-height:72px;max-width:260px;margin-bottom:2px">' : '<div style="height:40px"></div>')
+    + '<div style="border-top:1px solid #333;padding-top:4px"><b>' + hrEsc(name) + '</b></div></div>'
+    + '<div style="line-height:1.8">Date: <b>' + hrEsc(when) + '</b><br>Place: <b>' + hrEsc(place || "—") + '</b></div></div>';
+}
+// the "Your signature" box: shows the saved one, or asks for it
+function hrSigBox(onChange) {
+  var box = hrEl("div", "hr-sig"), sig = hrSigOf(HR.docs);
+  var pic = hrEl("div", "pic");
+  if (sig) {
+    pic.textContent = "Loading…";
+    hrImgData(sig.path).then(function (u) { pic.textContent = ""; var im = hrEl("img"); im.src = u; im.alt = "Your signature"; pic.appendChild(im); })
+      .catch(function () { pic.textContent = "Couldn't load it"; });
+  } else pic.appendChild(hrEl("span", null, "✍️ No signature yet"));
+  var btn = hrEl("button", "btn" + (sig ? "" : " save"), sig ? "Change" : "📷 Upload a photo of your signature"); btn.type = "button";
+  btn.onclick = async function () {
+    btn.disabled = true; btn.textContent = "Saving…";
+    var d = await hrPickSignature();
+    if (d) hrToast("Signature saved to your profile");
+    if (onChange) onChange(d); else { btn.disabled = false; btn.textContent = sig ? "Change" : "📷 Upload a photo of your signature"; }
+  };
+  box.append(pic, btn);
+  return box;
 }
 function hrRenderPolicies(card, rerender) {
   card.appendChild(hrEl("h3", null, "📜 Company policies"));
-  card.appendChild(hrEl("div", "hint", "Read each policy and sign it. Sign online by typing your name, or print it, sign it and upload the signed copy."));
+  card.appendChild(hrEl("div", "hint", "Read each policy and press Sign. Your saved signature, name, date and place are added for you. Or print it, sign it and upload the signed copy."));
   if (!HR.policies.length) { card.appendChild(hrEl("div", "hr-note info", "HR hasn't added the policies yet.")); return; }
+  var mySig = hrEl("div", "hr-doc"), ms = hrEl("div");
+  ms.append(hrEl("div", "t", "Your signature"), hrEl("div", "h", "Sign on plain white paper and take a clear photo. It's saved to your profile, so you only do this once."));
+  mySig.append(ms, hrSigBox(function () { rerender(); }));
+  card.appendChild(mySig);
   var need = HR.policies.filter(function (p) { return p.needs_sign; });
   var done = need.filter(function (p) { return hrPolicyState(p, HR.signs) === "done"; }).length;
   var top = hrEl("div", "hr-mini"); top.style.margin = "4px 0 10px";
@@ -1096,7 +1195,7 @@ function hrRenderPolicies(card, rerender) {
         if (name.length < 2) { hrToast("Add your full name in About you first"); return; }
         up.disabled = true; up.textContent = "Uploading…";
         var docRow = await hrUpload("policy", file);
-        if (docRow && await hrSign(p, name, docRow.id)) hrToast("Signed copy saved");
+        if (docRow && await hrSign(p, name, hrMyPlace(), null, docRow.id)) hrToast("Signed copy saved");
         rerender();
       };
       acts.append(up, inp);
@@ -1105,34 +1204,55 @@ function hrRenderPolicies(card, rerender) {
     card.appendChild(row);
   });
 }
-function hrPolicyDialog(p, after) {
-  var html = hrPolicyHtml(p, HR.rec && HR.rec.details, HR.company, HR.policies);
+// read a policy and sign it. ctx is for HR looking at someone else's (read only)
+function hrPolicyDialog(p, after, ctx) {
+  ctx = ctx || { signs: HR.signs, details: HR.rec && HR.rec.details, docs: HR.docs, company: HR.company, policies: HR.policies, mine: true };
+  var html = hrPolicyHtml(p, ctx.details, ctx.company, ctx.policies);
   var ov = hrEl("div", "hr-ask"), bx = hrEl("div", "box"); ov.setAttribute("data-plain", "");
   bx.style.cssText = "width:min(860px,100%);max-height:94vh;display:flex;flex-direction:column";
   var head = hrEl("div", "hr-top"); head.style.margin = "0";
-  var h = hrEl("h3", null, p.title); h.style.flex = "1"; head.append(h, hrPolicyChip(p, HR.signs));
+  var h = hrEl("h3", null, p.title); h.style.flex = "1"; head.append(h, hrPolicyChip(p, ctx.signs));
   bx.appendChild(head);
   var view = hrEl("div", "hr-contract"); view.style.cssText = "margin:10px 0;flex:1;max-height:none;min-height:0"; view.innerHTML = html;
   bx.appendChild(view);
-  var st = hrPolicyState(p, HR.signs);
-  if (p.needs_sign && st !== "done") {
-    var sign = hrEl("div"); sign.style.cssText = "display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:10px";
+  var st = hrPolicyState(p, ctx.signs), s = hrSignOf(p, ctx.signs);
+  // already signed: stamp the page with the signature that was used
+  if (s && s.method !== "upload") {
+    var sd = s.sig_doc && (ctx.docs || []).find(function (z) { return z.id === s.sig_doc; });
+    var stamp = function (img) { html = hrPolicyHtml(p, ctx.details, ctx.company, ctx.policies) + hrSigBlock(s.signed_name, hrDate(s.signed_at), s.place, img); view.innerHTML = html; };
+    stamp(null);
+    if (sd) hrImgData(sd.path).then(stamp).catch(function () { });
+  }
+  var canSign = ctx.mine && p.needs_sign && st !== "done";
+  if (canSign) {
+    var sign = hrEl("div"); sign.style.cssText = "display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:10px";
     var lab = hrEl("label", "hr-check"); var cb = hrEl("input"); cb.type = "checkbox";
     lab.append(cb, document.createTextNode("I have read and understood this policy, and I agree to follow it."));
-    var nm = hrEl("input", "login-input"); nm.placeholder = "Type your full name to sign"; nm.value = ""; nm.setAttribute("aria-label", "Your full name");
-    sign.append(lab, nm); bx.appendChild(sign);
+    var grid = hrEl("div", "hr-signgrid");
+    var drawSig = function () { var old = grid.querySelector(".hr-sig"); var nb = hrSigBox(drawSig); if (old) old.replaceWith(nb); else grid.prepend(nb); };
+    var meta = hrEl("div", "meta");
+    var name = hrMyName();
+    meta.appendChild(hrEl("div", null, "Name: ")).appendChild(hrEl("b", null, name || "Add it in About you"));
+    meta.appendChild(hrEl("div", null, "Date: ")).appendChild(hrEl("b", null, hrDate(new Date().toISOString())));
+    var pl = hrEl("input", "login-input"); pl.placeholder = "City"; pl.value = hrMyPlace(); pl.setAttribute("aria-label", "Place");
+    var plr = hrEl("label", "pl"); plr.append(document.createTextNode("Place "), pl); meta.appendChild(plr);
+    grid.appendChild(meta); drawSig();
+    sign.append(lab, grid); bx.appendChild(sign);
   }
   var row = hrEl("div", "hr-foot");
   var pr = hrEl("button", "btn", "🖨 Print or save as PDF"); pr.onclick = function () { hrPrint(html, p.title); };
   var cl = hrEl("button", "btn", "Close"); cl.onclick = function () { ov.remove(); };
   row.append(pr, hrEl("div", "grow"), cl);
-  if (p.needs_sign && st !== "done") {
-    var go = hrEl("button", "btn save", "Sign");
+  if (canSign) {
+    var go = hrEl("button", "btn save", "✍️ Sign");
     go.onclick = async function () {
+      var sig = hrSigOf(HR.docs);
       if (!cb.checked) { hrToast("Tick the box first"); return; }
-      if (nm.value.trim().length < 2) { hrToast("Type your full name"); nm.focus(); return; }
+      if (name.length < 2) { hrToast("Add your full name in My HR file → About you first"); return; }
+      if (!sig) { hrToast("Upload a photo of your signature first"); return; }
+      if (pl.value.trim().length < 2) { hrToast("Add the place (your city)"); pl.focus(); return; }
       go.disabled = true;
-      if (await hrSign(p, nm.value.trim(), null)) { ov.remove(); hrToast("Signed: " + p.title); if (after) after(); }
+      if (await hrSign(p, name, pl.value.trim(), sig.id, null)) { ov.remove(); hrToast("Signed: " + p.title); if (after) after(); }
       else go.disabled = false;
     };
     row.appendChild(go);
