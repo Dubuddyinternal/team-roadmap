@@ -19216,6 +19216,7 @@ function adminSections(){
     // HR: one dropdown in the sidebar (My HR file lives in the profile menu)
     { k:"hr",          ico:"🗂️", lbl:"Employees", group:"hr", show: !!me && !!SUPA && typeof renderAdminHr === "function" && (hasPerm("manage_hr") || hasPerm("view_hr")), render: renderAdminHr },
     { k:"hrpolicies",  ico:"📜", lbl:"Policies", group:"hr", show: !!me && !!SUPA && typeof renderAdminPolicyLibrary === "function" && hasPerm("manage_policies"), render: renderAdminPolicyLibrary },
+    { k:"hrequipment", ico:"🎒", lbl:"Equipment", group:"hr", show: !!me && !!SUPA && typeof renderAdminEquipment === "function" && (hasPerm("manage_hr") || hasPerm("view_hr")), render: renderAdminEquipment },
     { k:"hrsettings",  ico:"🏢", lbl:"Company and offer letter", group:"hr", show: !!me && !!SUPA && typeof renderAdminHrSettings === "function" && hasPerm("hr_settings"), render: renderAdminHrSettings },
     { k:"lms",         ico:"🎓", lbl:"LMS", group:"hr",  show: hasPerm("manage_learning") && !!SUPA, render: renderAdminLms },
     // Product: ideas from students and the team
