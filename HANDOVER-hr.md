@@ -58,7 +58,7 @@ Files can be PDF, JPG, PNG or WEBP, up to 10 MB each.
 
 ## Company policies (stage 18b)
 
-- **Where:** Administration → 📜 Company policies (everyone can read), and step 8 of My HR file. HR sees "x of y signed" per person in Employees (HR).
+- **Where:** Administration → 📜 Company policies (everyone can read), and in My HR file just before Check and submit. All of them must be signed before the file can be submitted (`hr_save`, stage 18f). HR sees "x of y signed" per person in Employees (HR).
 - **Signing:** a person uploads a photo of their signature once (saved to their profile as an `hr_documents` row of kind `signature`; the page whitens the paper and crops it). After that, **Sign** stamps the policy with that signature, their name, today's date and the place (their city from About you, editable). They can still upload a signed scan instead. Both are stored in `hr_policy_signs` against the policy's version; HR can open each signed policy from the person's page.
 - **Editing:** HR presses **📜 Policies** → edit. **Save** fixes wording without asking anyone to re-sign; **Save as a new version** asks everyone to sign again.
 - **Placeholders:** `{company}`, `{company_short}`, `{full_name}`, `{date}`, `{policy_list}` (acknowledgement only). Change the short company name in ⚙️ Company and offer letter.

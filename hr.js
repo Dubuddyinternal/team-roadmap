@@ -75,8 +75,8 @@ var HR_STEPS = [
     { k: "prev_to", lbl: "To", type: "month" },
     { k: "linkedin", lbl: "LinkedIn profile (optional)", ph: "https://linkedin.com/in/…" } ] },
   { k: "docs", ico: "📎", lbl: "Documents" },
-  { k: "submit", ico: "✅", lbl: "Check and submit" },
   { k: "policies", ico: "📜", lbl: "Company policies" },
+  { k: "submit", ico: "✅", lbl: "Check and submit" },
   { k: "contract", ico: "✍️", lbl: "Offer letter" }
 ];
 var HR_DOCS = [
@@ -491,7 +491,7 @@ async function openMyHrFile(step) {
   page.style.display = "block";
   try { await hrLoadMine(); } catch (e) { page.innerHTML = ""; hrClosePage(); hrToast("Couldn't open your HR file: " + hrErr(e) + (/hr_records/.test(hrErr(e)) ? " (run supabase/stage18a_hr_files.sql)" : "")); return; }
   var st = HR.rec.status;
-  HR.step = step != null ? step : (st === "contract_sent" || st === "signed" || st === "complete") ? HR_STEPS.length - 1 : st === "submitted" ? 7 : 0;
+  HR.step = step != null ? step : (st === "contract_sent" || st === "signed" || st === "complete") ? HR_STEPS.length - 1 : st === "submitted" ? hrStepIx("submit") : 0;
   hrRenderMine();
 }
 async function hrClosePage() {
@@ -521,7 +521,7 @@ function hrRenderMine() {
   if (rec.status === "changes" && rec.hr_note) {
     var n = hrEl("div", "hr-note warn"); n.textContent = "HR asked for changes: " + rec.hr_note; shell.appendChild(n);
   } else if (rec.status === "submitted") {
-    shell.appendChild(hrEl("div", "hr-note info", "Thanks! HR is checking your file. You'll get a 🔔 and an email when your offer letter is ready. Meanwhile, you can read and sign the company policies. Your details are locked while HR checks them."));
+    shell.appendChild(hrEl("div", "hr-note info", "Thanks! HR is checking your file. You'll get a 🔔 and an email when your offer letter is ready. Your details are locked while HR checks them."));
   } else if (rec.status === "complete") {
     shell.appendChild(hrEl("div", "hr-note ok", "✅ Your HR file is complete. Nothing more is needed from you."));
   }
@@ -667,10 +667,13 @@ function hrRenderDocs(card, editable) {
     card.appendChild(row);
   });
 }
+function hrStepIx(k) { return HR_STEPS.findIndex(function (z) { return z.k === k; }); }
 function hrMissing(d) {
   var out = [];
   HR_STEPS.forEach(function (s, i) { (s.fields || []).forEach(function (f) { if (f.type !== "check" && hrCheck(f, d[f.k], d)) out.push({ step: i, txt: s.lbl + ": " + f.lbl + (hrCheck(f, d[f.k], d) === "Required" ? "" : " — " + hrCheck(f, d[f.k], d)) }); }); });
-  HR_DOCS.forEach(function (x) { if (x.req && !hrDocsHave(HR.docs, x.k)) out.push({ step: 6, txt: "Upload: " + x.lbl }); });
+  HR_DOCS.forEach(function (x) { if (x.req && !hrDocsHave(HR.docs, x.k)) out.push({ step: hrStepIx("docs"), txt: "Upload: " + x.lbl }); });
+  // every policy has to be signed before the file goes to HR
+  (HR.policies || []).forEach(function (p) { var st = hrPolicyState(p, HR.signs); if (st === "todo" || st === "old") out.push({ step: hrStepIx("policies"), txt: "Sign: " + p.title }); });
   return out;
 }
 function hrRenderSubmit(card, d, editable) {
@@ -680,9 +683,8 @@ function hrRenderSubmit(card, d, editable) {
     done.append(hrEl("div", "big", "🎉"), hrEl("b", null, "Submitted to HR" + (HR.rec.submitted_at ? " on " + hrDate(HR.rec.submitted_at) : "")),
       hrEl("div", "h", HR.rec.status === "submitted" ? "HR is checking your file now. You'll get a 🔔 and an email when your offer letter is ready." : "HR has your file."));
     card.appendChild(done);
-    var pol = HR_STEPS.findIndex(function (z) { return z.k === "policies"; });
-    var nx = hrEl("button", "btn save", "Next: sign the company policies →"); nx.style.marginTop = "12px";
-    nx.onclick = function () { HR.step = pol; hrRenderMine(); };
+    var nx = hrEl("button", "btn save", "See what happens next →"); nx.style.marginTop = "12px";
+    nx.onclick = function () { HR.step = hrStepIx("contract"); hrRenderMine(); };
     card.appendChild(nx);
     return;
   }
@@ -732,7 +734,7 @@ function hrRenderContract(card) {
     var sent = st === "submitted";
     card.appendChild(hrEl("div", "hint", "Your offer letter will show up here. This is how it gets to you:"));
     var steps = hrEl("div", "hr-wait");
-    [[sent ? "✅" : "1", "Fill in your details and press Submit", sent ? "Done" : "In Check and submit"],
+    [[sent ? "✅" : "1", "Fill in your details, sign the company policies and press Submit", sent ? "Done" : "In Check and submit"],
      ["2", "HR adds your job terms and sends the offer letter", sent ? "HR is on it. You'll get a 🔔 and an email" : "After you submit"],
      ["3", "Read it here and sign it with your saved signature", "One click"]].forEach(function (x, i) {
       var r = hrEl("div", "r" + (sent && i === 1 ? " now" : !sent && i === 0 ? " now" : ""));
@@ -740,7 +742,7 @@ function hrRenderContract(card) {
       r.append(n, t); steps.appendChild(r);
     });
     card.appendChild(steps);
-    if (!sent) { var go = hrEl("button", "btn save", "Go to Check and submit →"); go.style.marginTop = "12px"; go.onclick = function () { HR.step = HR_STEPS.findIndex(function (z) { return z.k === "submit"; }); hrRenderMine(); }; card.appendChild(go); }
+    if (!sent) { var go = hrEl("button", "btn save", "Go to Check and submit →"); go.style.marginTop = "12px"; go.onclick = function () { HR.step = hrStepIx("submit"); hrRenderMine(); }; card.appendChild(go); }
     return;
   }
   if (st === "complete") card.appendChild(hrEl("div", "hr-note ok", "Signed and checked. ✅"));
