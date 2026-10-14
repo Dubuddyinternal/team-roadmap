@@ -309,13 +309,8 @@ function renderAdminAccRequests(wrap) {
 
 /* ---------- Accounts → Payroll ---------- */
 function renderAdminAccPayroll(wrap) {
-  ACC.month = ACC.month || accMonthNow();
-  var head = accEl("div", "module-head"); head.style.cssText += ";display:flex;align-items:center;gap:10px;flex-wrap:wrap";
-  head.appendChild(accEl("h2", null, "Payroll"));
-  var mi = accEl("input"); mi.type = "month"; mi.value = ACC.month; mi.style.cssText = "margin-left:auto;padding:8px 10px;border:1px solid var(--line-strong);border-radius:10px;font:inherit";
-  mi.onchange = function () { if (mi.value) { ACC.month = mi.value; renderAdminPage(); } };
-  head.appendChild(mi); wrap.appendChild(head);
-  wrap.appendChild(accEl("div", "hint", "Salaries start from the CTC in each person's HR job terms, divided by 12. Approved reimbursements waiting to be paid are added in. Add a bonus or deductions, approve the month, pay it from the bank, then mark it paid."));
+  var head = accEl("div", "module-head"); head.appendChild(accEl("h2", null, "Payroll")); accMonthPicker(head); wrap.appendChild(head);
+  wrap.appendChild(accEl("div", "hint", "Salaries start from the CTC in each person's HR job terms, divided by 12. Approved bonuses for the month and approved reimbursements waiting to be paid are added in. Add a bonus or deductions, approve the month, pay it from the bank, then mark it paid."));
   var body = accEl("div"); body.appendChild(accEl("div", "hint", "Loading…")); wrap.appendChild(body);
   var draw = async function () {
     var r = await SUPA.from("acc_payroll").select("*").eq("month", ACC.month);
@@ -409,3 +404,152 @@ function renderAdminAccPayroll(wrap) {
   };
   draw();
 }
+
+/* ---------- Accounts → Overview: what's paid, what's to pay, what's waiting ---------- */
+function accMonthPicker(head) {
+  ACC.month = ACC.month || accMonthNow();
+  var mi = accEl("input"); mi.type = "month"; mi.value = ACC.month; mi.style.cssText = "margin-left:auto;padding:8px 10px;border:1px solid var(--line-strong);border-radius:10px;font:inherit";
+  mi.onchange = function () { if (mi.value) { ACC.month = mi.value; renderAdminPage(); } };
+  head.style.cssText += ";display:flex;align-items:center;gap:10px;flex-wrap:wrap";
+  head.appendChild(mi);
+}
+function renderAdminAccOverview(wrap) {
+  var head = accEl("div", "module-head"); head.appendChild(accEl("h2", null, "Accounts overview")); accMonthPicker(head); wrap.appendChild(head);
+  var body = accEl("div"); body.appendChild(accEl("div", "hint", "Loading…")); wrap.appendChild(body);
+  var M = ACC.month;
+  Promise.all([SUPA.from("acc_requests").select("*").limit(2000), SUPA.from("acc_payroll").select("*").eq("month", M), SUPA.from("acc_bonuses").select("*").eq("month", M)]).then(function (res) {
+    body.innerHTML = "";
+    if (res[0].error) { body.appendChild(accEl("div", "hr-note warn", "Run supabase/stage19a_accounts.sql first (" + accErr(res[0].error) + ")")); return; }
+    var reqs = res[0].data || [], pay = res[1].data || [], bon = res[2].error ? [] : (res[2].data || []);
+    // rows: [waiting approval, to pay, paid in the month]
+    var T = { sal: [0, 0, 0], bonus: [0, 0, 0], reimb: [0, 0, 0], vendor: [0, 0, 0] };
+    var col = { draft: 0, pending: 0, approved: 1, paid: 2 };
+    pay.forEach(function (p) { var c = col[p.status]; T.sal[c] += Number(p.base) - Number(p.deductions); T.bonus[c] += Number(p.bonus); });
+    var inPayroll = {}; pay.forEach(function (p) { inPayroll[p.user_id] = 1; });
+    bon.forEach(function (b) { if (inPayroll[b.user_id] || b.status === "cancelled") return; T.bonus[col[b.status]] += Number(b.amount); });
+    reqs.forEach(function (r) {
+      var k = r.kind === "vendor" ? "vendor" : "reimb";
+      if (r.status === "pending") T[k][0] += Number(r.amount);
+      else if (r.status === "approved") T[k][1] += Number(r.amount);
+      else if (r.status === "paid" && String(r.paid_at || "").slice(0, 7) === M) T[k][2] += Number(r.amount);
+    });
+    var sumCol = function (i) { return ["sal", "bonus", "reimb", "vendor"].reduce(function (a, k) { return a + T[k][i]; }, 0); };
+    var grand = sumCol(0) + sumCol(1) + sumCol(2);
+    var stats = accEl("div", "acc-stats");
+    [[accInr(grand), "total payments · " + accMonthLabel(M)], [accInr(sumCol(2)), "paid"], [accInr(sumCol(1)), "approved, to pay"], [accInr(sumCol(0)), "waiting for approval"]].forEach(function (x, i) {
+      var s = accEl("div", "s"); if (i === 0) s.style.cssText = "background:var(--indigo-soft);border-color:#F5CDB6";
+      s.append(accEl("b", null, x[0]), accEl("span", null, x[1])); stats.appendChild(s);
+    });
+    body.appendChild(stats);
+    var card = accEl("div", "hr-card acc-tbl-wrap"); card.setAttribute("data-plain", "");
+    var t = accEl("table", "acc-tbl"), hr = accEl("tr");
+    ["", "Waiting for approval", "To pay", "Paid", "Total"].forEach(function (h, i) { hr.appendChild(accEl("th", i ? "num" : "", h)); });
+    var th = accEl("thead"); th.appendChild(hr); t.appendChild(th);
+    var tb = accEl("tbody");
+    [["sal", "💵 Salaries", "accpayroll"], ["bonus", "🎯 Bonuses", "accbonuses"], ["reimb", "🧾 Reimbursements", "accrequests"], ["vendor", "🤝 Vendor payments", "accrequests"]].forEach(function (x) {
+      var tr = accEl("tr"), name = accEl("td"), a = accEl("button", "hr-reveal", x[1]); a.style.cssText = "margin:0;font-weight:700;color:var(--ink)";
+      a.onclick = function () { adminView = x[2]; renderAdminPage(); }; name.appendChild(a); tr.appendChild(name);
+      T[x[0]].forEach(function (v) { tr.appendChild(accEl("td", "num", v ? accInr(v) : "—")); });
+      tr.appendChild(accEl("td", "num", accInr(T[x[0]][0] + T[x[0]][1] + T[x[0]][2])));
+      tb.appendChild(tr);
+    });
+    t.appendChild(tb);
+    var tf = accEl("tfoot"), fr = accEl("tr"); fr.appendChild(accEl("td", null, "Total"));
+    [0, 1, 2].forEach(function (i) { fr.appendChild(accEl("td", "num", accInr(sumCol(i)))); }); fr.appendChild(accEl("td", "num", accInr(grand)));
+    tf.appendChild(fr); t.appendChild(tf); card.appendChild(t); body.appendChild(card);
+    body.appendChild(accEl("div", "hint", "Salaries and bonuses are for " + accMonthLabel(M) + "'s payroll. Reimbursements and vendor payments show everything still waiting or to pay, and what was paid in " + accMonthLabel(M) + ". Reimbursements paid with a salary count once, as reimbursements."));
+  });
+}
+
+/* ---------- Accounts → Bonuses ---------- */
+function accBonusDialog(b, after) {
+  var isNew = !b; b = b || { month: ACC.month || accMonthNow(), reason: "", units: null, rate: null, amount: null };
+  var ov = accEl("div", "hr-ask"), bx = accEl("div", "box"); ov.setAttribute("data-plain", ""); bx.style.width = "min(560px,100%)";
+  bx.appendChild(accEl("h3", null, isNew ? "Add a bonus" : "Edit bonus · " + accName(b.user_id)));
+  var f = accEl("div", "hr-fields"); f.style.marginTop = "10px";
+  var fld = function (lbl, inp, wide) { var w = accEl("div", "field" + (wide ? " wide" : "")); w.append(accEl("label", null, lbl), inp); f.appendChild(w); return w; };
+  var who = accEl("select"); var o0 = accEl("option", null, "Who?"); o0.value = ""; who.appendChild(o0);
+  (typeof hrTeamPeople === "function" ? hrTeamPeople() : []).forEach(function (u) { var o = accEl("option", null, userDisplayName(u)); o.value = u.id; who.appendChild(o); });
+  if (!isNew) { who.value = b.user_id; who.disabled = true; }
+  var mo = accEl("input"); mo.type = "month"; mo.value = b.month;
+  var rs = accEl("input"); rs.value = b.reason || ""; rs.placeholder = "e.g. Sales incentive: CUET course sales";
+  var mode = b.units != null && b.rate != null ? "units" : "fixed";
+  var seg = accEl("div", "acc-tabs"); seg.style.margin = "0";
+  var un = accEl("input"); un.type = "number"; un.min = "0"; un.step = "1"; un.placeholder = "e.g. 40"; un.value = b.units != null ? b.units : "";
+  var ra = accEl("input"); ra.type = "number"; ra.min = "0"; ra.step = "1"; ra.placeholder = "e.g. 200"; ra.value = b.rate != null ? b.rate : "";
+  var am = accEl("input"); am.type = "number"; am.min = "1"; am.step = "1"; am.placeholder = "e.g. 5000"; am.value = mode === "fixed" && b.amount ? b.amount : "";
+  fld("Person", who); fld("Month", mo); fld("What it's for", rs, true);
+  var segW = fld("How", seg, true);
+  var unW = fld("Count (e.g. sales)", un), raW = fld("₹ each", ra), amW = fld("Amount (₹)", am);
+  var total = accEl("div", "hr-rule-prev"); total.style.marginTop = "10px";
+  bx.append(f, total);
+  var bs = {};
+  [["fixed", "Fixed amount"], ["units", "Count × rate"]].forEach(function (x) { var btn = accEl("button", "", x[1]); btn.type = "button"; btn.onclick = function () { mode = x[0]; draw(); }; bs[x[0]] = btn; seg.appendChild(btn); });
+  function amount() { return mode === "units" ? (parseFloat(un.value) || 0) * (parseFloat(ra.value) || 0) : (parseFloat(am.value) || 0); }
+  function draw() {
+    Object.keys(bs).forEach(function (k) { bs[k].classList.toggle("on", k === mode); });
+    unW.hidden = raW.hidden = mode !== "units"; amW.hidden = mode !== "fixed";
+    total.textContent = "Bonus: " + accInr(amount()) + (mode === "units" && un.value && ra.value ? " (" + un.value + " × " + accInr(ra.value) + ")" : "");
+  }
+  [un, ra, am].forEach(function (x) { x.oninput = draw; }); draw();
+  var row = accEl("div", "hr-foot");
+  var cl = accEl("button", "btn", "Cancel"); cl.onclick = function () { ov.remove(); };
+  var sv = accEl("button", "btn save", "Save");
+  sv.onclick = async function () {
+    if (!who.value) { accToast("Pick a person"); return; }
+    if (rs.value.trim().length < 2) { accToast("Say what it's for"); rs.focus(); return; }
+    if (!(amount() > 0)) { accToast("The bonus is ₹0"); return; }
+    sv.disabled = true;
+    var x = await SUPA.rpc("acc_bonus_save", { p_id: isNew ? null : b.id, p_user: who.value, p_month: mo.value, p_reason: rs.value.trim(),
+      p_units: mode === "units" ? parseFloat(un.value) : null, p_rate: mode === "units" ? parseFloat(ra.value) : null, p_amount: mode === "fixed" ? parseFloat(am.value) : null });
+    if (x.error) { accToast(accErr(x.error)); sv.disabled = false; return; }
+    ov.remove(); accToast("Saved"); if (after) after();
+  };
+  row.append(accEl("div", "grow"), cl, sv); bx.appendChild(row); ov.appendChild(bx); document.body.appendChild(ov);
+}
+function renderAdminAccBonuses(wrap) {
+  var head = accEl("div", "module-head"); head.appendChild(accEl("h2", null, "Bonuses")); accMonthPicker(head);
+  var add = accEl("button", "btn save", "＋ Add a bonus"); add.onclick = function () { accBonusDialog(null, function () { renderAdminPage(); }); }; head.appendChild(add);
+  wrap.appendChild(head);
+  wrap.appendChild(accEl("div", "hint", "A fixed amount, or a count × rate (e.g. 40 sales × ₹200). Approved bonuses go into the month's payroll when you fill or refresh it, and are paid with the salary."));
+  var body = accEl("div"); body.appendChild(accEl("div", "hint", "Loading…")); wrap.appendChild(body);
+  var M = ACC.month;
+  SUPA.from("acc_bonuses").select("*").eq("month", M).order("created_at", { ascending: false }).then(function (r) {
+    body.innerHTML = "";
+    if (r.error) { body.appendChild(accEl("div", "hr-note warn", "Run supabase/stage19b_accounts_bonuses.sql first (" + accErr(r.error) + ")")); return; }
+    var list = (r.data || []).filter(function (b) { return b.status !== "cancelled"; });
+    var by = function (st) { return list.filter(function (b) { return b.status === st; }); };
+    var tot = function (a) { return a.reduce(function (s, b) { return s + Number(b.amount); }, 0); };
+    var stats = accEl("div", "acc-stats");
+    [[accInr(tot(list)), "bonuses · " + accMonthLabel(M)], [accInr(tot(by("draft"))), "draft"], [accInr(tot(by("approved"))), "approved, goes into payroll"], [accInr(tot(by("paid"))), "paid"]].forEach(function (x) {
+      var s = accEl("div", "s"); s.append(accEl("b", null, x[0]), accEl("span", null, x[1])); stats.appendChild(s);
+    });
+    body.appendChild(stats);
+    var bar = accEl("div", "hr-foot"); bar.style.margin = "0 0 10px";
+    if (by("draft").length) {
+      var ap = accEl("button", "btn save", "Approve " + by("draft").length);
+      ap.onclick = async function () { var x = await SUPA.rpc("acc_bonus_status", { p_ids: by("draft").map(function (b) { return b.id; }), p_status: "approved" }); if (x.error) { accToast(accErr(x.error)); return; } accToast("Approved. Refresh the payroll to include them."); renderAdminPage(); };
+      bar.append(accEl("div", "grow"), ap); body.appendChild(bar);
+    }
+    var card = accEl("div", "hr-card"); card.setAttribute("data-plain", "");
+    if (!list.length) card.appendChild(accEl("div", "hint", "No bonuses for " + accMonthLabel(M) + " yet."));
+    list.forEach(function (b) {
+      var row = accEl("div", "acc-row"), main = accEl("div", "main"), side = accEl("div", "side");
+      main.append(accEl("div", "t", accName(b.user_id)), accEl("div", "h", b.reason + (b.units != null && b.rate != null ? " · " + Number(b.units) + " × " + accInr(b.rate) : "")));
+      side.append(accEl("div", "acc-amt", accInr(b.amount)), accChip(b.status === "approved" ? "approved_b" : b.status));
+      var a = accEl("div", "acc-acts");
+      if (b.status === "draft") {
+        var e = accEl("button", "btn", "Edit"); e.onclick = function () { accBonusDialog(b, function () { renderAdminPage(); }); };
+        var c = accEl("button", "btn", "Remove"); c.onclick = async function () { var x = await SUPA.rpc("acc_bonus_status", { p_ids: [b.id], p_status: "cancelled" }); if (x.error) { accToast(accErr(x.error)); return; } renderAdminPage(); };
+        a.append(c, e);
+      } else if (b.status === "approved") {
+        var u = accEl("button", "btn", "Back to draft"); u.onclick = async function () { var x = await SUPA.rpc("acc_bonus_status", { p_ids: [b.id], p_status: "draft" }); if (x.error) { accToast(accErr(x.error)); return; } renderAdminPage(); };
+        a.appendChild(u);
+      }
+      if (a.children.length) side.appendChild(a);
+      row.append(main, side); card.appendChild(row);
+    });
+    body.appendChild(card);
+  });
+}
+ACC_STATUS.approved_b = ["Approved · in payroll", "blue"];

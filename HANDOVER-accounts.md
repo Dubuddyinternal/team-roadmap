@@ -19,6 +19,15 @@ Payment requests, payroll and bank files, in Administration. Built on top of the
   - **Approve** → **Download bank file** → pay → **Mark paid**. This also settles the reimbursements included, and everyone gets a 🔔.
 - **Bank file columns:** Beneficiary name, Account number, IFSC, Bank, UPI ID, Amount, Payment mode (NEFT / RTGS over ₹2 lakh / UPI), Narration, Email. Rearrange the columns to match your bank's bulk template.
 
+- **💰 Accounts → 📊 Overview:** pick a month.
+  - Cards: total payments, then paid / to pay / waiting for approval.
+  - A table splits it by Salaries, Bonuses, Reimbursements and Vendor payments.
+  - Salaries and bonuses come from that month's payroll. Reimbursements and vendor payments show everything still waiting or to pay, plus what was paid that month.
+- **💰 Accounts → 🎯 Bonuses:** a bonus per person and month, as a fixed amount or a count × rate (e.g. 40 sales × ₹200).
+  - **Approve** it, and it goes into that month's payroll when you fill or refresh it (`acc_payroll_fill`).
+  - It's marked paid with the salary, by a trigger on `acc_payroll`.
+  - Database: `supabase/stage19b_accounts_bonuses.sql`.
+
 ## Who can use it
 
 - **Permission "Accounts: payments & payroll"** (`accounts`) in Roles & permissions. It includes seeing people's bank details. Owners and super-admins have it.
@@ -35,5 +44,5 @@ Payment requests, payroll and bank files, in Administration. Built on top of the
 
 - **Cashfree Payouts:** on **Mark paid** (or a new "Pay now"), send the selected rows to Cashfree from an Edge Function. Store the Cashfree reference in `paid_ref`.
 - **Zoho Books:** after a payment is marked paid, push an expense or bill payment (vendor = `payee_name`, account from `category`).
-- **Automatic bonuses:** rules that add to `acc_payroll.bonus` when the month is filled.
+- **Automatic sales bonuses:** feed the count (e.g. sales) from your sales data into `acc_bonus_save` with the agreed rate, instead of typing it.
 - **TDS** on vendor payments using `payee_pan`.
