@@ -613,8 +613,8 @@ function detailsPane(c){
           <div class="fbox ${f.wide?"wide":""}">
             <label for="f-${f.k}">${esc(f.label)}</label>
             ${f.type==="area"
-              ? `<textarea id="f-${f.k}" data-f="${f.k}" placeholder="${esc(f.ph)}" ${dis}>${esc(c.details[f.k]||"")}</textarea>`
-              : `<input id="f-${f.k}" data-f="${f.k}" value="${esc(c.details[f.k]||"")}" placeholder="${esc(f.ph)}" ${dis}>`}
+              ? `<textarea id="f-${f.k}" data-f="${f.k}" placeholder="${ro?"—":esc(f.ph)}" ${dis}>${esc(c.details[f.k]||"")}</textarea>`
+              : `<input id="f-${f.k}" data-f="${f.k}" value="${esc(c.details[f.k]||"")}" placeholder="${ro?"—":esc(f.ph)}" ${dis}>`}
           </div>`).join("")}
         ${c.extra.map((x,i)=>`
           <div class="fbox custom ${x.wide?"wide":""}">
