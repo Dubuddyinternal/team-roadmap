@@ -12778,7 +12778,8 @@ function renderContentCampaign(){
       soc.sx = soc.sx || {}; soc.sx.cards = soc.sx.cards || [];
       const today = new Date().toISOString().slice(0,10);
       const card = { id:"c"+Date.now().toString(36)+Math.random().toString(36).slice(2,5), ideaId:null, idea:it.name,
-        platform: it.platform==="YouTube" ? "yt" : "ig",
+        // a piece can be on several platforms: the first of YouTube / Instagram it's ticked for decides the board's platform
+        platform: ((it.platforms && it.platforms.length ? it.platforms : [it.platform]).find(p=>p==="YouTube"||p==="Instagram")==="YouTube") ? "yt" : "ig",
         vtype: it.kind==="longvideo" ? "long" : "reel",
         stage:"todo", pre:{ source:"", tool:"", keywords:[], why:it.details||"", title:it.name, desc:"", hashtags:"" },
         post:{ reel:null, thumb:null, postUrl:"" }, scheduled:it.date||null, published:null, acceptedOn:today, metrics:null, override:null,
