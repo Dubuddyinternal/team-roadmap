@@ -19193,12 +19193,13 @@ function adminSections(){
   const me = currentUser(), sup = !!(me && me.super), people = canManagePeople();
   return [
     { k:"users",       ico:"👥", lbl:"Users",                show: people,                         render: renderAdminUsers },
+    { k:"hr",          ico:"🗂️", lbl:"Employees (HR)",       show: !!me && !!SUPA && typeof renderAdminHr === "function" && (sup || hasPerm("manage_hr")), render: renderAdminHr },
+    { k:"myhr",        ico:"🪪", lbl:"My HR file",           show: !!me && !!SUPA && typeof renderAdminMyHr === "function", render: renderAdminMyHr },
     { k:"requests",    ico:"🙋", lbl:"Requests" + (PENDING_REQUESTS ? " (" + PENDING_REQUESTS + ")" : ""), crumb:"Requests",
                                                                         show: hasPerm("approve_requests"),    render: renderAdminRequests },
     { k:"request",     ico:"➕",       lbl:"Request a teammate",   show: hasPerm("request_members"),     render: renderRequestTeammate },
     { k:"notifications", ico:"📣", lbl:"Notifications",      show: hasPerm("send_notifications") && !!SUPA, render: renderAdminNotifications },
     { k:"ideaemails",  ico:"✉️", lbl:"Idea emails",          show: hasPerm("review_student_ideas") && !!SUPA, render: renderAdminIdeaEmails },
-    { k:"hr",          ico:"🗂️", lbl:"Employees (HR)",       show: !!me && !!SUPA && typeof renderAdminHr === "function" && (sup || hasPerm("manage_hr")), render: renderAdminHr },
     { k:"myfeedback",  ico:"📝", lbl:"My monthly feedback",  show: !!me && !!SUPA && typeof renderAdminMyFeedback === "function", render: renderAdminMyFeedback },
     { k:"sendbox",     ico:"📮", lbl:"Send to " + (typeof fbBoss === "function" ? fbBoss() : "Sumit"), crumb:"Send to Sumit",
                                                                         show: !!me && !!SUPA && !sup && typeof renderAdminSendBox === "function", render: renderAdminSendBox },
