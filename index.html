@@ -19211,6 +19211,8 @@ function adminSections(){
     { k:"request",     ico:"➕",       lbl:"Request a teammate",   show: hasPerm("request_members"),     group:"it", render: renderRequestTeammate },
     { k:"roadmaps",    ico:"🗺️", lbl:"Roadmaps",             show: hasPerm("add_roadmaps"),        group:"it", render: renderAdminRoadmaps },
     { k:"spaces",      ico:"🗂️", lbl:"Spaces",               show: hasPerm("add_spaces"),          group:"it", render: renderAdminSpaces },
+    { k:"reviewgames", ico:"\uD83D\uDD79\uFE0F", lbl:"Review games" + (gamesWaiting() ? " (" + gamesWaiting() + ")" : ""), crumb:"Review games",
+                                                                        show: sup,                            group:"it", render: renderReviewGames },
     // HR: one dropdown in the sidebar (My HR file lives in the profile menu)
     { k:"hr",          ico:"🗂️", lbl:"Employees", group:"hr", show: !!me && !!SUPA && typeof renderAdminHr === "function" && (hasPerm("manage_hr") || hasPerm("view_hr")), render: renderAdminHr },
     { k:"hrpolicies",  ico:"📜", lbl:"Policies", group:"hr", show: !!me && !!SUPA && typeof renderAdminPolicyLibrary === "function" && hasPerm("manage_policies"), render: renderAdminPolicyLibrary },
@@ -19228,8 +19230,6 @@ function adminSections(){
     { k:"myfeedback",  ico:"📝", lbl:"My monthly feedback",  show: !!me && !!SUPA && typeof renderAdminMyFeedback === "function", group:"me", render: renderAdminMyFeedback },
     { k:"notifications", ico:"📣", lbl:"Notifications",      show: hasPerm("send_notifications") && !!SUPA, group:"me", render: renderAdminNotifications },
     { k:"mygames",     ico:"\uD83C\uDFAE", lbl:"My games",             show: hasPerm("create_games"),        group:"me", render: renderMyGames },
-    { k:"reviewgames", ico:"\uD83D\uDD79\uFE0F", lbl:"Review games" + (gamesWaiting() ? " (" + gamesWaiting() + ")" : ""), crumb:"Review games",
-                                                                        show: sup,                            render: renderReviewGames },
     { k:"danger",      ico:"⚠️", lbl:"Danger zone",          show: sup,                            render: renderAdminDanger },
   ].filter(x=> x.show);
 }
