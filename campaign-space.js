@@ -836,7 +836,16 @@ const ACTIONS = {
   notification:{ label:"Push Notification", mode:"link", url:FCM_URL },
   other:       { label:"",                  mode:"none" }
 };
-const actionFor = it => ACTIONS[it.kind] || ACTIONS.other;
+/* YouTube and Instagram pieces always go to Content Process; otherwise a button set on the piece
+   (its own label + link) wins over the type's default */
+const PROCESS_PLATFORMS = ["YouTube","Instagram"];
+const safeUrl = u => { u = String(u||"").trim(); if(!u) return ""; if(!/^[a-z][a-z0-9+.-]*:/i.test(u)) u = "https://" + u; return /^https?:\/\//i.test(u) ? u : ""; };
+const actionFor = it => {
+  if(PROCESS_PLATFORMS.includes(it.platform)) return ACTIONS.reel;
+  const url = safeUrl(it.actionUrl);
+  if(url) return { label: (it.actionLabel||"").trim() || "Open link", mode:"link", url };
+  return ACTIONS[it.kind] || ACTIONS.other;
+};
 const sortItems = its => [...its].sort((a,b)=>(a.date||"9999").localeCompare(b.date||"9999"));
 
 /* ------------------------------------------------------------ data shape */
@@ -969,14 +978,15 @@ function openDialog({ title, sub, fields, okLabel="Save", onSave }){
            <p class="imghint">A square one works best — it is cropped to a square and kept with the campaign.</p>
          </div>`
       : `<input id="d-${f.k}" value="${esc(f.value||"")}" placeholder="${esc(f.ph||"")}">`;
-  const hidden = f => f.showIf && fields.find(x=>x.k===f.showIf.field)?.value !== f.showIf.equals;
+  const shows = (f, v) => f.showIf.notIn ? !f.showIf.notIn.includes(v) : v === f.showIf.equals;
+  const hidden = f => f.showIf && !shows(f, fields.find(x=>x.k===f.showIf.field)?.value);
   $("#dlgBody").innerHTML = fields.map(f=>`
     <div class="fbox" id="w-${f.k}" style="background:var(--surface-4);margin-bottom:10px" ${hidden(f)?"hidden":""}>
       <label for="d-${f.k}">${esc(f.label)}</label>${ctl(f)}
     </div>`).join("");
   fields.filter(f=>f.showIf).forEach(f=>{
     const src=$("#d-"+f.showIf.field); if(!src) return;
-    src.addEventListener("change",()=>{ const w=$("#w-"+f.k); w.hidden = src.value!==f.showIf.equals; if(!w.hidden) $("#d-"+f.k).focus(); });
+    src.addEventListener("change",()=>{ const w=$("#w-"+f.k), was=w.hidden; w.hidden = !shows(f, src.value); if(was && !w.hidden && !f.showIf.notIn) $("#d-"+f.k).focus(); });
   });
   $("#dlgBody").querySelectorAll("[data-sw]").forEach(wrap=>{
     const hid = $("#d-"+wrap.dataset.sw);
@@ -1611,10 +1621,16 @@ function itemDialog(c, idx, pre){
       { k:"platform", label:"Platform / Category", type:"select", value:it.platform, opts:PLATFORMS.map(p=>[p,p]) },
       { k:"ownerId", label:"Accountable person", type:"select", value:it.ownerId||"",
         opts:[["","— nobody yet —"]].concat(ppl.map(p=>[p.id, p.name + (p.role?" · "+p.role:"")])) },
-      { k:"details", label:"More details", type:"area", value:it.details, ph:"The hook, where it links to — anything the person making it needs." }
+      { k:"details", label:"More details", type:"area", value:it.details, ph:"The hook, where it links to — anything the person making it needs." },
+      { k:"actionLabel", label:"Action — what the button says (YouTube and Instagram pieces always send to Content Process)",
+        ph:(ACTIONS[it.kind]||{}).label || "Open Canva", value:it.actionLabel||"", showIf:{ field:"platform", notIn:PROCESS_PLATFORMS } },
+      { k:"actionUrl", label:"URL — where the button takes them", ph:"https://…", value:it.actionUrl||"", showIf:{ field:"platform", notIn:PROCESS_PLATFORMS } }
     ],
     onSave:(v)=>{
       if(!v.name){ toast("The item needs a name"); return false; }
+      if(v.actionUrl && !safeUrl(v.actionUrl)){ toast("The URL has to be a web link (https://…)"); return false; }
+      if(v.actionUrl) v.actionUrl = safeUrl(v.actionUrl);
+      if(v.actionLabel && !v.actionUrl && !PROCESS_PLATFORMS.includes(v.platform)){ toast("Add the URL the button opens"); return false; }
       const before = isNew ? "" : (it.ownerId||"");
       let target;
       if(isNew){ target = Object.assign({ id:uid("ci") }, v); c.items.push(target); }
@@ -1680,8 +1696,8 @@ function assignPane(c){
           </td></tr>`;
       }).join("")}</tbody>
     </table></div>
-    <p class="hint" style="margin:11px 0 0">Reel, long video, story and influencer video land on the Content Process board${OPT.socialName?` of <b>${esc(OPT.socialName(c)||"Social Media")}</b>`:""}.
-    Banner and alert open Strapi, WhatsApp opens MSG91, notification opens Firebase.</p>`;
+    <p class="hint" style="margin:11px 0 0">Every YouTube and Instagram piece lands on the Content Process board${OPT.socialName?` of <b>${esc(OPT.socialName(c)||"Social Media")}</b>`:""}.
+    Anything else opens its own button if one is set on the piece (Edit → Action + URL); otherwise banners and alerts open Strapi, WhatsApp opens MSG91, and notifications open Firebase.</p>`;
 }
 function wireAssign(c){
   const B = $("#body");
