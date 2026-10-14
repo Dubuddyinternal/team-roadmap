@@ -676,6 +676,7 @@ tr.in-mvp .an-rowhead{border-left:3px solid var(--indigo)}
 .mod-card.mc-add{display:flex;align-items:center;justify-content:center;border-style:dashed;border-width:1.5px;color:var(--muted);font-family:var(--mono);font-size:13px;background:transparent;min-height:90px}
 .mod-card.mc-add:hover{color:var(--indigo);border-color:var(--indigo)}
 .ws-item.ws-add{color:var(--muted);font-family:var(--mono);font-size:12px;border:1.5px dashed var(--line-strong);justify-content:center}
+body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 /* Marketing mega space: a parent with its spaces nested under it */
 .ws-item.ws-parent{border-color:var(--indigo);color:var(--indigo);box-shadow:0 0 0 1px var(--indigo) inset}
 .ws-chev{font-size:10px;color:var(--muted);width:10px;flex:none;transition:transform .14s;transform:rotate(-90deg)}
@@ -13488,6 +13489,8 @@ function renderContentBugs(cs){
 function renderAll(){
   if(!DATA || !OKRS || !CONTENT) return;
   renderHeader();
+  // a campaign's Fill in Details opens on its own hero (campaign-space.js), so the page title steps aside
+  document.body.classList.toggle("cx-hero", view==="campaign" && (campView==="details" || !campAdmin(currentCampaign())));
   // per-space enforcement: if the viewer can't edit THIS space, editMode is suppressed here
   editMode = canEditHere();   // Jira-style: always editable where you have permission (no toggle)
   // visibility protection: if you're viewing a space you can no longer see, bounce to a safe view
