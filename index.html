@@ -5195,20 +5195,14 @@ function mktOpen(cs){ return MKT_OPEN[cs.id] !== false; }
 // "＋ Add space" inside a Marketing space: the marketing templates
 function openMarketingTemplates(parent){
   const T = [
-    { id:"campaign",   emo:"📣", name:"Create campaign",     meta:"Details · Contents · Calendar", desc:"One sale, one place. Fill in the offer once, list everything that goes out, then arrange it day by day." },
-    { id:"social",     emo:"🎯", name:"Social media",        meta:"Ideation · Process · Schedule", desc:"Every post has a reason before it is made and a verdict after it ships — research, hook, CTA, then a board and a calendar." },
-    { id:"content",    emo:"📚", name:"Educational content", meta:"Tasks · Budget · Kanban",       desc:"A content section with tasks, deadlines, budgets and the List / Board views — like your exam sections." },
-    { id:"competitor", emo:"⚔️", name:"Competitor analysis", meta:"Product-level · Feature-level", desc:"Compare against competitors — product-level feature grids and feature-level deep dives, side by side." },
-    { id:"discovery",  emo:"🚀", name:"Product roadmap",     meta:"All ideas · Roadmap · Timeline", desc:"Collect ideas, sort them into Now / Next / Later, and see them on a timeline." },
-    { id:null, emo:"🔔", name:"Push automations",    meta:"Coming soon", desc:"Rules that fire on their own — someone signs up, the right notification goes out, and every attempt is written down." },
-    { id:null, emo:"🤝", name:"Influencer pipeline", meta:"Coming soon", desc:"Track creators from first message to published video, with rates, deliverables and whether payment went out." }
+    { id:"campaign",   emo:"📣", name:"Create campaign",     meta:"Details · Contents · Calendar", desc:"One sale, one place. Fill in the offer once, list everything that goes out, then arrange it day by day." }
   ];
   const back = document.createElement("div"); back.className = "overlay show";
   const dlg = document.createElement("div"); dlg.className = "dialog"; dlg.setAttribute("role","dialog"); dlg.setAttribute("aria-modal","true"); dlg.style.maxWidth = "620px";
-  const h = document.createElement("h3"); h.textContent = "Add to " + parent.name;
+  const h = document.createElement("h3"); h.textContent = "Space templates";
   const body = document.createElement("div"); body.className = "dlg-body";
   const hint = document.createElement("div"); hint.className = "hint"; hint.style.marginBottom = "12px";
-  hint.textContent = "Pick a template — the space appears inside " + parent.name + " for the whole team.";
+  hint.textContent = "Pick a template — the space appears inside " + parent.name + " for the whole team. These are the ones built for marketing. More coming.";
   const grid = document.createElement("div"); grid.className = "tpl-grid";
   function close(){ back.remove(); }
   T.forEach(t=>{
@@ -5647,6 +5641,7 @@ function loadTeamData(t){
   DEV = normalizeDev(t.dev || clean(emptyTeam("x").dev));
   RMAPS = normalizeRmaps(t.rmaps);
   CSPACES = normalizeCspaces(t.cspaces);
+  seedMarketingParent();
   SOCIAL_TARGETS = (t.socialTargets && typeof t.socialTargets==="object") ? t.socialTargets : {};
   BUILTIN_SPACE_MEMBERS = t.spaceMembers || { dev:{}, bugs:{} };
   BUILTIN_SPACE_MEMBERS.dev = BUILTIN_SPACE_MEMBERS.dev || {};
@@ -5678,6 +5673,19 @@ function loadTeamData(t){
   syncContentSpaces();
   syncModuleSpaces();
   loadRecent();
+}
+// Dubuddy: "Dubuddy Marketing" is the parent space and Social Media sits inside it.
+// Done once (CSPACES.mktSeeded) — if someone deletes the Marketing space later, it stays deleted.
+function seedMarketingParent(){
+  if(TEAM !== "dubuddy" || CSPACES.mktSeeded) return;
+  const L = CSPACES.list;
+  if(L.some(x=>x.type==="marketing")){ CSPACES.mktSeeded = true; return; }
+  const soc = L.filter(x=>x.type==="social" && !x.parent);
+  if(!soc.length) return;
+  const m = { id:"cs-mkt-dubuddy", name:"Dubuddy Marketing", type:"marketing", access:"open", members:{} };
+  L.splice(L.indexOf(soc[0]), 0, m);   // takes Social Media's place in the sidebar
+  soc.forEach(x=>{ x.parent = m.id; });
+  CSPACES.mktSeeded = true;
 }
 let BUILTIN_SPACE_MEMBERS = { dev:{}, bugs:{} };
 let BUILTIN_HIDDEN = { dev:false, bugs:false };
@@ -6756,7 +6764,7 @@ function workTabs(){
       ? [{key:"ideation",label:"All ideas"},{key:"ideation-roadmap",label:"Roadmap"}]
       : [{key:pdtView,label:pdtSectionLabel(pdtView)}];
   if(view==="social") return SX.tabs.map(([key,label])=>({key, label}));
-  if(view==="campaign" && window.CX) return CX.tabs.map(([key,label])=>({key, label}));
+  if(view==="campaign" && window.CX) return campTabs(currentCampaign()).map(([key,label])=>({key, label}));
   if(view==="watch" && window.WX) return WX.tabs.map(([key,label])=>({key, label}));
   if(view==="horizon" && window.HX) return HX.tabs.map(([key,label])=>({key, label}));
   const l = view==="rmap" ? "Timeline" : view==="okr" ? "Objectives"
@@ -6775,7 +6783,7 @@ function selectWorkTab(key){
   paneTab="work";
   if(view==="disc" && discView!==key){ discView=key; renderAll(); return; }  // re-render the sub-view
   if(view==="social" && socialView!==key){ socialView=key; renderAll(); return; }
-  if(view==="campaign" && campView!==key){ campView=key; renderAll(); return; }
+  if(view==="campaign" && campView!==key){ if(key!=="details" && !campAdmin(currentCampaign())) return; campView=key; renderAll(); return; }
   if(view==="watch" && watchView!==key){ watchView=key; renderAll(); return; }
   if(view==="horizon" && horizonView!==key){ horizonView=key; renderAll(); return; }
   if(view==="pdt" && pdtView!==key){ pdtView=key; renderAll(); return; }
@@ -12693,6 +12701,14 @@ function pdtBugsPane(cs){ pdtLanePane(cs, "bugs", "Bugs",        PDT_BUG_COLS, n
 
 /* ---------- Campaign space (campaign-space.js), inside a Marketing space ---------- */
 function currentCampaign(){ return (CSPACES.list||[]).find(x=>x.id===activeCspace && x.type==="campaign") || null; }
+// a campaign is run by admins: they edit and see every tab; everyone else on the team only reads Fill in Details
+function campAdmin(cs){
+  const u = currentUser(); if(!u || !cs) return false;
+  if(u.super) return true;
+  const r = spaceRoleOf(u, csRef(cs));
+  return !!r && roleRank(r) <= roleRank("admin");
+}
+function campTabs(cs){ return campAdmin(cs) ? CX.tabs : CX.tabs.filter(([k])=>k==="details"); }
 // save without redrawing the page (used while typing in a campaign)
 function saveQuiet(){
   if(!db) return;
@@ -12709,10 +12725,11 @@ function renderContentCampaign(){
   const wrap = $("content"); wrap.innerHTML = "";
   const cs = currentCampaign();
   if(!cs){ view = "roadmap"; renderAll(); return; }
+  if(!campAdmin(cs)) campView = "details";
   CX.render(cs, wrap, {
     tab: campView,
-    canEdit: canEditHere,
-    canDelete: ()=> hasPerm("delete_spaces"),
+    canEdit: ()=> campAdmin(cs),
+    canDelete: ()=> campAdmin(cs) && hasPerm("delete_spaces"),
     people: ()=> USERS.filter(u=>isMember(u, TEAM)).map(u=>({ id:u.id, name:userDisplayName(u), role:(u.profile&&u.profile.title)||roleLabel(roleOf(u,TEAM)) })),
     save: ()=> pushAll(),
     saveQuiet: ()=> saveQuiet(),
@@ -13760,7 +13777,7 @@ function renderAll(){
           });
         }
         if(cs.type==="campaign" && view==="campaign" && activeCspace===cs.id && window.CX){
-          [["details","\uD83D\uDCDD Fill in Details"],["assign","\uD83D\uDC65 Assignment"],["calendar","\uD83D\uDDD3 Calendar"],["dash","\uD83D\uDCCA Dashboard"]].forEach(([k,lbl])=>{
+          [["details","\uD83D\uDCDD Fill in Details"],["assign","\uD83D\uDC65 Assignment"],["calendar","\uD83D\uDDD3 Calendar"],["dash","\uD83D\uDCCA Dashboard"]].filter(([k])=>k==="details" || campAdmin(cs)).forEach(([k,lbl])=>{
             const sub=document.createElement("button");
             sub.className="ws-sub"+(_nested?" ws-sub-nested":"")+(campView===k?" active":"");
             sub.textContent=lbl;

@@ -10,12 +10,17 @@
 
 ## Setting it up
 
-1. Go to Administration → Spaces → **＋ Add space** → **Marketing**, and give it a name, for example "Dubuddy Marketing".
-2. Every Social Media space that isn't already inside a Marketing space moves into it automatically.
-3. To add more inside it, use **＋ Add space** under the Marketing space in the sidebar. You can choose Create campaign, Social media, Educational content, Competitor analysis or Product roadmap. Push automations and Influencer pipeline show as "coming soon".
-4. To move an existing space in or out of Marketing, use its **⋯** menu → Move into / out of Marketing.
+1. On the **dubuddy** team, **Dubuddy Marketing** is created on its own the first time the app loads, and the Social Media space moves inside it (`seedMarketingParent` in `index.html`). It only happens once: if you delete it, it stays deleted. Other teams add one from Administration → Spaces → **＋ Add space** → **Marketing**.
+2. To add a campaign, use **＋ Add space** under the Marketing space in the sidebar. The Space templates pop-up offers **Create campaign** only. The other marketing templates were taken out on purpose.
+3. To move an existing space in or out of Marketing, use its **⋯** menu → Move into / out of Marketing.
 
 Adding or moving spaces needs the **Add spaces** permission. Deleting a Marketing space doesn't delete the spaces inside it; they go back to the sidebar.
+
+## Who can do what in a campaign
+
+- A new campaign starts empty.
+- **Admins** (team Owner/Admin, or Admin on that space) can edit it and see all four tabs.
+- **Everyone else on the team** sees **Fill in Details** only, read-only. The Assignment, Calendar and Dashboard tabs are hidden from them (`campAdmin` / `campTabs` in `index.html`).
 
 ## A campaign
 
