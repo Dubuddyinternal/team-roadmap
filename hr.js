@@ -965,3 +965,18 @@ function hrProfileLink() {
     });
   }, 500);
 })();
+
+// Administration → 🪪 My HR file: the same file, reachable from the admin sidebar too
+function renderAdminMyHr(wrap) {
+  var head = hrEl("div", "module-head"); head.appendChild(hrEl("h2", null, "My HR file")); wrap.appendChild(head);
+  var card = hrEl("div", "hr-profile-link"); card.style.maxWidth = "640px";
+  card.appendChild(hrEl("span", null, "🗂️"));
+  var txt = hrEl("span", "grow", "Your personal details, documents and work contract. Loading…"); card.appendChild(txt);
+  var b = hrEl("button", "btn save", "Open my HR file"); b.onclick = function () { openMyHrFile(); }; card.appendChild(b);
+  wrap.appendChild(card);
+  var me = hrMe(); if (!me || !SUPA) return;
+  SUPA.from("hr_records").select("status").eq("user_id", me.id).maybeSingle().then(function (r) {
+    var st = (r.data && r.data.status) || "none";
+    txt.textContent = "Your personal details, documents and work contract. Status: " + (HR_STATUS[st] || HR_STATUS.none)[0] + ".";
+  });
+}
