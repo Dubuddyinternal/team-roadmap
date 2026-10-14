@@ -4,11 +4,11 @@
    · Account menu → 🗂️ My HR file (also linked from 👤 My profile) — every
      teammate: personal details, family, emergency contacts, address, ID and
      bank details, education and past work, document uploads, consent and
-     submit. Later: read the contract and upload the signed copy.
+     submit. Later: read the offer letter and sign it.
    · Administration → 🗂️ Employees (HR) — super-admins and roles with
      "Manage HR files": everyone's progress, every detail and document,
      approve / reject documents, send a file back with a note, job terms,
-     preview and email the contract, mark the file complete. Super-admins
+     preview and email the offer letter, mark the file complete. Super-admins
      also edit the company details and the contract template.
 
    Files go to the private "hr-docs" bucket under <user id>/…; HR opens them
@@ -94,7 +94,7 @@ var HR_STATUS = {
   draft:         ["Filling in", "amber"],
   changes:       ["Changes asked", "red"],
   submitted:     ["Waiting for HR", "blue"],
-  contract_sent: ["Contract sent", "amber"],
+  contract_sent: ["Offer letter sent", "amber"],
   signed:        ["Signed, to check", "blue"],
   complete:      ["Complete", "green"]
 };
@@ -256,6 +256,8 @@ function hrEditable(rec) { return !rec || rec.status === "draft" || rec.status =
     + ".hr-tpl{width:100%;min-height:360px;font-family:var(--mono);font-size:12.5px;padding:12px;border:1px solid var(--line-strong);border-radius:10px}"
     + ".hr-profile-link{display:flex;gap:10px;align-items:center;background:var(--indigo-soft);border:1px solid #F5CDB6;border-radius:12px;padding:10px 12px;margin-bottom:14px;font-size:13.5px}"
     + ".hr-profile-link .grow{flex:1}"
+    + ".hr-wait{display:flex;flex-direction:column;gap:8px;margin-top:8px}.hr-wait .r{display:flex;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:12px;font-size:13.5px}"
+    + ".hr-wait .r.now{border-color:#F5CDB6;background:var(--indigo-soft)}.hr-wait .n{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--line);font-weight:700;flex:none}.hr-wait .h{color:var(--muted);font-size:12.5px}"
     + ".hr-sig{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.hr-sig .pic{width:220px;height:76px;border:1.5px dashed var(--line-strong);border-radius:10px;background:#fff;display:grid;place-items:center;font-size:12.5px;color:var(--muted);overflow:hidden}"
     + ".hr-sig .pic img{max-width:200px;max-height:66px}"
     + ".hr-signgrid{display:flex;gap:18px;align-items:center;flex-wrap:wrap;justify-content:space-between}.hr-signgrid .meta{display:flex;flex-direction:column;align-items:flex-start;gap:4px;font-size:13.5px;order:2}"
@@ -405,10 +407,9 @@ async function hrClosePage() {
   var page = document.getElementById("hr-page"); if (page) page.style.display = "none";
   try { var u = new URL(location.href); if (u.searchParams.has("hr")) { u.searchParams.delete("hr"); history.replaceState(null, "", u.toString()); } } catch (_) { }
 }
+// every step shows; the offer letter one says "later" until HR sends it
 function hrVisibleSteps() {
-  var st = HR.rec && HR.rec.status;
-  var hasContract = st === "contract_sent" || st === "signed" || st === "complete";
-  return HR_STEPS.map(function (s, i) { return { s: s, i: i }; }).filter(function (x) { return x.s.k !== "contract" || hasContract; });
+  return HR_STEPS.map(function (s, i) { return { s: s, i: i }; });
 }
 function hrRenderMine() {
   var page = document.getElementById("hr-page"); if (!page) return;
@@ -444,6 +445,9 @@ function hrRenderMine() {
     } else if (x.s.k === "policies") {
       var left = HR.policies.filter(function (p) { var st = hrPolicyState(p, HR.signs); return st === "todo" || st === "old"; }).length;
       if (HR.policies.length) b.appendChild(left ? hrEl("span", "todo", left + " to sign") : hrEl("span", "tick", "✓"));
+    } else if (x.s.k === "contract") {
+      var cs = rec.status;
+      b.appendChild(cs === "contract_sent" ? hrEl("span", "todo", "to sign") : cs === "signed" || cs === "complete" ? hrEl("span", "tick", "✓") : hrEl("span", "todo", "later"));
     } else if (x.s.k === "docs") {
       var miss = HR_DOCS.filter(function (z) { return z.req && !hrDocsHave(HR.docs, z.k); }).length;
       b.appendChild(miss ? hrEl("span", "todo", miss + " left") : hrEl("span", "tick", "✓"));
@@ -598,21 +602,80 @@ function hrRenderSubmit(card, d, editable) {
   };
   foot.appendChild(go); card.appendChild(foot);
 }
+// the signature line under a signed offer letter
+function hrOfferStamp(rec, docs, view, done) {
+  var html = rec.contract_html || "";
+  if (!rec.offer_sig_doc) { if (done) done(html); return html; }
+  var put = function (img) { var h = html + hrSigBlock(rec.offer_signed_name || "", hrDate(rec.signed_at), rec.offer_place, img); if (view) view.innerHTML = h; if (done) done(h); return h; };
+  var sd = (docs || []).find(function (z) { return z.id === rec.offer_sig_doc; });
+  if (sd) hrImgData(sd.path).then(put).catch(function () { });
+  return put(null);
+}
 function hrRenderContract(card) {
-  var rec = HR.rec;
+  var rec = HR.rec, st = rec.status;
   card.appendChild(hrEl("h3", null, "✍️ Your offer letter"));
-  if (rec.status === "complete") card.appendChild(hrEl("div", "hr-note ok", "Signed and checked. ✅"));
-  else if (rec.status === "signed") card.appendChild(hrEl("div", "hr-note info", "Thanks! HR is checking your signed copy."));
-  else card.appendChild(hrEl("div", "hint", "Sent to your email on " + hrDate(rec.contract_sent_at) + ". Read it, print it, sign every page, and upload the signed copy below."));
-  var view = hrEl("div", "hr-contract"); view.innerHTML = rec.contract_html || "<p>No contract yet.</p>";
+  // not sent yet: say what happens and when
+  if (st !== "contract_sent" && st !== "signed" && st !== "complete") {
+    var sent = st === "submitted";
+    card.appendChild(hrEl("div", "hint", "Your offer letter will show up here. This is how it gets to you:"));
+    var steps = hrEl("div", "hr-wait");
+    [[sent ? "✅" : "1", "Fill in your details and press Submit", sent ? "Done" : "In Check and submit"],
+     ["2", "HR adds your job terms and sends the offer letter", sent ? "HR is on it. You'll get a 🔔 and an email" : "After you submit"],
+     ["3", "Read it here and sign it with your saved signature", "One click"]].forEach(function (x, i) {
+      var r = hrEl("div", "r" + (sent && i === 1 ? " now" : !sent && i === 0 ? " now" : ""));
+      var n = hrEl("span", "n", x[0]), t = hrEl("div"); t.append(hrEl("b", null, x[1]), hrEl("div", "h", x[2]));
+      r.append(n, t); steps.appendChild(r);
+    });
+    card.appendChild(steps);
+    if (!sent) { var go = hrEl("button", "btn save", "Go to Check and submit →"); go.style.marginTop = "12px"; go.onclick = function () { HR.step = HR_STEPS.findIndex(function (z) { return z.k === "submit"; }); hrRenderMine(); }; card.appendChild(go); }
+    return;
+  }
+  if (st === "complete") card.appendChild(hrEl("div", "hr-note ok", "Signed and checked. ✅"));
+  else if (st === "signed") card.appendChild(hrEl("div", "hr-note info", "Thanks! You've signed it. HR is checking it now."));
+  else card.appendChild(hrEl("div", "hint", "Sent to your email on " + hrDate(rec.contract_sent_at) + ". Read it, then sign it below."));
+  var view = hrEl("div", "hr-contract"), html = rec.contract_html || "";
+  view.innerHTML = html || "<p>No offer letter yet.</p>";
   card.appendChild(view);
+  if (rec.offer_sig_doc) hrOfferStamp(rec, HR.docs, view, function (h) { html = h; });
   var row = hrEl("div", "hr-foot");
-  var pr = hrEl("button", "btn", "🖨 Print or save as PDF"); pr.onclick = function () { hrPrint(rec.contract_html || "", "Contract"); };
+  var pr = hrEl("button", "btn", "🖨 Print or save as PDF"); pr.onclick = function () { hrPrint(html, "Offer letter"); };
   row.appendChild(pr); row.appendChild(hrEl("div", "grow"));
   card.appendChild(row);
 
+  // sign with the saved signature
+  if (st === "contract_sent") {
+    var sign = hrEl("div", "hr-sec"); sign.appendChild(hrEl("h4", null, "Sign it"));
+    var lab = hrEl("label", "hr-check"); var cb = hrEl("input"); cb.type = "checkbox";
+    lab.append(cb, document.createTextNode("I have read this offer letter and I accept it."));
+    var grid = hrEl("div", "hr-signgrid");
+    var drawSig = function () { var old = grid.querySelector(".hr-sig"); var nb = hrSigBox(drawSig); if (old) old.replaceWith(nb); else grid.prepend(nb); };
+    var meta = hrEl("div", "meta"), name = hrMyName();
+    meta.appendChild(hrEl("div", null, "Name: ")).appendChild(hrEl("b", null, name || "Add it in About you"));
+    meta.appendChild(hrEl("div", null, "Date: ")).appendChild(hrEl("b", null, hrDate(new Date().toISOString())));
+    var pl = hrEl("input", "login-input"); pl.placeholder = "City"; pl.value = hrMyPlace(); pl.setAttribute("aria-label", "Place");
+    var plr = hrEl("label", "pl"); plr.append(document.createTextNode("Place "), pl); meta.appendChild(plr);
+    grid.appendChild(meta); drawSig();
+    var sg = hrEl("button", "btn save", "✍️ Sign offer letter");
+    sg.onclick = async function () {
+      var sig = hrSigOf(HR.docs);
+      if (!cb.checked) { hrToast("Tick the box first"); return; }
+      if (!sig) { hrToast("Upload a photo of your signature first"); return; }
+      if (pl.value.trim().length < 2) { hrToast("Add the place (your city)"); pl.focus(); return; }
+      sg.disabled = true;
+      var r = await SUPA.rpc("hr_sign_offer", { p_sig: sig.id, p_place: pl.value.trim() });
+      if (r.error) { hrToast(hrErr(r.error)); sg.disabled = false; return; }
+      HR.docs.forEach(function (z) { if (z.id === sig.id) z.status = "approved"; });
+      HR.rec = r.data; hrToast("Signed. HR will check it."); hrRenderMine();
+    };
+    var f1 = hrEl("div", "hr-foot"); f1.append(hrEl("div", "grow"), sg);
+    sign.append(lab, grid, f1);
+    card.appendChild(sign);
+  }
+  if (rec.offer_sig_doc) return;   // signed online: no paper copy needed
+
   var signed = HR.docs.filter(function (z) { return z.kind === "contract"; });
-  var sec = hrEl("div", "hr-sec"); sec.appendChild(hrEl("h4", null, "Signed copy"));
+  if (st !== "contract_sent" && !signed.length) return;
+  var sec = hrEl("div", "hr-sec"); sec.appendChild(hrEl("h4", null, st === "contract_sent" ? "Or print it, sign every page and upload the signed copy" : "Signed copy"));
   var files = hrEl("div", "hr-files");
   signed.forEach(function (z) {
     var f = hrEl("div", "hr-file"); var nm = hrEl("button", "n", z.file_name); nm.type = "button"; nm.onclick = function () { hrOpenFile(z.path); };
@@ -691,7 +754,7 @@ function renderAdminHr(wrap) {
     set.onclick = function () { hrSettingsDialog(); }; head.appendChild(set);
   }
   wrap.appendChild(head);
-  wrap.appendChild(hrEl("div", "hint", "Everyone in this team fills in their own HR file from their account menu → 🗂️ My HR file. Open a person to check their details and documents, and send their contract."));
+  wrap.appendChild(hrEl("div", "hint", "Everyone in this team fills in their own HR file from their account menu → 🗂️ My HR file. Open a person to check their details and documents, and send their offer letter."));
   var body = hrEl("div"); body.innerHTML = '<div class="hint" style="margin-top:14px">Loading…</div>';
   wrap.appendChild(body);
   hrLoadAll().then(function () { hrDrawList(body); }).catch(function (e) {
@@ -795,7 +858,7 @@ function hrRenderPerson(wrap, uid) {
   if (acts.children.length) wrap.appendChild(acts);
 
   var tl = hrEl("div", "hr-tl"); tl.style.margin = "12px 0 4px";
-  [["Submitted", rec && rec.submitted_at], ["Contract sent", rec && rec.contract_sent_at], ["Signed copy", rec && rec.signed_at], ["Complete", rec && rec.completed_at]].forEach(function (x) {
+  [["Submitted", rec && rec.submitted_at], ["Offer letter sent", rec && rec.contract_sent_at], ["Signed", rec && rec.signed_at], ["Complete", rec && rec.completed_at]].forEach(function (x) {
     var s = hrEl("span"); s.appendChild(document.createTextNode(x[0] + ": ")); s.appendChild(hrEl("b", null, x[1] ? hrDate(x[1]) : "—")); tl.appendChild(s);
   });
   wrap.appendChild(tl);
@@ -909,7 +972,8 @@ function hrRenderPerson(wrap, uid) {
   };
   jf.append(sj, hrEl("div", "grow"), pv);
   if (rec && rec.contract_html) {
-    var last = hrEl("button", "btn", "See the offer letter they got"); last.onclick = function () { hrContractDialog(u, rec.contract_html, null); };
+    var last = hrEl("button", "btn", rec.offer_sig_doc ? "See the signed offer letter" : "See the offer letter they got");
+    last.onclick = function () { var dlg = hrContractDialog(u, hrOfferStamp(rec, docs, null, function (h) { if (dlg) dlg(h); }), null); };
     jf.insertBefore(last, pv);
   }
   jc.appendChild(jf);
@@ -921,7 +985,7 @@ function hrContractDialog(u, html, act) {
   if (act) bx.appendChild(hrEl("div", "hint", "Check every line. Anything in [brackets] is still missing — fill in the job terms or the company details first."));
   var view = hrEl("div", "hr-contract"); view.style.margin = "10px 0"; view.innerHTML = html; bx.appendChild(view);
   var row = hrEl("div", "hr-foot");
-  var pr = hrEl("button", "btn", "🖨 Print / PDF"); pr.onclick = function () { hrPrint(html, "Contract — " + userDisplayName(u)); };
+  var pr = hrEl("button", "btn", "🖨 Print / PDF"); pr.onclick = function () { hrPrint(html, "Offer letter — " + userDisplayName(u)); };
   var cl = hrEl("button", "btn", "Close"); cl.onclick = function () { ov.remove(); };
   row.append(pr, hrEl("div", "grow"), cl);
   if (act) {
@@ -941,6 +1005,7 @@ function hrContractDialog(u, html, act) {
   bx.appendChild(row); ov.appendChild(bx);
   ov.addEventListener("click", function (e) { if (e.target === ov) ov.remove(); });
   document.body.appendChild(ov);
+  return function (h) { html = h; view.innerHTML = h; };   // swap in the signed version once its image loads
 }
 async function hrSettingsDialog() {
   var s = await hrLoadSettings();
@@ -976,13 +1041,13 @@ function hrProfileLink() {
   if (!dlg || document.getElementById("hr-profile-link")) return;
   var box = hrEl("div", "hr-profile-link"); box.id = "hr-profile-link";
   box.appendChild(hrEl("span", null, "🗂️"));
-  box.appendChild(hrEl("span", "grow", "Your HR details, documents and contract are in My HR file."));
+  box.appendChild(hrEl("span", "grow", "Your HR details, documents and offer letter are in My HR file."));
   var b = hrEl("button", "btn save", "Open");
   b.onclick = function () { var o = document.getElementById("profile-overlay"); if (o) o.classList.remove("show"); openMyHrFile(); };
   box.appendChild(b);
   dlg.insertBefore(box, dlg.firstChild);
 }
-// ?hr=1 (the contract email's button) opens the file once someone is signed in;
+// ?hr=1 (the offer letter email's button) opens the file once someone is signed in;
 // otherwise a gentle reminder once a day until it is submitted
 (function () {
   var tries = 0;
@@ -1000,7 +1065,7 @@ function hrProfileLink() {
       if (st && st !== "draft" && st !== "changes" && st !== "contract_sent") return;
       var key = "hr-nudge-" + new Date().toISOString().slice(0, 10);
       try { if (localStorage.getItem(key)) return; localStorage.setItem(key, "1"); } catch (_) { }
-      hrToast(st === "contract_sent" ? "✍️ Your contract is waiting: account menu → My HR file" : st === "changes" ? "🗂️ HR asked for changes to your HR file" : "🗂️ Please fill in your HR file: account menu → My HR file");
+      hrToast(st === "contract_sent" ? "✍️ Your offer letter is waiting: account menu → My HR file" : st === "changes" ? "🗂️ HR asked for changes to your HR file" : "🗂️ Please fill in your HR file: account menu → My HR file");
     });
   }, 500);
 })();
@@ -1010,13 +1075,13 @@ function renderAdminMyHr(wrap) {
   var head = hrEl("div", "module-head"); head.appendChild(hrEl("h2", null, "My HR file")); wrap.appendChild(head);
   var card = hrEl("div", "hr-profile-link"); card.style.maxWidth = "640px";
   card.appendChild(hrEl("span", null, "🗂️"));
-  var txt = hrEl("span", "grow", "Your personal details, documents and work contract. Loading…"); card.appendChild(txt);
+  var txt = hrEl("span", "grow", "Your personal details, documents and offer letter. Loading…"); card.appendChild(txt);
   var b = hrEl("button", "btn save", "Open my HR file"); b.onclick = function () { openMyHrFile(); }; card.appendChild(b);
   wrap.appendChild(card);
   var me = hrMe(); if (!me || !SUPA) return;
   SUPA.from("hr_records").select("status").eq("user_id", me.id).maybeSingle().then(function (r) {
     var st = (r.data && r.data.status) || "none";
-    txt.textContent = "Your personal details, documents and work contract. Status: " + (HR_STATUS[st] || HR_STATUS.none)[0] + ".";
+    txt.textContent = "Your personal details, documents and offer letter. Status: " + (HR_STATUS[st] || HR_STATUS.none)[0] + ".";
   });
 }
 
