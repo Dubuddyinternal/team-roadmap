@@ -19205,6 +19205,7 @@ function adminSections(){
     { k:"hr",          ico:"🗂️", lbl:"Employees", group:"hr", show: !!me && !!SUPA && typeof renderAdminHr === "function" && (hasPerm("manage_hr") || hasPerm("view_hr")), render: renderAdminHr },
     { k:"policies",    ico:"📜", lbl:"Company policies", group:"hr", show: !!me && !!SUPA && typeof renderAdminPolicies === "function", render: renderAdminPolicies },
     { k:"hrsettings",  ico:"🏢", lbl:"Company and offer letter", group:"hr", show: !!me && !!SUPA && typeof renderAdminHrSettings === "function" && hasPerm("hr_settings"), render: renderAdminHrSettings },
+    { k:"lms",         ico:"🎓", lbl:"LMS", group:"hr",  show: hasPerm("manage_learning") && !!SUPA, render: renderAdminLms },
     // IT support: one dropdown for access, accounts and structure
     { k:"permissions", ico:"🔐", lbl:"Roles & permissions",  show: people,                         group:"it", render: renderAdminPermissions },
     { k:"password",    ico:"🔑", lbl:"Change password",      show: !!me,                           group:"it", render: renderChangePassword },
@@ -19222,7 +19223,6 @@ function adminSections(){
     { k:"myideas",     ico:"💡", lbl:"My product ideas",     show: !!me && !!SUPA && typeof pitchTarget === "function" && !!pitchTarget(), render: renderAdminMyIdeas },
     { k:"roadmaps",    ico:"🗺️", lbl:"Roadmaps",             show: hasPerm("add_roadmaps"),        render: renderAdminRoadmaps },
     { k:"spaces",      ico:"🗂️", lbl:"Spaces",               show: hasPerm("add_spaces"),          render: renderAdminSpaces },
-    { k:"lms",         ico:"🎓", lbl:"LMS",                  show: hasPerm("manage_learning") && !!SUPA, render: renderAdminLms },
     { k:"myaccess",    ico:"🔎", lbl:"My access",            show: !!me,                           render: renderMyAccess },
     { k:"mygames",     ico:"\uD83C\uDFAE", lbl:"My games",             show: hasPerm("create_games"),        render: renderMyGames },
     { k:"reviewgames", ico:"\uD83D\uDD79\uFE0F", lbl:"Review games" + (gamesWaiting() ? " (" + gamesWaiting() + ")" : ""), crumb:"Review games",
