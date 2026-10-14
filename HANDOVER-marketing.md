@@ -20,9 +20,21 @@ Adding or moving spaces needs the **Add spaces** permission. Deleting a Marketin
 
 ## Who can do what in a campaign
 
-- A new campaign starts empty.
-- **Admins** (team Owner/Admin, or Admin on that space) can edit it and see all four tabs.
-- **Everyone else on the team** sees **Fill in Details** only, read-only. The Assignment, Calendar and Dashboard tabs are hidden from them (`campAdmin` / `campTabs` in `index.html`).
+Everyone on the team can see all four tabs of a campaign.
+
+| Level | Who | Can do |
+|---|---|---|
+| Admin | Team Owner/Admin, or Admin on that space | Everything |
+| Team Manager | A role named "…Manager…", or one given **Plan & assign campaigns** (Administration → Roles & permissions) | Move pieces between days on the Calendar (drag a card, or tap it to pick a day), and use Assignment: assign, notify, send to a board, open Strapi/MSG91/Firebase. Can't change the details. |
+| Team Member | Everyone else | Read-only, with a note that their work happens on their own board (Content Process, or wherever a piece was handed off) |
+
+This lives in `campAdmin` and `campPlanner` in `index.html`, which pass `canEdit` and `canPlan` to `campaign-space.js`.
+
+## The list of contents
+
+- **＋ Create content piece** (next to the heading) adds many pieces at once. Pick a day, then add rows of *type × how many*. A row set to "Other" asks what the pieces actually are. Pieces are named "Notification 1", "Notification 2" and so on, carrying on from the highest number already used for that type on that day. The platform is filled in from the type, while the accountable person and details are left empty.
+- **Day strip**: one tab per day of the campaign's duration, plus any day added with **＋ Day** and any day that already has pieces, all in date order. A day you added that's outside the dates and still empty shows a ✕ so you can remove it. Pieces with no date get a **No date** tab.
+- A day shows its pieces **grouped by type**. Each group has its colour, icon, count and **＋ Add one**, which opens the full item dialog with that type and day already filled in.
 
 ## A campaign
 

@@ -4178,6 +4178,7 @@ const PERMS = [
   {key:"delete_roadmaps",  label:"Delete roadmaps",       hint:"See “Delete roadmap” in a roadmap's ⋯ menu"},
   {key:"add_spaces",       label:"Add spaces",            hint:"Create new spaces (Administration → Spaces). Nobody else sees an Add space button"},
   {key:"delete_spaces",    label:"Delete spaces",         hint:"See “Delete…” in a space's ⋯ menu and remove whole spaces"},
+  {key:"plan_campaigns",   label:"Plan & assign campaigns", hint:"In a campaign, move pieces between days on the Calendar and assign people in Assignment (a Team Manager). Roles named “Manager” have this already; Owners and Admins edit everything"},
   {key:"delete_social_cards", label:"Delete Social Media cards", hint:"See “Delete” on a Content Process card in Social Media. Owners and Admins always can"},
   {key:"review_student_ideas", label:"Review student ideas", hint:"Approve, merge or reject ideas students send from tools.dubuddy.in/ideas (product space → From students)"},
   {key:"manage_learning",  label:"Run LMS",               hint:"Plan learning drops — videos, articles, polls, quizzes — in Administration → LMS, and see everyone's answers"},
@@ -6790,7 +6791,7 @@ function selectWorkTab(key){
   paneTab="work";
   if(view==="disc" && discView!==key){ discView=key; renderAll(); return; }  // re-render the sub-view
   if(view==="social" && socialView!==key){ socialView=key; renderAll(); return; }
-  if(view==="campaign" && campView!==key){ if(key!=="details" && !campAdmin(currentCampaign())) return; campView=key; renderAll(); return; }
+  if(view==="campaign" && campView!==key){ campView=key; renderAll(); return; }
   if(view==="watch" && watchView!==key){ watchView=key; renderAll(); return; }
   if(view==="horizon" && horizonView!==key){ horizonView=key; renderAll(); return; }
   if(view==="pdt" && pdtView!==key){ pdtView=key; renderAll(); return; }
@@ -12708,14 +12709,25 @@ function pdtBugsPane(cs){ pdtLanePane(cs, "bugs", "Bugs",        PDT_BUG_COLS, n
 
 /* ---------- Campaign space (campaign-space.js), inside a Marketing space ---------- */
 function currentCampaign(){ return (CSPACES.list||[]).find(x=>x.id===activeCspace && x.type==="campaign") || null; }
-// a campaign is run by admins: they edit and see every tab; everyone else on the team only reads Fill in Details
+// who does what in a campaign (everyone on the team sees all four tabs):
+//   Admin (Owner / Admin)  — edits everything
+//   Team Manager           — moves pieces on the Calendar and works the Assignment tab
+//                            (a role named "…Manager…", or one given "Plan & assign campaigns")
+//   Team Member            — read-only; they work on their own board (Content Process…)
 function campAdmin(cs){
   const u = currentUser(); if(!u || !cs) return false;
   if(u.super) return true;
   const r = spaceRoleOf(u, csRef(cs));
   return !!r && roleRank(r) <= roleRank("admin");
 }
-function campTabs(cs){ return campAdmin(cs) ? CX.tabs : CX.tabs.filter(([k])=>k==="details"); }
+function campPlanner(cs){
+  if(campAdmin(cs)) return true;
+  const u = currentUser(); if(!u || !cs) return false;
+  const r = spaceRoleOf(u, csRef(cs)); if(!r) return false;
+  const d = (ROLE_DEFS[TEAM] || {})[r];
+  return rolePerms(r).indexOf("plan_campaigns") >= 0 || /manager/i.test(r) || !!(d && /manager/i.test(d.name||""));
+}
+function campTabs(cs){ return CX.tabs; }
 // save without redrawing the page (used while typing in a campaign)
 function saveQuiet(){
   if(!db) return;
@@ -12732,10 +12744,10 @@ function renderContentCampaign(){
   const wrap = $("content"); wrap.innerHTML = "";
   const cs = currentCampaign();
   if(!cs){ view = "roadmap"; renderAll(); return; }
-  if(!campAdmin(cs)) campView = "details";
   CX.render(cs, wrap, {
     tab: campView,
     canEdit: ()=> campAdmin(cs),
+    canPlan: ()=> campPlanner(cs),
     canDelete: ()=> campAdmin(cs) && hasPerm("delete_spaces"),
     people: ()=> USERS.filter(u=>isMember(u, TEAM)).map(u=>({ id:u.id, name:userDisplayName(u), role:(u.profile&&u.profile.title)||roleLabel(roleOf(u,TEAM)) })),
     save: ()=> pushAll(),
@@ -13490,7 +13502,7 @@ function renderAll(){
   if(!DATA || !OKRS || !CONTENT) return;
   renderHeader();
   // a campaign's Fill in Details opens on its own hero (campaign-space.js), so the page title steps aside
-  document.body.classList.toggle("cx-hero", view==="campaign" && (campView==="details" || !campAdmin(currentCampaign())));
+  document.body.classList.toggle("cx-hero", view==="campaign" && campView==="details");
   // per-space enforcement: if the viewer can't edit THIS space, editMode is suppressed here
   editMode = canEditHere();   // Jira-style: always editable where you have permission (no toggle)
   // visibility protection: if you're viewing a space you can no longer see, bounce to a safe view
@@ -13786,7 +13798,7 @@ function renderAll(){
           });
         }
         if(cs.type==="campaign" && view==="campaign" && activeCspace===cs.id && window.CX){
-          [["details","\uD83D\uDCDD Fill in Details"],["assign","\uD83D\uDC65 Assignment"],["calendar","\uD83D\uDDD3 Calendar"],["dash","\uD83D\uDCCA Dashboard"]].filter(([k])=>k==="details" || campAdmin(cs)).forEach(([k,lbl])=>{
+          [["details","\uD83D\uDCDD Fill in Details"],["assign","\uD83D\uDC65 Assignment"],["calendar","\uD83D\uDDD3 Calendar"],["dash","\uD83D\uDCCA Dashboard"]].forEach(([k,lbl])=>{
             const sub=document.createElement("button");
             sub.className="ws-sub"+(_nested?" ws-sub-nested":"")+(campView===k?" active":"");
             sub.textContent=lbl;

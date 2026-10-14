@@ -669,6 +669,35 @@ tbody tr:hover{background:var(--surface-4)}
 [hidden]{display:none!important}
 p{margin:0}
 /* read-only (not an admin): what's chosen shows, the knobs don't */
+/* --- content list: day strip + groups --- */
+.daystrip{align-items:flex-end;gap:2px;margin-bottom:18px;padding-top:2px}
+.dtab-w{position:relative;display:inline-flex;flex-shrink:0}
+.dtab{flex-direction:column;align-items:center;gap:1px;min-width:62px;padding:7px 12px 8px}
+.dtab b{font-size:19px;font-weight:800;letter-spacing:-.03em;line-height:1.05;color:inherit}
+.dtab span:not(.cnt){font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase}
+.dtab .cnt{margin-top:3px}
+.dtab.out{opacity:.82}
+.dtab.out b::after{content:"•";color:var(--saffron);font-size:12px;vertical-align:super;margin-left:1px}
+.dtab-x{position:absolute;top:1px;right:1px;font-size:9px;line-height:1;color:var(--ink-3);padding:3px 4px;border-radius:4px}
+.dtab-x:hover{color:var(--crit);background:var(--crit-soft)}
+.dtab-add{flex-shrink:0;align-self:center;margin-left:6px;border:1.5px dashed var(--line-2);border-radius:999px;padding:6px 13px;font-size:12px;font-weight:600;color:var(--ink-3);white-space:nowrap}
+.dtab-add:hover{border-color:var(--accent);color:var(--accent);border-style:solid}
+.cgroup{margin-bottom:20px}
+.cgroup-h{display:flex;align-items:center;gap:8px;padding:0 0 8px 10px;margin-bottom:11px;border-left:4px solid var(--ic);border-bottom:1px solid var(--line)}
+.cgroup-h h4{font-size:15px;letter-spacing:-.018em;color:var(--ic)}
+.cg-ic{font-size:16px;line-height:1}
+.cgroup-h .cnt{font-family:var(--mono);font-size:10.5px;background:color-mix(in srgb,var(--ic) 14%,transparent);color:var(--ic);border-radius:999px;padding:1px 8px;font-weight:600}
+.cg-add{margin-left:auto}
+/* --- bulk create rows --- */
+.bhead,.brow{display:grid;grid-template-columns:minmax(0,1fr) 84px 32px;gap:8px;align-items:center}
+.bhead{margin-bottom:6px}
+.bhead span{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.brow{margin-bottom:8px}
+.brow select,.brow input{width:100%;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-s);padding:8px 10px;font-size:13px}
+.brow .bother{grid-column:1/-1;border-style:dashed}
+.bx{border:1px solid var(--line-2);border-radius:var(--r-s);padding:7px 0;text-align:center;color:var(--ink-3);font-size:12px}
+.bx:hover{color:var(--crit);border-color:var(--crit)}
+
 .ro .pkx,.ro .pk.add,.ro .fx,.ro .tx,.ro .tedit,.ro .iacts,.ro .fnav{display:none}
 .ro .detwrap{grid-template-columns:minmax(0,1fr)}
 .ro .pkw:not(.on),.ro .pk.solo:not(.on){display:none}
@@ -700,6 +729,11 @@ function hue(name){ let h=0; for(const ch of String(name)) h=(h*31+ch.charCodeAt
 function avatar(name){ const n=String(name||"?").trim()||"?";
   return `<span class="av" style="background:hsl(${hue(n)} 48% 42%)">${esc(n.charAt(0).toUpperCase())}</span>`; }
 const canEdit = () => !OPT.canEdit || OPT.canEdit();
+/* a Team Manager (or admin): moves pieces on the calendar, works the Assignment tab */
+const canPlan = () => canEdit() || !!(OPT.canPlan && OPT.canPlan());
+/* the line a Team Member sees on every tab */
+const memberBar = () => `<div class="bar2"><span class="ic2">VIEW ONLY</span><p><b>This campaign is the plan — you can see all of it.</b>
+  Your own work happens on your board (Content Process, or wherever a piece was handed to you): open it there to change its status or add to it.</p></div>`;
 function people(){ return (OPT.people && OPT.people()) || []; }          /* [{id,name,role}] */
 function ownerName(it){ if(!it.ownerId) return it.owner||""; const p=people().find(x=>x.id===it.ownerId); return p ? p.name : (it.owner||""); }
 /* save and redraw (index.html's save redraws the whole page, which calls CX.render again) */
@@ -1141,52 +1175,117 @@ function targetSection(c, ro){
     </div>`}`;
 }
 /* the content pieces */
+/* ---------- the content list: one tab per day, pieces grouped by type ---------- */
+let DAYSEL = null;                 /* the day open in the strip: "YYYY-MM-DD", "none", or null = pick one */
+const PLATFORM_GUESS = { longvideo:"YouTube", notification:"App", whatsapp:"WhatsApp", banner:"Website", alert:"Website",
+                         story:"Instagram", reel:"Instagram", influencer:"Instagram", other:"Other" };
+/* "Story" → "Stories", "Long video" → "Long videos", "Press release" → "Press releases" */
+const plural = (w, n) => n===1 ? w : /[^aeiou]y$/i.test(w) ? w.slice(0,-1)+"ies" : /(s|x|ch|sh)$/i.test(w) ? w+"es" : w+"s";
+/* the days on the strip: the campaign's duration, any day added by hand, and any day that already has a piece — in order */
+function stripDays(c){
+  const set = new Set();
+  const d = c.details;
+  if(d.start){
+    const end = d.end && d.end >= d.start ? d.end : d.start;
+    for(let x = d.start, n = 0; x <= end && n < 120; x = addDays(x,1), n++) set.add(x);
+  }
+  (c.extraDays||[]).forEach(x=>set.add(x));
+  c.items.forEach(it=>{ if(it.date) set.add(it.date); });
+  return [...set].sort();
+}
+/* a day added by hand that has nothing on it and sits outside the duration can be taken off again */
+function dayRemovable(c, day){
+  const d = c.details, inRange = d.start && day >= d.start && day <= (d.end && d.end>=d.start ? d.end : d.start);
+  return (c.extraDays||[]).includes(day) && !inRange && !c.items.some(it=>it.date===day);
+}
+function pickDay(c){
+  const days = stripDays(c), hasNone = c.items.some(it=>!it.date);
+  if(DAYSEL==="none" && hasNone) return "none";
+  if(DAYSEL && days.includes(DAYSEL)) return DAYSEL;
+  return days.find(x=>c.items.some(it=>it.date===x)) || (days.includes(TODAY) ? TODAY : days[0]) || (hasNone ? "none" : null);
+}
+/* the group a piece sits in: its type, and for "Other" the name typed for it */
+const groupKey = it => it.kind==="other" ? "other:" + (it.kindOther||"").trim().toLowerCase() : it.kind;
+function itemCard(it, ro){
+  const k = kindOf(it), who = ownerName(it);
+  return `<article class="icard" style="--ic:${k.c}">
+    <header class="icard-h">
+      <span class="e">${k.emo}</span>
+      <span class="t">${esc(kindName(it))}</span>
+      <span class="d">${it.date?dmy(it.date):"no date"}</span>
+    </header>
+    <div class="icard-b">
+      <h5>${esc(it.name)}</h5>
+      ${it.details?`<p>${esc(it.details)}</p>`:""}
+    </div>
+    <footer class="icard-f">
+      ${it.platform?`<span class="ichip">${esc(it.platform)}</span>`:""}
+      ${who ? `<span class="who">${avatar(who)}${esc(who)}</span>` : `<span class="ichip none">nobody yet</span>`}
+      ${ro ? "" : `<span class="iacts">
+        <button class="ibtn" type="button" data-edititem="${esc(it.id)}">Edit</button>
+        <button class="ibtn x" type="button" data-rmitem="${esc(it.id)}" title="Remove">✕</button>
+      </span>`}
+    </footer>
+  </article>`;
+}
 function itemsSection(c, ro){
+  const days = stripDays(c), sel = pickDay(c), undated = c.items.filter(it=>!it.date);
+  const strip = days.length || undated.length || !ro ? `<div class="subnav daystrip">
+      ${days.map(x=>{
+        const n = c.items.filter(it=>it.date===x).length, dt = new Date(x+"T00:00:00");
+        const out = c.details.start && (x < c.details.start || x > (c.details.end||c.details.start));
+        return `<span class="dtab-w"><button class="snav dtab ${sel===x?"on":""} ${out?"out":""}" type="button" data-day="${x}" title="${esc(dt.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"}))}${out?" — outside the campaign's dates":""}">
+          <b>${dt.getDate()}</b><span>${dt.toLocaleDateString("en-GB",{month:"short"})}</span><span class="cnt">${n}</span></button>${
+          !ro && dayRemovable(c,x) ? `<button class="dtab-x" type="button" data-rmday="${x}" title="Take this day off the strip">✕</button>` : ""}</span>`;
+      }).join("")}
+      ${undated.length ? `<button class="snav dtab ${sel==="none"?"on":""}" type="button" data-day="none"><b>—</b><span>No date</span><span class="cnt">${undated.length}</span></button>` : ""}
+      ${ro ? "" : `<button class="dtab-add" type="button" id="addDay" title="Add another day">＋ Day</button>`}
+    </div>` : "";
+  let body;
+  if(!sel){
+    body = `<div class="empty bold"><h4>No days yet</h4>
+      <p>${ro ? "No content pieces have been planned for this campaign yet."
+        : "Set the campaign's duration above and its days appear here — or press <b>＋ Day</b>, then <b>Create content piece</b>."}</p></div>`;
+  } else {
+    const list = c.items.filter(it => sel==="none" ? !it.date : it.date===sel);
+    if(!list.length){
+      body = `<div class="empty bold"><h4>Nothing on ${sel==="none"?"this tab":esc(new Date(sel+"T00:00:00").toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"}))} yet</h4>
+        <p>${ro ? "Nothing goes out on this day." : "Press <b>Create content piece</b> to add everything that goes out on this day in one go."}</p></div>`;
+    } else {
+      /* groups in the order of the type list, "Other" groups after, by their typed name */
+      const groups = [];
+      list.forEach(it=>{ const g = groupKey(it); let G = groups.find(x=>x.key===g);
+        if(!G){ G = { key:g, kind:it.kind, other:it.kind==="other" ? (it.kindOther||"").trim() : "", items:[] }; groups.push(G); }
+        G.items.push(it); });
+      const order = Object.keys(ITEM_KINDS);
+      groups.sort((a,b)=> order.indexOf(a.kind)-order.indexOf(b.kind) || a.other.localeCompare(b.other));
+      body = groups.map(G=>{
+        const k = ITEM_KINDS[G.kind] || ITEM_KINDS.other, name = G.kind==="other" ? (G.other || "Other") : k.label;
+        const its = [...G.items].sort((a,b)=>a.name.localeCompare(b.name, undefined, {numeric:true}));
+        return `<section class="cgroup" style="--ic:${k.c}">
+          <div class="cgroup-h">
+            <span class="cg-ic">${k.emo}</span><h4>${esc(plural(name, its.length))}</h4><span class="cnt">${its.length}</span>
+            ${ro ? "" : `<button class="btn sm cg-add" type="button" data-addone="${esc(G.kind)}" data-other="${esc(G.other)}">＋ Add one</button>`}
+          </div>
+          <div class="igrid">${its.map(it=>itemCard(it, ro)).join("")}</div>
+        </section>`;
+      }).join("");
+    }
+  }
   return `
     <div class="sec-h secbig" style="margin-top:30px">
       ${ro ? `<h3>${esc(c.contentsLabel)}</h3>`
            : `<input class="renameable" id="clabel" value="${esc(c.contentsLabel)}" title="Click to rename this section">`}
-      <span class="hint">${c.items.length} piece${c.items.length===1?"":"s"}${ro?"":" · tap a tile to add one"}</span>
+      <span class="hint">${c.items.length} piece${c.items.length===1?"":"s"} across ${new Set(c.items.map(i=>i.date||"none")).size} day${new Set(c.items.map(i=>i.date||"none")).size===1?"":"s"}</span>
+      ${ro ? "" : `<button class="btn pri" id="bulkCreate" style="margin-left:auto">＋ Create content piece</button>`}
     </div>
-    ${ro ? "" : `<div class="ktiles">
-      ${Object.entries(ITEM_KINDS).map(([k,v])=>{
-        const n = c.items.filter(i=>i.kind===k).length;
-        return `<button class="ktile ${n?"has":""}" type="button" data-addkind="${k}" style="--kc:${v.c}" title="Add a ${v.label.toLowerCase()}">
-          <span class="e">${v.emo}</span><b>${esc(v.label)}</b>
-          <span class="n">${n ? n : "＋"}</span></button>`;}).join("")}
-    </div>`}
-    ${c.items.length ? `<div class="igrid">
-      ${sortItems(c.items).map(it=>{
-        const k = kindOf(it), who = ownerName(it);
-        return `<article class="icard" style="--ic:${k.c}">
-          <header class="icard-h">
-            <span class="e">${k.emo}</span>
-            <span class="t">${esc(kindName(it))}</span>
-            <span class="d">${it.date?dmy(it.date):"no date"}</span>
-          </header>
-          <div class="icard-b">
-            <h5>${esc(it.name)}</h5>
-            ${it.details?`<p>${esc(it.details)}</p>`:""}
-          </div>
-          <footer class="icard-f">
-            ${it.platform?`<span class="ichip">${esc(it.platform)}</span>`:""}
-            ${who ? `<span class="who">${avatar(who)}${esc(who)}</span>` : `<span class="ichip none">nobody yet</span>`}
-            <span class="iacts">
-              <button class="ibtn" type="button" data-edititem="${esc(it.id)}">Edit</button>
-              <button class="ibtn x" type="button" data-rmitem="${esc(it.id)}" title="Remove">✕</button>
-            </span>
-          </footer>
-        </article>`;}).join("")}
-    </div>` : `<div class="empty bold">
-      <h4>Nothing listed yet</h4>
-      <p>${ro ? "No content pieces have been added to this campaign yet."
-        : "Tap a tile above for every piece that goes out. Give each one a date and someone accountable, and the calendar builds itself."}</p>
-    </div>`}`;
+    ${strip}
+    <div class="daybody">${body}</div>`;
 }
 function detailsPane(c){
   const ro = !canEdit();
   return `<div class="${ro?"ro":""}">
-    ${ro?`<div class="bar2"><span class="ic2">VIEW ONLY</span><p>You can see this campaign but not change it — only admins edit it.</p></div>`:""}
+    ${!ro ? "" : canPlan() ? `<div class="bar2"><span class="ic2">MANAGER</span><p><b>Only admins change the details.</b> You can assign pieces in <b>Assignment</b> and move them between days on the <b>Calendar</b>.</p></div>` : memberBar()}
     ${heroHTML(c, ro)}
     <div class="sec-h secbig">
       <h3>📝 Campaign details</h3>
@@ -1211,8 +1310,10 @@ function detailsPane(c){
 }
 
 function wireDetails(c){
-  if(!canEdit()) return;
   const W = $("#body");
+  /* the day strip works for everyone */
+  W.querySelectorAll("[data-day]").forEach(b=>b.onclick=()=>{ DAYSEL = b.dataset.day; draw(); });
+  if(!canEdit()) return;
   const d = c.details;
 
   /* plain inputs */
@@ -1369,7 +1470,28 @@ function wireDetails(c){
 
   /* content pieces */
   const cl = $("#clabel"); if(cl) cl.oninput = ()=>{ c.contentsLabel = cl.value; saveQuiet(); };
-  W.querySelectorAll("[data-addkind]").forEach(b=>b.onclick=()=>itemDialog(c, null, b.dataset.addkind));
+  const bc = $("#bulkCreate"); if(bc) bc.onclick = ()=>bulkDialog(c);
+  W.querySelectorAll("[data-addone]").forEach(b=>b.onclick=()=>{
+    const day = pickDay(c);
+    itemDialog(c, null, { kind:b.dataset.addone, kindOther:b.dataset.other||"", date: day && day!=="none" ? day : "" });
+  });
+  const adDay = $("#addDay"); if(adDay) adDay.onclick = ()=>openDialog({
+    title:"Add a day", sub:"Any date — it slots into the strip in date order, even before the campaign starts.",
+    okLabel:"Add day",
+    fields:[{ k:"day", label:"Which day", type:"date", value:"" }],
+    onSave:(v)=>{
+      if(!v.day){ toast("Pick a date"); return false; }
+      c.extraDays = c.extraDays || [];
+      if(!stripDays(c).includes(v.day)) c.extraDays.push(v.day);
+      DAYSEL = v.day; save(); toast(`${dmy(v.day)} added`);
+    }
+  });
+  W.querySelectorAll("[data-rmday]").forEach(b=>b.onclick=()=>{
+    const x = b.dataset.rmday;
+    c.extraDays = (c.extraDays||[]).filter(y=>y!==x);
+    if(DAYSEL===x) DAYSEL = null;
+    save(); toast(`${dmy(x)} taken off`);
+  });
   W.querySelectorAll("[data-edititem]").forEach(b=>b.onclick=()=>itemDialog(c, c.items.findIndex(x=>x.id===b.dataset.edititem)));
   W.querySelectorAll("[data-rmitem]").forEach(b=>b.onclick=()=>{
     const i = c.items.findIndex(x=>x.id===b.dataset.rmitem); if(i<0) return;
@@ -1390,14 +1512,92 @@ function wireDetails(c){
   });
 }
 
+/* ---------- "Create content piece": many pieces for one day in one go ---------- */
+function bulkDialog(c){
+  if(!canEdit()) return;
+  const sel = pickDay(c);
+  const day0 = sel && sel!=="none" ? sel : (c.details.start || TODAY);
+  const kindOpts = Object.entries(ITEM_KINDS).map(([k,v])=>`<option value="${k}">${v.emo} ${esc(v.label)}</option>`).join("");
+  const rowHTML = () => `<div class="brow">
+      <select class="bkind">${kindOpts}</select>
+      <input class="bqty" type="number" min="1" max="50" value="1" inputmode="numeric" title="How many">
+      <button class="bx" type="button" title="Remove this row">✕</button>
+      <input class="bother" placeholder="What is it? e.g. YT Community Post, Press release" hidden>
+    </div>`;
+  $("#dlgTitle").textContent = "Create content pieces";
+  $("#dlgSub").textContent = "Pick the day, then how many of each type go out on it. Each piece gets a card you can fill in afterwards.";
+  $("#dlgSub").hidden = false;
+  $("#dlgOk").textContent = "Add them";
+  $("#dlgBody").innerHTML = `
+    <div class="fbox" style="background:var(--surface-4);margin-bottom:12px">
+      <label for="b-day">Which day these go out on</label><input id="b-day" type="date" value="${esc(day0)}">
+    </div>
+    <div class="bhead"><span>Content type</span><span>How many</span><span></span></div>
+    <div id="brows">${rowHTML()}</div>
+    <button class="addfield" type="button" id="baddrow" style="min-height:0;margin-top:8px">＋ Add another type</button>`;
+  const rows = $("#brows");
+  const wireRow = r=>{
+    const k = r.querySelector(".bkind"), o = r.querySelector(".bother");
+    k.onchange = ()=>{ o.hidden = k.value!=="other"; if(!o.hidden) o.focus(); };
+    r.querySelector(".bx").onclick = ()=>{ if(rows.children.length>1) r.remove(); else { k.value="reel"; o.hidden=true; r.querySelector(".bqty").value=1; } };
+  };
+  rows.querySelectorAll(".brow").forEach(wireRow);
+  $("#baddrow").onclick = ()=>{
+    rows.insertAdjacentHTML("beforeend", rowHTML());
+    const r = rows.lastElementChild;
+    /* start the new row on a type not picked yet */
+    const used = [...rows.querySelectorAll(".bkind")].map(x=>x.value);
+    const next = Object.keys(ITEM_KINDS).find(k=>k!=="other" && !used.includes(k));
+    if(next) r.querySelector(".bkind").value = next;
+    wireRow(r); r.querySelector(".bkind").focus();
+  };
+  dlgSubmit = ()=>{
+    const day = $("#b-day").value;
+    if(!day){ toast("Pick the day"); return; }
+    const want = [];
+    for(const r of rows.querySelectorAll(".brow")){
+      const kind = r.querySelector(".bkind").value;
+      const n = Math.max(0, Math.min(50, parseInt(r.querySelector(".bqty").value,10) || 0));
+      const other = r.querySelector(".bother").value.trim();
+      if(!n) continue;
+      if(kind==="other" && !other){ toast("Say what the “Other” pieces are"); r.querySelector(".bother").focus(); return; }
+      want.push({ kind, n, other });
+    }
+    if(!want.length){ toast("Add at least one piece"); return; }
+    let made = 0;
+    want.forEach(w=>{
+      const base = w.kind==="other" ? w.other : ITEM_KINDS[w.kind].label;
+      /* carry on from the highest number already used for this type on this day, so names never repeat */
+      const re = new RegExp("^" + base.replace(/[.*+?^${}()|[\]\\]/g,"\\$&") + " (\\d+)$", "i");
+      let top = 0;
+      c.items.forEach(it=>{ if(it.date===day && groupKey(it)===(w.kind==="other" ? "other:"+w.other.toLowerCase() : w.kind)){
+        const m = re.exec(it.name||""); top = Math.max(top, m ? Number(m[1]) : 0); } });
+      top = Math.max(top, c.items.filter(it=>it.date===day && groupKey(it)===(w.kind==="other" ? "other:"+w.other.toLowerCase() : w.kind) && !re.test(it.name||"")).length);
+      for(let i=1;i<=w.n;i++){
+        c.items.push({ id:uid("ci"), name:`${base} ${top+i}`, kind:w.kind, kindOther:w.kind==="other" ? w.other : "",
+          date:day, platform:PLATFORM_GUESS[w.kind]||"Other", ownerId:"", owner:"", details:"" });
+        made++;
+      }
+    });
+    if(!stripDays(c).includes(day)) (c.extraDays = c.extraDays || []).push(day);
+    DAYSEL = day;
+    closeDialog(); save();
+    toast(`${made} piece${made===1?"":"s"} added to ${dmy(day)}`);
+  };
+  $("#dlgScrim").classList.add("on");
+  setTimeout(()=>rows.querySelector(".bkind").focus(), 60);
+}
+
 /* ---------- the item dialog ---------- */
-function itemDialog(c, idx, preKind){
+function itemDialog(c, idx, pre){
   if(!canEdit()) return;
   const isNew = idx==null || idx<0;
+  pre = typeof pre==="string" ? { kind:pre } : (pre || {});
+  const preKind = pre.kind;
   const guess = { longvideo:"YouTube", notification:"App", whatsapp:"WhatsApp", banner:"Website", alert:"Website",
                   story:"Instagram", reel:"Instagram", influencer:"Instagram" };
   const it = isNew
-    ? { name:"", kind:preKind||"reel", kindOther:"", date:c.details.start||"", platform:guess[preKind||"reel"]||"Instagram", ownerId:"", details:"" }
+    ? { name:"", kind:preKind||"reel", kindOther:pre.kindOther||"", date: pre.date!=null ? pre.date : (c.details.start||""), platform:guess[preKind||"reel"]||(preKind==="other"?"Other":"Instagram"), ownerId:"", details:"" }
     : c.items[idx];
   const ppl = people();
   openDialog({
@@ -1421,6 +1621,7 @@ function itemDialog(c, idx, preKind){
       else target = Object.assign(c.items[idx], v);
       const p = ppl.find(x=>x.id===v.ownerId); target.owner = p ? p.name : "";
       if(v.ownerId && v.ownerId!==before) notifyOwner(c, target);
+      DAYSEL = target.date || "none";
       save();
       toast(isNew ? `"${v.name}" added` : "Saved");
     }
@@ -1433,13 +1634,13 @@ function assignPane(c){
     <h4>Nothing to hand out yet</h4>
     <p>Add items under Fill in Details, then share them out here by platform.</p>
     <button class="btn pri" data-ctab="details">Go to Fill in Details</button></div>`;
-  const ro = !canEdit();
+  const ro = !canPlan();
   const plats = [...new Set(c.items.map(i=>i.platform).filter(Boolean))];
   if(ASSIGNFILTER!=="All" && !plats.includes(ASSIGNFILTER)) ASSIGNFILTER="All";
   const rows = ASSIGNFILTER==="All" ? c.items : c.items.filter(i=>i.platform===ASSIGNFILTER);
   const unassigned = c.items.filter(i=>!ownerName(i)).length;
-  return `
-    <div class="bar2">
+  return `${ro ? memberBar() : ""}
+    <div class="bar2" ${ro?"hidden":""}>
       <span class="ic2">HAND-OFF</span>
       <p><b>Give every item a name, then press its action.</b> Whoever you put in Accountable gets an email and a 🔔 the moment
       you save. Reels and videos go straight to the Content Process board as high priority; the rest open the tool that
@@ -1474,7 +1675,7 @@ function assignPane(c){
                 ? `<button class="btn sm" data-goprocess="1">View on the board →</button>`
                 : ro ? `<span class="hint">not sent yet</span>` : `<button class="btn sm pri" data-act="${esc(it.id)}">🔔 ${esc(a.label)}</button>`)
               : a.mode==="link"
-                ? `<a class="btn sm go" href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.label)} ↗</a>`
+                ? ro ? `<span class="hint">${esc(a.label.replace(/^Open /,""))}</span>` : `<a class="btn sm go" href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.label)} ↗</a>`
                 : `<span class="hint">nothing to send</span>`}
           </td></tr>`;
       }).join("")}</tbody>
@@ -1486,7 +1687,7 @@ function wireAssign(c){
   const B = $("#body");
   B.querySelectorAll("[data-plat]").forEach(b=>b.onclick=()=>{ ASSIGNFILTER=b.dataset.plat; draw(); });
   B.querySelectorAll("[data-goprocess]").forEach(b=>b.onclick=()=>{ if(OPT.goProcess) OPT.goProcess(c); });
-  if(!canEdit()) return;
+  if(!canPlan()) return;
   B.querySelectorAll("[data-assign]").forEach(b=>b.onclick=()=>{
     const it = c.items.find(x=>x.id===b.dataset.assign); if(!it) return;
     const ppl = people();
@@ -1543,7 +1744,7 @@ function dashPane(c){
   const owners = [...new Set(c.items.map(ownerName).filter(Boolean))];
   const byOwner = owners.map(o=>({ label:o, v:c.items.filter(x=>ownerName(x)===o).length, c:`hsl(${hue(o)} 52% 46%)` })).sort((a,b)=>b.v-a.v);
   const unassigned = c.items.filter(i=>!ownerName(i)).length;
-  return `
+  return `${canPlan() ? "" : memberBar()}
     <div class="bigtile">
       <span class="lbl">Total content pieces</span>
       <div class="n">${n}</div>
@@ -1596,7 +1797,7 @@ function calendarPane(c){
   const owners = [...new Set(c.items.map(ownerName).filter(Boolean))];
   const sel = (id,label,value,opts) => `<label class="fsel"><span>${label}</span>
     <select data-cf="${id}">${opts.map(([v,t])=>`<option value="${esc(v)}" ${value===v?"selected":""}>${esc(t)}</option>`).join("")}</select></label>`;
-  return `
+  return `${canPlan() ? "" : memberBar()}
     <div class="calbar">
       <div class="seg">
         <button data-cv="grid" class="${CALVIEW==="grid"?"on":""}">Grid</button>
@@ -1635,7 +1836,7 @@ function shiftMonth(ym, n){
 /* a card you can pick up */
 function evtHTML(c, it){
   const k = kindOf(it), who = ownerName(it);
-  return `<button class="cevt" data-drag="${esc(it.id)}" title="${esc(it.name)}${canEdit()?" — drag to move":""}"
+  return `<button class="cevt" data-drag="${esc(it.id)}" title="${esc(it.name)}${canPlan()?" — drag to move":""}"
     style="border-left-color:${k.c};background:color-mix(in srgb,${k.c} 9%,transparent)">
     <b>${k.emo} ${esc(it.name)}</b>
     <span>${esc(kindName(it))}${who?" · "+esc(who):""}</span></button>`;
@@ -1664,7 +1865,7 @@ function gridView(c, shown){
         <button class="navbtn" data-mv="1" title="Next month">›</button>
       </div>
       <span class="hint">${here} here${away?` · ${away} in another month — use the arrows`:""}</span>
-      ${canEdit()?`<span class="hint" style="margin-left:auto">✋ Drag a card onto another day to move it</span>`:""}
+      ${canPlan()?`<span class="hint" style="margin-left:auto">✋ Drag a card onto another day to move it</span>`:""}
     </div>
     <div style="overflow-x:auto"><div class="cgrid">
       ${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=>`<div class="cdow">${d}</div>`).join("")}
@@ -1673,7 +1874,7 @@ function gridView(c, shown){
     <div class="undated" data-drop="none">
       <span class="lbl">No date yet</span>
       ${undated.length ? undated.map(it=>evtHTML(c,it)).join("")
-        : `<span class="hint">${canEdit()?"Drag a card here to take its date off again.":"Everything has a date."}</span>`}
+        : `<span class="hint">${canPlan()?"Drag a card here to take its date off again.":"Everything has a date."}</span>`}
     </div>`;
 }
 function listView(c, shown){
@@ -1710,7 +1911,7 @@ function flowView(c, shown){
       </div>${i<ds.length-1?`<div class="farrow">→</div>`:""}`;
     }).join("")}
   </div></div>
-  <p class="hint" style="margin:12px 0 0">Reads left to right in the order things go out.${canEdit()?" Click any card to edit it.":""}</p>`;
+  <p class="hint" style="margin:12px 0 0">Reads left to right in the order things go out.${canEdit()?" Click any card to edit it.":canPlan()?" Click any card to change its day.":""}</p>`;
 }
 
 /* drag and drop on pointer events, so a finger works like a mouse.
@@ -1782,11 +1983,11 @@ function pointerDrag(el, opts){
 }
 function wireCalendar(c){
   const W = $("#body");
-  if(canEdit()) W.querySelectorAll("[data-drag]").forEach(el=>{
+  if(canPlan()) W.querySelectorAll("[data-drag]").forEach(el=>{
     const id = el.dataset.drag;
     pointerDrag(el, {
       zone:"[data-drop]",
-      onTap: ()=>itemDialog(c, c.items.findIndex(x=>x.id===id)),
+      onTap: ()=>openPiece(c, id),
       onDrop: z=>dropOnto(c, id, z.dataset.drop),
       onMiss: ()=>toast("Dropped outside the calendar — nothing changed")
     });
@@ -1802,7 +2003,20 @@ function wireCalendar(c){
   ["clearFilter","clearFilter2"].forEach(id=>{ const b=$("#"+id);
     if(b) b.onclick=()=>{ CALFILTER={range:"all",anchor:"",type:"all",platform:"all",owner:"all"}; draw(); }; });
   const g = $("#genFlow"); if(g) g.onclick=()=>{ CALVIEW = CALVIEW==="flow" ? "grid" : "flow"; draw(); };
-  W.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>itemDialog(c, c.items.findIndex(x=>x.id===b.dataset.open)));
+  if(canPlan()) W.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openPiece(c, b.dataset.open));
+  else W.querySelectorAll("[data-open]").forEach(b=>{ b.style.cursor="default"; });
+}
+/* tapping a piece: an admin gets the whole item, a Team Manager just its day */
+function openPiece(c, id){
+  const i = c.items.findIndex(x=>x.id===id); if(i<0) return;
+  if(canEdit()) return itemDialog(c, i);
+  if(!canPlan()) return;
+  const it = c.items[i];
+  openDialog({
+    title:`Move "${it.name}"`, sub:"Pick the day it goes out on, or clear it to take its date off.", okLabel:"Move",
+    fields:[{ k:"date", label:"Day", type:"date", value:it.date||"" }],
+    onSave:(v)=>{ if((it.date||"")===v.date) return; dropOnto(c, id, v.date || "none"); }
+  });
 }
 
 /* ============================================================ API */
@@ -1810,14 +2024,14 @@ window.CX = {
   tabs: [["details","Fill in Details"],["assign","Assignment & distribution of work"],["calendar","Calendar"],["dash","Dashboard"]],
   normalize: normalize,
   kinds: ITEM_KINDS,
-  /* opt: { tab, canEdit(), canDelete(), people() → [{id,name,role}], save(space), saveQuiet(space),
+  /* opt: { tab, canEdit() (admin: everything), canPlan() (Team Manager: calendar + assignment), canDelete(), people() → [{id,name,role}], save(space), saveQuiet(space),
             onHeader(space), remove(space), notify(space,item) → Promise<{sent,belled,reason}>,
             sendToProcess(space,item) → {cardId}|{error}, cardExists(space,cardId), goProcess(space),
             socialName(space), setTab(t) } */
   render: function(space, wrap, opt){
     mount();
     OPT = opt || {};
-    if(SPACE!==space){ SPACE=space; ASSIGNFILTER="All"; CALMONTH=""; CALFILTER={range:"all",anchor:"",type:"all",platform:"all",owner:"all"}; if(R) closeDialog(); }
+    if(SPACE!==space){ SPACE=space; ASSIGNFILTER="All"; CALMONTH=""; DAYSEL=null; CALFILTER={range:"all",anchor:"",type:"all",platform:"all",owner:"all"}; if(R) closeDialog(); }
     normalize(space);
     CTAB = ["details","assign","calendar","dash"].includes(OPT.tab) ? OPT.tab : "details";
     if(HOST.parentNode!==wrap) wrap.appendChild(HOST);
