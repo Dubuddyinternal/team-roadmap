@@ -19195,7 +19195,7 @@ function roleOptions(sel, current, maxRole){
    to add a new kind of section later (e.g. "Raise a request", "Game support"),
    add one line here and a render function. */
 // sidebar dropdowns in Administration (sections with a matching group)
-const ADMIN_GROUPS = { hr: { ico:"🧑‍💼", lbl:"HR" }, it: { ico:"🛠️", lbl:"IT support" } };
+const ADMIN_GROUPS = { it: { ico:"🛠️", lbl:"IT support" }, hr: { ico:"🧑‍💼", lbl:"HR" }, product: { ico:"💡", lbl:"Product" }, me: { ico:"👤", lbl:"For me" } };
 let adminOpenGroups = {};
 function adminSections(){
   const me = currentUser(), sup = !!(me && me.super), people = canManagePeople();
@@ -19214,17 +19214,19 @@ function adminSections(){
     { k:"policies",    ico:"📜", lbl:"Company policies", group:"hr", show: !!me && !!SUPA && typeof renderAdminPolicies === "function", render: renderAdminPolicies },
     { k:"hrsettings",  ico:"🏢", lbl:"Company and offer letter", group:"hr", show: !!me && !!SUPA && typeof renderAdminHrSettings === "function" && hasPerm("hr_settings"), render: renderAdminHrSettings },
     { k:"lms",         ico:"🎓", lbl:"LMS", group:"hr",  show: hasPerm("manage_learning") && !!SUPA, render: renderAdminLms },
-    { k:"notifications", ico:"📣", lbl:"Notifications",      show: hasPerm("send_notifications") && !!SUPA, render: renderAdminNotifications },
-    { k:"ideaemails",  ico:"✉️", lbl:"Idea emails",          show: hasPerm("review_student_ideas") && !!SUPA, render: renderAdminIdeaEmails },
-    { k:"myfeedback",  ico:"📝", lbl:"My monthly feedback",  show: !!me && !!SUPA && typeof renderAdminMyFeedback === "function", render: renderAdminMyFeedback },
+    // Product: ideas from students and the team
+    { k:"ideaemails",  ico:"✉️", lbl:"Idea emails",          show: hasPerm("review_student_ideas") && !!SUPA, group:"product", render: renderAdminIdeaEmails },
+    { k:"suggestbox",  ico:"📮", lbl:"Suggestion box",       show: sup && !!SUPA && typeof renderAdminSuggestionBox === "function", group:"product", render: renderAdminSuggestionBox },
     { k:"sendbox",     ico:"📮", lbl:"Send to " + (typeof fbBoss === "function" ? fbBoss() : "Sumit"), crumb:"Send to Sumit",
-                                                                        show: !!me && !!SUPA && !sup && typeof renderAdminSendBox === "function", render: renderAdminSendBox },
-    { k:"suggestbox",  ico:"📮", lbl:"Suggestion box",       show: sup && !!SUPA && typeof renderAdminSuggestionBox === "function", render: renderAdminSuggestionBox },
-    { k:"myideas",     ico:"💡", lbl:"My product ideas",     show: !!me && !!SUPA && typeof pitchTarget === "function" && !!pitchTarget(), render: renderAdminMyIdeas },
+                                                                        show: !!me && !!SUPA && !sup && typeof renderAdminSendBox === "function", group:"product", render: renderAdminSendBox },
+    // For me: things about your own account and work
+    { k:"myaccess",    ico:"🔎", lbl:"My access",            show: !!me,                           group:"me", render: renderMyAccess },
+    { k:"myideas",     ico:"💡", lbl:"My product ideas",     show: !!me && !!SUPA && typeof pitchTarget === "function" && !!pitchTarget(), group:"me", render: renderAdminMyIdeas },
+    { k:"myfeedback",  ico:"📝", lbl:"My monthly feedback",  show: !!me && !!SUPA && typeof renderAdminMyFeedback === "function", group:"me", render: renderAdminMyFeedback },
+    { k:"notifications", ico:"📣", lbl:"Notifications",      show: hasPerm("send_notifications") && !!SUPA, group:"me", render: renderAdminNotifications },
+    { k:"mygames",     ico:"\uD83C\uDFAE", lbl:"My games",             show: hasPerm("create_games"),        group:"me", render: renderMyGames },
     { k:"roadmaps",    ico:"🗺️", lbl:"Roadmaps",             show: hasPerm("add_roadmaps"),        render: renderAdminRoadmaps },
     { k:"spaces",      ico:"🗂️", lbl:"Spaces",               show: hasPerm("add_spaces"),          render: renderAdminSpaces },
-    { k:"myaccess",    ico:"🔎", lbl:"My access",            show: !!me,                           render: renderMyAccess },
-    { k:"mygames",     ico:"\uD83C\uDFAE", lbl:"My games",             show: hasPerm("create_games"),        render: renderMyGames },
     { k:"reviewgames", ico:"\uD83D\uDD79\uFE0F", lbl:"Review games" + (gamesWaiting() ? " (" + gamesWaiting() + ")" : ""), crumb:"Review games",
                                                                         show: sup,                            render: renderReviewGames },
     { k:"danger",      ico:"⚠️", lbl:"Danger zone",          show: sup,                            render: renderAdminDanger },
