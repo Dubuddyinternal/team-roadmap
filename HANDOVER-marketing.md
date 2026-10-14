@@ -11,7 +11,9 @@
 ## Setting it up
 
 1. On the **dubuddy** team, **Dubuddy Marketing** is created on its own the first time the app loads, and the Social Media space moves inside it (`seedMarketingParent` in `index.html`). It only happens once: if you delete it, it stays deleted. Other teams add one from Administration → Spaces → **＋ Add space** → **Marketing**.
-2. To add a campaign, use **＋ Add space** under the Marketing space in the sidebar. The Space templates pop-up offers **Create campaign** only. The other marketing templates were taken out on purpose.
+2. The sidebar has two add buttons (both need the **Add spaces** permission):
+   - **＋ Add parent space**, at the bottom of the spaces list, opens every space template (Marketing, Scrum, Social Media…). The new space goes at the top level.
+   - **＋ Add space**, inside a Marketing space, opens the marketing Space templates: Create campaign, Social media, Educational content, Competitor analysis and Product roadmap. Push automations and Influencer pipeline show as "coming soon". The new space goes inside that Marketing space.
 3. To move an existing space in or out of Marketing, use its **⋯** menu → Move into / out of Marketing.
 
 Adding or moving spaces needs the **Add spaces** permission. Deleting a Marketing space doesn't delete the spaces inside it; they go back to the sidebar.

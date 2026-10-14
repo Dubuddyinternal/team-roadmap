@@ -5195,7 +5195,13 @@ function mktOpen(cs){ return MKT_OPEN[cs.id] !== false; }
 // "＋ Add space" inside a Marketing space: the marketing templates
 function openMarketingTemplates(parent){
   const T = [
-    { id:"campaign",   emo:"📣", name:"Create campaign",     meta:"Details · Contents · Calendar", desc:"One sale, one place. Fill in the offer once, list everything that goes out, then arrange it day by day." }
+    { id:"campaign",   emo:"📣", name:"Create campaign",     meta:"Details · Contents · Calendar", desc:"One sale, one place. Fill in the offer once, list everything that goes out, then arrange it day by day." },
+    { id:"social",     emo:"🎯", name:"Social media",        meta:"Ideation · Process · Schedule", desc:"Every post has a reason before it is made and a verdict after it ships — research, hook, CTA, then a board and a calendar." },
+    { id:"content",    emo:"📚", name:"Educational content", meta:"Tasks · Budget · Kanban",       desc:"A content section with tasks, deadlines, budgets and the List / Board views — like your exam sections." },
+    { id:"competitor", emo:"⚔️", name:"Competitor analysis", meta:"Product-level · Feature-level", desc:"Compare against competitors — product-level feature grids and feature-level deep dives, side by side." },
+    { id:"discovery",  emo:"🚀", name:"Product roadmap",     meta:"All ideas · Roadmap · Timeline", desc:"Collect ideas, sort them into Now / Next / Later, and see them on a timeline." },
+    { id:null, emo:"🔔", name:"Push automations",    meta:"Coming soon", desc:"Rules that fire on their own — someone signs up, the right notification goes out, and every attempt is written down." },
+    { id:null, emo:"🤝", name:"Influencer pipeline", meta:"Coming soon", desc:"Track creators from first message to published video, with rates, deliverables and whether payment went out." }
   ];
   const back = document.createElement("div"); back.className = "overlay show";
   const dlg = document.createElement("div"); dlg.className = "dialog"; dlg.setAttribute("role","dialog"); dlg.setAttribute("aria-modal","true"); dlg.style.maxWidth = "620px";
@@ -13835,7 +13841,16 @@ function renderAll(){
         _moreCs.onclick = ()=> openAllList("spaces");
         ws.appendChild(_moreCs);
       }
-      // "＋ Add space" lives in Administration → Spaces now, for roles given "Add spaces"
+      // top-level "＋ Add space": a new space of its own (a Marketing space is a parent that holds others);
+      // the "＋ Add space" inside a Marketing space adds to that parent instead
+      if(hasPerm("add_spaces")){
+        const _addTop = document.createElement("button");
+        _addTop.className = "ws-item ws-add";
+        _addTop.textContent = "\uFF0B Add parent space";
+        _addTop.title = "Add a new space to the sidebar";
+        _addTop.onclick = ()=>{ window._pendingParent = null; $("tpl-overlay").classList.add("show"); };
+        ws.appendChild(_addTop);
+      }
     });
   }
   // Educational Content sections now live as content-type spaces under SPACES.
