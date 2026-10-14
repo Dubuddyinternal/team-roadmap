@@ -746,6 +746,9 @@ function renderAdminAccChecks(wrap) {
     // not in Zoho yet
     var bad = reqs.filter(function (r) { return r.status === "paid" && ["pending", "failed", "dry_run", "manual"].indexOf(r.zoho_status) >= 0; });
     var badRuns = runs.filter(function (r) { return r.zoho_status !== "synced" && r.zoho_status !== "none"; });
+    // salaries paid with no run recorded (e.g. paid before the Zoho sync existed) can't be sent; say so
+    var runMonths = runs.map(function (r) { return r.month; });
+    pay.forEach(function (p) { if (runMonths.indexOf(p.month) < 0) { runMonths.push(p.month); badRuns.push({ month: p.month, zoho_status: "manual", zoho_error: "paid before the Zoho sync was set up; ask Claude to queue it" }); } });
     var fc = sec("Not in Zoho yet (" + (bad.length + badRuns.length) + ")", "Failed, waiting, dry run or to enter by hand.");
     if (!bad.length && !badRuns.length) fc.appendChild(accEl("div", "hint", "Everything paid is in Zoho. ✓"));
     badRuns.forEach(function (r) { var row = accEl("div", "acc-row"), m = accEl("div", "main"); m.append(accEl("div", "t", "Payroll " + accMonthLabel(r.month)), accEl("div", "h", (ZOHO_CHIP[r.zoho_status] || [r.zoho_status])[0] + (r.zoho_error ? " · " + r.zoho_error : ""))); row.appendChild(m); fc.appendChild(row); });
@@ -755,7 +758,7 @@ function renderAdminAccChecks(wrap) {
       var ra = accEl("button", "btn save", "↻ Retry all"); ra.style.marginTop = "8px";
       ra.onclick = async function () {
         ra.disabled = true;
-        for (var i = 0; i < badRuns.length; i++) await accZoho({ action: "payroll", month: badRuns[i].month }, true);
+        for (var i = 0; i < badRuns.length; i++) if (badRuns[i].zoho_status !== "manual") await accZoho({ action: "payroll", month: badRuns[i].month }, true);
         if (retryable.length) await accZoho({ action: "requests", ids: retryable.map(function (r) { return r.id; }) }, true);
         accToast("Done. Check the list again."); renderAdminPage();
       };
