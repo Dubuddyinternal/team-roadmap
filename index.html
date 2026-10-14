@@ -34,6 +34,7 @@
 <script src="horizon-space.js"></script>
 <!-- Monthly feedback (My Team tab + Administration) and the suggestion box to Sumit (monthly-feedback.js) -->
 <script src="monthly-feedback.js"></script>
+<script src="hr.js"></script><!-- HR files: My HR file + Administration → Employees (HR) -->
 <script>
 /* ============================================================
    ONE-TIME SETUP with JSONBin (~3 minutes)
@@ -3760,6 +3761,7 @@ body{margin:0}
       </div>
       <button class="acct-item" id="acct-teams">⌂ Switch team</button>
       <button class="acct-item" id="acct-profile">👤 My profile</button>
+      <button class="acct-item" id="acct-hr">🗂️ My HR file</button>
       <button class="acct-item" id="acct-doclib">📚 Our Wiki</button>
       <button class="acct-item" id="acct-admin" style="display:none">⚙️ Administration</button>
       <button class="acct-item danger" id="acct-logout">→] Sign out</button>
@@ -4175,6 +4177,7 @@ const PERMS = [
   {key:"delete_social_cards", label:"Delete Social Media cards", hint:"See “Delete” on a Content Process card in Social Media. Owners and Admins always can"},
   {key:"review_student_ideas", label:"Review student ideas", hint:"Approve, merge or reject ideas students send from tools.dubuddy.in/ideas (product space → From students)"},
   {key:"manage_learning",  label:"Run LMS",               hint:"Plan learning drops — videos, articles, polls, quizzes — in Administration → LMS, and see everyone's answers"},
+  {key:"manage_hr",        label:"Manage HR files",       hint:"See everyone's HR details and documents in Administration → Employees (HR), approve documents and send contracts"},
 ];
 // what the 5 old role names meant, for anyone not yet on a custom role
 const LEGACY_PERMS = { admin: PERMS.map(p=>p.key), editor:["view","comment","edit","delete","spaces"], commenter:["view","comment"], viewer:["view"] };
@@ -19092,6 +19095,7 @@ function openAccount(){
 }
 $("acct-teams") && ($("acct-teams").onclick = ()=>{ $("account-overlay").classList.remove("show"); location.href = location.pathname; });
 $("acct-profile") && ($("acct-profile").onclick = ()=>{ $("account-overlay").classList.remove("show"); openProfile(); });
+$("acct-hr") && ($("acct-hr").onclick = ()=>{ $("account-overlay").classList.remove("show"); if(typeof openMyHrFile === "function") openMyHrFile(); });
 $("acct-doclib") && ($("acct-doclib").onclick = ()=>{ $("account-overlay").classList.remove("show"); openDocLib(); });
 $("acct-admin") && ($("acct-admin").onclick = ()=>{ $("account-overlay").classList.remove("show"); openAdmin(); });
 $("acct-logout") && ($("acct-logout").onclick = ()=> logout());
@@ -19194,6 +19198,7 @@ function adminSections(){
     { k:"request",     ico:"➕",       lbl:"Request a teammate",   show: hasPerm("request_members"),     render: renderRequestTeammate },
     { k:"notifications", ico:"📣", lbl:"Notifications",      show: hasPerm("send_notifications") && !!SUPA, render: renderAdminNotifications },
     { k:"ideaemails",  ico:"✉️", lbl:"Idea emails",          show: hasPerm("review_student_ideas") && !!SUPA, render: renderAdminIdeaEmails },
+    { k:"hr",          ico:"🗂️", lbl:"Employees (HR)",       show: !!me && !!SUPA && typeof renderAdminHr === "function" && (sup || hasPerm("manage_hr")), render: renderAdminHr },
     { k:"myfeedback",  ico:"📝", lbl:"My monthly feedback",  show: !!me && !!SUPA && typeof renderAdminMyFeedback === "function", render: renderAdminMyFeedback },
     { k:"sendbox",     ico:"📮", lbl:"Send to " + (typeof fbBoss === "function" ? fbBoss() : "Sumit"), crumb:"Send to Sumit",
                                                                         show: !!me && !!SUPA && !sup && typeof renderAdminSendBox === "function", render: renderAdminSendBox },
