@@ -133,7 +133,11 @@ function hrErr(e) { return (e && (e.message || e.error_description)) || String(e
 function hrDate(iso) { return iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : ""; }
 function hrSize(n) { return n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB"; }
 function hrMe() { return typeof currentUser === "function" ? currentUser() : null; }
-function hrToast(m) { if (typeof toast === "function") toast(m); }
+function hrToast(m) {
+  if (typeof toast !== "function") return;
+  var t = document.getElementById("toast"); if (t) t.style.zIndex = "10050";   // above the admin page and HR dialogs
+  toast(m);
+}
 function hrIsAdmin() { var u = hrMe(); return !!u && (u.super || (typeof hasPerm === "function" && hasPerm("manage_hr"))); }
 function hrUsers() { return typeof USERS !== "undefined" ? USERS : []; }
 function hrUser(id) { return hrUsers().find(function (u) { return u.id === id; }) || null; }
@@ -351,6 +355,8 @@ function hrAsk(title, ph, btn) {
 function hrAddress(d, pre) {
   return [d[pre + "_line"], d[pre + "_city"], d[pre + "_state"], d[pre + "_pin"]].filter(function (x) { return x && String(x).trim(); }).join(", ");
 }
+// "4" → "4 months"; anything with words stays as typed
+function hrUnit(v, unit) { v = String(v == null ? "" : v).trim(); return /^\d+$/.test(v) ? v + " " + unit + (v === "1" ? "" : "s") : v; }
 function hrContractHtml(template, company, d, job, extra) {
   d = d || {}; job = job || {}; company = company || {};
   var v = {
@@ -364,7 +370,7 @@ function hrContractHtml(template, company, d, job, extra) {
     designation: job.designation || "[designation]", department: job.department || "[department]",
     employment_type: ({ "Full-time employee": "a full-time employee", "Intern": "an intern", "Consultant / freelancer": "a consultant", "Part-time": "a part-time employee" })[job.employment_type] || "[type]",
     joining_date: job.joining_date ? new Date(job.joining_date).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "[joining date]",
-    pay: job.pay || "[pay]", probation: job.probation || "4 months", notice: job.notice || "15 days",
+    pay: job.pay || "[pay]", probation: hrUnit(job.probation, "month") || "4 months", notice: hrUnit(job.notice, "day") || "15 days",
     location: job.location || "[work location]", reporting_to: job.reporting_to || "[manager]", hours: job.hours || "[working hours]"
   };
   Object.keys(extra || {}).forEach(function (k) { v[k] = extra[k]; });
@@ -973,16 +979,28 @@ function hrRenderPerson(wrap, uid) {
   });
   jc.appendChild(box);
   var jf = hrEl("div", "hr-foot");
+  var msg = hrEl("span", "hr-saved");
+  var note = function (t, bad) { msg.textContent = t; msg.style.color = bad ? "#B4321E" : ""; };
   var sj = hrEl("button", "btn", "Save job terms");
-  sj.onclick = async function () { if (await act("save_job", { p_job: job })) hrToast("Job terms saved"); };
+  sj.onclick = async function () {
+    sj.disabled = true; note("Saving…");
+    if (await act("save_job", { p_job: job })) note("✓ Saved at " + new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }));
+    else note("Couldn't save. Try again.", true);
+    sj.disabled = false;
+  };
   var pv = hrEl("button", "btn save", "📄 Preview offer letter");
   pv.onclick = async function () {
-    if (!rec || ["submitted", "contract_sent", "signed", "complete"].indexOf(rec.status) < 0) { hrToast("They need to submit their HR file first"); return; }
-    await act("save_job", { p_job: job });
-    var s = HR.settings || await hrLoadSettings();
-    hrContractDialog(u, hrContractHtml(s.contract_template, s.company, d, job), act);
+    pv.disabled = true; note("Opening…");
+    try {
+      if (!await act("save_job", { p_job: job })) { note("Couldn't save the job terms. Try again.", true); return; }
+      var s = HR.settings || await hrLoadSettings();
+      var ready = rec && ["submitted", "contract_sent", "signed", "complete"].indexOf(rec.status) >= 0;
+      hrContractDialog(u, hrContractHtml(s.contract_template, s.company, d, job), ready ? act : "waiting");
+      note("");
+    } catch (e) { note("Couldn't open the preview: " + hrErr(e), true); }
+    finally { pv.disabled = false; }
   };
-  jf.append(sj, hrEl("div", "grow"), pv);
+  jf.append(sj, msg, hrEl("div", "grow"), pv);
   if (rec && rec.contract_html) {
     var last = hrEl("button", "btn", rec.offer_sig_doc ? "See the signed offer letter" : "See the offer letter they got");
     last.onclick = function () { var dlg = hrContractDialog(u, hrOfferStamp(rec, docs, null, function (h) { if (dlg) dlg(h); }), null); };
@@ -993,7 +1011,10 @@ function hrRenderPerson(wrap, uid) {
 }
 function hrContractDialog(u, html, act) {
   var ov = hrEl("div", "hr-ask"), bx = hrEl("div", "box"); bx.style.width = "min(820px,100%)"; ov.setAttribute("data-plain", "");
-  bx.appendChild(hrEl("h3", null, act ? "Offer letter for " + userDisplayName(u) : "Offer letter sent to " + userDisplayName(u)));
+  // act === "waiting": a preview only; it can be sent once they submit their HR file
+  var waiting = act === "waiting"; if (waiting) act = null;
+  bx.appendChild(hrEl("h3", null, act || waiting ? "Offer letter for " + userDisplayName(u) : "Offer letter sent to " + userDisplayName(u)));
+  if (waiting) bx.appendChild(hrEl("div", "hr-note warn", "This is a preview. You can email it once " + userDisplayName(u) + " submits their HR file. They're still filling it in, so details like their address and PAN may show as [brackets]."));
   if (act) bx.appendChild(hrEl("div", "hint", "Check every line. Anything in [brackets] is still missing — fill in the job terms or the company details first."));
   var view = hrEl("div", "hr-contract"); view.style.margin = "10px 0"; view.innerHTML = html; bx.appendChild(view);
   var row = hrEl("div", "hr-foot");
