@@ -63,7 +63,8 @@ Files can be PDF, JPG, PNG or WEBP, up to 10 MB each.
 - **Editing:** HR presses **📜 Policies** → edit. **Save** fixes wording without asking anyone to re-sign; **Save as a new version** asks everyone to sign again.
 - **Placeholders:** `{company}`, `{company_short}`, `{full_name}`, `{date}`, `{policy_list}` (acknowledgement only). Change the short company name in ⚙️ Company and offer letter.
 - **Seeded:** Work Systems, Leave, Code of Conduct, POSH (placeholder text: paste the real policy in) and the Acknowledgement & Agreement.
-- **Database:** `supabase/stage18b_hr_policies.sql`, then `supabase/stage18c_hr_signature.sql`. Both are safe to run again.
+- **Offer letter:** the step is always in My HR file. Before HR sends it, it shows what happens next. Once sent, the person signs it with the same saved signature (`hr_sign_offer`, stored as `offer_sig_doc`, `offer_place`, `offer_signed_name` on `hr_records`), or prints and uploads a signed copy as before.
+- **Database:** `supabase/stage18b_hr_policies.sql`, then `stage18c_hr_signature.sql`, then `stage18d_hr_offer_sign.sql`. All are safe to run again.
 
 ## Notes for the next developer
 
