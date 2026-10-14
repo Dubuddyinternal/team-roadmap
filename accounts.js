@@ -804,3 +804,178 @@ function renderAdminAccChecks(wrap) {
     if (!logs.length) lc.appendChild(accEl("div", "hint", "Nothing yet."));
   });
 }
+
+/* ---------- Accounts → Sales (Cashfree)  (database: supabase/stage19d_cashfree_sales.sql) ----------
+   Every Cashfree payment arrives by webhook (cashfree-hook) with its invoice
+   number and GST split; this page shows the month like the B2C sheet,
+   downloads it, and imports Cashfree's transaction export for history. */
+var ACC_SALE_COLS = [["Transaction Time", "txn_time"], ["Invoice No.", "invoice_no"], ["Order Id", "order_id"], ["Cashfree Order ID", "cf_order_id"],
+  ["Order Amount", "order_amount"], ["Taxable", "taxable"], ["CGST", "cgst"], ["SGST", "sgst"], ["Order Currency", "currency"], ["Reference Id", "cf_payment_id"],
+  ["Customer Phone", "customer_phone"], ["Payment Mode", "payment_mode"], ["Transaction Status", "status"], ["Failure Reason", "message"], ["Refunded", "refunded"],
+  ["Transaction Amount", "txn_amount"], ["Transaction Currency", "currency"], ["Refund Type", "refund_type"], ["Captured", "captured"], ["Customer Reference ID", "customer_id"],
+  ["Customer Name", "customer_name"], ["Customer Email", "customer_email"]];
+function accIstTime(t) {
+  if (!t) return "";
+  var p = {}; new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })
+    .formatToParts(new Date(t)).forEach(function (x) { p[x.type] = x.value; });
+  return p.day + "/" + p.month + "/" + p.year + " " + p.hour + ":" + p.minute;
+}
+function accCsvParse(text) {
+  var rows = [], row = [], cur = "", q = false;
+  for (var i = 0; i < text.length; i++) {
+    var c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
+    else if (c === '"') q = true;
+    else if (c === ",") { row.push(cur); cur = ""; }
+    else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(cur); rows.push(row); row = []; cur = ""; }
+    else cur += c;
+  }
+  if (cur || row.length) { row.push(cur); rows.push(row); }
+  return rows;
+}
+// "8/31/25 20:17" (Sheets), "2025-08-31 20:17:33" (Cashfree), "31/08/2025 20:17" → ISO in IST
+function accParseTime(s) {
+  s = String(s || "").trim(); if (!s) return "";
+  var m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (m) return m[1] + "-" + m[2] + "-" + m[3] + "T" + m[4].padStart(2, "0") + ":" + m[5] + ":" + (m[6] || "00") + "+05:30";
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})[ ,]+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (m) {
+    var a = Number(m[1]), b = Number(m[2]), y = m[3].length === 2 ? "20" + m[3] : m[3];
+    var mon = a > 12 ? b : a, day = a > 12 ? a : b;   // month/day like Sheets, unless the first number can't be a month
+    return y + "-" + String(mon).padStart(2, "0") + "-" + String(day).padStart(2, "0") + "T" + m[4].padStart(2, "0") + ":" + m[5] + ":" + (m[6] || "00") + "+05:30";
+  }
+  var d = new Date(s); return isNaN(d) ? "" : d.toISOString();
+}
+async function accSalesImport(file) {
+  var rows = accCsvParse(await file.text()), hi = rows.findIndex(function (r) { return r.some(function (c) { return /^reference id$/i.test(c.trim()); }); });
+  if (hi < 0) { accToast("This file has no “Reference Id” column. Download the transactions report from Cashfree (or the B2C sheet as CSV)."); return; }
+  var head = rows[hi].map(function (c) { return c.trim().toLowerCase(); }), col = {};
+  ACC_SALE_COLS.forEach(function (c) { var i = head.indexOf(c[0].toLowerCase()); if (i >= 0 && !(c[1] in col)) col[c[1]] = i; });
+  var num = function (v) { return String(v || "").replace(/[₹,\s]/g, ""); };
+  var out = rows.slice(hi + 1).map(function (r) {
+    var g = function (k) { return k in col ? String(r[col[k]] || "").trim() : ""; };
+    return { cf_payment_id: g("cf_payment_id"), invoice_no: g("invoice_no"), order_id: g("order_id"), cf_order_id: g("cf_order_id"), txn_time: accParseTime(g("txn_time")),
+      order_amount: num(g("order_amount")), txn_amount: num(g("txn_amount")) || num(g("order_amount")), currency: g("currency") || "INR",
+      customer_phone: g("customer_phone"), customer_email: g("customer_email"), customer_name: g("customer_name"), customer_id: g("customer_id"),
+      payment_mode: g("payment_mode"), status: g("status").toUpperCase(), message: g("message"),
+      refunded: /^true$/i.test(g("refunded")), refund_type: /^true$/i.test(g("refunded")) ? g("refund_type") : "" };
+  }).filter(function (x) { return x.cf_payment_id; });
+  // oldest first, so payments without an invoice number get theirs in time order
+  out.sort(function (a, b) { return String(a.txn_time).localeCompare(String(b.txn_time)); });
+  var n = 0;
+  for (var i = 0; i < out.length; i += 400) {
+    var x = await SUPA.rpc("acc_sales_import", { p_rows: out.slice(i, i + 400) });
+    if (x.error) { accToast("Import stopped: " + accErr(x.error)); break; }
+    n += x.data || 0;
+  }
+  accToast("Imported " + n + " new payment" + (n === 1 ? "" : "s") + (out.length - n ? " · " + (out.length - n) + " already here, skipped" : ""));
+  renderAdminPage();
+}
+function renderAdminAccSales(wrap) {
+  var head = accEl("div", "module-head"); head.appendChild(accEl("h2", null, "Sales (Cashfree)")); accMonthPicker(head); wrap.appendChild(head);
+  wrap.appendChild(accEl("p", "hint", "Every Cashfree payment lands here within seconds, with the next invoice number and its GST split (price includes GST). Download a month for the CA or GST returns."));
+  var body = accEl("div"); body.appendChild(accEl("div", "hint", "Loading…")); wrap.appendChild(body);
+  var M = ACC.month, y = Number(M.slice(0, 4)), mo = Number(M.slice(5)), N = mo === 12 ? (y + 1) + "-01" : y + "-" + String(mo + 1).padStart(2, "0");
+  ACC.saleAll = ACC.saleAll || false; ACC.saleQ = ACC.saleQ || "";
+  Promise.all([SUPA.from("acc_sales").select("*").gte("txn_time", M + "-01T00:00:00+05:30").lt("txn_time", N + "-01T00:00:00+05:30").order("txn_time", { ascending: false }).limit(20000),
+               SUPA.from("acc_sales_settings").select("*").eq("id", 1).maybeSingle()]).then(function (res) {
+    body.innerHTML = "";
+    if (res[0].error) { body.appendChild(accEl("div", "hr-note warn", "Run supabase/stage19d_cashfree_sales.sql first (" + accErr(res[0].error) + ")")); return; }
+    var all = res[0].data || [], S = res[1].data || { prefix: "CYBRCT", next_no: 4730, gst_rate: 18 };
+    var ok = all.filter(function (r) { return r.status === "SUCCESS"; });
+    var sum = function (k, list) { return (list || ok).reduce(function (a, r) { return a + Number(r[k] || 0); }, 0); };
+    var refunded = ok.filter(function (r) { return r.refunded; });
+    var stats = accEl("div", "acc-stats");
+    [[accInr(sum("txn_amount")), ok.length + " sale" + (ok.length === 1 ? "" : "s") + " · " + accMonthLabel(M)], [accInr(sum("taxable")), "taxable value"],
+     [accInr(sum("cgst") + sum("sgst")), "GST (CGST " + accInr(sum("cgst")) + " + SGST " + accInr(sum("sgst")) + ")"],
+     [accInr(refunded.reduce(function (a, r) { return a + Number(r.refund_amount || r.txn_amount); }, 0)), refunded.length + " refunded"]].forEach(function (x, i) {
+      var s = accEl("div", "s"); if (i === 0) s.style.cssText = "background:var(--indigo-soft);border-color:#F5CDB6";
+      s.append(accEl("b", null, x[0]), accEl("span", null, x[1])); stats.appendChild(s);
+    });
+    body.appendChild(stats);
+
+    // tools: search, successful/all, download, import
+    var bar = accEl("div"); bar.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:4px 0 10px";
+    var q = accEl("input"); q.placeholder = "Search invoice, order, phone…"; q.value = ACC.saleQ; q.style.cssText = "flex:1;min-width:180px;padding:8px 10px;border:1px solid var(--line-strong);border-radius:10px;font:inherit";
+    var tabs = accEl("div", "acc-tabs"); tabs.style.margin = "0";
+    [[false, "Successful (" + ok.length + ")"], [true, "All attempts (" + all.length + ")"]].forEach(function (t) {
+      var b = accEl("button", ACC.saleAll === t[0] ? "on" : "", t[1]); b.onclick = function () { ACC.saleAll = t[0]; renderAdminPage(); }; tabs.appendChild(b);
+    });
+    var dl = accEl("button", "btn", "⬇ Download CSV");
+    var im = accEl("button", "btn", "⬆ Import CSV"), fi = accEl("input"); fi.type = "file"; fi.accept = ".csv,text/csv"; fi.hidden = true;
+    im.onclick = function () { fi.click(); }; fi.onchange = function () { if (fi.files[0]) { im.disabled = true; im.textContent = "Importing…"; accSalesImport(fi.files[0]); } };
+    bar.append(q, tabs, dl, im, fi); body.appendChild(bar);
+
+    var card = accEl("div", "hr-card acc-tbl-wrap"); card.setAttribute("data-plain", ""); card.style.overflowX = "auto"; body.appendChild(card);
+    function list() {
+      var s = ACC.saleQ.toLowerCase();
+      return (ACC.saleAll ? all : ok).filter(function (r) { return !s || [r.invoice_no, r.order_id, r.cf_order_id, r.cf_payment_id, r.customer_phone, r.customer_id, r.customer_email, r.customer_name].join(" ").toLowerCase().indexOf(s) >= 0; });
+    }
+    function draw() {
+      card.innerHTML = "";
+      var L = list();
+      if (!L.length) { card.appendChild(accEl("div", "hint", all.length ? "Nothing matches." : "No Cashfree payments in " + accMonthLabel(M) + " yet.")); return; }
+      var t = accEl("table", "acc-tbl"), hr = accEl("tr");
+      [["Time"], ["Invoice"], ["Order Id"], ["Amount", 1], ["Taxable", 1], ["CGST", 1], ["SGST", 1], ["Phone"], ["Mode"], ["Status"]].forEach(function (h) { hr.appendChild(accEl("th", h[1] ? "num" : "", h[0])); });
+      var th = accEl("thead"); th.appendChild(hr); t.appendChild(th);
+      var tb = accEl("tbody");
+      L.slice(0, 1000).forEach(function (r) {
+        var tr = accEl("tr");
+        tr.append(accEl("td", null, accIstTime(r.txn_time)), accEl("td", null, r.invoice_no || "—"), accEl("td", null, r.order_id),
+          accEl("td", "num", accInr(r.txn_amount)), accEl("td", "num", r.invoice_no ? accInr(r.taxable) : "—"), accEl("td", "num", r.invoice_no ? accInr(r.cgst) : "—"),
+          accEl("td", "num", r.invoice_no ? accInr(r.sgst) : "—"), accEl("td", null, r.customer_phone), accEl("td", null, r.payment_mode));
+        var st = accEl("td"), chip = r.refunded ? ["Refunded" + (r.refund_type === "PARTIAL" ? " (part)" : ""), "red"] : r.status === "SUCCESS" ? ["Success", "green"] : [r.status.replace(/_/g, " ").toLowerCase() || "?", "grey"];
+        var c = accEl("span", "hr-chip hr-" + chip[1], chip[0]); if (r.message) c.title = r.message; st.appendChild(c); tr.appendChild(st);
+        tb.appendChild(tr);
+      });
+      t.appendChild(tb);
+      var okL = L.filter(function (r) { return r.status === "SUCCESS"; });
+      var tf = accEl("tfoot"), fr = accEl("tr");
+      fr.append(accEl("td", null, "Total · " + okL.length), accEl("td"), accEl("td"), accEl("td", "num", accInr(sum("txn_amount", okL))), accEl("td", "num", accInr(sum("taxable", okL))),
+        accEl("td", "num", accInr(sum("cgst", okL))), accEl("td", "num", accInr(sum("sgst", okL))), accEl("td"), accEl("td"), accEl("td"));
+      tf.appendChild(fr); t.appendChild(tf); card.appendChild(t);
+      if (L.length > 1000) card.appendChild(accEl("div", "hint", "Showing the latest 1,000. Download the CSV for all " + L.length + "."));
+    }
+    q.oninput = function () { ACC.saleQ = q.value; draw(); };
+    dl.onclick = function () {
+      var qv = function (v) { v = String(v == null ? "" : v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+      var rows = list().slice().reverse().map(function (r) {
+        return ACC_SALE_COLS.map(function (c) {
+          var v = r[c[1]];
+          if (c[1] === "txn_time") return accIstTime(v);
+          if (c[1] === "refunded") return v ? "TRUE" : "FALSE";
+          if (["taxable", "cgst", "sgst"].indexOf(c[1]) >= 0 && !r.invoice_no) return "";
+          if (["order_amount", "txn_amount", "taxable", "cgst", "sgst"].indexOf(c[1]) >= 0) return Number(v).toFixed(2);
+          return v;
+        });
+      });
+      var csv = [ACC_SALE_COLS.map(function (c) { return c[0]; })].concat(rows).map(function (r) { return r.map(qv).join(","); }).join("\r\n");
+      var a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
+      a.download = "cashfree-sales-" + M + ".csv"; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    };
+    draw();
+
+    // invoice series, GST rate and the Cashfree connection
+    var sc = accEl("div", "hr-card"); sc.setAttribute("data-plain", ""); sc.style.marginTop = "14px";
+    sc.appendChild(accEl("h3", null, "Invoice series and Cashfree"));
+    sc.appendChild(accEl("div", "hint", "The next successful payment gets " + S.prefix + S.next_no + ". Numbers are given in the order payments arrive, never repeated or skipped."));
+    var f = accEl("div", "hr-fields"); f.style.marginTop = "10px";
+    var fld = function (lbl, inp) { var w = accEl("div", "field"); w.append(accEl("label", null, lbl), inp); f.appendChild(w); };
+    var pre = accEl("input"); pre.value = S.prefix; var nx = accEl("input"); nx.type = "number"; nx.min = "1"; nx.value = S.next_no;
+    var gr = accEl("input"); gr.type = "number"; gr.min = "0"; gr.max = "28"; gr.step = "0.01"; gr.value = Number(S.gst_rate);
+    fld("Invoice prefix", pre); fld("Next invoice number", nx); fld("GST % (included in the price)", gr);
+    sc.appendChild(f);
+    var sv = accEl("button", "btn save", "Save"); sv.style.marginTop = "8px";
+    sv.onclick = async function () {
+      var x = await SUPA.rpc("acc_sales_settings_save", { p_prefix: pre.value.trim(), p_next: parseInt(nx.value, 10), p_rate: parseFloat(gr.value) });
+      if (x.error) { accToast(accErr(x.error)); return; } accToast("Saved"); renderAdminPage();
+    };
+    sc.appendChild(sv);
+    var url = SUPABASE_URL + "/functions/v1/cashfree-hook";
+    var how = accEl("div", "hr-rule-prev"); how.style.cssText = "margin-top:12px;white-space:pre-line";
+    how.textContent = "Connect Cashfree once:\n1. Supabase → Edge Functions → Secrets: add CASHFREE_APP_ID and CASHFREE_SECRET (Cashfree → Developers → API Keys).\n2. Cashfree → Developers → Webhooks → Add webhook URL, for Payment Gateway events, version 2023-08-01:\n" + url;
+    var cp = accEl("button", "hr-reveal", "Copy webhook URL"); cp.onclick = function () { navigator.clipboard.writeText(url).then(function () { accToast("Copied"); }); };
+    sc.append(how, cp);
+    body.appendChild(sc);
+  });
+}
