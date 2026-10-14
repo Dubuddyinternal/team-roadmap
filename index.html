@@ -19200,13 +19200,8 @@ let adminOpenGroups = {};
 function adminSections(){
   const me = currentUser(), sup = !!(me && me.super), people = canManagePeople();
   return [
-    { k:"users",       ico:"👥", lbl:"Users",                show: people,                         render: renderAdminUsers },
-    // HR: one dropdown in the sidebar (My HR file lives in the profile menu)
-    { k:"hr",          ico:"🗂️", lbl:"Employees", group:"hr", show: !!me && !!SUPA && typeof renderAdminHr === "function" && (hasPerm("manage_hr") || hasPerm("view_hr")), render: renderAdminHr },
-    { k:"policies",    ico:"📜", lbl:"Company policies", group:"hr", show: !!me && !!SUPA && typeof renderAdminPolicies === "function", render: renderAdminPolicies },
-    { k:"hrsettings",  ico:"🏢", lbl:"Company and offer letter", group:"hr", show: !!me && !!SUPA && typeof renderAdminHrSettings === "function" && hasPerm("hr_settings"), render: renderAdminHrSettings },
-    { k:"lms",         ico:"🎓", lbl:"LMS", group:"hr",  show: hasPerm("manage_learning") && !!SUPA, render: renderAdminLms },
-    // IT support: one dropdown for access, accounts and structure
+    // IT support: one dropdown for people, access, accounts and structure
+    { k:"users",       ico:"👥", lbl:"Users",                show: people,                         group:"it", render: renderAdminUsers },
     { k:"permissions", ico:"🔐", lbl:"Roles & permissions",  show: people,                         group:"it", render: renderAdminPermissions },
     { k:"password",    ico:"🔑", lbl:"Change password",      show: !!me,                           group:"it", render: renderChangePassword },
     { k:"okrlevels",   ico:"🪜", lbl:"OKR levels",           show: people,                         group:"it", render: renderAdminOkrLevels },
@@ -19214,6 +19209,11 @@ function adminSections(){
     { k:"requests",    ico:"🙋", lbl:"Requests" + (PENDING_REQUESTS ? " (" + PENDING_REQUESTS + ")" : ""), crumb:"Requests",
                                                                         show: hasPerm("approve_requests"),    group:"it", render: renderAdminRequests },
     { k:"request",     ico:"➕",       lbl:"Request a teammate",   show: hasPerm("request_members"),     group:"it", render: renderRequestTeammate },
+    // HR: one dropdown in the sidebar (My HR file lives in the profile menu)
+    { k:"hr",          ico:"🗂️", lbl:"Employees", group:"hr", show: !!me && !!SUPA && typeof renderAdminHr === "function" && (hasPerm("manage_hr") || hasPerm("view_hr")), render: renderAdminHr },
+    { k:"policies",    ico:"📜", lbl:"Company policies", group:"hr", show: !!me && !!SUPA && typeof renderAdminPolicies === "function", render: renderAdminPolicies },
+    { k:"hrsettings",  ico:"🏢", lbl:"Company and offer letter", group:"hr", show: !!me && !!SUPA && typeof renderAdminHrSettings === "function" && hasPerm("hr_settings"), render: renderAdminHrSettings },
+    { k:"lms",         ico:"🎓", lbl:"LMS", group:"hr",  show: hasPerm("manage_learning") && !!SUPA, render: renderAdminLms },
     { k:"notifications", ico:"📣", lbl:"Notifications",      show: hasPerm("send_notifications") && !!SUPA, render: renderAdminNotifications },
     { k:"ideaemails",  ico:"✉️", lbl:"Idea emails",          show: hasPerm("review_student_ideas") && !!SUPA, render: renderAdminIdeaEmails },
     { k:"myfeedback",  ico:"📝", lbl:"My monthly feedback",  show: !!me && !!SUPA && typeof renderAdminMyFeedback === "function", render: renderAdminMyFeedback },
