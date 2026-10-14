@@ -91,6 +91,14 @@ Files can be PDF, JPG, PNG or WEBP, up to 10 MB each.
 - Every accepted hand-over stores what was signed: name, place, signature, item details, and the wording at that moment.
 - Database: `supabase/stage18h_hr_equipment.sql` (`hr_equipment`, `hr_equipment_moves`, `hr_equipment_save/offer/cancel/answer/take_back`, `hr_save_equipment_template`, `hr_equipment_wording`).
 
+## Rules (stage 18i)
+
+- **Administration → HR → Rules.** The first rule is "HR file not complete" (until the person submits). Settings: pop-ups a day, emails a day, 🔔 bells a day, restrict after N days (empty = never), and a strip at the top. Super-admins are never affected.
+- **Clock:** each person's deadline counts from when the rule was switched on, or when they joined, whichever is later.
+- **Sending:** the hourly job `hr_rules_tick()` (pg_cron `hr-rules-tick`, 09:00–21:00 IST) creates the bells and the daily pop-up (`team_notifications`, ref `hr:remind` / `hr:popup`) and logs them in `hr_rule_log`. Emails go through the Edge Function **`hr-remind`** (Verify JWT OFF, checks `hr_rules.cron_key`).
+- **Strip and lock:** in the browser (`hrRuleCheck`, every 10 minutes). The lock screen only allows My HR file and Sign out. It's a page lock, not a database lock.
+- Database: `supabase/stage18i_hr_rules.sql`.
+
 ## Notes for the next developer
 
 - **Front end:** `hr.js`, loaded after `monthly-feedback.js`. It adds its own styles. The admin section is registered in `adminSections()` in `index.html` (`k:"hr"`).

@@ -264,6 +264,7 @@ function hrEditable(rec) { return !rec || rec.status === "draft" || rec.status =
     + ".hr-tpl{width:100%;min-height:360px;font-family:var(--mono);font-size:12.5px;padding:12px;border:1px solid var(--line-strong);border-radius:10px}"
     + ".hr-profile-link{display:flex;gap:10px;align-items:center;background:var(--indigo-soft);border:1px solid #F5CDB6;border-radius:12px;padding:10px 12px;margin-bottom:14px;font-size:13.5px}"
     + ".hr-profile-link .grow{flex:1}"
+    + ".hr-rule-prev{margin-top:10px;padding:10px 12px;border-radius:10px;background:#FFF1E8;border:1px solid #F5CDB6;color:#7A2E0E;font-size:13px;font-weight:600}"
     + ".hr-pen{border:0;background:none;cursor:pointer;font-size:13px;padding:0 4px;margin-left:6px;opacity:.75}.hr-pen:hover{opacity:1}.hr-chg{margin-left:8px;font-size:10.5px;letter-spacing:0;text-transform:none}"
     + ".hr-open input,.hr-open select,.hr-open textarea{border-color:#2F8F4E !important;background:#fff !important}.hr-chgrow{margin-top:6px}.hr-chgno{font-size:12px;color:var(--muted);margin-top:4px}"
     + ".hr-done{text-align:center;padding:22px 16px;border:1px solid #BFE3C9;background:#EEF8F1;border-radius:14px;margin-top:6px}.hr-done .big{font-size:34px}.hr-done b{display:block;font-size:17px;margin:4px 0}.hr-done .h{color:var(--muted);font-size:13.5px}"
@@ -724,7 +725,7 @@ function hrRenderSubmit(card, d, editable) {
     await hrSaveDraft(true);
     var r = await SUPA.rpc("hr_save", { p_details: hrClean(HR.rec.details || {}), p_submit: true, p_consent: true });
     if (r.error) { say("Couldn't submit: " + hrErr(r.error)); go.disabled = false; go.textContent = "Submit to HR"; return; }
-    HR.rec = r.data; hrToast("Submitted to HR ✅"); hrRenderMine();
+    HR.rec = r.data; hrToast("Submitted to HR ✅"); hrRenderMine(); hrRuleCheck();
   };
   foot.appendChild(go); card.append(warn, foot);
 }
@@ -1207,6 +1208,7 @@ function hrProfileLink() {
     if (!hrMe() || !SUPA) return;
     clearInterval(t);
     hrProfileLink();
+    hrRuleCheck(); clearInterval(HRR.timer); HRR.timer = setInterval(function () { if (!document.hidden) hrRuleCheck(); }, 10 * 60000);
     var wants = false; try { wants = new URL(location.href).searchParams.get("hr") === "1"; } catch (_) { }
     if (wants) { openMyHrFile(); return; }
     SUPA.from("hr_records").select("status").eq("user_id", hrMe().id).maybeSingle().then(function (r) {
@@ -1926,4 +1928,133 @@ function hrRenderPersonEquipment(wrap, uid, docs) {
     row.appendChild(left); card.appendChild(row);
   });
   wrap.appendChild(card);
+}
+
+/* =====================================================================
+   HR RULES (stage18i). The first rule nudges people to finish their HR
+   file: daily pop-ups, emails and bells (sent by the hourly job on the
+   server), a strip at the top of every page, and a lock screen once the
+   deadline passes. Set up in Administration → HR → Rules.
+   ===================================================================== */
+var HRR = { me: null, timer: null };
+async function hrRuleCheck() {
+  var me = hrMe(); if (!me || !SUPA) return;
+  var r = await SUPA.rpc("hr_rule_me");
+  var s = (r && !r.error && r.data) || { on: false };
+  HRR.me = s;
+  if (!s.on) { hrRuleStrip(null); hrRuleLock(false); return; }
+  var pct = 0;
+  try {
+    var rec = await SUPA.from("hr_records").select("details").eq("user_id", me.id).maybeSingle();
+    var docs = await SUPA.from("hr_documents").select("kind,status").eq("user_id", me.id);
+    pct = hrProgress((rec.data && rec.data.details) || {}, docs.data || []);
+  } catch (_) { }
+  var left = s.deadline ? Math.ceil((new Date(s.deadline).getTime() - Date.now()) / 86400000) : null;
+  hrRuleLock(!!s.restricted);
+  hrRuleStrip(s.strip && !s.restricted ? { pct: pct, left: left } : null);
+}
+function hrRuleStrip(info) {
+  var bar = document.getElementById("hr-rule-strip");
+  document.documentElement.classList.toggle("hr-strip-on", !!info);
+  if (!info) { if (bar) bar.remove(); return; }
+  if (!bar) { bar = hrEl("div"); bar.id = "hr-rule-strip"; document.body.appendChild(bar); }
+  bar.innerHTML = "";
+  var txt = "🗂️ Your HR file is " + info.pct + "% complete.";
+  if (info.left != null) txt += info.left <= 1 ? " Last day before your account is restricted." : " " + info.left + " days left before your account is restricted.";
+  else txt += " Please complete it.";
+  var t = hrEl("span", "t", txt);
+  var go = hrEl("button", null, "Complete it →"); go.type = "button"; go.onclick = function () { openMyHrFile(); };
+  bar.append(t, go);
+  bar.classList.toggle("urgent", info.left != null && info.left <= 3);
+}
+function hrRuleLock(on) {
+  var lk = document.getElementById("hr-rule-lock");
+  if (!on) { if (lk) lk.remove(); return; }
+  if (lk) return;
+  lk = hrEl("div"); lk.id = "hr-rule-lock";
+  var box = hrEl("div", "box");
+  box.append(hrEl("div", "big", "🔒"), hrEl("h2", null, "Your account is paused"),
+    hrEl("p", null, "Your HR file wasn't completed in time, so the rest of the tools are locked for now. Fill in your details, upload your documents, sign the company policies and press Submit. Everything opens again straight away."));
+  var go = hrEl("button", "btn save", "Open my HR file"); go.onclick = function () { openMyHrFile(); };
+  var out = hrEl("button", "btn", "Sign out"); out.onclick = function () { if (typeof logout === "function") logout(); };
+  var row = hrEl("div"); row.style.cssText = "display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap"; row.append(go, out);
+  box.appendChild(row); lk.appendChild(box); document.body.appendChild(lk);
+}
+(function () {
+  var css = "#hr-rule-strip{position:fixed;top:0;left:0;right:0;z-index:395;height:44px;display:flex;align-items:center;justify-content:center;gap:14px;padding:0 16px;"
+    + "background:#FFF1E8;border-bottom:1px solid #F5CDB6;color:#7A2E0E;font:600 13.5px var(--sans,system-ui);box-shadow:0 1px 6px rgba(0,0,0,.05)}"
+    + "#hr-rule-strip.urgent{background:#FDE8E6;border-color:#F3B9B2;color:#8E1F14}"
+    + "#hr-rule-strip .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}"
+    + "#hr-rule-strip button{flex:none;border:0;border-radius:99px;background:#E8622B;color:#fff;font:700 12.5px var(--sans,system-ui);padding:7px 14px;cursor:pointer}"
+    + "html.hr-strip-on body{padding-top:44px}"
+    + "html.hr-strip-on .admin-page,html.hr-strip-on .product-page,html.hr-strip-on .team-page,html.hr-strip-on .docs-page,html.hr-strip-on .hr-page{top:44px}"
+    + "#hr-rule-lock{position:fixed;inset:0;z-index:595;background:rgba(250,245,240,.97);display:flex;align-items:center;justify-content:center;padding:20px}"
+    + "#hr-rule-lock .box{max-width:460px;text-align:center;background:#fff;border:1px solid var(--line,#E5DDD5);border-radius:16px;padding:28px 26px;box-shadow:0 10px 40px rgba(0,0,0,.08)}"
+    + "#hr-rule-lock .big{font-size:40px}#hr-rule-lock h2{margin:6px 0 8px}#hr-rule-lock p{color:var(--muted,#6B5F57);font-size:14px;line-height:1.55;margin:0}"
+    + "@media(max-width:640px){#hr-rule-strip{height:auto;min-height:44px;padding:6px 12px;font-size:12.5px}#hr-rule-strip .t{white-space:normal}}";
+  var st = document.createElement("style"); st.textContent = css; (document.head || document.documentElement).appendChild(st);
+})();
+
+// Administration → HR → Rules
+function renderAdminHrRules(wrap) {
+  var manage = hrIsAdmin();
+  var head = hrEl("div", "module-head"); head.appendChild(hrEl("h2", null, "Rules")); wrap.appendChild(head);
+  wrap.appendChild(hrEl("div", "hint", "Automatic reminders and limits. Super-admins are never affected."));
+  var card = hrEl("div", "hr-card"); card.style.cssText = "max-width:820px;margin-top:12px"; card.setAttribute("data-plain", "");
+  card.appendChild(hrEl("div", "hint", "Loading…")); wrap.appendChild(card);
+  Promise.all([SUPA.rpc("hr_rules_get"), SUPA.rpc("hr_rules_people")]).then(function (res) {
+    card.innerHTML = "";
+    if (res[0].error) { card.appendChild(hrEl("div", "hr-note warn", "Run supabase/stage18i_hr_rules.sql first (" + hrErr(res[0].error) + ")")); return; }
+    var r = res[0].data || {}, waiting = res[1].data || [];
+    var top = hrEl("div", "hr-top"); top.style.margin = "0";
+    var h = hrEl("h3", null, "🗂️ HR file not complete"); h.style.cssText = "flex:1;margin:0";
+    var onl = hrEl("label", "hr-check"); var on = hrEl("input"); on.type = "checkbox"; on.checked = !!r.file_on; on.disabled = !manage;
+    onl.append(on, document.createTextNode("On"));
+    top.append(h, onl); card.appendChild(top);
+    card.appendChild(hrEl("div", "hint", "Until someone submits their HR file, they get:"));
+    var grid = hrEl("div", "hr-fields"); grid.style.marginTop = "10px";
+    var num = function (lbl, val, max, hint) {
+      var w = hrEl("div", "field"), l = hrEl("label", null, lbl), i = hrEl("input"); i.type = "number"; i.min = "0"; i.max = String(max); i.value = val == null ? "" : String(val); i.disabled = !manage;
+      w.append(l, i); if (hint) w.appendChild(hrEl("div", "hint", hint)); grid.appendChild(w); return i;
+    };
+    var pop = num("Pop-ups a day", r.file_popups, 10, "Shown when they open the tools");
+    var em = num("Emails a day", r.file_emails, 5, "Spread between 9 am and 9 pm");
+    var bl = num("🔔 Bell notifications a day", r.file_bells, 5, "Spread between 9 am and 9 pm");
+    var rs = num("Restrict the account after (days)", r.file_restrict, 365, "Leave empty to never restrict. Counted from when this rule is switched on, or from when they joined, whichever is later");
+    rs.placeholder = "e.g. 7";
+    card.appendChild(grid);
+    var stl = hrEl("label", "hr-check"); stl.style.marginTop = "12px"; var stp = hrEl("input"); stp.type = "checkbox"; stp.checked = r.file_strip !== false; stp.disabled = !manage;
+    stl.append(stp, document.createTextNode("Show a strip at the top of every page until it's done"));
+    card.appendChild(stl);
+    var prev = hrEl("div", "hr-rule-prev"); card.appendChild(prev);
+    var draw = function () {
+      var d = parseInt(rs.value, 10);
+      prev.textContent = stp.checked ? "Strip preview: 🗂️ Your HR file is 48% complete. " + (d > 0 ? Math.min(5, d) + " days left before your account is restricted." : "Please complete it.") : "No strip.";
+    };
+    [rs, stp].forEach(function (x) { x.oninput = draw; x.onchange = draw; }); draw();
+    if (manage) {
+      var row = hrEl("div", "hr-foot"); var msg = hrEl("span", "hr-saved");
+      var sv = hrEl("button", "btn save", "Save rule");
+      sv.onclick = async function () {
+        sv.disabled = true; msg.textContent = "Saving…";
+        var x = await SUPA.rpc("hr_rules_save", { p_on: on.checked, p_strip: stp.checked, p_popups: parseInt(pop.value, 10) || 0, p_emails: parseInt(em.value, 10) || 0, p_bells: parseInt(bl.value, 10) || 0, p_restrict: parseInt(rs.value, 10) || null });
+        sv.disabled = false;
+        if (x.error) { msg.textContent = ""; hrToast(hrErr(x.error)); return; }
+        msg.textContent = "✓ Saved"; hrToast(on.checked ? "Rule is on" : "Rule is off"); renderAdminPage();
+      };
+      row.append(msg, hrEl("div", "grow"), sv); card.appendChild(row);
+    }
+    // who it's waiting on
+    var sec = hrEl("div", "hr-sec"); sec.appendChild(hrEl("h4", null, r.file_on ? "Waiting on " + waiting.length + (waiting.length === 1 ? " person" : " people") : "Would apply to " + waiting.length + (waiting.length === 1 ? " person" : " people")));
+    waiting.map(function (w) { return { u: hrUser(w.user_id), d: w.deadline }; }).filter(function (x) { return x.u; })
+      .sort(function (a, b) { return String(a.d || "z").localeCompare(String(b.d || "z")); })
+      .forEach(function (x) {
+        var line = hrEl("div", "hr-doc"), left = hrEl("div");
+        left.append(hrEl("div", "t", userDisplayName(x.u)), hrEl("div", "h", x.u.email || ""));
+        var days = x.d ? Math.ceil((new Date(x.d).getTime() - Date.now()) / 86400000) : null;
+        var chip = !r.file_on || days == null ? hrEl("span", "hr-chip hr-grey", "Not submitted") : days <= 0 ? hrEl("span", "hr-chip hr-red", "Restricted") : hrEl("span", "hr-chip " + (days <= 3 ? "hr-amber" : "hr-grey"), days + (days === 1 ? " day left" : " days left"));
+        line.append(left, chip); sec.appendChild(line);
+      });
+    card.appendChild(sec);
+  });
 }

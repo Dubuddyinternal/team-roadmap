@@ -251,6 +251,13 @@ function ntfShowBox(n, asPopup) {
   var ok = ntfEl("button", "ntf-btn" + (drop || fill ? "" : " primary"), ack ? "Got it ✓" : drop ? "Close" : fill && asPopup ? "Later" : asPopup ? "OK" : "Close");
   ok.onclick = function () { if (mine) ntfMark(n, ack ? "ack" : "read").then(ntfRenderBell); close(); };
   acts.appendChild(ok);
+  var route = !fill && !drop && mine ? ntfRoute(n) : null;
+  if (route) {
+    var op = ntfEl("button", "ntf-btn primary", "Open →");
+    op.onclick = function () { ntfMark(n, "read").then(ntfRenderBell); close(); route(); };
+    acts.appendChild(op);
+    ok.className = "ntf-btn"; if (asPopup && !ack) ok.textContent = "Later";
+  }
   if (fill) {
     var go = ntfEl("button", "ntf-btn primary", "✍️ Fill it now");
     go.onclick = function () { ntfMark(n, "read").then(ntfRenderBell); close(); if (typeof closeTeam === "function") closeTeam(); openAdmin("myfeedback"); };
@@ -279,7 +286,7 @@ function ntfRoute(n) {
   var hrPerson = function () { return admin("hr", function () { if (typeof HRA !== "undefined" && n.created_by) { HRA.open = n.created_by; HRA.rows = null; } }); };
   var isHr = has("hrIsAdmin") && hrIsAdmin();
   if (/^feedback:/.test(ref)) return admin("myfeedback");
-  if (/^hr:/.test(ref)) return myhr(ref.slice(3) || null);
+  if (/^hr:/.test(ref)) { var st = ref.split(":")[1] || ""; return myhr(has("hrStepIx") && hrStepIx(st) >= 0 ? st : null); }
   if (/^admin:/.test(ref)) return admin(ref.slice(6));
   // HR
   if (/^🎒/.test(n.title || "")) return /My HR file/.test(t) || !isHr ? myhr("equipment") : admin("hrequipment");
