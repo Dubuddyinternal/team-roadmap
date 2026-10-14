@@ -84,6 +84,13 @@ Files can be PDF, JPG, PNG or WEBP, up to 10 MB each.
 - Everyone can read and sign the policies.
 - Database: `supabase/stage18g_hr_permissions.sql` (`hr_perm_any`, `hr_can_view`; read policies use `hr_can_view`).
 
+## Equipment (stage 18h)
+
+- **HR → Equipment:** HR (`manage_hr`) lists items, hands an item that's with HR to someone, takes items back, and sees the history with each signed agreement. `view_hr` can look but not change. "Agreement wording" needs `hr_settings`.
+- **My HR file → 🎒 Equipment:** what you hold, and what's waiting for you to accept. **Hand over** offers an item to a teammate. They read the agreement and **Accept and sign** with their saved signature, name, date and place. Until then it stays the sender's responsibility.
+- Every accepted hand-over stores what was signed: name, place, signature, item details, and the wording at that moment.
+- Database: `supabase/stage18h_hr_equipment.sql` (`hr_equipment`, `hr_equipment_moves`, `hr_equipment_save/offer/cancel/answer/take_back`, `hr_save_equipment_template`, `hr_equipment_wording`).
+
 ## Notes for the next developer
 
 - **Front end:** `hr.js`, loaded after `monthly-feedback.js`. It adds its own styles. The admin section is registered in `adminSections()` in `index.html` (`k:"hr"`).

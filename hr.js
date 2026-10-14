@@ -77,7 +77,8 @@ var HR_STEPS = [
   { k: "docs", ico: "📎", lbl: "Documents" },
   { k: "policies", ico: "📜", lbl: "Company policies" },
   { k: "submit", ico: "✅", lbl: "Check and submit" },
-  { k: "contract", ico: "✍️", lbl: "Offer letter" }
+  { k: "contract", ico: "✍️", lbl: "Offer letter" },
+  { k: "equipment", ico: "🎒", lbl: "Equipment" }
 ];
 var HR_DOCS = [
   { k: "photo", lbl: "Passport-size photo", hint: "A clear photo of your face, plain background.", req: true },
@@ -289,7 +290,9 @@ async function hrLoadMine() {
   HR.docs = d.data || [];
   await hrLoadPolicies();
   await hrLoadChanges();
+  await hrLoadEquipment(false);
 }
+function hrEqIncoming() { var me = hrMe(); return me ? HRE.moves.filter(function (m) { return m.to_user === me.id && m.status === "pending"; }) : []; }
 function hrClean(d) {
   var out = {};
   hrAllFields().forEach(function (f) { if (!f.noSave && d[f.k] != null && String(d[f.k]).trim() !== "") out[f.k] = d[f.k]; });
@@ -495,7 +498,7 @@ async function openMyHrFile(step) {
   page.style.display = "block";
   try { await hrLoadMine(); } catch (e) { page.innerHTML = ""; hrClosePage(); hrToast("Couldn't open your HR file: " + hrErr(e) + (/hr_records/.test(hrErr(e)) ? " (run supabase/stage18a_hr_files.sql)" : "")); return; }
   var st = HR.rec.status;
-  HR.step = step != null ? step : (st === "contract_sent" || st === "signed" || st === "complete") ? HR_STEPS.length - 1 : st === "submitted" ? hrStepIx("submit") : 0;
+  HR.step = step != null ? step : hrEqIncoming().length ? hrStepIx("equipment") : (st === "contract_sent" || st === "signed" || st === "complete") ? hrStepIx("contract") : st === "submitted" ? hrStepIx("submit") : 0;
   hrRenderMine();
 }
 async function hrClosePage() {
@@ -541,6 +544,9 @@ function hrRenderMine() {
     } else if (x.s.k === "policies") {
       var left = HR.policies.filter(function (p) { var st = hrPolicyState(p, HR.signs); return st === "todo" || st === "old"; }).length;
       if (HR.policies.length) b.appendChild(left ? hrEl("span", "todo", left + " to sign") : hrEl("span", "tick", "✓"));
+    } else if (x.s.k === "equipment") {
+      var inc = hrEqIncoming().length, held = HRE.items.filter(function (e) { return e.holder === hrMe().id; }).length;
+      if (inc) b.appendChild(hrEl("span", "todo", inc + " to accept")); else if (held) b.appendChild(hrEl("span", "tick", String(held)));
     } else if (x.s.k === "contract") {
       var cs = rec.status;
       b.appendChild(cs === "contract_sent" ? hrEl("span", "todo", "to sign") : cs === "signed" || cs === "complete" ? hrEl("span", "tick", "✓") : hrEl("span", "todo", "later"));
@@ -559,9 +565,10 @@ function hrRenderMine() {
   else if (step.k === "docs") hrRenderDocs(card, editable);
   else if (step.k === "submit") hrRenderSubmit(card, d, editable);
   else if (step.k === "policies") hrRenderPolicies(card, hrRenderMine);
+  else if (step.k === "equipment") hrRenderEquipment(card);
   else hrRenderContract(card);
 
-  if (step.k !== "contract") {
+  if (step.k !== "contract" && step.k !== "equipment") {
     var foot = hrEl("div", "hr-foot");
     var vis = hrVisibleSteps().map(function (x) { return x.i; }), at = vis.indexOf(HR.step);
     if (at > 0) { var back = hrEl("button", "btn", "← Back"); back.onclick = async function () { if (editable && HR.dirty) await hrSaveDraft(false); HR.step = vis[at - 1]; hrRenderMine(); }; foot.appendChild(back); }
@@ -848,6 +855,7 @@ async function hrLoadAll() {
     var sg = await SUPA.from("hr_policy_signs").select("*").in("user_id", ids);
     (sg.data || []).forEach(function (x) { (HRA.signs[x.user_id] = HRA.signs[x.user_id] || []).push(x); });
   }
+  await hrLoadEquipment(true);
   HRA.changes = {};
   var ch = await SUPA.from("hr_change_requests").select("*").in("user_id", ids).order("created_at", { ascending: false });
   (ch.error ? [] : ch.data || []).forEach(function (x) { (HRA.changes[x.user_id] = HRA.changes[x.user_id] || []).push(x); });
@@ -1065,6 +1073,8 @@ function hrRenderPerson(wrap, uid) {
     });
     wrap.appendChild(pc);
   }
+
+  hrRenderPersonEquipment(wrap, uid, docs);
 
   /* job terms + contract */
   var jc = hrEl("div", "hr-card"); jc.style.marginTop = "14px";
@@ -1591,4 +1601,329 @@ function hrPolicyDialogPreview(p) {
   var view = hrEl("div", "hr-contract"); view.style.margin = "10px 0"; view.innerHTML = html; bx.appendChild(view);
   var c = hrEl("button", "btn", "Close"); c.onclick = function () { ov.remove(); }; bx.appendChild(c);
   ov.appendChild(bx); ov.style.zIndex = "9600"; document.body.appendChild(ov);
+}
+
+/* =====================================================================
+   EQUIPMENT (stage18h): who holds which company item, and the signed
+   agreement for every hand-over. People pass items on from My HR file →
+   Equipment; the next person accepts by signing. HR keeps the list in
+   Administration → HR → Equipment.
+   ===================================================================== */
+var HRE = { items: [], moves: [], wording: "", off: false };
+// used when HR hasn't saved their own wording (matches the stage18h default)
+var HR_EQUIP_TEMPLATE = "# Equipment Handover and Responsibility Agreement\n\nI, {full_name}, confirm that on {date} I received the following equipment belonging to {company} from {from_name}:\n\nEquipment: {equipment}\nSerial / ID: {serial}\nCondition and notes: {condition}\n\n## I agree that\n\n1. The equipment belongs to {company_short} and is given to me only for company work.\n2. From today, I am solely responsible for it. If it is damaged, lost or stolen while in my care, I will pay for its repair or replacement, as decided by {company_short}. Normal wear and tear is not counted as damage.\n3. I will keep it safe. I will not lend it to anyone outside {company_short}, and I will not change, sell or pledge it.\n4. I will tell HR at once about any damage, loss or theft, and report a theft to the police.\n5. I will pass it on only through the Equipment section of My HR file. It stays my responsibility until the next person accepts it there.\n6. I will return it when {company_short} asks, or when I leave, in the same condition apart from normal wear and tear. {company_short} may recover the cost of any missing or damaged equipment from my final settlement.";
+var HR_EQUIP_KINDS = ["Camera", "Lens", "Mic", "Tripod", "Light", "Laptop", "Phone", "Tablet", "Hard drive", "Other"];
+
+// all = HR (every move); otherwise just the moves to or from me
+async function hrLoadEquipment(all) {
+  var me = hrMe(); if (!me || !SUPA) return;
+  var it = await SUPA.from("hr_equipment").select("*").order("name");
+  if (it.error) { HRE.items = []; HRE.moves = []; HRE.off = true; return; }   // stage18h not run yet
+  var q = SUPA.from("hr_equipment_moves").select("*").order("created_at", { ascending: false });
+  if (!all) q = q.or("to_user.eq." + me.id + ",from_user.eq." + me.id);
+  var mv = await q;
+  var w = await SUPA.rpc("hr_equipment_wording");
+  HRE.items = it.data || []; HRE.moves = mv.error ? [] : (mv.data || []); HRE.wording = (w && w.data) || ""; HRE.off = false;
+}
+function hrEqItem(id) { return HRE.items.find(function (x) { return x.id === id; }) || null; }
+function hrEqPending(itemId) { return HRE.moves.find(function (m) { return m.equipment_id === itemId && m.status === "pending"; }) || null; }
+function hrEqWho(id) { return id ? hrName(id) : "HR"; }
+function hrEqDesc(e) { return [e.category, e.serial ? "Serial " + e.serial : ""].filter(Boolean).join(" · "); }
+function hrEqHtml(tpl, vals) {
+  var company = (HR.settings && HR.settings.company) || HR.company || {};
+  return hrContractHtml(tpl || HRE.wording || HR_EQUIP_TEMPLATE, company, { full_name: vals.full_name }, {}, {
+    date: vals.date, equipment: vals.equipment || "", serial: vals.serial || "—", condition: vals.condition || "Good working order", from_name: vals.from_name || "HR"
+  });
+}
+function hrLongDate(iso) { return new Date(iso || Date.now()).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }); }
+
+// a signed hand-over: the agreement as it was signed, with the signature
+function hrEqAgreementDialog(mv, docs) {
+  var vals = { full_name: mv.signed_name, date: hrLongDate(mv.decided_at), equipment: mv.item_name, serial: mv.item_serial, condition: mv.item_condition, from_name: mv.from_name };
+  var html = mv.to_user ? hrEqHtml(mv.template, vals) : "<h1>Returned to HR</h1><p>" + hrEsc(mv.item_name || "") + " was taken back by " + hrEsc(mv.signed_name || "HR") + " from " + hrEsc(mv.from_name || "") + " on " + hrEsc(hrLongDate(mv.decided_at)) + "." + (mv.note ? "\n\nNote: " + hrEsc(mv.note) : "") + "</p>";
+  var ov = hrEl("div", "hr-ask"), bx = hrEl("div", "box"); ov.setAttribute("data-plain", "");
+  bx.style.cssText = "width:min(820px,100%);max-height:94vh;display:flex;flex-direction:column";
+  bx.appendChild(hrEl("h3", null, (mv.item_name || "Equipment") + " · " + hrDate(mv.decided_at)));
+  var view = hrEl("div", "hr-contract"); view.style.cssText = "margin:10px 0;flex:1;max-height:none;min-height:0"; bx.appendChild(view);
+  var stamp = function (img) { var h = html + (mv.to_user ? hrSigBlock(mv.signed_name || "", hrDate(mv.decided_at), mv.place, img) : ""); view.innerHTML = h; return h; };
+  var full = stamp(null);
+  var sd = mv.sig_doc && (docs || []).find(function (z) { return z.id === mv.sig_doc; });
+  if (sd) hrImgData(sd.path).then(function (u) { full = stamp(u); }).catch(function () { });
+  var row = hrEl("div", "hr-foot");
+  var pr = hrEl("button", "btn", "🖨 Print or save as PDF"); pr.onclick = function () { hrPrint(full, "Equipment agreement · " + (mv.item_name || "")); };
+  var cl = hrEl("button", "btn", "Close"); cl.onclick = function () { ov.remove(); };
+  row.append(pr, hrEl("div", "grow"), cl); bx.appendChild(row); ov.appendChild(bx);
+  ov.addEventListener("click", function (e) { if (e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+}
+
+// read the agreement for an item being handed to me, and sign it
+function hrEqAcceptDialog(mv, after) {
+  var e = hrEqItem(mv.equipment_id) || {};
+  var name = hrMyName();
+  var html = hrEqHtml(null, { full_name: name || "[your name]", date: hrLongDate(), equipment: e.name, serial: e.serial, condition: e.notes, from_name: hrEqWho(mv.from_user) });
+  var ov = hrEl("div", "hr-ask"), bx = hrEl("div", "box"); ov.setAttribute("data-plain", "");
+  bx.style.cssText = "width:min(860px,100%);max-height:94vh;display:flex;flex-direction:column";
+  bx.appendChild(hrEl("h3", null, "🎒 " + (e.name || "Equipment") + " from " + hrEqWho(mv.from_user)));
+  if (mv.note) bx.appendChild(hrEl("div", "hint", "Their note: " + mv.note));
+  var view = hrEl("div", "hr-contract"); view.style.cssText = "margin:10px 0;flex:1;max-height:none;min-height:0"; view.innerHTML = html; bx.appendChild(view);
+  var sign = hrEl("div"); sign.style.cssText = "display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:10px";
+  var lab = hrEl("label", "hr-check"); var cb = hrEl("input"); cb.type = "checkbox";
+  lab.append(cb, document.createTextNode("I have received it in the condition described, and I accept this agreement."));
+  var grid = hrEl("div", "hr-signgrid");
+  var drawSig = function () { var old = grid.querySelector(".hr-sig"); var nb = hrSigBox(drawSig); if (old) old.replaceWith(nb); else grid.prepend(nb); };
+  var meta = hrEl("div", "meta");
+  meta.appendChild(hrEl("div", null, "Name: ")).appendChild(hrEl("b", null, name || "Add it in About you"));
+  meta.appendChild(hrEl("div", null, "Date: ")).appendChild(hrEl("b", null, hrDate(new Date().toISOString())));
+  var pl = hrEl("input", "login-input"); pl.placeholder = "City"; pl.value = hrMyPlace(); pl.setAttribute("aria-label", "Place");
+  var plr = hrEl("label", "pl"); plr.append(document.createTextNode("Place "), pl); meta.appendChild(plr);
+  grid.appendChild(meta); drawSig();
+  sign.append(lab, grid); bx.appendChild(sign);
+  var row = hrEl("div", "hr-foot");
+  var no = hrEl("button", "btn", "Don't accept");
+  no.onclick = async function () {
+    no.disabled = true;
+    var r = await SUPA.rpc("hr_equipment_answer", { p_move: mv.id, p_accept: false, p_place: null, p_sig: null });
+    if (r.error) { hrToast(hrErr(r.error)); no.disabled = false; return; }
+    ov.remove(); hrToast("Not accepted. It stays with " + hrEqWho(mv.from_user) + "."); if (after) after();
+  };
+  var cl = hrEl("button", "btn", "Close"); cl.onclick = function () { ov.remove(); };
+  var go = hrEl("button", "btn save", "✍️ Accept and sign");
+  go.onclick = async function () {
+    var sig = hrSigOf(HR.docs);
+    if (!cb.checked) { hrToast("Tick the box first"); return; }
+    if (name.length < 2) { hrToast("Add your full name in My HR file → About you first"); return; }
+    if (!sig) { hrToast("Upload a photo of your signature first"); return; }
+    if (pl.value.trim().length < 2) { hrToast("Add the place (your city)"); pl.focus(); return; }
+    go.disabled = true;
+    var r = await SUPA.rpc("hr_equipment_answer", { p_move: mv.id, p_accept: true, p_place: pl.value.trim(), p_sig: sig.id });
+    if (r.error) { hrToast(hrErr(r.error)); go.disabled = false; return; }
+    HR.docs.forEach(function (z) { if (z.id === sig.id) z.status = "approved"; });
+    ov.remove(); hrToast("Accepted. " + (e.name || "It") + " is now with you."); if (after) after();
+  };
+  row.append(no, hrEl("div", "grow"), cl, go); bx.appendChild(row); ov.appendChild(bx);
+  document.body.appendChild(ov);
+}
+
+// hand an item to a teammate (the holder, or HR for an item with HR)
+function hrEqPassDialog(e, after) {
+  var me = hrMe();
+  var ov = hrEl("div", "hr-ask"), bx = hrEl("div", "box"); ov.setAttribute("data-plain", "");
+  bx.style.width = "min(520px,100%)";
+  bx.appendChild(hrEl("h3", null, "Hand over: " + e.name));
+  bx.appendChild(hrEl("div", "hint", "They get a 🔔 and accept it by signing. Until they do, it stays " + (e.holder ? "your" : "HR's") + " responsibility."));
+  var sel = hrEl("select", "login-input"); sel.style.marginTop = "12px";
+  var o0 = hrEl("option", null, "Who gets it?"); o0.value = ""; sel.appendChild(o0);
+  hrTeamPeople().forEach(function (u) { if (u.id === e.holder || (me && u.id === me.id && e.holder)) return; var o = hrEl("option", null, userDisplayName(u)); o.value = u.id; sel.appendChild(o); });
+  var ta = hrEl("textarea"); ta.placeholder = "Note (optional), e.g. Comes with 2 batteries and a charger.";
+  bx.append(sel, ta);
+  var row = hrEl("div", "hr-foot");
+  var cl = hrEl("button", "btn", "Cancel"); cl.onclick = function () { ov.remove(); };
+  var go = hrEl("button", "btn save", "Send");
+  go.onclick = async function () {
+    if (!sel.value) { hrToast("Pick who gets it"); sel.focus(); return; }
+    go.disabled = true;
+    var r = await SUPA.rpc("hr_equipment_offer", { p_equipment: e.id, p_to: sel.value, p_note: ta.value.trim() || null });
+    if (r.error) { hrToast(hrErr(r.error)); go.disabled = false; return; }
+    ov.remove(); hrToast("Sent to " + hrName(sel.value) + ". They'll accept it from their HR file."); if (after) after();
+  };
+  row.append(hrEl("div", "grow"), cl, go); bx.appendChild(row); ov.appendChild(bx);
+  document.body.appendChild(ov);
+}
+async function hrEqCancel(mv, after) {
+  var r = await SUPA.rpc("hr_equipment_cancel", { p_move: mv.id });
+  if (r.error) { hrToast(hrErr(r.error)); return; }
+  hrToast("Cancelled"); if (after) after();
+}
+
+// My HR file → 🎒 Equipment
+function hrRenderEquipment(card) {
+  var me = hrMe();
+  card.appendChild(hrEl("h3", null, "🎒 Equipment"));
+  if (HRE.off) { card.appendChild(hrEl("div", "hr-note info", "Equipment isn't set up yet.")); return; }
+  card.appendChild(hrEl("div", "hint", "Company equipment you're responsible for. To give something to a teammate, press Hand over. It stays your responsibility until they accept it."));
+  var redraw = function () { hrLoadEquipment(false).then(hrRenderMine); };
+  var incoming = HRE.moves.filter(function (m) { return m.to_user === me.id && m.status === "pending"; });
+  if (incoming.length) {
+    var sec = hrEl("div", "hr-sec"); sec.appendChild(hrEl("h4", null, "Waiting for you to accept"));
+    incoming.forEach(function (m) {
+      var e = hrEqItem(m.equipment_id) || {};
+      var row = hrEl("div", "hr-doc"), left = hrEl("div");
+      left.append(hrEl("div", "t", e.name || "Equipment"), hrEl("div", "h", "From " + hrEqWho(m.from_user) + (hrEqDesc(e) ? " · " + hrEqDesc(e) : "")));
+      if (m.note) left.appendChild(hrEl("div", "h", "“" + m.note + "”"));
+      var b = hrEl("button", "btn save", "Read and accept"); b.onclick = function () { hrEqAcceptDialog(m, redraw); };
+      row.append(left, b); sec.appendChild(row);
+    });
+    card.appendChild(sec);
+  }
+  var mine = HRE.items.filter(function (e) { return e.holder === me.id; });
+  var sec2 = hrEl("div", "hr-sec"); sec2.appendChild(hrEl("h4", null, "With you"));
+  if (!mine.length) sec2.appendChild(hrEl("div", "hint", "You don't have any company equipment."));
+  mine.forEach(function (e) {
+    var row = hrEl("div", "hr-doc"), left = hrEl("div");
+    var got = HRE.moves.find(function (m) { return m.equipment_id === e.id && m.to_user === me.id && m.status === "accepted"; });
+    left.append(hrEl("div", "t", e.name), hrEl("div", "h", [hrEqDesc(e), got ? "Since " + hrDate(got.decided_at) : ""].filter(Boolean).join(" · ")));
+    var acts = hrEl("div"); acts.style.cssText = "display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;align-items:center";
+    if (got) { var ag = hrEl("button", "btn", "📄 Agreement"); ag.onclick = function () { hrEqAgreementDialog(got, HR.docs); }; acts.appendChild(ag); }
+    var p = hrEqPending(e.id);
+    if (p) {
+      acts.appendChild(hrEl("span", "hr-chip hr-amber", "Waiting for " + hrName(p.to_user)));
+      var c = hrEl("button", "btn", "Cancel"); c.onclick = function () { hrEqCancel(p, redraw); }; acts.appendChild(c);
+    } else { var h = hrEl("button", "btn save", "Hand over"); h.onclick = function () { hrEqPassDialog(e, redraw); }; acts.appendChild(h); }
+    row.append(left, acts); sec2.appendChild(row);
+  });
+  card.appendChild(sec2);
+  var past = HRE.moves.filter(function (m) { return m.status === "accepted" && m.to_user === me.id && !mine.some(function (e) { return e.id === m.equipment_id; }); });
+  if (past.length) {
+    var sec3 = hrEl("div", "hr-sec"); sec3.appendChild(hrEl("h4", null, "Earlier"));
+    past.forEach(function (m) {
+      var row = hrEl("div", "hr-doc"), left = hrEl("div");
+      left.append(hrEl("div", "t", m.item_name || "Equipment"), hrEl("div", "h", "Accepted " + hrDate(m.decided_at) + " from " + (m.from_name || "HR")));
+      var ag = hrEl("button", "btn", "📄 Agreement"); ag.onclick = function () { hrEqAgreementDialog(m, HR.docs); };
+      row.append(left, ag); sec3.appendChild(row);
+    });
+    card.appendChild(sec3);
+  }
+}
+
+/* ---------- Administration → HR → Equipment ---------- */
+function hrEqEditDialog(e, after) {
+  var isNew = !e; e = e || { name: "", category: "", serial: "", notes: "", active: true };
+  var ov = hrEl("div", "hr-ask"), bx = hrEl("div", "box"); ov.setAttribute("data-plain", "");
+  bx.style.width = "min(560px,100%)";
+  bx.appendChild(hrEl("h3", null, isNew ? "Add equipment" : "Edit: " + e.name));
+  var fields = hrEl("div", "hr-fields"); fields.style.marginTop = "10px";
+  var fld = function (lbl, inp, wide) { var w = hrEl("div", "field" + (wide ? " wide" : "")); var l = hrEl("label", null, lbl); w.append(l, inp); fields.appendChild(w); return inp; };
+  var nm = fld("Name", Object.assign(hrEl("input"), { value: e.name, placeholder: "e.g. Sony ZV-E10 camera" }));
+  var dl = hrEl("datalist"); dl.id = "hr-eq-kinds"; HR_EQUIP_KINDS.forEach(function (k) { var o = hrEl("option"); o.value = k; dl.appendChild(o); });
+  var ca = fld("Type", Object.assign(hrEl("input"), { value: e.category, placeholder: "Camera, Mic, Laptop…" })); ca.setAttribute("list", "hr-eq-kinds");
+  var se = fld("Serial / ID (optional)", Object.assign(hrEl("input"), { value: e.serial }));
+  var no = fld("Condition and what's included", Object.assign(hrEl("textarea"), { value: e.notes, placeholder: "e.g. Small scratch on the screen. With 2 batteries, charger and bag." }), true);
+  var acl = hrEl("label", "hr-check"); var ac = hrEl("input"); ac.type = "checkbox"; ac.checked = e.active !== false;
+  acl.append(ac, document.createTextNode("In use (untick if it's sold, lost or scrapped)"));
+  bx.append(fields, dl, acl);
+  var row = hrEl("div", "hr-foot");
+  var cl = hrEl("button", "btn", "Cancel"); cl.onclick = function () { ov.remove(); };
+  var sv = hrEl("button", "btn save", "Save");
+  sv.onclick = async function () {
+    if (!nm.value.trim()) { hrToast("Give it a name"); nm.focus(); return; }
+    sv.disabled = true;
+    var r = await SUPA.rpc("hr_equipment_save", { p_id: isNew ? null : e.id, p_name: nm.value.trim(), p_category: ca.value.trim(), p_serial: se.value.trim(), p_notes: no.value.trim(), p_active: ac.checked });
+    if (r.error) { hrToast(hrErr(r.error)); sv.disabled = false; return; }
+    ov.remove(); hrToast("Saved"); if (after) after();
+  };
+  row.append(hrEl("div", "grow"), cl, sv); bx.appendChild(row); ov.appendChild(bx);
+  document.body.appendChild(ov); nm.focus();
+}
+function hrEqWordingDialog() {
+  var ov = hrEl("div", "hr-ask"), bx = hrEl("div", "box"); ov.setAttribute("data-plain", "");
+  bx.style.cssText = "width:min(880px,100%);max-height:94vh;overflow-y:auto";
+  bx.appendChild(hrEl("h3", null, "Equipment agreement wording"));
+  bx.appendChild(hrEl("div", "hint", "Everyone signs this when they accept equipment. A blank line starts a new paragraph, # makes the title, ## a heading. Placeholders: {full_name} {date} {equipment} {serial} {condition} {from_name} {company} {company_short}. Changes apply to new hand-overs; signed ones keep the wording they signed."));
+  var ta = hrEl("textarea", "hr-tpl"); ta.value = HRE.wording || HR_EQUIP_TEMPLATE; ta.style.marginTop = "10px"; bx.appendChild(ta);
+  var row = hrEl("div", "hr-foot");
+  var pv = hrEl("button", "btn", "Preview");
+  pv.onclick = function () {
+    var h = hrEqHtml(ta.value, { full_name: "Asha Verma", date: hrLongDate(), equipment: "Sony ZV-E10 camera", serial: "SN 1234", condition: "With 2 batteries and a charger", from_name: "Aditya" });
+    var o2 = hrEl("div", "hr-ask"), b2 = hrEl("div", "box"); b2.style.width = "min(820px,100%)"; o2.style.zIndex = "9600";
+    var v = hrEl("div", "hr-contract"); v.innerHTML = h; b2.appendChild(v);
+    var c2 = hrEl("button", "btn", "Close"); c2.style.marginTop = "10px"; c2.onclick = function () { o2.remove(); }; b2.appendChild(c2);
+    o2.appendChild(b2); document.body.appendChild(o2);
+  };
+  var rs = hrEl("button", "btn", "Use the standard wording"); rs.onclick = function () { ta.value = HR_EQUIP_TEMPLATE; };
+  var cl = hrEl("button", "btn", "Cancel"); cl.onclick = function () { ov.remove(); };
+  var sv = hrEl("button", "btn save", "Save");
+  sv.onclick = async function () {
+    sv.disabled = true;
+    var r = await SUPA.rpc("hr_save_equipment_template", { p_template: ta.value });
+    if (r.error) { hrToast(hrErr(r.error)); sv.disabled = false; return; }
+    HRE.wording = ta.value; ov.remove(); hrToast("Saved. New hand-overs use this wording.");
+  };
+  row.append(pv, rs, hrEl("div", "grow"), cl, sv); bx.appendChild(row); ov.appendChild(bx);
+  document.body.appendChild(ov);
+}
+function renderAdminEquipment(wrap) {
+  var manage = hrIsAdmin();
+  var head = hrEl("div", "module-head"); head.style.cssText += ";display:flex;align-items:center;gap:10px;flex-wrap:wrap";
+  head.appendChild(hrEl("h2", null, "Equipment"));
+  var redraw = function () { renderAdminPage(); };
+  if (hrCan("hr_settings")) { var wd = hrEl("button", "btn", "✏️ Agreement wording"); wd.style.marginLeft = "auto"; wd.onclick = hrEqWordingDialog; head.appendChild(wd); }
+  if (manage) { var add = hrEl("button", "btn save", "＋ Add equipment"); if (!head.querySelector(".btn")) add.style.marginLeft = "auto"; add.onclick = function () { hrEqEditDialog(null, redraw); }; head.appendChild(add); }
+  wrap.appendChild(head);
+  wrap.appendChild(hrEl("div", "hint", "Who holds what. People hand items to each other from My HR file → Equipment, and the next person accepts by signing the agreement. Whoever holds an item is responsible for it."));
+  var body = hrEl("div"); body.appendChild(hrEl("div", "hint", "Loading…")); wrap.appendChild(body);
+  Promise.all([hrLoadEquipment(true), hrLoadAll().catch(function () { })]).then(function () {
+    body.innerHTML = "";
+    if (HRE.off) { body.appendChild(hrEl("div", "hr-note warn", "Run supabase/stage18h_hr_equipment.sql in Supabase first.")); return; }
+    var items = HRE.items.slice().sort(function (a, b) { return (b.active - a.active) || a.name.localeCompare(b.name); });
+    var stats = hrEl("div", "hr-tl"); stats.style.margin = "12px 0";
+    var act = items.filter(function (e) { return e.active; });
+    [["Items", act.length], ["With people", act.filter(function (e) { return e.holder; }).length], ["With HR", act.filter(function (e) { return !e.holder; }).length], ["Waiting to be accepted", HRE.moves.filter(function (m) { return m.status === "pending"; }).length]].forEach(function (x) {
+      var s = hrEl("span"); s.appendChild(document.createTextNode(x[0] + ": ")); s.appendChild(hrEl("b", null, String(x[1]))); stats.appendChild(s);
+    });
+    body.appendChild(stats);
+    if (!items.length) { body.appendChild(hrEl("div", "hr-note info", manage ? "No equipment yet. Press ＋ Add equipment to list your cameras, mics, laptops and so on." : "No equipment yet.")); return; }
+    var card = hrEl("div", "hr-card"); card.setAttribute("data-plain", "");
+    items.forEach(function (e) {
+      var row = hrEl("div", "hr-doc"), left = hrEl("div");
+      left.appendChild(hrEl("div", "t", e.name + (e.active ? "" : " (not in use)")));
+      if (hrEqDesc(e)) left.appendChild(hrEl("div", "h", hrEqDesc(e)));
+      var p = hrEqPending(e.id);
+      left.appendChild(hrEl("div", "h", "With: " + (e.holder ? hrName(e.holder) : "HR") + (p ? " · waiting for " + hrName(p.to_user) + " to accept" : "")));
+      var hist = HRE.moves.filter(function (m) { return m.equipment_id === e.id && m.status !== "pending"; });
+      var box = hrEl("div"); box.hidden = true; box.style.marginTop = "6px";
+      hist.forEach(function (m) {
+        var line = hrEl("div", "h");
+        var what = m.status === "accepted" ? (m.to_user ? (m.from_name || hrEqWho(m.from_user)) + " → " + (m.signed_name || hrName(m.to_user)) + (m.place ? " · " + m.place : "") : "Returned to HR from " + (m.from_name || hrEqWho(m.from_user))) : hrEqWho(m.from_user) + " → " + hrEqWho(m.to_user) + " · " + m.status;
+        line.textContent = hrDate(m.decided_at || m.created_at) + " · " + what;
+        if (m.status === "accepted") { var v = hrEl("button", "hr-reveal", "View"); v.onclick = function () { hrEqAgreementDialog(m, (HRA.docs && HRA.docs[m.to_user]) || []); }; line.appendChild(v); }
+        box.appendChild(line);
+      });
+      left.appendChild(box);
+      var acts = hrEl("div"); acts.style.cssText = "display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;align-items:center";
+      if (hist.length) { var hb = hrEl("button", "btn", "History (" + hist.length + ")"); hb.onclick = function () { box.hidden = !box.hidden; }; acts.appendChild(hb); }
+      if (manage) {
+        var ed = hrEl("button", "btn", "Edit"); ed.onclick = function () { hrEqEditDialog(e, redraw); }; acts.appendChild(ed);
+        if (p) { var c = hrEl("button", "btn", "Cancel hand-over"); c.onclick = function () { hrEqCancel(p, redraw); }; acts.appendChild(c); }
+        else if (!e.holder && e.active) { var g = hrEl("button", "btn save", "Hand over"); g.onclick = function () { hrEqPassDialog(e, redraw); }; acts.appendChild(g); }
+        if (e.holder) {
+          var tb = hrEl("button", "btn", "Take back");
+          tb.onclick = async function () {
+            var n = await hrAsk("Take back " + e.name + " from " + hrName(e.holder) + "?", "e.g. Returned in good condition. / Screen cracked, noted.", "Take back");
+            if (!n) return;
+            var r = await SUPA.rpc("hr_equipment_take_back", { p_equipment: e.id, p_note: n });
+            if (r.error) { hrToast(hrErr(r.error)); return; }
+            hrToast("It's with HR now."); redraw();
+          };
+          acts.appendChild(tb);
+        }
+      }
+      row.append(left, acts); card.appendChild(row);
+    });
+    body.appendChild(card);
+  });
+}
+// person view (HR): what they hold
+function hrRenderPersonEquipment(wrap, uid, docs) {
+  if (HRE.off) return;
+  var held = HRE.items.filter(function (e) { return e.holder === uid; });
+  var waiting = HRE.moves.filter(function (m) { return m.to_user === uid && m.status === "pending"; });
+  if (!held.length && !waiting.length) return;
+  var card = hrEl("div", "hr-card"); card.style.marginTop = "14px";
+  card.appendChild(hrEl("h3", null, "🎒 Equipment"));
+  held.forEach(function (e) {
+    var got = HRE.moves.find(function (m) { return m.equipment_id === e.id && m.to_user === uid && m.status === "accepted"; });
+    var row = hrEl("div", "hr-doc"), left = hrEl("div");
+    left.append(hrEl("div", "t", e.name), hrEl("div", "h", [hrEqDesc(e), got ? "Since " + hrDate(got.decided_at) : ""].filter(Boolean).join(" · ")));
+    row.appendChild(left);
+    if (got) { var v = hrEl("button", "btn", "📄 Agreement"); v.onclick = function () { hrEqAgreementDialog(got, docs); }; row.appendChild(v); }
+    card.appendChild(row);
+  });
+  waiting.forEach(function (m) {
+    var e = hrEqItem(m.equipment_id) || {};
+    var row = hrEl("div", "hr-doc"), left = hrEl("div");
+    left.append(hrEl("div", "t", e.name || "Equipment"), hrEl("div", "h", "Not accepted yet · from " + hrEqWho(m.from_user)));
+    row.appendChild(left); card.appendChild(row);
+  });
+  wrap.appendChild(card);
 }
