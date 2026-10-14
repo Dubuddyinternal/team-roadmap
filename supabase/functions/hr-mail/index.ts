@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
     + '<p style="margin:18px 0"><a href="' + esc(link) + '" style="background:#E8622B;color:#fff;text-decoration:none;font-weight:700;padding:11px 18px;border-radius:10px;display:inline-block">Upload the signed copy</a></p>'
     + '<div style="border:1px solid #E5DDD5;border-radius:10px;padding:22px 24px;margin-top:20px;background:#fff">' + html + "</div>"
     + '<p style="color:#8C7F75;font-size:12.5px;margin-top:22px">You got this because you work with Cyberflow Tech Pvt Ltd. Questions? Reply to this email.</p></div>';
-  const text = "Hi " + name + ",\n\nYour work contract is below, in this email.\n\n" + steps.map((s, i) => (i + 1) + ". " + s).join("\n")
+  const text = "Hi " + name + ",\n\nYour work contract is in this email (open it in a mail app that shows formatting) and in tools.dubuddy.in → My HR file.\n\n" + steps.map((s, i) => (i + 1) + ". " + s).join("\n")
     + "\n\nUpload it here: " + link;
 
   const err = await sendMail(prof.email, subject, text, mail);

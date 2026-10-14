@@ -297,3 +297,7 @@ revoke execute on function public.hr_can_admin(uuid), public.hr_is_admin(), publ
 grant execute on function public.hr_can_admin(uuid), public.hr_is_admin(), public.hr_save(jsonb, boolean, boolean),
   public.hr_mark_signed(), public.hr_admin_update(uuid, text, jsonb, text, text), public.hr_review_doc(uuid, text, text),
   public.hr_save_settings(jsonb, text) to authenticated;
+-- table access (the row rules above still decide which rows)
+revoke all on public.hr_records, public.hr_documents, public.hr_settings from anon;
+grant select on public.hr_records, public.hr_settings to authenticated;
+grant select, insert, delete on public.hr_documents to authenticated;
