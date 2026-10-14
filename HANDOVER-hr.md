@@ -75,7 +75,7 @@ Files can be PDF, JPG, PNG or WEBP, up to 10 MB each.
 
 ## Where HR lives and who can use it (stage 18g)
 
-- **Sidebar:** Administration → **🧑‍💼 HR** dropdown: Employees, Company policies, Company and offer letter. My HR file is only in the profile menu.
+- **Sidebar:** Administration → **🧑‍💼 HR**: Employees, Policies (editing, `manage_policies`), Company and offer letter, LMS. Reading and signing is in **👤 For me → Company policies**. My HR file is only in the profile menu.
 - **Permissions** (Roles & permissions; owners and super-admins have all):
   - **HR: see employee files** (`view_hr`): read only.
   - **HR: manage employee files** (`manage_hr`): approve documents, send back, answer ✏️ requests, send offer letters.

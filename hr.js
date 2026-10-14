@@ -1483,13 +1483,9 @@ function hrPolicyDialog(p, after, ctx) {
   ov.addEventListener("click", function (e) { if (e.target === ov) ov.remove(); });
   document.body.appendChild(ov);
 }
-// Administration → 📜 Company policies (everyone)
+// Administration → For me → Company policies (everyone reads and signs)
 function renderAdminPolicies(wrap) {
   var head = hrEl("div", "module-head"); head.appendChild(hrEl("h2", null, "Company policies"));
-  if (hrCan("manage_policies")) {
-    head.style.cssText += ";display:flex;align-items:center;gap:10px;flex-wrap:wrap";
-    var pm = hrEl("button", "btn", "✏️ Add or edit policies"); pm.style.marginLeft = "auto"; pm.onclick = function () { hrPolicyManager(); }; head.appendChild(pm);
-  }
   wrap.appendChild(head);
   var card = hrEl("div", "hr-card"); card.style.maxWidth = "880px"; card.setAttribute("data-plain", "");
   card.appendChild(hrEl("div", "hint", "Loading…")); wrap.appendChild(card);
@@ -1498,6 +1494,35 @@ function renderAdminPolicies(wrap) {
 }
 
 /* ---------- HR: the policy library ---------- */
+// after editing: back to Administration → HR → Policies if that's open, else the list dialog
+function hrPolicyBack() {
+  var pg = document.getElementById("admin-page");
+  if (pg && pg.style.display !== "none" && typeof adminView !== "undefined" && adminView === "hrpolicies") renderAdminPage();
+  else hrPolicyManager();
+}
+// Administration → HR → Policies ("HR: edit company policies"): the library, with who has signed
+function renderAdminPolicyLibrary(wrap) {
+  var head = hrEl("div", "module-head"); head.style.cssText += ";display:flex;align-items:center;gap:10px;flex-wrap:wrap";
+  head.appendChild(hrEl("h2", null, "Policies"));
+  var add = hrEl("button", "btn save", "＋ New policy"); add.style.marginLeft = "auto"; add.onclick = function () { hrPolicyEditor(null); };
+  head.appendChild(add); wrap.appendChild(head);
+  var card = hrEl("div", "hr-card"); card.style.maxWidth = "880px"; card.setAttribute("data-plain", "");
+  card.appendChild(hrEl("div", "hint", "Everyone reads and signs the active ones in 👤 For me → Company policies and in My HR file. Edit one to change its wording; “Save as a new version” asks everyone to sign again."));
+  var body = hrEl("div"); body.appendChild(hrEl("div", "hint", "Loading…")); card.appendChild(body); wrap.appendChild(card);
+  Promise.all([SUPA.from("hr_policies").select("*").order("position"), SUPA.from("hr_policy_signs").select("policy_id,version,user_id")]).then(function (res) {
+    body.innerHTML = "";
+    if (res[0].error) { body.appendChild(hrEl("div", "hr-note warn", "Couldn't load the policies: " + hrErr(res[0].error))); return; }
+    var signs = res[1].data || [];
+    (res[0].data || []).forEach(function (p) {
+      var row = hrEl("div", "hr-doc"), left = hrEl("div");
+      left.appendChild(hrEl("div", "t", p.title + (p.active ? "" : " (hidden)")));
+      var n = {}; signs.forEach(function (x) { if (x.policy_id === p.id && x.version >= p.version) n[x.user_id] = 1; });
+      left.appendChild(hrEl("div", "h", [p.code, "version " + p.version, p.needs_sign ? Object.keys(n).length + " signed this version" : "read only"].filter(Boolean).join(" · ")));
+      var ed = hrEl("button", "btn", "Edit"); ed.onclick = function () { hrPolicyEditor(p); };
+      row.append(left, ed); body.appendChild(row);
+    });
+  });
+}
 async function hrPolicyManager() {
   var r = await SUPA.from("hr_policies").select("*").order("position");
   if (r.error) { hrToast("Run supabase/stage18b_hr_policies.sql first (" + hrErr(r.error) + ")"); return; }
@@ -1539,7 +1564,7 @@ function hrPolicyEditor(p) {
   var foot = hrEl("div", "hr-foot");
   var pv = hrEl("button", "btn", "Preview");
   pv.onclick = function () { hrPolicyDialogPreview(Object.assign({}, p, { title: ti.value, body: ta.value })); };
-  var cl = hrEl("button", "btn", "Cancel"); cl.onclick = function () { ov.remove(); hrPolicyManager(); };
+  var cl = hrEl("button", "btn", "Cancel"); cl.onclick = function () { ov.remove(); hrPolicyBack(); };
   foot.append(pv, hrEl("div", "grow"), cl);
   async function save(newVersion) {
     if (!ti.value.trim()) { hrToast("Give it a title"); return; }
@@ -1548,7 +1573,7 @@ function hrPolicyEditor(p) {
       p_needs_sign: ns.checked, p_position: parseInt(po.value, 10) || 100, p_active: ac.checked, p_new_version: !!newVersion });
     if (r.error) { hrToast(hrErr(r.error)); return; }
     ov.remove(); hrToast(newVersion ? "Saved as version " + r.data.version + ". Everyone will be asked to sign again" : "Saved");
-    hrPolicyManager();
+    hrPolicyBack();
   }
   var sv = hrEl("button", "btn save", "Save"); sv.onclick = function () { save(false); };
   foot.appendChild(sv);
