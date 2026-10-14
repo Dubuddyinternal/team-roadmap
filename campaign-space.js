@@ -688,6 +688,14 @@ p{margin:0}
 .cg-ic{font-size:16px;line-height:1}
 .cgroup-h .cnt{font-family:var(--mono);font-size:10.5px;background:color-mix(in srgb,var(--ic) 14%,transparent);color:var(--ic);border-radius:999px;padding:1px 8px;font-weight:600}
 .cg-add{margin-left:auto}
+/* --- platform tick boxes + several platform chips --- */
+.mchecks{display:flex;flex-wrap:wrap;gap:7px}
+.mcheck{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line-2);border-radius:999px;padding:6px 12px 6px 9px;font-size:12.5px;font-weight:600;color:var(--ink-2);background:var(--surface);cursor:pointer;text-transform:none;letter-spacing:0;font-family:var(--sans);margin:0}
+.mcheck input{width:auto;margin:0;accent-color:var(--accent)}
+.mcheck:has(input:checked){border-color:var(--accent);background:var(--accent-soft);color:var(--accent-ink)}
+.fbox label.mcheck{display:inline-flex;margin:0;font-family:var(--sans);font-size:12.5px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--ink-2)}
+.fbox label.mcheck:has(input:checked){color:var(--accent-ink)}
+.pchips{display:inline-flex;flex-wrap:wrap;gap:4px}
 /* --- bulk create rows --- */
 .bhead,.brow{display:grid;grid-template-columns:minmax(0,1fr) 84px 32px;gap:8px;align-items:center}
 .bhead{margin-bottom:6px}
@@ -839,9 +847,14 @@ const ACTIONS = {
 /* YouTube and Instagram pieces always go to Content Process; otherwise a button set on the piece
    (its own label + link) wins over the type's default */
 const PROCESS_PLATFORMS = ["YouTube","Instagram"];
+/* a piece can go out on several platforms: it.platforms (older pieces only have it.platform, a single one).
+   it.platform is kept as the first of them, for the Content Process hand-off in index.html */
+const platsOf = it => Array.isArray(it.platforms) && it.platforms.length ? it.platforms : (it.platform ? [it.platform] : []);
+const platChips = (it, cls) => platsOf(it).map(p=>`<span class="${cls}">${esc(p)}</span>`).join("");
+const allPlats = c => { const seen = []; c.items.forEach(it=>platsOf(it).forEach(p=>{ if(!seen.includes(p)) seen.push(p); })); return seen; };
 const safeUrl = u => { u = String(u||"").trim(); if(!u) return ""; if(!/^[a-z][a-z0-9+.-]*:/i.test(u)) u = "https://" + u; return /^https?:\/\//i.test(u) ? u : ""; };
 const actionFor = it => {
-  if(PROCESS_PLATFORMS.includes(it.platform)) return ACTIONS.reel;
+  if(platsOf(it).some(p=>PROCESS_PLATFORMS.includes(p))) return ACTIONS.reel;
   const url = safeUrl(it.actionUrl);
   if(url) return { label: (it.actionLabel||"").trim() || "Open link", mode:"link", url };
   return ACTIONS[it.kind] || ACTIONS.other;
@@ -963,6 +976,8 @@ function openDialog({ title, sub, fields, okLabel="Save", onSave }){
       ? `<select id="d-${f.k}">${f.opts.map(([k,v])=>`<option value="${esc(k)}" ${f.value===k?"selected":""}>${esc(v)}</option>`).join("")}</select>`
     : f.type==="date"
       ? `<input id="d-${f.k}" type="date" value="${esc(f.value||"")}">`
+    : f.type==="multi"
+      ? `<div class="mchecks" id="d-${f.k}" data-multi="1">${f.opts.map(([k,v])=>`<label class="mcheck"><input type="checkbox" value="${esc(k)}" ${(f.value||[]).includes(k)?"checked":""}><span>${esc(v)}</span></label>`).join("")}</div>`
     : f.type==="swatch"
       ? `<input type="hidden" id="d-${f.k}" value="${esc(f.value||"")}">
          <div class="swatches" data-sw="${esc(f.k)}">
@@ -978,7 +993,9 @@ function openDialog({ title, sub, fields, okLabel="Save", onSave }){
            <p class="imghint">A square one works best — it is cropped to a square and kept with the campaign.</p>
          </div>`
       : `<input id="d-${f.k}" value="${esc(f.value||"")}" placeholder="${esc(f.ph||"")}">`;
-  const shows = (f, v) => f.showIf.notIn ? !f.showIf.notIn.includes(v) : v === f.showIf.equals;
+  /* a field's current value; a tick-box field gives the list that's ticked */
+  const valOf = el => el && el.dataset && el.dataset.multi ? [...el.querySelectorAll("input:checked")].map(x=>x.value) : (el ? el.value : "");
+  const shows = (f, v) => f.showIf.notIn ? ![].concat(v==null?[]:v).some(x=>f.showIf.notIn.includes(x)) : v === f.showIf.equals;
   const hidden = f => f.showIf && !shows(f, fields.find(x=>x.k===f.showIf.field)?.value);
   $("#dlgBody").innerHTML = fields.map(f=>`
     <div class="fbox" id="w-${f.k}" style="background:var(--surface-4);margin-bottom:10px" ${hidden(f)?"hidden":""}>
@@ -986,7 +1003,7 @@ function openDialog({ title, sub, fields, okLabel="Save", onSave }){
     </div>`).join("");
   fields.filter(f=>f.showIf).forEach(f=>{
     const src=$("#d-"+f.showIf.field); if(!src) return;
-    src.addEventListener("change",()=>{ const w=$("#w-"+f.k), was=w.hidden; w.hidden = !shows(f, src.value); if(was && !w.hidden && !f.showIf.notIn) $("#d-"+f.k).focus(); });
+    src.addEventListener("change",()=>{ const w=$("#w-"+f.k), was=w.hidden; w.hidden = !shows(f, valOf(src)); if(was && !w.hidden && !f.showIf.notIn) $("#d-"+f.k).focus(); });
   });
   $("#dlgBody").querySelectorAll("[data-sw]").forEach(wrap=>{
     const hid = $("#d-"+wrap.dataset.sw);
@@ -1008,7 +1025,7 @@ function openDialog({ title, sub, fields, okLabel="Save", onSave }){
   });
   dlgSubmit = ()=>{
     const out={};
-    fields.forEach(f=>{ const el=$("#d-"+f.k), off=$("#w-"+f.k)?.hidden; out[f.k] = off ? "" : (el?.value||"").trim(); });
+    fields.forEach(f=>{ const el=$("#d-"+f.k), off=$("#w-"+f.k)?.hidden, v=valOf(el); out[f.k] = Array.isArray(v) ? (off ? [] : v) : (off ? "" : (v||"").trim()); });
     if(onSave(out) !== false) closeDialog();
   };
   $("#dlgScrim").classList.add("on");
@@ -1229,7 +1246,7 @@ function itemCard(it, ro){
       ${it.details?`<p>${esc(it.details)}</p>`:""}
     </div>
     <footer class="icard-f">
-      ${it.platform?`<span class="ichip">${esc(it.platform)}</span>`:""}
+      ${platChips(it,"ichip")}
       ${who ? `<span class="who">${avatar(who)}${esc(who)}</span>` : `<span class="ichip none">nobody yet</span>`}
       ${ro ? "" : `<span class="iacts">
         <button class="ibtn" type="button" data-edititem="${esc(it.id)}">Edit</button>
@@ -1585,7 +1602,7 @@ function bulkDialog(c){
       top = Math.max(top, c.items.filter(it=>it.date===day && groupKey(it)===(w.kind==="other" ? "other:"+w.other.toLowerCase() : w.kind) && !re.test(it.name||"")).length);
       for(let i=1;i<=w.n;i++){
         c.items.push({ id:uid("ci"), name:`${base} ${top+i}`, kind:w.kind, kindOther:w.kind==="other" ? w.other : "",
-          date:day, platform:PLATFORM_GUESS[w.kind]||"Other", ownerId:"", owner:"", details:"" });
+          date:day, platform:PLATFORM_GUESS[w.kind]||"Other", platforms:[PLATFORM_GUESS[w.kind]||"Other"], ownerId:"", owner:"", details:"" });
         made++;
       }
     });
@@ -1618,19 +1635,21 @@ function itemDialog(c, idx, pre){
       { k:"kind", label:"Type", type:"select", value:it.kind, opts:Object.entries(ITEM_KINDS).map(([k,v])=>[k,v.emo+" "+v.label]) },
       { k:"kindOther", label:"If other, what is it?", ph:"Podcast clip, press release…", value:it.kindOther, showIf:{ field:"kind", equals:"other" } },
       { k:"date", label:"Day", type:"date", value:it.date },
-      { k:"platform", label:"Platform / Category", type:"select", value:it.platform, opts:PLATFORMS.map(p=>[p,p]) },
+      { k:"platforms", label:"Platform / Category — tick every one it goes out on", type:"multi", value:platsOf(it), opts:PLATFORMS.map(p=>[p,p]) },
       { k:"ownerId", label:"Accountable person", type:"select", value:it.ownerId||"",
         opts:[["","— nobody yet —"]].concat(ppl.map(p=>[p.id, p.name + (p.role?" · "+p.role:"")])) },
       { k:"details", label:"More details", type:"area", value:it.details, ph:"The hook, where it links to — anything the person making it needs." },
       { k:"actionLabel", label:"Action — what the button says (YouTube and Instagram pieces always send to Content Process)",
-        ph:(ACTIONS[it.kind]||{}).label || "Open Canva", value:it.actionLabel||"", showIf:{ field:"platform", notIn:PROCESS_PLATFORMS } },
-      { k:"actionUrl", label:"URL — where the button takes them", ph:"https://…", value:it.actionUrl||"", showIf:{ field:"platform", notIn:PROCESS_PLATFORMS } }
+        ph:(ACTIONS[it.kind]||{}).label || "Open Canva", value:it.actionLabel||"", showIf:{ field:"platforms", notIn:PROCESS_PLATFORMS } },
+      { k:"actionUrl", label:"URL — where the button takes them", ph:"https://…", value:it.actionUrl||"", showIf:{ field:"platforms", notIn:PROCESS_PLATFORMS } }
     ],
     onSave:(v)=>{
       if(!v.name){ toast("The item needs a name"); return false; }
       if(v.actionUrl && !safeUrl(v.actionUrl)){ toast("The URL has to be a web link (https://…)"); return false; }
       if(v.actionUrl) v.actionUrl = safeUrl(v.actionUrl);
-      if(v.actionLabel && !v.actionUrl && !PROCESS_PLATFORMS.includes(v.platform)){ toast("Add the URL the button opens"); return false; }
+      if(!v.platforms.length){ toast("Tick at least one platform"); return false; }
+      v.platform = v.platforms[0];
+      if(v.actionLabel && !v.actionUrl && !v.platforms.some(p=>PROCESS_PLATFORMS.includes(p))){ toast("Add the URL the button opens"); return false; }
       const before = isNew ? "" : (it.ownerId||"");
       let target;
       if(isNew){ target = Object.assign({ id:uid("ci") }, v); c.items.push(target); }
@@ -1651,9 +1670,9 @@ function assignPane(c){
     <p>Add items under Fill in Details, then share them out here by platform.</p>
     <button class="btn pri" data-ctab="details">Go to Fill in Details</button></div>`;
   const ro = !canPlan();
-  const plats = [...new Set(c.items.map(i=>i.platform).filter(Boolean))];
+  const plats = allPlats(c);
   if(ASSIGNFILTER!=="All" && !plats.includes(ASSIGNFILTER)) ASSIGNFILTER="All";
-  const rows = ASSIGNFILTER==="All" ? c.items : c.items.filter(i=>i.platform===ASSIGNFILTER);
+  const rows = ASSIGNFILTER==="All" ? c.items : c.items.filter(i=>platsOf(i).includes(ASSIGNFILTER));
   const unassigned = c.items.filter(i=>!ownerName(i)).length;
   return `${ro ? memberBar() : ""}
     <div class="bar2" ${ro?"hidden":""}>
@@ -1665,7 +1684,7 @@ function assignPane(c){
     <div class="subnav">
       <button class="snav ${ASSIGNFILTER==="All"?"on":""}" data-plat="All">All <span class="cnt">${c.items.length}</span></button>
       ${plats.map(p=>`<button class="snav ${ASSIGNFILTER===p?"on":""}" data-plat="${esc(p)}">${esc(p)}
-        <span class="cnt">${c.items.filter(i=>i.platform===p).length}</span></button>`).join("")}
+        <span class="cnt">${c.items.filter(i=>platsOf(i).includes(p)).length}</span></button>`).join("")}
     </div>
     <div class="tw"><table style="min-width:1020px">
       <thead><tr><th>Item</th><th>Type</th><th>Platform / Category</th><th>Date</th><th>Accountable</th><th>Action</th></tr></thead>
@@ -1676,7 +1695,7 @@ function assignPane(c){
           <td class="td-idea" style="border-left:3px solid ${k.c}">${esc(it.name)}
             ${done?`<div style="margin-top:5px"><span class="badge good">🔔 in Content Process</span></div>`:""}</td>
           <td><span class="tag" style="background:color-mix(in srgb,${k.c} 15%,transparent);color:${k.c}">${esc(kindName(it).toLowerCase())}</span></td>
-          <td>${it.platform?`<span class="chip">${esc(it.platform)}</span>`:"—"}</td>
+          <td><span class="pchips">${platChips(it,"chip") || "—"}</span></td>
           <td class="vol" style="white-space:nowrap">${it.date?dmy(it.date):`<span class="miss">not set</span>`}</td>
           <td style="min-width:186px">
             ${who
@@ -1754,8 +1773,8 @@ function dashPane(c){
   const byKind = Object.entries(ITEM_KINDS)
     .map(([k,v])=>({ label:v.label, emo:v.emo, c:v.c, v:c.items.filter(i=>i.kind===k).length }))
     .filter(r=>r.v).sort((a,b)=>b.v-a.v);
-  const plats = [...new Set(c.items.map(i=>i.platform).filter(Boolean))];
-  const byPlat = plats.map((p,i)=>({ label:p, v:c.items.filter(x=>x.platform===p).length,
+  const plats = allPlats(c);
+  const byPlat = plats.map((p,i)=>({ label:p, v:c.items.filter(x=>platsOf(x).includes(p)).length,
     c:["var(--accent)","var(--saffron)","var(--c2)","var(--c3)","var(--c4)","var(--good)"][i%6] })).sort((a,b)=>b.v-a.v);
   const owners = [...new Set(c.items.map(ownerName).filter(Boolean))];
   const byOwner = owners.map(o=>({ label:o, v:c.items.filter(x=>ownerName(x)===o).length, c:`hsl(${hue(o)} 52% 46%)` })).sort((a,b)=>b.v-a.v);
@@ -1787,7 +1806,7 @@ function weekOf(d){ const x=new Date(d+"T00:00:00"), off=(x.getDay()+6)%7;
 function passFilter(it){
   const F = CALFILTER;
   if(F.type !== "all" && it.kind !== F.type) return false;
-  if(F.platform !== "all" && it.platform !== F.platform) return false;
+  if(F.platform !== "all" && !platsOf(it).includes(F.platform)) return false;
   if(F.owner !== "all" && ownerName(it) !== F.owner) return false;
   if(F.range !== "all"){
     if(!it.date) return false;
@@ -1809,7 +1828,7 @@ function calendarPane(c){
   const shown = filtered(c);
   const dated = shown.filter(i=>i.date), undated = shown.filter(i=>!i.date);
   const kinds = [...new Set(c.items.map(i=>i.kind))];
-  const plats = [...new Set(c.items.map(i=>i.platform).filter(Boolean))];
+  const plats = allPlats(c);
   const owners = [...new Set(c.items.map(ownerName).filter(Boolean))];
   const sel = (id,label,value,opts) => `<label class="fsel"><span>${label}</span>
     <select data-cf="${id}">${opts.map(([v,t])=>`<option value="${esc(v)}" ${value===v?"selected":""}>${esc(t)}</option>`).join("")}</select></label>`;
@@ -1901,7 +1920,7 @@ function listView(c, shown){
         <td class="vol" style="white-space:nowrap">${it.date?`${dmy(it.date)}<small>${dowShortC(it.date)}</small>`:`<span class="miss">not set</span>`}</td>
         <td class="td-idea" style="border-left:3px solid ${k.c}">${esc(it.name)}</td>
         <td><span class="tag" style="background:color-mix(in srgb,${k.c} 15%,transparent);color:${k.c}">${esc(kindName(it).toLowerCase())}</span></td>
-        <td>${it.platform?`<span class="chip">${esc(it.platform)}</span>`:"—"}</td>
+        <td><span class="pchips">${platChips(it,"chip") || "—"}</span></td>
         <td>${who?`<span class="who">${avatar(who)}${esc(who)}</span>`:`<span class="miss">nobody</span>`}</td>
         <td class="td-txt">${it.details?esc(it.details):"—"}</td></tr>`;}).join("")}
     </tbody></table></div>`;
@@ -1920,7 +1939,7 @@ function flowView(c, shown){
             return `<button class="fcard" style="border-color:${k.c};background:color-mix(in srgb,${k.c} 8%,transparent)" data-open="${esc(it.id)}">
               <span class="femo">${k.emo}</span>
               <b>${esc(it.name)}</b>
-              <span class="fmeta">${esc(kindName(it))}${it.platform?" · "+esc(it.platform):""}</span>
+              <span class="fmeta">${esc(kindName(it))}${platsOf(it).length?" · "+esc(platsOf(it).join(", ")):""}</span>
               ${who?`<span class="fwho">${avatar(who)}${esc(who)}</span>`:""}
             </button>`;}).join("")}
         </div>
