@@ -873,7 +873,7 @@ async function accSalesImport(file) {
 }
 function renderAdminAccSales(wrap) {
   var head = accEl("div", "module-head"); head.appendChild(accEl("h2", null, "Sales (Cashfree)")); accMonthPicker(head); wrap.appendChild(head);
-  wrap.appendChild(accEl("p", "hint", "Every Cashfree payment lands here within seconds, with the next invoice number and its GST split (price includes GST). Download a month for the CA or GST returns."));
+  wrap.appendChild(accEl("p", "hint", "Every Cashfree payment lands here within 10 minutes, with the next invoice number and its GST split (price includes GST). Download a month for the CA or GST returns."));
   var body = accEl("div"); body.appendChild(accEl("div", "hint", "Loading…")); wrap.appendChild(body);
   var M = ACC.month, y = Number(M.slice(0, 4)), mo = Number(M.slice(5)), N = mo === 12 ? (y + 1) + "-01" : y + "-" + String(mo + 1).padStart(2, "0");
   ACC.saleAll = ACC.saleAll || false; ACC.saleQ = ACC.saleQ || "";
@@ -971,11 +971,23 @@ function renderAdminAccSales(wrap) {
       if (x.error) { accToast(accErr(x.error)); return; } accToast("Saved"); renderAdminPage();
     };
     sc.appendChild(sv);
-    var url = SUPABASE_URL + "/functions/v1/cashfree-hook";
-    var how = accEl("div", "hr-rule-prev"); how.style.cssText = "margin-top:12px;white-space:pre-line";
-    how.textContent = "Connect Cashfree once:\n1. Supabase → Edge Functions → Secrets: add CASHFREE_APP_ID and CASHFREE_SECRET (Cashfree → Developers → API Keys).\n2. Cashfree → Developers → Webhooks → Add webhook URL, for Payment Gateway events, version 2023-08-01:\n" + url;
-    var cp = accEl("button", "hr-reveal", "Copy webhook URL"); cp.onclick = function () { navigator.clipboard.writeText(url).then(function () { accToast("Copied"); }); };
-    sc.append(how, cp);
+    // Cashfree allows one webhook (the app's), so the tools fetch every 10 minutes
+    var sn = S.last_sync_note || null, how = accEl("div", "hr-rule-prev"); how.style.cssText = "margin-top:12px;white-space:pre-line";
+    how.textContent = !S.last_sync_at ? "Not synced with Cashfree yet."
+      : "Last fetched from Cashfree " + accIstTime(S.last_sync_at) + ": " + (sn && sn.ok ? sn.added + " new sale" + (sn.added === 1 ? "" : "s") + " (" + sn.payments + " payments in the last 2 days)" : "⚠️ " + ((sn && sn.error) || "failed"));
+    how.textContent += "\nThe tools fetch new payments from Cashfree every 10 minutes. To connect, add CASHFREE_APP_ID and CASHFREE_SECRET (Cashfree Payment Gateway → Developers → API Keys) to the Supabase Edge Function secrets.";
+    var sy = accEl("button", "btn", "↻ Sync now"); sy.style.marginTop = "8px";
+    sy.onclick = async function () {
+      sy.disabled = true; sy.textContent = "Fetching from Cashfree…";
+      var hours = Math.max(48, Math.ceil((Date.now() - new Date(M + "-01T00:00:00+05:30").getTime()) / 3600e3));   // back to the start of the month shown
+      try {
+        var r = await SUPA.functions.invoke("cashfree-hook", { body: { hours: Math.min(hours, 24 * 31) } });
+        var err = r.error ? r.error.message : r.data && r.data.error;
+        accToast(err ? "Cashfree: " + err : "Fetched: " + r.data.added + " new sale" + (r.data.added === 1 ? "" : "s"));
+      } catch (e) { accToast("Cashfree: " + accErr(e)); }
+      renderAdminPage();
+    };
+    sc.append(how, sy);
     body.appendChild(sc);
   });
 }
