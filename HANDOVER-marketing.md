@@ -28,10 +28,10 @@ Adding or moving spaces needs the **Add spaces** permission. Deleting a Marketin
 
 | Tab | What |
 |---|---|
-| Fill in Details | Name, tagline, offer code, duration, days, messaging and your own fields, plus the **list of contents**: every reel, banner, push notification and WhatsApp message, each with a date, platform and one accountable person. |
+| Fill in Details | The **Campaign Creator** design. It starts with a hero showing the icon, name, tagline, offer code and a live "days to launch" countdown. Below that is the details form, where you tap to pick a campaign type, an offer type and a duration. Channels, audience, goal, budget, messaging and custom fields can be dragged in from the **Field library**. Then come a **Target** box per department and the **content pieces**: tap a tile for each reel, banner, push notification or WhatsApp message, with a date, platform and one accountable person. |
 | Assignment & distribution of work | The items grouped by platform. **Assign** or **Reassign** emails the person and puts a 🔔 in their bell. Reels, long videos, stories and influencer videos go to **Content Process → To Do** in the Social Media space, marked 🔔 High priority. Banners and alerts open Strapi, WhatsApp opens MSG91, and notifications open Firebase. |
-| Calendar | A grid or list of every month the campaign covers. You can filter by type, platform or person, and make a flowchart. |
-| Dashboard | Counts from what you entered. The **Campaign success** sales block shows example numbers ("NOT LIVE") until it is connected to the orders database. |
+| Calendar | A month grid (drag a card to another day, or to "No date yet"), a list or a flowchart. You can filter by date range, type, platform or person. |
+| Dashboard | Total pieces, then the counts by content type, platform and assignee, all read from the campaign. |
 
 ## Keep an Eye (its own space, not inside Marketing)
 
