@@ -138,7 +138,10 @@ function hrToast(m) {
   var t = document.getElementById("toast"); if (t) t.style.zIndex = "10050";   // above the admin page and HR dialogs
   toast(m);
 }
-function hrIsAdmin() { var u = hrMe(); return !!u && (u.super || (typeof hasPerm === "function" && hasPerm("manage_hr"))); }
+// HR permissions (Roles & permissions): manage_hr acts on files, view_hr only reads them
+function hrCan(perm) { var u = hrMe(); return !!u && (u.super || (typeof hasPerm === "function" && hasPerm(perm))); }
+function hrIsAdmin() { return hrCan("manage_hr"); }
+function hrCanView() { return hrCan("manage_hr") || hrCan("view_hr"); }
 function hrUsers() { return typeof USERS !== "undefined" ? USERS : []; }
 function hrUser(id) { return hrUsers().find(function (u) { return u.id === id; }) || null; }
 function hrName(id) { var u = hrUser(id); return u ? userDisplayName(u) : "Someone"; }
@@ -400,7 +403,7 @@ function hrChangeTools(f, label, inp, wrap, c, d) {
 
 // HR: what this person asked to change, with Approve / Say no
 var HR_SECRET = { aadhaar: 4, bank_account: 4 };
-function hrRenderChangeCard(wrap, uid) {
+function hrRenderChangeCard(wrap, uid, canEdit) {
   var list = (HRA.changes && HRA.changes[uid]) || [];
   if (!list.length) return;
   var card = hrEl("div", "hr-card"); card.style.marginTop = "14px";
@@ -414,7 +417,8 @@ function hrRenderChangeCard(wrap, uid) {
     left.appendChild(hrEl("div", "h", vals));
     row.appendChild(left);
     var right = hrEl("div"); right.style.cssText = "display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end";
-    if (c.status === "pending") {
+    if (c.status === "pending" && !canEdit) right.appendChild(hrEl("span", "hr-chip hr-amber", "Waiting for HR"));
+    else if (c.status === "pending") {
       var no = hrEl("button", "btn", "Say no"), yes = hrEl("button", "btn save", "✓ Approve");
       var decide = async function (ok) {
         var note = null;
@@ -864,15 +868,9 @@ function renderAdminHr(wrap) {
   if (HRA.open && HRA.rows) { hrRenderPerson(wrap, HRA.open); return; }
   if (HRA.open) { hrLoadAll().then(function () { renderAdminPage(); }).catch(function (e) { HRA.open = null; hrToast(hrErr(e)); }); return; }
   var head = hrEl("div", "module-head");
-  var h2 = hrEl("h2", null, "Employees (HR)"); head.appendChild(h2);
-  head.style.cssText += ";display:flex;align-items:center;gap:10px;flex-wrap:wrap";
-  var pm = hrEl("button", "btn", "📜 Policies"); pm.style.marginLeft = "auto"; pm.onclick = function () { hrPolicyManager(); }; head.appendChild(pm);
-  if (hrMe() && hrMe().super) {
-    var set = hrEl("button", "btn", "⚙️ Company and offer letter");
-    set.onclick = function () { hrSettingsDialog(); }; head.appendChild(set);
-  }
+  var h2 = hrEl("h2", null, "Employees"); head.appendChild(h2);
   wrap.appendChild(head);
-  wrap.appendChild(hrEl("div", "hint", "Everyone in this team fills in their own HR file from their account menu → 🗂️ My HR file. Open a person to check their details and documents, and send their offer letter."));
+  wrap.appendChild(hrEl("div", "hint", "Everyone fills in their own HR file from their profile menu → 🗂️ My HR file. Open a person to see their details, documents and policies" + (hrIsAdmin() ? ", and send their offer letter." : ".")));
   var body = hrEl("div"); body.innerHTML = '<div class="hint" style="margin-top:14px">Loading…</div>';
   wrap.appendChild(body);
   hrLoadAll().then(function () { hrDrawList(body); }).catch(function (e) {
@@ -940,6 +938,7 @@ function hrDrawList(body) {
 function hrRenderPerson(wrap, uid) {
   var u = hrUser(uid); if (!u) { HRA.open = null; renderAdminHr(wrap); return; }
   var rec = (HRA.rows && HRA.rows[uid]) || null, docs = (HRA.docs && HRA.docs[uid]) || [];
+  var canEdit = hrIsAdmin();   // "HR: see employee files" only reads
   var d = (rec && rec.details) || {}, job = Object.assign({}, (rec && rec.job) || {});
   var back = hrEl("button", "btn", "← All employees"); back.onclick = function () { HRA.open = null; renderAdminPage(); };
   wrap.appendChild(back);
@@ -975,8 +974,9 @@ function hrRenderPerson(wrap, uid) {
     ro.onclick = async function () { var n = await hrAsk("Why are you reopening it?", "e.g. Please update your new address.", "Reopen"); if (n && await act("reopen", { p_note: n })) { hrToast("Reopened"); renderAdminPage(); } };
     acts.appendChild(ro);
   }
-  if (acts.children.length) wrap.appendChild(acts);
-  hrRenderChangeCard(wrap, uid);
+  if (canEdit && acts.children.length) wrap.appendChild(acts);
+  if (!canEdit) wrap.appendChild(hrEl("div", "hr-note info", "👀 You can see this file. Approving, sending back and offer letters need “HR: manage employee files”."));
+  hrRenderChangeCard(wrap, uid, canEdit);
 
   var tl = hrEl("div", "hr-tl"); tl.style.margin = "12px 0 4px";
   [["Submitted", rec && rec.submitted_at], ["Offer letter sent", rec && rec.contract_sent_at], ["Signed", rec && rec.signed_at], ["Complete", rec && rec.completed_at]].forEach(function (x) {
@@ -1034,8 +1034,8 @@ function hrRenderPerson(wrap, uid) {
         if (r.error) { hrToast(hrErr(r.error)); return; }
         Object.assign(z, r.data); renderAdminPage();
       }
-      if (z.status !== "approved") { var ap = hrEl("button", "hr-reveal", "Approve"); ap.onclick = function () { review("approved"); }; f.appendChild(ap); }
-      if (z.status !== "rejected") { var rj = hrEl("button", "hr-reveal", "Reject"); rj.style.color = "#C0362C"; rj.onclick = async function () { var n2 = await hrAsk("Why can't you accept it?", "e.g. Too blurry to read the number.", "Reject"); if (n2) review("rejected", n2); }; f.appendChild(rj); }
+      if (canEdit && z.status !== "approved") { var ap = hrEl("button", "hr-reveal", "Approve"); ap.onclick = function () { review("approved"); }; f.appendChild(ap); }
+      if (canEdit && z.status !== "rejected") { var rj = hrEl("button", "hr-reveal", "Reject"); rj.style.color = "#C0362C"; rj.onclick = async function () { var n2 = await hrAsk("Why can't you accept it?", "e.g. Too blurry to read the number.", "Reject"); if (n2) review("rejected", n2); }; f.appendChild(rj); }
       files.appendChild(f);
     });
     left.appendChild(files); row.appendChild(left); dc.appendChild(row);
@@ -1108,6 +1108,10 @@ function hrRenderPerson(wrap, uid) {
     var last = hrEl("button", "btn", rec.offer_sig_doc ? "See the signed offer letter" : "See the offer letter they got");
     last.onclick = function () { var dlg = hrContractDialog(u, hrOfferStamp(rec, docs, null, function (h) { if (dlg) dlg(h); }), null); };
     jf.insertBefore(last, pv);
+  }
+  if (!canEdit) {   // read only: show the terms, keep only "see the offer letter"
+    box.querySelectorAll("input,select,textarea").forEach(function (x) { x.disabled = true; });
+    [sj, msg, pv].forEach(function (x) { x.remove(); });
   }
   jc.appendChild(jf);
   wrap.appendChild(jc);
@@ -1207,6 +1211,23 @@ function hrProfileLink() {
 })();
 
 // Administration → 🪪 My HR file: the same file, reachable from the admin sidebar too
+// Administration → HR → Company and offer letter ("HR: company details and offer letter")
+function renderAdminHrSettings(wrap) {
+  var head = hrEl("div", "module-head"); head.appendChild(hrEl("h2", null, "Company and offer letter")); wrap.appendChild(head);
+  var card = hrEl("div", "hr-card"); card.style.maxWidth = "760px"; card.setAttribute("data-plain", "");
+  card.appendChild(hrEl("div", "hint", "The company details and the offer letter wording used for every new offer letter and in the policies."));
+  var kv = hrEl("div", "hr-kv"); kv.style.marginTop = "10px"; card.appendChild(kv);
+  var ed = hrEl("button", "btn save", "✏️ Edit company details and offer letter"); ed.style.marginTop = "14px";
+  ed.onclick = function () { hrSettingsDialog(); };
+  card.appendChild(ed); wrap.appendChild(card);
+  (HR.settings ? Promise.resolve(HR.settings) : hrLoadSettings()).then(function (s) {
+    var c = (s && s.company) || {};
+    [["Company", c.name], ["Short name", c.short], ["Address", c.address], ["City (courts)", c.city], ["Signs for the company", [c.signatory, c.signatory_title].filter(Boolean).join(", ")], ["HR email", c.email],
+     ["Offer letter wording", s && s.contract_template ? "Customised" : "Standard template"]].forEach(function (x) {
+      kv.append(hrEl("div", "k", x[0]), hrEl("div", "v", x[1] || "—"));
+    });
+  }).catch(function (e) { card.appendChild(hrEl("div", "hr-note warn", "Couldn't load: " + hrErr(e))); });
+}
 function renderAdminMyHr(wrap) {
   var head = hrEl("div", "module-head"); head.appendChild(hrEl("h2", null, "My HR file")); wrap.appendChild(head);
   var card = hrEl("div", "hr-profile-link"); card.style.maxWidth = "640px";
@@ -1464,7 +1485,12 @@ function hrPolicyDialog(p, after, ctx) {
 }
 // Administration → 📜 Company policies (everyone)
 function renderAdminPolicies(wrap) {
-  var head = hrEl("div", "module-head"); head.appendChild(hrEl("h2", null, "Company policies")); wrap.appendChild(head);
+  var head = hrEl("div", "module-head"); head.appendChild(hrEl("h2", null, "Company policies"));
+  if (hrCan("manage_policies")) {
+    head.style.cssText += ";display:flex;align-items:center;gap:10px;flex-wrap:wrap";
+    var pm = hrEl("button", "btn", "✏️ Add or edit policies"); pm.style.marginLeft = "auto"; pm.onclick = function () { hrPolicyManager(); }; head.appendChild(pm);
+  }
+  wrap.appendChild(head);
   var card = hrEl("div", "hr-card"); card.style.maxWidth = "880px"; card.setAttribute("data-plain", "");
   card.appendChild(hrEl("div", "hint", "Loading…")); wrap.appendChild(card);
   function draw() { card.innerHTML = ""; hrRenderPolicies(card, draw); }

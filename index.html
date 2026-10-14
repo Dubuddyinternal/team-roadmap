@@ -733,6 +733,8 @@ tr.in-mvp .an-rowhead{border-left:3px solid var(--indigo)}
 .admin-navitem{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:11px 14px;border:1px solid transparent;border-radius:10px;background:none;font-family:var(--sans);font-size:14px;color:var(--ink);cursor:pointer}
 .admin-navitem:hover{background:var(--paper)}
 .admin-navitem.active{border-color:var(--indigo);background:var(--indigo-soft);color:var(--indigo);font-weight:600}
+.admin-navitem .admin-caret{margin-left:auto;color:var(--muted);font-size:12px}
+.admin-subitem{padding-left:34px;font-size:13.5px}
 .admin-back{margin-top:auto;text-align:left;padding:11px 14px;border:none;background:none;color:var(--muted);font-family:var(--mono);font-size:12.5px;cursor:pointer;border-radius:8px}
 .admin-back:hover{color:var(--indigo);background:var(--indigo-soft)}
 .admin-main{flex:1;padding:44px 48px;min-width:0}
@@ -4177,7 +4179,10 @@ const PERMS = [
   {key:"delete_social_cards", label:"Delete Social Media cards", hint:"See “Delete” on a Content Process card in Social Media. Owners and Admins always can"},
   {key:"review_student_ideas", label:"Review student ideas", hint:"Approve, merge or reject ideas students send from tools.dubuddy.in/ideas (product space → From students)"},
   {key:"manage_learning",  label:"Run LMS",               hint:"Plan learning drops — videos, articles, polls, quizzes — in Administration → LMS, and see everyone's answers"},
-  {key:"manage_hr",        label:"Manage HR files",       hint:"See everyone's HR details and documents in Administration → Employees (HR), approve documents and send contracts"},
+  {key:"view_hr",          label:"HR: see employee files", hint:"Read everyone's HR details, documents and signed policies in Administration → HR → Employees. Can't change anything"},
+  {key:"manage_hr",        label:"HR: manage employee files", hint:"Everything in “see employee files”, plus approve documents, send files back, answer ✏️ change requests, and send offer letters"},
+  {key:"manage_policies",  label:"HR: edit company policies", hint:"Add and edit policies in Administration → HR → Company policies, and ask everyone to sign a new version"},
+  {key:"hr_settings",      label:"HR: company details & offer letter", hint:"Change the company details and the offer letter wording in Administration → HR → Company and offer letter"},
 ];
 // what the 5 old role names meant, for anyone not yet on a custom role
 const LEGACY_PERMS = { admin: PERMS.map(p=>p.key), editor:["view","comment","edit","delete","spaces"], commenter:["view","comment"], viewer:["view"] };
@@ -19189,13 +19194,17 @@ function roleOptions(sel, current, maxRole){
 /* Administration is the one place everyone goes. Each section says who sees it;
    to add a new kind of section later (e.g. "Raise a request", "Game support"),
    add one line here and a render function. */
+// sidebar dropdowns in Administration (sections with a matching group)
+const ADMIN_GROUPS = { hr: { ico:"🧑‍💼", lbl:"HR" } };
+let adminOpenGroups = {};
 function adminSections(){
   const me = currentUser(), sup = !!(me && me.super), people = canManagePeople();
   return [
     { k:"users",       ico:"👥", lbl:"Users",                show: people,                         render: renderAdminUsers },
-    { k:"hr",          ico:"🗂️", lbl:"Employees (HR)",       show: !!me && !!SUPA && typeof renderAdminHr === "function" && (sup || hasPerm("manage_hr")), render: renderAdminHr },
-    { k:"myhr",        ico:"🪪", lbl:"My HR file",           show: !!me && !!SUPA && typeof renderAdminMyHr === "function", render: renderAdminMyHr },
-    { k:"policies",    ico:"📜", lbl:"Company policies",     show: !!me && !!SUPA && typeof renderAdminPolicies === "function", render: renderAdminPolicies },
+    // HR: one dropdown in the sidebar (My HR file lives in the profile menu)
+    { k:"hr",          ico:"🗂️", lbl:"Employees", group:"hr", show: !!me && !!SUPA && typeof renderAdminHr === "function" && (hasPerm("manage_hr") || hasPerm("view_hr")), render: renderAdminHr },
+    { k:"policies",    ico:"📜", lbl:"Company policies", group:"hr", show: !!me && !!SUPA && typeof renderAdminPolicies === "function", render: renderAdminPolicies },
+    { k:"hrsettings",  ico:"🏢", lbl:"Company and offer letter", group:"hr", show: !!me && !!SUPA && typeof renderAdminHrSettings === "function" && hasPerm("hr_settings"), render: renderAdminHrSettings },
     { k:"requests",    ico:"🙋", lbl:"Requests" + (PENDING_REQUESTS ? " (" + PENDING_REQUESTS + ")" : ""), crumb:"Requests",
                                                                         show: hasPerm("approve_requests"),    render: renderAdminRequests },
     { k:"request",     ico:"➕",       lbl:"Request a teammate",   show: hasPerm("request_members"),     render: renderRequestTeammate },
@@ -19303,14 +19312,31 @@ function renderAdminPage(){
   if(!secs.some(x=> x.k === adminView)) adminView = secs[0].k;   // never show a section this role can't use
   const nav = $("admin-nav");
   nav.innerHTML = "";
-  secs.forEach(sec=>{
+  const item = (sec, sub)=>{
     const b = document.createElement("button");
-    b.className = "admin-navitem" + (adminView===sec.k ? " active" : "");
+    b.className = "admin-navitem" + (sub ? " admin-subitem" : "") + (adminView===sec.k ? " active" : "");
     b.innerHTML = '<span></span><span></span>';
     b.querySelector("span:first-child").textContent = sec.ico;
     b.querySelector("span:last-child").textContent = sec.lbl;
     b.onclick = ()=>{ adminView = sec.k; renderAdminPage(); };
-    nav.appendChild(b);
+    return b;
+  };
+  const drawn = {};
+  secs.forEach(sec=>{
+    if(!sec.group){ nav.appendChild(item(sec)); return; }
+    if(drawn[sec.group]) return;   // a group draws all its items at its first one
+    drawn[sec.group] = true;
+    const g = ADMIN_GROUPS[sec.group], kids = secs.filter(x=> x.group === sec.group);
+    const inside = kids.some(x=> x.k === adminView);
+    const open = adminOpenGroups[sec.group] != null ? adminOpenGroups[sec.group] : inside;   // opens itself on its own pages
+    const h = document.createElement("button");
+    h.className = "admin-navitem admin-group" + (inside && !open ? " active" : "");
+    h.setAttribute("aria-expanded", open ? "true" : "false");
+    h.innerHTML = '<span></span><span></span><span class="admin-caret"></span>';
+    h.children[0].textContent = g.ico; h.children[1].textContent = g.lbl; h.children[2].textContent = open ? "▾" : "▸";
+    h.onclick = ()=>{ adminOpenGroups[sec.group] = !open; renderAdminPage(); };
+    nav.appendChild(h);
+    if(open) kids.forEach(k=> nav.appendChild(item(k, true)));
   });
   $("admin-back").onclick = ()=> closeAdmin();
   const main = $("admin-main");
@@ -19318,7 +19344,7 @@ function renderAdminPage(){
   const cur = secs.find(x=> x.k === adminView);
   const crumb = document.createElement("div");
   crumb.className = "admin-crumb";
-  crumb.textContent = "⚙️ Administration › " + (cur.crumb || cur.lbl);
+  crumb.textContent = "⚙️ Administration › " + (cur.group ? ADMIN_GROUPS[cur.group].lbl + " › " : "") + (cur.crumb || cur.lbl);
   main.appendChild(crumb);
   cur.render(main);
 }

@@ -73,6 +73,17 @@ Files can be PDF, JPG, PNG or WEBP, up to 10 MB each.
 - If approved, only that field opens. **Save change** writes it (`hr_apply_change`) and locks it again; HR sees old → new.
 - Database: `supabase/stage18e_hr_change_requests.sql` (`hr_change_requests`, `hr_request_change`, `hr_decide_change`, `hr_apply_change`).
 
+## Where HR lives and who can use it (stage 18g)
+
+- **Sidebar:** Administration → **🧑‍💼 HR** dropdown: Employees, Company policies, Company and offer letter. My HR file is only in the profile menu.
+- **Permissions** (Roles & permissions; owners and super-admins have all):
+  - **HR: see employee files** (`view_hr`): read only.
+  - **HR: manage employee files** (`manage_hr`): approve documents, send back, answer ✏️ requests, send offer letters.
+  - **HR: edit company policies** (`manage_policies`).
+  - **HR: company details & offer letter** (`hr_settings`).
+- Everyone can read and sign the policies.
+- Database: `supabase/stage18g_hr_permissions.sql` (`hr_perm_any`, `hr_can_view`; read policies use `hr_can_view`).
+
 ## Notes for the next developer
 
 - **Front end:** `hr.js`, loaded after `monthly-feedback.js`. It adds its own styles. The admin section is registered in `adminSections()` in `index.html` (`k:"hr"`).
