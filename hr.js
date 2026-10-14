@@ -260,6 +260,8 @@ function hrEditable(rec) { return !rec || rec.status === "draft" || rec.status =
     + ".hr-tpl{width:100%;min-height:360px;font-family:var(--mono);font-size:12.5px;padding:12px;border:1px solid var(--line-strong);border-radius:10px}"
     + ".hr-profile-link{display:flex;gap:10px;align-items:center;background:var(--indigo-soft);border:1px solid #F5CDB6;border-radius:12px;padding:10px 12px;margin-bottom:14px;font-size:13.5px}"
     + ".hr-profile-link .grow{flex:1}"
+    + ".hr-pen{border:0;background:none;cursor:pointer;font-size:13px;padding:0 4px;margin-left:6px;opacity:.75}.hr-pen:hover{opacity:1}.hr-chg{margin-left:8px;font-size:10.5px;letter-spacing:0;text-transform:none}"
+    + ".hr-open input,.hr-open select,.hr-open textarea{border-color:#2F8F4E !important;background:#fff !important}.hr-chgrow{margin-top:6px}.hr-chgno{font-size:12px;color:var(--muted);margin-top:4px}"
     + ".hr-done{text-align:center;padding:22px 16px;border:1px solid #BFE3C9;background:#EEF8F1;border-radius:14px;margin-top:6px}.hr-done .big{font-size:34px}.hr-done b{display:block;font-size:17px;margin:4px 0}.hr-done .h{color:var(--muted);font-size:13.5px}"
     + ".hr-wait{display:flex;flex-direction:column;gap:8px;margin-top:8px}.hr-wait .r{display:flex;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:12px;font-size:13.5px}"
     + ".hr-wait .r.now{border-color:#F5CDB6;background:var(--indigo-soft)}.hr-wait .n{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--line);font-weight:700;flex:none}.hr-wait .h{color:var(--muted);font-size:12.5px}"
@@ -283,6 +285,7 @@ async function hrLoadMine() {
   HR.rec = r.data || { user_id: me.id, details: {}, status: "draft", _new: true };
   HR.docs = d.data || [];
   await hrLoadPolicies();
+  await hrLoadChanges();
 }
 function hrClean(d) {
   var out = {};
@@ -291,10 +294,13 @@ function hrClean(d) {
 }
 async function hrSaveDraft(quiet) {
   if (!hrEditable(HR.rec)) return true;
+  clearTimeout(HR.saveTimer);
   var d = HR.rec.details || {};
   var r = await SUPA.rpc("hr_save", { p_details: hrClean(d), p_submit: false, p_consent: false });
   if (r.error) { if (!quiet) hrToast("Couldn't save: " + hrErr(r.error)); return false; }
-  HR.rec = r.data; HR.rec.details.bank_account2 = d.bank_account2; HR.dirty = false;
+  // keep the details object the form is typing into; swapping it for the server's
+  // copy made every edit after the first save land in an old object and get lost
+  var keep = HR.rec.details; HR.rec = r.data; HR.rec.details = keep || r.data.details || {}; HR.dirty = false;
   var s = document.getElementById("hr-saved"); if (s) s.textContent = "Saved " + new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
   return true;
 }
@@ -349,6 +355,85 @@ function hrAsk(title, ph, btn) {
     ok.onclick = function () { var v = ta.value.trim(); if (!v) { ta.focus(); return; } ov.remove(); res(v); };
     row.append(c, ok); box.appendChild(row); ov.appendChild(box); document.body.appendChild(ov); ta.focus();
   });
+}
+
+/* ---------- asking HR to change a locked detail ---------- */
+function hrChangeOf(k) { return (HR.changes || []).filter(function (c) { return c.field === k; })[0] || null; }   // newest first
+async function hrLoadChanges() {
+  var me = hrMe(); if (!me) return;
+  var r = await SUPA.from("hr_change_requests").select("*").eq("user_id", me.id).order("created_at", { ascending: false });
+  HR.changes = r.error ? [] : (r.data || []);   // stage18e not run yet: no ✏️ requests
+}
+// the ✏️ next to a locked field, and what happens after asking
+function hrChangeTools(f, label, inp, wrap, c, d) {
+  if (HR.changes == null) return;
+  var open = c && (c.status === "pending" || c.status === "approved");
+  if (c && c.status === "pending") { label.appendChild(hrEl("span", "hr-chip hr-amber hr-chg", "Asked HR")); return; }
+  if (c && c.status === "approved") {
+    inp.disabled = false; wrap.classList.add("hr-open");
+    label.appendChild(hrEl("span", "hr-chip hr-green hr-chg", "HR said yes"));
+    var row = hrEl("div", "hr-chgrow");
+    var sv = hrEl("button", "btn save", "Save change"); sv.type = "button";
+    sv.onclick = async function () {
+      var v = inp.value; if (f.fmt === "pan" || f.fmt === "ifsc") v = v.toUpperCase();
+      var msg = hrCheck(f, v, d);
+      if (msg) { hrToast(msg === "Required" ? "This can't be empty" : msg); inp.focus(); return; }
+      sv.disabled = true;
+      var r = await SUPA.rpc("hr_apply_change", { p_id: c.id, p_value: v });
+      if (r.error) { hrToast(hrErr(r.error)); sv.disabled = false; return; }
+      HR.rec = r.data; await hrLoadChanges(); hrToast("Changed. HR can see it."); hrRenderMine();
+    };
+    row.appendChild(sv); wrap.appendChild(row);
+    return;
+  }
+  var pen = hrEl("button", "hr-pen", "✏️"); pen.type = "button"; pen.title = "Ask HR to change this"; pen.setAttribute("aria-label", "Ask HR to change " + f.lbl);
+  pen.onclick = async function () {
+    var why = await hrAsk("Change “" + f.lbl + "”?", "Why does it need to change? e.g. I moved to a new flat.", "Ask HR");
+    if (!why) return;
+    var r = await SUPA.rpc("hr_request_change", { p_field: f.k, p_label: f.lbl, p_reason: why });
+    if (r.error) { hrToast(hrErr(r.error)); return; }
+    await hrLoadChanges(); hrToast("Sent to HR. You'll get a 🔔 when they answer."); hrRenderMine();
+  };
+  label.appendChild(pen);
+  if (c && c.status === "rejected" && !open) wrap.appendChild(hrEl("div", "hr-chgno", "HR said no" + (c.hr_note ? ": " + c.hr_note : "") + ". You can ask again."));
+}
+
+// HR: what this person asked to change, with Approve / Say no
+var HR_SECRET = { aadhaar: 4, bank_account: 4 };
+function hrRenderChangeCard(wrap, uid) {
+  var list = (HRA.changes && HRA.changes[uid]) || [];
+  if (!list.length) return;
+  var card = hrEl("div", "hr-card"); card.style.marginTop = "14px";
+  card.appendChild(hrEl("h3", null, "✏️ Change requests"));
+  var show = function (k, v) { if (v == null || v === "") return "—"; return HR_SECRET[k] ? hrMask(String(v).replace(/\s/g, ""), HR_SECRET[k]) : String(v); };
+  list.slice(0, 12).forEach(function (c) {
+    var row = hrEl("div", "hr-doc"), left = hrEl("div");
+    left.appendChild(hrEl("div", "t", c.label));
+    left.appendChild(hrEl("div", "h", "“" + c.reason + "” · " + hrDate(c.created_at)));
+    var vals = c.status === "done" ? "Was: " + show(c.field, c.old_value) + " → now: " + show(c.field, c.new_value) : "Now: " + show(c.field, c.old_value);
+    left.appendChild(hrEl("div", "h", vals));
+    row.appendChild(left);
+    var right = hrEl("div"); right.style.cssText = "display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end";
+    if (c.status === "pending") {
+      var no = hrEl("button", "btn", "Say no"), yes = hrEl("button", "btn save", "✓ Approve");
+      var decide = async function (ok) {
+        var note = null;
+        if (!ok) { note = await hrAsk("Why not?", "e.g. Please send the new address proof to HR first.", "Say no"); if (!note) return; }
+        yes.disabled = no.disabled = true;
+        var r = await SUPA.rpc("hr_decide_change", { p_id: c.id, p_approve: ok, p_note: note });
+        if (r.error) { hrToast(hrErr(r.error)); yes.disabled = no.disabled = false; return; }
+        hrToast(ok ? "Approved. They can change it now." : "Told them no.");
+        await hrLoadAll(); renderAdminPage();
+      };
+      no.onclick = function () { decide(false); }; yes.onclick = function () { decide(true); };
+      right.append(no, yes);
+    } else {
+      var lbl = { approved: ["Approved, waiting for them", "amber"], rejected: ["Said no", "grey"], done: ["Changed · " + hrDate(c.done_at), "green"] }[c.status];
+      right.appendChild(hrEl("span", "hr-chip hr-" + lbl[1], lbl[0]));
+    }
+    row.appendChild(right); card.appendChild(row);
+  });
+  wrap.appendChild(card);
 }
 
 /* ---------- contract ---------- */
@@ -459,7 +544,7 @@ function hrRenderMine() {
       var miss = HR_DOCS.filter(function (z) { return z.req && !hrDocsHave(HR.docs, z.k); }).length;
       b.appendChild(miss ? hrEl("span", "todo", miss + " left") : hrEl("span", "tick", "✓"));
     }
-    b.onclick = function () { HR.step = x.i; hrRenderMine(); };
+    b.onclick = async function () { if (editable && HR.dirty) await hrSaveDraft(false); HR.step = x.i; hrRenderMine(); };
     nav.appendChild(b);
   });
   grid.appendChild(nav);
@@ -475,12 +560,19 @@ function hrRenderMine() {
   if (step.k !== "contract") {
     var foot = hrEl("div", "hr-foot");
     var vis = hrVisibleSteps().map(function (x) { return x.i; }), at = vis.indexOf(HR.step);
-    if (at > 0) { var back = hrEl("button", "btn", "← Back"); back.onclick = function () { HR.step = vis[at - 1]; hrRenderMine(); }; foot.appendChild(back); }
+    if (at > 0) { var back = hrEl("button", "btn", "← Back"); back.onclick = async function () { if (editable && HR.dirty) await hrSaveDraft(false); HR.step = vis[at - 1]; hrRenderMine(); }; foot.appendChild(back); }
     foot.appendChild(hrEl("div", "grow"));
     if (editable) { var sv = hrEl("span", "hr-saved", rec._new ? "" : "Saved"); sv.id = "hr-saved"; foot.appendChild(sv); }
     if (at < vis.length - 1 && step.k !== "submit") {
-      var next = hrEl("button", "btn save", "Next →");
-      next.onclick = async function () { if (editable) await hrSaveDraft(true); HR.step = vis[at + 1]; hrRenderMine(); page.scrollTop = 0; };
+      var next = hrEl("button", "btn save", editable ? "Save and next →" : "Next →");
+      next.onclick = async function () {
+        if (editable) {
+          next.disabled = true; next.textContent = "Saving…";
+          if (!await hrSaveDraft(false)) { next.disabled = false; next.textContent = "Save and next →"; return; }
+          hrToast("Saved ✓");
+        }
+        HR.step = vis[at + 1]; hrRenderMine(); page.scrollTop = 0;
+      };
       foot.appendChild(next);
     }
     card.appendChild(foot);
@@ -491,7 +583,7 @@ function hrRenderMine() {
 }
 function hrRenderFields(card, step, d, editable) {
   card.appendChild(hrEl("h3", null, step.ico + " " + step.lbl));
-  card.appendChild(hrEl("div", "hint", editable ? "Fields marked * are needed. Everything saves as you type." : "Locked while HR has your file."));
+  card.appendChild(hrEl("div", "hint", editable ? "Fields marked * are needed. Press Save and next when this page is done." : "🔒 Your details are locked. To change one, press ✏️ next to it and HR will approve it."));
   var box = hrEl("div", "hr-fields");
   var errs = {};
   step.fields.forEach(function (f) {
@@ -517,6 +609,8 @@ function hrRenderFields(card, step, d, editable) {
     if (f.k === "full_name" && !inp.value && editable && hrMe() && hrMe().name) { inp.value = hrMe().name; d.full_name = inp.value; }
     inp.disabled = !editable;
     var err = hrEl("div", "hr-ferr");
+    var chg = editable || f.noSave ? null : hrChangeOf(f.k);
+    if (!editable && !f.noSave) hrChangeTools(f, l, inp, wrap, chg, d);
     errs[f.k] = { wrap: wrap, err: err };
     function sync(show) {
       var msg = hrCheck(f, inp.value, d);
@@ -531,6 +625,7 @@ function hrRenderFields(card, step, d, editable) {
     inp.addEventListener("change", function () { sync(true); });
     inp.addEventListener("blur", function () { sync(true); });
     wrap.append(inp, err);
+    wrap.querySelectorAll(".hr-chgrow,.hr-chgno").forEach(function (x) { wrap.appendChild(x); });   // under the box
     if (inp.value) setTimeout(function () { sync(true); }, 0);
     box.appendChild(wrap);
   });
@@ -747,6 +842,9 @@ async function hrLoadAll() {
     var sg = await SUPA.from("hr_policy_signs").select("*").in("user_id", ids);
     (sg.data || []).forEach(function (x) { (HRA.signs[x.user_id] = HRA.signs[x.user_id] || []).push(x); });
   }
+  HRA.changes = {};
+  var ch = await SUPA.from("hr_change_requests").select("*").in("user_id", ids).order("created_at", { ascending: false });
+  (ch.error ? [] : ch.data || []).forEach(function (x) { (HRA.changes[x.user_id] = HRA.changes[x.user_id] || []).push(x); });
 }
 function hrAvatar(u) {
   var av = hrEl("span", "hr-av");
@@ -823,6 +921,8 @@ function hrDrawList(body) {
       var c3b = hrEl("td", "hide-s", need.length ? signed + " of " + need.length + " signed" : "—");
       if (need.length && signed === need.length) c3b.style.color = "var(--done)";
       var c4 = hrEl("td"); c4.appendChild(hrChip(rec ? rec.status : "none"));
+      var asks = (HRA.changes[u.id] || []).filter(function (x) { return x.status === "pending"; }).length;
+      if (asks) { var ak = hrEl("span", "hr-chip hr-amber", "✏️ " + asks + " to answer"); ak.style.marginLeft = "6px"; c4.appendChild(ak); }
       var c5 = hrEl("td", "hide-s", rec ? hrDate(rec.updated_at) : "—");
       tr.append(c1, c2, c3, c3b, c4, c5);
       function go() { HRA.open = u.id; HRA.reveal = {}; renderAdminPage(); }
@@ -874,6 +974,7 @@ function hrRenderPerson(wrap, uid) {
     acts.appendChild(ro);
   }
   if (acts.children.length) wrap.appendChild(acts);
+  hrRenderChangeCard(wrap, uid);
 
   var tl = hrEl("div", "hr-tl"); tl.style.margin = "12px 0 4px";
   [["Submitted", rec && rec.submitted_at], ["Offer letter sent", rec && rec.contract_sent_at], ["Signed", rec && rec.signed_at], ["Complete", rec && rec.completed_at]].forEach(function (x) {

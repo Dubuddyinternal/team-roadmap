@@ -66,6 +66,13 @@ Files can be PDF, JPG, PNG or WEBP, up to 10 MB each.
 - **Offer letter:** the step is always in My HR file. Before HR sends it, it shows what happens next. Once sent, the person signs it with the same saved signature (`hr_sign_offer`, stored as `offer_sig_doc`, `offer_place`, `offer_signed_name` on `hr_records`), or prints and uploads a signed copy as before.
 - **Database:** `supabase/stage18b_hr_policies.sql`, then `stage18c_hr_signature.sql`, then `stage18d_hr_offer_sign.sql`. All are safe to run again.
 
+## Changing a locked detail (stage 18e)
+
+- Once a person submits, their details are locked. Each field has a ✏️: they say why it needs to change, and HR gets a 🔔.
+- HR answers on the person's page (**✏️ Change requests**: Approve / Say no). The list shows "✏️ n to answer".
+- If approved, only that field opens. **Save change** writes it (`hr_apply_change`) and locks it again; HR sees old → new.
+- Database: `supabase/stage18e_hr_change_requests.sql` (`hr_change_requests`, `hr_request_change`, `hr_decide_change`, `hr_apply_change`).
+
 ## Notes for the next developer
 
 - **Front end:** `hr.js`, loaded after `monthly-feedback.js`. It adds its own styles. The admin section is registered in `adminSections()` in `index.html` (`k:"hr"`).
