@@ -710,6 +710,7 @@ ACC_STATUS.approved_b = ["Approved · in payroll", "blue"];
 /* ---------- Accounts → Checks (for the owner, once a month) ---------- */
 function renderAdminAccChecks(wrap) {
   var head = accEl("div", "module-head"); head.appendChild(accEl("h2", null, "Monthly checks")); accMonthPicker(head); wrap.appendChild(head);
+  if (typeof accCloseMonth === "function") accCloseMonth(wrap, ACC.month);
   var body = accEl("div"); body.appendChild(accEl("div", "hint", "Loading…")); wrap.appendChild(body);
   var M = ACC.month, fyStart = (Number(M.slice(5)) >= 4 ? Number(M.slice(0, 4)) : Number(M.slice(0, 4)) - 1) + "-04-01";
   Promise.all([SUPA.from("acc_requests").select("*").limit(5000), SUPA.from("acc_payroll").select("*").eq("status", "paid"), SUPA.from("acc_payroll_runs").select("*"),
@@ -810,7 +811,7 @@ function renderAdminAccChecks(wrap) {
    number and GST split; this page shows the month like the B2C sheet,
    downloads it, and imports Cashfree's transaction export for history. */
 var ACC_SALE_COLS = [["Transaction Time", "txn_time"], ["Invoice No.", "invoice_no"], ["Order Id", "order_id"], ["Cashfree Order ID", "cf_order_id"],
-  ["Order Amount", "order_amount"], ["Taxable", "taxable"], ["CGST", "cgst"], ["SGST", "sgst"], ["Order Currency", "currency"], ["Reference Id", "cf_payment_id"],
+  ["Order Amount", "order_amount"], ["Taxable", "taxable"], ["CGST", "cgst"], ["SGST", "sgst"], ["IGST", "igst"], ["Place of Supply", "place_of_supply"], ["State Source", "state_source"], ["Order Currency", "currency"], ["Reference Id", "cf_payment_id"],
   ["Customer Phone", "customer_phone"], ["Payment Mode", "payment_mode"], ["Transaction Status", "status"], ["Failure Reason", "message"], ["Refunded", "refunded"],
   ["Transaction Amount", "txn_amount"], ["Transaction Currency", "currency"], ["Refund Type", "refund_type"], ["Captured", "captured"], ["Customer Reference ID", "customer_id"],
   ["Customer Name", "customer_name"], ["Customer Email", "customer_email"]];
@@ -851,6 +852,7 @@ async function accSalesImport(file) {
   if (hi < 0) { accToast("This file has no “Reference Id” column. Download the transactions report from Cashfree (or the B2C sheet as CSV)."); return; }
   var head = rows[hi].map(function (c) { return c.trim().toLowerCase(); }), col = {};
   ACC_SALE_COLS.forEach(function (c) { var i = head.indexOf(c[0].toLowerCase()); if (i >= 0 && !(c[1] in col)) col[c[1]] = i; });
+  if (!("place_of_supply" in col)) ["state", "state code", "state_code", "pos"].some(function (h) { var i = head.indexOf(h); if (i >= 0) { col.place_of_supply = i; return true; } });
   var num = function (v) { return String(v || "").replace(/[₹,\s]/g, ""); };
   var out = rows.slice(hi + 1).map(function (r) {
     var g = function (k) { return k in col ? String(r[col[k]] || "").trim() : ""; };
@@ -858,6 +860,7 @@ async function accSalesImport(file) {
       order_amount: num(g("order_amount")), txn_amount: num(g("txn_amount")) || num(g("order_amount")), currency: g("currency") || "INR",
       customer_phone: g("customer_phone"), customer_email: g("customer_email"), customer_name: g("customer_name"), customer_id: g("customer_id"),
       payment_mode: g("payment_mode"), status: g("status").toUpperCase(), message: g("message"),
+      state_code: accStateCode(g("place_of_supply")), state_source: "import",
       refunded: /^true$/i.test(g("refunded")), refund_type: /^true$/i.test(g("refunded")) ? g("refund_type") : "" };
   }).filter(function (x) { return x.cf_payment_id; });
   // oldest first, so payments without an invoice number get theirs in time order
@@ -871,14 +874,60 @@ async function accSalesImport(file) {
   accToast("Imported " + n + " new payment" + (n === 1 ? "" : "s") + (out.length - n ? " · " + (out.length - n) + " already here, skipped" : ""));
   renderAdminPage();
 }
+// GST states: code → { no, name } (acc_gst_states)
+var ACC_STATES = null;
+async function accLoadStates() {
+  if (ACC_STATES) return ACC_STATES;
+  var x = await SUPA.from("acc_gst_states").select("*");
+  ACC_STATES = {}; (x.data || []).forEach(function (r) { ACC_STATES[r.code] = { no: r.gst_no, name: r.name }; });
+  return ACC_STATES;
+}
+// "DL", "07", "Delhi", "07-Delhi" → "DL" (unknown → "")
+function accStateCode(v) {
+  v = String(v || "").trim(); if (!v || !ACC_STATES) return "";
+  var up = v.toUpperCase(), m = up.match(/^(\d{2})\b/);
+  if (ACC_STATES[up]) return up;
+  for (var k in ACC_STATES) { var st = ACC_STATES[k]; if ((m && st.no === m[1]) || st.name.toUpperCase() === up || up.indexOf("-" + st.name.toUpperCase()) >= 0) return k; }
+  return "";
+}
+function accStateLabel(code) { var st = ACC_STATES && ACC_STATES[code]; return st ? st.name + " (" + st.no + ")" : code || "—"; }
+var ACC_OUR_GSTIN = "06AAMCC3851G1ZN";
+// printable tax invoice / credit note (browser print → PDF)
+async function accPrintDoc(kind, r) {
+  var co = {}; try { var c = await SUPA.rpc("hr_company"); co = c.data || {}; } catch (_) { }
+  var hr = r.place_of_supply === "HR", isCn = kind === "cn", amt = Number(isCn ? r.refund_amount : r.txn_amount);
+  var esc = function (v) { return String(v == null ? "" : v).replace(/[&<>"]/g, function (ch) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]; }); };
+  var m2 = function (n) { return "₹" + Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+  var taxRows = hr ? "<tr><td>CGST @ 9%</td><td class=n>" + m2(r.cgst) + "</td></tr><tr><td>SGST @ 9%</td><td class=n>" + m2(r.sgst) + "</td></tr>"
+                   : "<tr><td>IGST @ 18%</td><td class=n>" + m2(r.igst) + "</td></tr>";
+  var html = "<!doctype html><html><head><meta charset=utf-8><title>" + esc(isCn ? r.cn_no : r.invoice_no) + "</title><style>"
+    + "body{font:14px/1.45 -apple-system,Segoe UI,Roboto,sans-serif;color:#111;margin:32px}h1{font-size:20px;margin:0 0 4px}.muted{color:#555}.row{display:flex;justify-content:space-between;gap:24px;margin:18px 0}"
+    + "table{width:100%;border-collapse:collapse;margin-top:12px}th,td{border-bottom:1px solid #ddd;padding:8px 6px;text-align:left}.n{text-align:right;white-space:nowrap}tfoot td{font-weight:700;border-top:2px solid #111}"
+    + "@media print{body{margin:12mm}.noprint{display:none}}</style></head><body>"
+    + "<button class=noprint onclick='print()' style='float:right;padding:8px 14px'>Print / Save as PDF</button>"
+    + "<h1>" + (isCn ? "Credit Note" : "Tax Invoice") + "</h1><div class=muted>" + esc(co.name || "Cyberflow Tech Pvt Ltd") + " · GSTIN " + ACC_OUR_GSTIN + "</div>"
+    + "<div class=muted>" + esc([co.address, co.city].filter(Boolean).join(", ")) + (co.email ? " · " + esc(co.email) : "") + "</div>"
+    + "<div class=row><div><b>" + (isCn ? "Credit note no." : "Invoice no.") + "</b> " + esc(isCn ? r.cn_no : r.invoice_no) + "<br><b>Date</b> " + esc(accIstTime(isCn ? r.refund_time : r.txn_time).slice(0, 10))
+    + (isCn ? "<br><b>Against invoice</b> " + esc(r.invoice_no || "—") : "") + "<br><b>Order</b> " + esc(r.order_id) + "</div>"
+    + "<div><b>Billed to</b><br>" + esc(r.customer_name || "Customer") + (r.customer_phone ? "<br>" + esc(r.customer_phone) : "") + (r.customer_email ? "<br>" + esc(r.customer_email) : "")
+    + "<br><b>Place of supply:</b> " + esc(accStateLabel(r.place_of_supply)) + "</div></div>"
+    + "<table><thead><tr><th>Description</th><th>SAC</th><th class=n>Amount</th></tr></thead><tbody>"
+    + "<tr><td>App Subscription" + (isCn ? " (refund)" : "") + "</td><td>999299</td><td class=n>" + m2(r.taxable) + "</td></tr></tbody></table>"
+    + "<table><tbody><tr><td>Taxable value</td><td class=n>" + m2(r.taxable) + "</td></tr>" + taxRows + "</tbody><tfoot><tr><td>Total (GST included)</td><td class=n>" + m2(amt) + "</td></tr></tfoot></table>"
+    + "<p class=muted style='margin-top:24px'>Paid online through Cashfree" + (isCn ? "; refunded to the original payment method." : ".") + " This is a computer-generated document.</p></body></html>";
+  var w = window.open("", "_blank"); if (!w) { accToast("Allow pop-ups to open the invoice."); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+}
 function renderAdminAccSales(wrap) {
   var head = accEl("div", "module-head"); head.appendChild(accEl("h2", null, "Sales (Cashfree)")); accMonthPicker(head); wrap.appendChild(head);
   wrap.appendChild(accEl("p", "hint", "Every Cashfree payment lands here within 10 minutes, with the next invoice number and its GST split (price includes GST). Download a month for the CA or GST returns."));
   var body = accEl("div"); body.appendChild(accEl("div", "hint", "Loading…")); wrap.appendChild(body);
   var M = ACC.month, y = Number(M.slice(0, 4)), mo = Number(M.slice(5)), N = mo === 12 ? (y + 1) + "-01" : y + "-" + String(mo + 1).padStart(2, "0");
   ACC.saleAll = ACC.saleAll || false; ACC.saleQ = ACC.saleQ || "";
+  ACC.saleState = ACC.saleState || "";
   Promise.all([SUPA.from("acc_sales").select("*").gte("txn_time", M + "-01T00:00:00+05:30").lt("txn_time", N + "-01T00:00:00+05:30").order("txn_time", { ascending: false }).limit(20000),
-               SUPA.from("acc_sales_settings").select("*").eq("id", 1).maybeSingle()]).then(function (res) {
+               SUPA.from("acc_sales_settings").select("*").eq("id", 1).maybeSingle(), accLoadStates(),
+               SUPA.from("acc_sale_refunds").select("*").gte("refund_time", M + "-01T00:00:00+05:30").lt("refund_time", N + "-01T00:00:00+05:30").order("refund_time", { ascending: false })]).then(function (res) {
     body.innerHTML = "";
     if (res[0].error) { body.appendChild(accEl("div", "hr-note warn", "Run supabase/stage19d_cashfree_sales.sql first (" + accErr(res[0].error) + ")")); return; }
     var all = res[0].data || [], S = res[1].data || { prefix: "CYBRCT", next_no: 4730, gst_rate: 18 };
@@ -887,7 +936,7 @@ function renderAdminAccSales(wrap) {
     var refunded = ok.filter(function (r) { return r.refunded; });
     var stats = accEl("div", "acc-stats");
     [[accInr(sum("txn_amount")), ok.length + " sale" + (ok.length === 1 ? "" : "s") + " · " + accMonthLabel(M)], [accInr(sum("taxable")), "taxable value"],
-     [accInr(sum("cgst") + sum("sgst")), "GST (CGST " + accInr(sum("cgst")) + " + SGST " + accInr(sum("sgst")) + ")"],
+     [accInr(sum("cgst") + sum("sgst") + sum("igst")), "GST (CGST " + accInr(sum("cgst")) + " + SGST " + accInr(sum("sgst")) + " + IGST " + accInr(sum("igst")) + ")"],
      [accInr(refunded.reduce(function (a, r) { return a + Number(r.refund_amount || r.txn_amount); }, 0)), refunded.length + " refunded"]].forEach(function (x, i) {
       var s = accEl("div", "s"); if (i === 0) s.style.cssText = "background:var(--indigo-soft);border-color:#F5CDB6";
       s.append(accEl("b", null, x[0]), accEl("span", null, x[1])); stats.appendChild(s);
@@ -904,26 +953,36 @@ function renderAdminAccSales(wrap) {
     var dl = accEl("button", "btn", "⬇ Download CSV");
     var im = accEl("button", "btn", "⬆ Import CSV"), fi = accEl("input"); fi.type = "file"; fi.accept = ".csv,text/csv"; fi.hidden = true;
     im.onclick = function () { fi.click(); }; fi.onchange = function () { if (fi.files[0]) { im.disabled = true; im.textContent = "Importing…"; accSalesImport(fi.files[0]); } };
-    bar.append(q, tabs, dl, im, fi); body.appendChild(bar);
+    var sf = accEl("select"); sf.style.cssText = "padding:8px 10px;border:1px solid var(--line-strong);border-radius:10px;font:inherit";
+    var present = {}; all.forEach(function (r) { present[r.place_of_supply] = (present[r.place_of_supply] || 0) + (r.status === "SUCCESS" ? 1 : 0); });
+    [["", "All states"]].concat(Object.keys(present).sort().map(function (k) { return [k, accStateLabel(k) + " · " + present[k]]; })).forEach(function (o) { var e = accEl("option", null, o[1]); e.value = o[0]; sf.appendChild(e); });
+    sf.value = ACC.saleState; sf.onchange = function () { ACC.saleState = sf.value; draw(); };
+    bar.append(q, sf, tabs, dl, im, fi); body.appendChild(bar);
+    var dflt = ok.filter(function (r) { return r.state_source === "default"; }).length;
+    if (dflt) { var dc = accEl("div", "hr-note warn", "⚠️ " + dflt + " sale" + (dflt === 1 ? " has" : "s have") + " no state from the app, so Haryana (HR) is used by default (supplier's state). The app should send order_tags.state_code at checkout."); dc.style.margin = "0 0 10px"; body.appendChild(dc); }
 
     var card = accEl("div", "hr-card acc-tbl-wrap"); card.setAttribute("data-plain", ""); card.style.overflowX = "auto"; body.appendChild(card);
     function list() {
       var s = ACC.saleQ.toLowerCase();
-      return (ACC.saleAll ? all : ok).filter(function (r) { return !s || [r.invoice_no, r.order_id, r.cf_order_id, r.cf_payment_id, r.customer_phone, r.customer_id, r.customer_email, r.customer_name].join(" ").toLowerCase().indexOf(s) >= 0; });
+      return (ACC.saleAll ? all : ok).filter(function (r) { return (!ACC.saleState || r.place_of_supply === ACC.saleState) && (!s || [r.invoice_no, r.order_id, r.cf_order_id, r.cf_payment_id, r.customer_phone, r.customer_id, r.customer_email, r.customer_name].join(" ").toLowerCase().indexOf(s) >= 0); });
     }
     function draw() {
       card.innerHTML = "";
       var L = list();
       if (!L.length) { card.appendChild(accEl("div", "hint", all.length ? "Nothing matches." : "No Cashfree payments in " + accMonthLabel(M) + " yet.")); return; }
       var t = accEl("table", "acc-tbl"), hr = accEl("tr");
-      [["Time"], ["Invoice"], ["Order Id"], ["Amount", 1], ["Taxable", 1], ["CGST", 1], ["SGST", 1], ["Phone"], ["Mode"], ["Status"]].forEach(function (h) { hr.appendChild(accEl("th", h[1] ? "num" : "", h[0])); });
+      [["Time"], ["Invoice"], ["Order Id"], ["State"], ["Amount", 1], ["Taxable", 1], ["CGST", 1], ["SGST", 1], ["IGST", 1], ["Phone"], ["Mode"], ["Status"]].forEach(function (h) { hr.appendChild(accEl("th", h[1] ? "num" : "", h[0])); });
       var th = accEl("thead"); th.appendChild(hr); t.appendChild(th);
       var tb = accEl("tbody");
       L.slice(0, 1000).forEach(function (r) {
         var tr = accEl("tr");
-        tr.append(accEl("td", null, accIstTime(r.txn_time)), accEl("td", null, r.invoice_no || "—"), accEl("td", null, r.order_id),
+        var invTd = accEl("td");
+        if (r.invoice_no) { var ib = accEl("button", "hr-reveal", r.invoice_no); ib.style.margin = "0"; ib.title = "Open the tax invoice"; ib.onclick = function () { accPrintDoc("inv", r); }; invTd.appendChild(ib); } else invTd.textContent = "—";
+        var stTd = accEl("td", null, r.place_of_supply || "—"); stTd.title = accStateLabel(r.place_of_supply) + (r.state_source === "default" ? " · default (no state from the app)" : " · from " + r.state_source);
+        if (r.state_source === "default") stTd.style.color = "var(--muted)";
+        tr.append(accEl("td", null, accIstTime(r.txn_time)), invTd, accEl("td", null, r.order_id), stTd,
           accEl("td", "num", accInr(r.txn_amount)), accEl("td", "num", r.invoice_no ? accInr(r.taxable) : "—"), accEl("td", "num", r.invoice_no ? accInr(r.cgst) : "—"),
-          accEl("td", "num", r.invoice_no ? accInr(r.sgst) : "—"), accEl("td", null, r.customer_phone), accEl("td", null, r.payment_mode));
+          accEl("td", "num", r.invoice_no ? accInr(r.sgst) : "—"), accEl("td", "num", r.invoice_no ? accInr(r.igst) : "—"), accEl("td", null, r.customer_phone), accEl("td", null, r.payment_mode));
         var st = accEl("td"), chip = r.refunded ? ["Refunded" + (r.refund_type === "PARTIAL" ? " (part)" : ""), "red"] : r.status === "SUCCESS" ? ["Success", "green"] : [r.status.replace(/_/g, " ").toLowerCase() || "?", "grey"];
         var c = accEl("span", "hr-chip hr-" + chip[1], chip[0]); if (r.message) c.title = r.message; st.appendChild(c); tr.appendChild(st);
         tb.appendChild(tr);
@@ -931,8 +990,8 @@ function renderAdminAccSales(wrap) {
       t.appendChild(tb);
       var okL = L.filter(function (r) { return r.status === "SUCCESS"; });
       var tf = accEl("tfoot"), fr = accEl("tr");
-      fr.append(accEl("td", null, "Total · " + okL.length), accEl("td"), accEl("td"), accEl("td", "num", accInr(sum("txn_amount", okL))), accEl("td", "num", accInr(sum("taxable", okL))),
-        accEl("td", "num", accInr(sum("cgst", okL))), accEl("td", "num", accInr(sum("sgst", okL))), accEl("td"), accEl("td"), accEl("td"));
+      fr.append(accEl("td", null, "Total · " + okL.length), accEl("td"), accEl("td"), accEl("td"), accEl("td", "num", accInr(sum("txn_amount", okL))), accEl("td", "num", accInr(sum("taxable", okL))),
+        accEl("td", "num", accInr(sum("cgst", okL))), accEl("td", "num", accInr(sum("sgst", okL))), accEl("td", "num", accInr(sum("igst", okL))), accEl("td"), accEl("td"), accEl("td"));
       tf.appendChild(fr); t.appendChild(tf); card.appendChild(t);
       if (L.length > 1000) card.appendChild(accEl("div", "hint", "Showing the latest 1,000. Download the CSV for all " + L.length + "."));
     }
@@ -944,8 +1003,8 @@ function renderAdminAccSales(wrap) {
           var v = r[c[1]];
           if (c[1] === "txn_time") return accIstTime(v);
           if (c[1] === "refunded") return v ? "TRUE" : "FALSE";
-          if (["taxable", "cgst", "sgst"].indexOf(c[1]) >= 0 && !r.invoice_no) return "";
-          if (["order_amount", "txn_amount", "taxable", "cgst", "sgst"].indexOf(c[1]) >= 0) return Number(v).toFixed(2);
+          if (["taxable", "cgst", "sgst", "igst"].indexOf(c[1]) >= 0 && !r.invoice_no) return "";
+          if (["order_amount", "txn_amount", "taxable", "cgst", "sgst", "igst"].indexOf(c[1]) >= 0) return Number(v).toFixed(2);
           return v;
         });
       });
@@ -954,6 +1013,24 @@ function renderAdminAccSales(wrap) {
       a.download = "cashfree-sales-" + M + ".csv"; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
     };
     draw();
+
+    // refunds → credit notes (same place of supply and split as the invoice)
+    var refs = res[3] && !res[3].error ? (res[3].data || []) : [];
+    if (refs.length) {
+      var rc = accEl("div", "hr-card acc-tbl-wrap"); rc.setAttribute("data-plain", ""); rc.style.cssText = "margin-top:14px;overflow-x:auto";
+      rc.appendChild(accEl("h3", null, "Credit notes · " + accMonthLabel(M)));
+      var rt = accEl("table", "acc-tbl"), rh = accEl("tr");
+      [["Refunded"], ["Credit note"], ["Against invoice"], ["State"], ["Amount", 1], ["Taxable", 1], ["CGST", 1], ["SGST", 1], ["IGST", 1]].forEach(function (h) { rh.appendChild(accEl("th", h[1] ? "num" : "", h[0])); });
+      var rth = accEl("thead"); rth.appendChild(rh); rt.appendChild(rth);
+      var rtb = accEl("tbody");
+      refs.forEach(function (r) {
+        var tr = accEl("tr"), cnTd = accEl("td"), b = accEl("button", "hr-reveal", r.cn_no || "—"); b.style.margin = "0"; b.onclick = function () { accPrintDoc("cn", r); }; cnTd.appendChild(b);
+        tr.append(accEl("td", null, accIstTime(r.refund_time)), cnTd, accEl("td", null, r.invoice_no || "before the warehouse"), accEl("td", null, r.place_of_supply),
+          accEl("td", "num", accInr(r.refund_amount)), accEl("td", "num", accInr(r.taxable)), accEl("td", "num", accInr(r.cgst)), accEl("td", "num", accInr(r.sgst)), accEl("td", "num", accInr(r.igst)));
+        rtb.appendChild(tr);
+      });
+      rt.appendChild(rtb); rc.appendChild(rt); body.appendChild(rc);
+    }
 
     // invoice series, GST rate and the Cashfree connection
     var sc = accEl("div", "hr-card"); sc.setAttribute("data-plain", ""); sc.style.marginTop = "14px";
@@ -989,5 +1066,206 @@ function renderAdminAccSales(wrap) {
     };
     sc.append(how, sy);
     body.appendChild(sc);
+  });
+}
+
+
+/* ---------- Monthly checks → Close month & post to Zoho  (stage19f, Edge Function zoho-month) ----------
+   The month's Cashfree sales, refunds, fees and payouts; the Cashfree GST
+   invoice typed in; checks; a preview of the exact Zoho entries (never sent);
+   then "Post" (ZOHO_DRY_RUN respected), which locks the month. */
+async function accMonthFn(body) {
+  try {
+    var r = await SUPA.functions.invoke("zoho-month", { body: body });
+    if (r.error) { var j = null; try { j = await r.error.context.json(); } catch (_) { } return j || { error: r.error.message }; }
+    return r.data || {};
+  } catch (e) { return { error: accErr(e) }; }
+}
+function accCloseMonth(wrap, M) {
+  var box = accEl("div", "hr-card"); box.setAttribute("data-plain", ""); box.style.marginTop = "14px"; wrap.appendChild(box);
+  var title = accEl("h3", null, "Close " + accMonthLabel(M) + " & post to Zoho"); box.appendChild(title);
+  var inner = accEl("div"); inner.appendChild(accEl("div", "hint", "Loading…")); box.appendChild(inner);
+  Promise.all([SUPA.rpc("acc_sales_month_summary", { p_month: M }), accLoadStates()]).then(function (all) {
+    var res = all[0];
+    inner.innerHTML = "";
+    if (res.error) { inner.appendChild(accEl("div", "hr-note warn", "Run supabase/stage19f_cashfree_month_close.sql first (" + accErr(res.error) + ")")); return; }
+    var S = res.data, row = S.month_row || {}, posted = row.status === "posted";
+    var sum = function (list, k) { return (list || []).reduce(function (a, x) { return a + Number(x[k] || 0); }, 0); };
+    var n2 = function (v) { return accInr(Math.round(Number(v || 0) * 100) / 100); };
+    if (posted) {
+      var pb = accEl("div", "hr-note"); pb.style.cssText = "background:#E8F6EE;border-color:#B7E2C8;color:#14532D";
+      pb.appendChild(accEl("b", null, "✅ Posted to Zoho on " + accDate(row.posted_at) + ". The month is locked. "));
+      var z = row.zoho || {}, links = [];
+      (z.invoices || []).forEach(function (x) { links.push(["Invoice " + (x.number || x.pos), x.link]); });
+      (z.payments || []).forEach(function (x) { links.push(["Payment " + x.ref.split("-").pop(), x.link]); });
+      (z.creditnotes || []).forEach(function (x) { links.push(["Credit note " + (x.number || x.pos), x.link]); });
+      if (z.expense) links.push(["Cashfree fees " + z.expense.ref, z.expense.link]);
+      links.forEach(function (l) { if (!l[1]) return; var a = accEl("a", null, l[0] + " ↗"); a.href = l[1]; a.target = "_blank"; a.rel = "noopener"; a.style.marginRight = "12px"; pb.appendChild(a); });
+      inner.appendChild(pb);
+    }
+    // 1–7: the month in numbers
+    var grid = accEl("div"); grid.style.cssText = "display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-top:10px";
+    var card = function (t, big, lines) {
+      var c = accEl("div"); c.style.cssText = "background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px";
+      c.append(accEl("div", "hint", t), accEl("b", null, big)); c.lastChild.style.cssText = "display:block;font-size:19px;margin:2px 0 4px";
+      lines.forEach(function (l) { var d = accEl("div", null, l); d.style.cssText = "font-size:12.5px;color:var(--muted)"; c.appendChild(d); });
+      grid.appendChild(c);
+    };
+    var sl = S.sales || [], rl = S.refunds || [], f = S.fees || {}, inv = S.invoices || {}, cum = S.cumulative || {}, cn = S.credit_notes || {};
+    var byPos = function (list) { return list.length > 1 ? [list.length + " states (see Sales by state)"] : list.map(function (x) { return accStateLabel(x.pos) + ": " + x.count + " · " + n2(x.gross); }); };
+    card("1 · Sales", n2(sum(sl, "gross")), [sum(sl, "count") + " payments · taxable " + n2(sum(sl, "taxable")), "CGST " + n2(sum(sl, "cgst")) + " · SGST " + n2(sum(sl, "sgst")) + " · IGST " + n2(sum(sl, "igst"))].concat(byPos(sl)));
+    card("2 · Refunds", n2(sum(rl, "gross")), [sum(rl, "count") + " refunds · taxable " + n2(sum(rl, "taxable")), "CGST " + n2(sum(rl, "cgst")) + " · SGST " + n2(sum(rl, "sgst")) + " · IGST " + n2(sum(rl, "igst"))]);
+    card("3 · Net sales (GSTR-1 / 3B)", n2(sum(sl, "gross") - sum(rl, "gross")), ["Taxable " + n2(sum(sl, "taxable") - sum(rl, "taxable")),
+      "CGST " + n2(sum(sl, "cgst") - sum(rl, "cgst")) + " · SGST " + n2(sum(sl, "sgst") - sum(rl, "sgst")) + " · IGST " + n2(sum(sl, "igst") - sum(rl, "igst"))]);
+    card("4 · Cashfree fees", n2(f.total), ["Exempt (no GST) " + n2(f.exempt) + " · taxable " + n2(f.taxable), "GST on fees " + n2(f.gst)].concat(Number(f.missing) ? [f.missing + " payment(s) without a fee yet"] : []));
+    card("5 · Settled to PNB", n2(S.settled), ["Cashfree payouts dated in " + accMonthLabel(M)]);
+    var bal = Number(cum.sales) - Number(cum.refunds) - Number(cum.fees) - Number(cum.fee_gst) - Number(cum.settled);
+    card("6 · Expected Cashfree balance", n2(bal), ["At month end, from what the warehouse holds" + (cum.since ? " (since " + accDate(cum.since) + ")" : ""),
+      "Payouts include sales from before the warehouse started, so this is low until older sales are imported."]);
+    card("7 · Invoice series", inv.count ? (inv.prefix + inv.first + " – " + inv.prefix + inv.last) : "—", [inv.count + " invoices · " + ((inv.gaps || []).length ? (inv.gaps.length + " missing") : "no gaps") + " · " + inv.cancelled + " cancelled",
+      cn.count ? "Credit notes " + cn.first + " – " + cn.last + " (" + cn.count + ")" : "No credit notes", "For GSTR-1 Table 13"]);
+    inner.appendChild(grid);
+
+    // sales by state = GSTR-1 Table 7 (B2C others), net of refunds, ready to copy
+    var states = {};
+    var addTo = function (x, sign) { var t = states[x.pos] = states[x.pos] || { n: 0, gross: 0, taxable: 0, cgst: 0, sgst: 0, igst: 0, rn: 0, rgross: 0 };
+      if (sign > 0) t.n += Number(x.count); else { t.rn += Number(x.count); t.rgross += Number(x.gross); }
+      ["gross", "taxable", "cgst", "sgst", "igst"].forEach(function (k) { t[k] += sign * Number(x[k] || 0); }); };
+    sl.forEach(function (x) { addTo(x, 1); }); rl.forEach(function (x) { addTo(x, -1); });
+    var keys = Object.keys(states).sort();
+    var sc = accEl("div"); sc.style.marginTop = "14px";
+    sc.appendChild(accEl("b", null, "Sales by state · GSTR-1 Table 7 (B2C others)"));
+    sc.appendChild(accEl("div", "hint", "One row per place of supply, net of refunds (credit notes). Rate 18%. One Zoho invoice is posted per state."));
+    if (!keys.length) sc.appendChild(accEl("div", "hint", "No sales this month."));
+    else {
+      var tw = accEl("div"); tw.style.overflowX = "auto";
+      var t = accEl("table", "acc-tbl"), h = accEl("tr");
+      [["Place of supply"], ["Sales", 1], ["Refunds", 1], ["Rate", 1], ["Taxable value", 1], ["IGST", 1], ["CGST", 1], ["SGST", 1], ["Cess", 1]].forEach(function (x) { h.appendChild(accEl("th", x[1] ? "num" : "", x[0])); });
+      var th = accEl("thead"); th.appendChild(h); t.appendChild(th);
+      var tb = accEl("tbody"), tot = { taxable: 0, igst: 0, cgst: 0, sgst: 0, gross: 0 };
+      var pos = function (k) { var st = ACC_STATES && ACC_STATES[k]; return st ? st.no + "-" + st.name : k; };
+      keys.forEach(function (k) {
+        var x = states[k], tr = accEl("tr");
+        tr.append(accEl("td", null, pos(k)), accEl("td", "num", x.n + " · " + n2(x.gross + x.rgross)), accEl("td", "num", x.rn ? x.rn + " · " + n2(x.rgross) : "—"), accEl("td", "num", "18%"),
+          accEl("td", "num", n2(x.taxable)), accEl("td", "num", n2(x.igst)), accEl("td", "num", n2(x.cgst)), accEl("td", "num", n2(x.sgst)), accEl("td", "num", "0"));
+        tb.appendChild(tr); ["taxable", "igst", "cgst", "sgst", "gross"].forEach(function (q) { tot[q] += x[q]; });
+      });
+      t.appendChild(tb);
+      var tf = accEl("tfoot"), fr = accEl("tr");
+      fr.append(accEl("td", null, "Total"), accEl("td"), accEl("td"), accEl("td"), accEl("td", "num", n2(tot.taxable)), accEl("td", "num", n2(tot.igst)), accEl("td", "num", n2(tot.cgst)), accEl("td", "num", n2(tot.sgst)), accEl("td", "num", "0"));
+      tf.appendChild(fr); t.appendChild(tf); tw.appendChild(t); sc.appendChild(tw);
+      var cp = accEl("button", "hr-reveal", "📋 Copy for GSTR-1 (B2CS)");
+      cp.onclick = function () {
+        var r2 = function (v) { return (Math.round(v * 100) / 100).toFixed(2); };
+        var tsv = [["Type", "Place Of Supply", "Rate", "Applicable % of Tax Rate", "Taxable Value", "Cess Amount", "E-Commerce GSTIN", "IGST", "CGST", "SGST"].join("\t")]
+          .concat(keys.map(function (k) { var x = states[k]; return ["OE", pos(k), "18", "", r2(x.taxable), "0", "", r2(x.igst), r2(x.cgst), r2(x.sgst)].join("\t"); })).join("\n");
+        navigator.clipboard.writeText(tsv).then(function () { accToast("Copied " + keys.length + " row" + (keys.length === 1 ? "" : "s") + " (paste into the GSTR-1 B2CS sheet)"); });
+      };
+      sc.appendChild(cp);
+    }
+    inner.appendChild(sc);
+
+    // the Cashfree GST invoice for the month
+    var fc = accEl("div"); fc.style.marginTop = "14px";
+    fc.appendChild(accEl("b", null, "Cashfree's GST invoice for " + accMonthLabel(M)));
+    fc.appendChild(accEl("div", "hint", "From the PDF in Cashfree → Reports → Invoices (payment gateway only, not payout fees)."));
+    var ff = accEl("div", "hr-fields"); ff.style.marginTop = "8px";
+    var fld = function (lbl, inp) { var w = accEl("div", "field"); w.append(accEl("label", null, lbl), inp); ff.appendChild(w); };
+    var mk = function (v, type) { var i = accEl("input"); i.type = type || "number"; if (type !== "text") { i.step = "0.01"; i.min = "0"; } i.value = v == null ? "" : v; i.disabled = posted; return i; };
+    var ino = mk(row.cf_invoice_no || "", "text"), ex = mk(row.cf_exempt_fee), tx = mk(row.cf_taxable_fee), ig = mk(row.cf_igst);
+    var pdf = accEl("input"); pdf.type = "file"; pdf.accept = "application/pdf"; pdf.disabled = posted;
+    fld("Invoice number", ino); fld("Exempt fee (₹, no GST)", ex); fld("Taxable fee (₹)", tx); fld("IGST on it (₹)", ig); fld(row.cf_invoice_path ? "PDF (uploaded ✓; choose to replace)" : "Invoice PDF (optional)", pdf);
+    fc.appendChild(ff);
+    if (!posted) {
+      var sv = accEl("button", "btn", "Save invoice details"); sv.style.marginTop = "8px";
+      sv.onclick = async function () {
+        sv.disabled = true; var path = null;
+        if (pdf.files[0]) {
+          path = accMe().id + "/cashfree-invoice-" + M + "-" + Date.now() + ".pdf";
+          var up = await SUPA.storage.from("acc-docs").upload(path, pdf.files[0], { contentType: "application/pdf" });
+          if (up.error) { accToast("PDF upload failed: " + accErr(up.error)); sv.disabled = false; return; }
+        }
+        var x = await SUPA.rpc("acc_sales_month_save", { p_month: M, p_inv: ino.value.trim(), p_exempt: ex.value === "" ? null : Number(ex.value), p_taxable: tx.value === "" ? null : Number(tx.value),
+          p_igst: ig.value === "" ? null : Number(ig.value), p_path: path });
+        if (x.error) { accToast(accErr(x.error)); sv.disabled = false; return; }
+        accToast("Saved"); renderAdminPage();
+      };
+      fc.appendChild(sv);
+    }
+    inner.appendChild(fc);
+
+    // checks, preview, post
+    var act = accEl("div"); act.style.cssText = "margin-top:16px;border-top:1px solid var(--line);padding-top:12px";
+    var list = accEl("div"), out = accEl("div");
+    var bar = accEl("div"); bar.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;align-items:center";
+    var ck = accEl("button", "btn", "Run checks"), pv = accEl("button", "btn", "👀 Preview Zoho entries (nothing is sent)"), go = accEl("button", "btn save", "Post " + accMonthLabel(M) + " to Zoho");
+    var ackL = accEl("label", "hr-check"), ack = accEl("input"); ack.type = "checkbox"; ackL.append(ack, document.createTextNode(" I've read the warnings")); ackL.style.display = "none";
+    go.disabled = true; go.style.opacity = ".45";
+    var syncB = accEl("button", "hr-reveal", "↻ Refresh fees & payouts from Cashfree");
+    syncB.onclick = async function () {
+      syncB.disabled = true; syncB.textContent = "Fetching…";
+      var hours = Math.min(24 * 62, Math.ceil((Date.now() - new Date(M + "-01T00:00:00+05:30").getTime()) / 3600e3) + 1);
+      try { var r = await SUPA.functions.invoke("cashfree-hook", { body: { hours: hours } }); accToast(r.error ? "Cashfree: " + r.error.message : r.data && r.data.error ? "Cashfree: " + r.data.error : "Updated from Cashfree"); } catch (e) { accToast(accErr(e)); }
+      renderAdminPage();
+    };
+    if (!posted) bar.append(ck, pv, ackL, go, syncB);
+    act.append(bar, list, out);
+    var ICON = { ok: "✅", warn: "⚠️", bad: "❌" };
+    function showChecks(c) {
+      list.innerHTML = "";
+      (c || []).forEach(function (x) { var d = accEl("div", null, ICON[x.level] + " " + x.text); d.style.cssText = "padding:4px 0;font-size:13.5px"; list.appendChild(d); });
+      var bad = (c || []).some(function (x) { return x.level === "bad"; }), warn = (c || []).some(function (x) { return x.level === "warn"; });
+      go.disabled = bad; go.style.opacity = bad ? ".45" : ""; ackL.style.display = !warn || bad ? "none" : "";
+      go.title = bad ? "Fix the ❌ items first" : "";
+    }
+    ck.onclick = async function () {
+      ck.disabled = true; ck.textContent = "Checking…";
+      var r = await accMonthFn({ action: "check", month: M });
+      ck.disabled = false; ck.textContent = "Run checks";
+      if (r.error) { accToast(r.error); return; }
+      showChecks(r.checks);
+      if (r.env_dry) go.textContent = "Post " + accMonthLabel(M) + " to Zoho (dry run: ZOHO_DRY_RUN is on)";
+    };
+    function showSteps(r) {
+      out.innerHTML = "";
+      var h = accEl("div", "hr-note" + (r.dry ? "" : " warn")); h.style.marginTop = "10px";
+      h.textContent = r.dry ? "Preview only: nothing was sent to Zoho. These are the exact requests a real post makes, in order:" : "Posted to Zoho:";
+      out.appendChild(h);
+      (r.steps || []).forEach(function (s, i) {
+        var d = accEl("details"); d.style.cssText = "margin:6px 0;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#fff";
+        var smy = accEl("summary", null, (i + 1) + ". " + s.step + (s.skipped ? " — skipped (" + s.skipped + ")" : " — " + s.method + " " + s.path) + (s.response ? " · " + s.response : ""));
+        smy.style.cssText = "cursor:pointer;font-weight:600;font-size:13.5px"; d.appendChild(smy);
+        if (s.body) { var pre = accEl("pre", null, typeof s.body === "string" ? s.body : JSON.stringify(s.body, null, 2)); pre.style.cssText = "white-space:pre-wrap;font-size:12px;margin:8px 0 0"; d.appendChild(pre); }
+        out.appendChild(d);
+      });
+    }
+    pv.onclick = async function () {
+      pv.disabled = true; pv.textContent = "Building preview…";
+      var r = await accMonthFn({ action: "preview", month: M });
+      pv.disabled = false; pv.textContent = "👀 Preview Zoho entries (nothing is sent)";
+      if (r.error) { accToast(r.error); return; }
+      showChecks(r.checks); showSteps(r);
+    };
+    go.onclick = async function () {
+      if (!confirm("Post " + accMonthLabel(M) + " to Zoho Books? This creates the invoices, payments, credit notes and the fees expense, and locks the month.")) return;
+      go.disabled = true; go.textContent = "Posting…";
+      var r = await accMonthFn({ action: "post", month: M, ack: ack.checked });
+      go.textContent = "Post " + accMonthLabel(M) + " to Zoho";
+      if (r.checks) showChecks(r.checks);
+      if (r.error) { accToast(r.error); go.disabled = false; if (r.steps) showSteps({ steps: r.steps, dry: false }); return; }
+      showSteps(r);
+      accToast(r.dry ? "Dry run: nothing sent (ZOHO_DRY_RUN is on)" : "Posted to Zoho");
+      if (!r.dry) setTimeout(renderAdminPage, 1500);
+    };
+    if (posted && accMe() && accMe().super) {
+      var ul = accEl("button", "hr-reveal", "Unlock month (admin)");
+      ul.onclick = async function () {
+        if (!confirm("Unlock " + accMonthLabel(M) + "? First delete its entries in Zoho (payments, then invoices, credit notes and the fees expense); the tools check they're gone.")) return;
+        var r = await accMonthFn({ action: "unlock", month: M });
+        if (r.error) { accToast(r.error); return; } accToast("Unlocked"); renderAdminPage();
+      };
+      act.appendChild(ul);
+    }
+    inner.appendChild(act);
   });
 }
