@@ -19227,7 +19227,8 @@ function adminSections(){
     { k:"accrequests", ico:"🧾", lbl:"Payment requests", group:"accounts", show: !!me && !!SUPA && typeof renderAdminAccRequests === "function" && hasPerm("accounts"), render: renderAdminAccRequests },
     { k:"accpayroll",  ico:"💵", lbl:"Payroll", group:"accounts", show: !!me && !!SUPA && typeof renderAdminAccPayroll === "function" && hasPerm("accounts"), render: renderAdminAccPayroll },
     { k:"accbonuses",  ico:"🎯", lbl:"Bonuses", group:"accounts", show: !!me && !!SUPA && typeof renderAdminAccBonuses === "function" && hasPerm("accounts"), render: renderAdminAccBonuses },
-    { k:"accchecks",   ico:"✅", lbl:"Monthly checks", group:"accounts", show: !!me && !!SUPA && typeof renderAdminAccChecks === "function" && hasPerm("accounts"), render: renderAdminAccChecks },
+    { k:"accsales",    ico:"💳", lbl:"Sales (Cashfree)", group:"accounts", show: !!me && !!SUPA && typeof renderAdminAccSales === "function" && hasPerm("accounts"), render: renderAdminAccSales },
+    { k:"accchecks",  ico:"✅", lbl:"Monthly checks", group:"accounts", show: !!me && !!SUPA && typeof renderAdminAccChecks === "function" && hasPerm("accounts"), render: renderAdminAccChecks },
     // Product: ideas from students and the team
     { k:"ideaemails",  ico:"✉️", lbl:"Idea emails",          show: hasPerm("review_student_ideas") && !!SUPA, group:"product", render: renderAdminIdeaEmails },
     { k:"suggestbox",  ico:"📮", lbl:"Suggestion box",       show: sup && !!SUPA && typeof renderAdminSuggestionBox === "function", group:"product", render: renderAdminSuggestionBox },

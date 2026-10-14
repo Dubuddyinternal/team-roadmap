@@ -68,3 +68,10 @@ When a payment request or a payroll month is marked paid, the page calls the Edg
 - **Assets as Zoho bills (rule F)**, once vendors are kept as Zoho contacts.
 - **Automatic sales bonuses:** feed the count (e.g. sales) from your sales data into `acc_bonus_save` with the agreed rate, instead of typing it.
 - **TDS** on vendor payments using `payee_pan`.
+
+## Sales warehouse — Cashfree (stage 19d)
+
+- **Accounts → 💳 Sales (Cashfree)**: every Cashfree payment, by month, with invoice number and GST split. Search, Successful / All attempts, Download CSV (same columns as the B2C sheet), Import CSV (Cashfree's transaction export or the B2C sheet; rows already present are skipped, invoice numbers in the file are kept).
+- **Database**: `supabase/stage19d_cashfree_sales.sql` — `acc_sales` (one row per Cashfree payment, unique `cf_payment_id`), `acc_sales_settings` (prefix `CYBRCT`, next number, GST % — price includes GST; taxable = amount ÷ 1.18, CGST = SGST = 9% of taxable). `acc_sale_record` gives a successful payment the next invoice number exactly once (row lock, gap-free, arrival order); a late "failed" never undoes a success. `acc_sale_refund` marks refunds (FULL / PARTIAL, each refund id counted once).
+- **Edge Function** `cashfree-hook` (Verify JWT **off**; checks Cashfree's HMAC signature with `CASHFREE_SECRET`). Secrets: `CASHFREE_APP_ID`, `CASHFREE_SECRET`, optional `CASHFREE_ENV=sandbox`. Cashfree → Developers → Webhooks → `https://bzhnzrmnbphkcasvrsnc.supabase.co/functions/v1/cashfree-hook` (Payment Gateway, version 2023-08-01).
+- Not yet: sales to Zoho Books, credit notes for refunds, IGST for buyers outside Haryana (Cashfree doesn't send the buyer's state).
