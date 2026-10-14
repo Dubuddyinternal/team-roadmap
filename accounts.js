@@ -23,10 +23,58 @@ function accDate(d) { return d ? new Date(d).toLocaleDateString("en-GB", { day: 
 function accName(id) { var u = (typeof USERS !== "undefined" ? USERS : []).find(function (x) { return x.id === id; }); return u ? userDisplayName(u) : "Someone"; }
 function accMonthNow() { var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); }
 function accMonthLabel(m) { return new Date(m + "-01T00:00:00").toLocaleDateString("en-GB", { month: "long", year: "numeric" }); }
-var ACC_KIND = { reimbursement: "Reimbursement", vendor: "Vendor payment" };
+var ACC_KIND = { reimbursement: "Reimbursement", vendor: "Vendor payment", advance: "Advance" };
 var ACC_STATUS = { pending: ["Waiting", "amber"], approved: ["Approved · to pay", "blue"], paid: ["Paid", "green"], rejected: ["Not approved", "red"], cancelled: ["Cancelled", "grey"], draft: ["Draft", "grey"] };
-var ACC_CATS = ["Influencer / creator", "Ads", "Travel", "Food", "Software / subscription", "Equipment", "Office", "Printing", "Freelancer", "Other"];
+// categories = the exact Zoho Books account names (stage19c, zoho-sync)
+var ACC_CATS = [
+  ["People and services", [["Influencer Expense", "Influencer"], ["Freelancer Expense", "Freelancer"], ["Consultant Expense", "Consultant (retainer)"], ["Professional Fee", "CA / legal / professional"]]],
+  ["Marketing", [["Facebook Ads", "Facebook ads"], ["Google Ads", "Google ads"], ["Advertising And Marketing", "Other marketing"], ["MSG 91", "MSG91"]]],
+  ["Software", [["Adobe", "Adobe"], ["Canva", "Canva"], ["Chatgpt", "ChatGPT"], ["Jotform", "Jotform"], ["Manychat", "Manychat"], ["Software Charges", "Other software"]]],
+  ["Team", [["Meals and Entertainment", "Team food"], ["Staff Celebration", "Team celebration"], ["Staff Skill Development", "Courses / training"], ["Travel Expense", "Travel"]]],
+  ["Office", [["Rent Expense", "Rent"], ["Electricity", "Electricity"], ["Office Supplies", "Office supplies"], ["Printing and Stationery", "Printing"], ["Telephone Expense", "Phone"], ["Internet Expense", "Internet"], ["Repairs and Maintenance", "Repairs"]]],
+  ["Things the company keeps", [["Computer", "Laptop / monitor"], ["Furniture and Equipment", "Furniture"]]],
+  ["Other", [["Other Expenses", "Anything else"]]]
+];
+var ACC_LEGACY = { "Influencer / creator": "Influencer Expense", "Ads": "Advertising And Marketing", "Travel": "Travel Expense", "Food": "Meals and Entertainment",
+  "Software / subscription": "Software Charges", "Equipment": "Other Expenses", "Office": "Office Supplies", "Printing": "Printing and Stationery", "Freelancer": "Freelancer Expense", "Other": "Other Expenses" };
+var ACC_PAID_FROM = [["Punjab National Bank", "Punjab National Bank"], ["Pancham Imprest", "Pancham's HDFC card (Pancham Imprest)"], ["Mannat Imprest", "Mannat's advance (Mannat Imprest)"], ["Imprest", "Another advance (Imprest)"]];
+var ACC_IMPRESTS = ["Pancham Imprest", "Mannat Imprest", "Imprest"];
+var ACC_194C = ["Influencer Expense", "Freelancer Expense"], ACC_194J = ["Professional Fee", "Consultant Expense"];
+var ZOHO_ORG = "60041846412";
+function accCatOf(c) { return ACC_LEGACY[c] || c || ""; }
+function accCatLabel(c) {
+  c = accCatOf(c); var hit = "";
+  ACC_CATS.forEach(function (g) { g[1].forEach(function (x) { if (x[0] === c) hit = x[1]; }); });
+  return hit || c;
+}
+function accCatSelect(val) {
+  var sel = accEl("select"); var o0 = accEl("option", null, "Choose…"); o0.value = ""; sel.appendChild(o0);
+  ACC_CATS.forEach(function (g) { var og = accEl("optgroup"); og.label = g[0]; g[1].forEach(function (x) { var o = accEl("option", null, x[1]); o.value = x[0]; og.appendChild(o); }); sel.appendChild(og); });
+  sel.value = accCatOf(val);
+  return sel;
+}
+function accNet(r) { return Number(r.amount) - Number(r.tds_amount || 0); }
 function accChip(st) { var s = ACC_STATUS[st] || [st, "grey"]; return accEl("span", "hr-chip hr-" + s[1], s[0]); }
+var ZOHO_CHIP = { pending: ["Zoho: waiting", "amber"], synced: ["Zoho ✓", "green"], failed: ["Zoho: failed", "red"], dry_run: ["Zoho: dry run", "grey"], manual: ["Zoho: enter by hand", "amber"] };
+function accZohoLinks(ids) {
+  var out = [];
+  if (!ids) return out;
+  if (ids.expense) out.push(["Expense", "https://books.zoho.in/app/" + ZOHO_ORG + "#/expenses/" + ids.expense]);
+  if (ids.journal) out.push(["Journal", "https://books.zoho.in/app/" + ZOHO_ORG + "#/journals/" + ids.journal]);
+  (ids.journals || []).forEach(function (j, i) { out.push(["Journal" + (i ? " " + (i + 1) : ""), "https://books.zoho.in/app/" + ZOHO_ORG + "#/journals/" + j.id]); });
+  return out;
+}
+// post to Zoho Books (Edge Function zoho-sync); returns the reply or null
+async function accZoho(body, quiet) {
+  try {
+    var r = await SUPA.functions.invoke("zoho-sync", { body: body });
+    var err = r.error ? r.error.message : (r.data && r.data.error);
+    if (r.error) { try { var j = await r.error.context.json(); if (j && j.error) err = j.error; } catch (_) { } }
+    if (err) { if (!quiet) accToast("Zoho: " + err); return null; }
+    if (!quiet && r.data) accToast(r.data.dry ? "Zoho dry run: logged what would be posted (nothing sent)" : "Posted to Zoho Books");
+    return r.data;
+  } catch (e) { if (!quiet) accToast("Zoho: " + accErr(e)); return null; }
+}
 
 (function () {
   var css = ".acc-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}.acc-tabs button{border:1px solid var(--line);background:#fff;border-radius:99px;padding:7px 14px;font:600 13px var(--sans);cursor:pointer;color:var(--ink)}"
@@ -78,7 +126,7 @@ function accNewRequest(after) {
   bx.appendChild(accEl("h3", null, "Ask for a payment"));
   var kinds = accEl("div", "acc-kind");
   var kb = {};
-  [["reimbursement", "🧾 I already paid", "Get it back in your bank account (from your HR file)"], ["vendor", "🤝 Pay someone", "Accounts pays them directly, e.g. an influencer or freelancer"]].forEach(function (k) {
+  [["reimbursement", "🧾 I already paid", "Get it back in your bank account (from your HR file)"], ["vendor", "🤝 Pay someone", "Accounts pays them directly, e.g. an influencer or freelancer"], ["advance", "💼 I need an advance", "Money upfront for work spending; you send the bills later"]].forEach(function (k) {
     var b = accEl("button"); b.type = "button"; b.appendChild(accEl("b", null, k[1])); b.appendChild(document.createTextNode(k[2]));
     b.onclick = function () { kind = k[0]; draw(); }; kb[k[0]] = b; kinds.appendChild(b);
   });
@@ -87,10 +135,11 @@ function accNewRequest(after) {
   var fld = function (lbl, inp, wide, req) { var w = accEl("div", "field" + (wide ? " wide" : "")); var l = accEl("label", null, lbl); if (req) l.appendChild(accEl("span", "req", " *")); w.append(l, inp); f.appendChild(w); return w; };
   var title = accEl("input"); title.placeholder = "e.g. Reel with @creatorname for the CUET campaign";
   var amount = accEl("input"); amount.type = "number"; amount.min = "1"; amount.step = "0.01"; amount.placeholder = "50000";
-  var cat = accEl("select"); [""].concat(ACC_CATS).forEach(function (c) { var o = accEl("option", null, c || "Choose…"); o.value = c; cat.appendChild(o); });
+  var cat = accCatSelect("");
   var when = accEl("input"); when.type = "date"; when.value = new Date().toISOString().slice(0, 10);
   var notes = accEl("textarea"); notes.rows = 2; notes.placeholder = "Anything Accounts should know";
-  fld("What is it for", title, true, true); fld("Amount (₹)", amount, false, true); fld("Type", cat);
+  fld("What is it for", title, true, true); fld("Amount (₹)", amount, false, true);
+  var catW = fld("Type", cat);
   var whenW = fld("Date you paid", when);
   var pn = accEl("input"); pn.placeholder = "Name as on their bank account";
   var pu = accEl("input"); pu.placeholder = "e.g. name@okaxis";
@@ -99,6 +148,12 @@ function accNewRequest(after) {
   var pb = accEl("input"); pb.placeholder = "Bank name";
   var pp = accEl("input"); pp.placeholder = "Optional, for TDS"; pp.style.textTransform = "uppercase";
   var vend = [fld("Pay to", pn, true, true), fld("UPI ID", pu), fld("PAN", pp), fld("Account number", pa), fld("IFSC", pi), fld("Bank", pb)];
+  var gb = accEl("label", "hr-check"); var gcb = accEl("input"); gcb.type = "checkbox";
+  gb.append(gcb, document.createTextNode("The bill shows our GSTIN (06AAMCC3851G1ZN)"));
+  var gw = accEl("div", "field wide"); gw.appendChild(gb); f.appendChild(gw);
+  var gi = accEl("input"); gi.placeholder = "Seller's GSTIN, e.g. 29ABCDE1234F1Z5"; gi.style.textTransform = "uppercase"; gi.maxLength = 15;
+  var giW = fld("Seller's GSTIN", gi, true);
+  gcb.onchange = function () { draw(); };
   fld("Notes", notes, true);
   bx.appendChild(f);
   var vhint = accEl("div", "hint", "Give either their UPI ID, or their account number and IFSC.");
@@ -109,6 +164,8 @@ function accNewRequest(after) {
     Object.keys(kb).forEach(function (k) { kb[k].classList.toggle("on", k === kind); });
     vend.forEach(function (w) { w.hidden = kind !== "vendor"; }); vhint.hidden = kind !== "vendor";
     whenW.hidden = kind !== "reimbursement";
+    catW.hidden = gw.hidden = kind === "advance"; giW.hidden = kind === "advance" || !gcb.checked;
+    fl.hidden = kind === "advance";
     fll.textContent = kind === "vendor" ? "Their invoice (attach it if you have one)" : "Bill or receipt (please attach)";
   }
   draw();
@@ -119,10 +176,12 @@ function accNewRequest(after) {
     if (title.value.trim().length < 2) { accToast("Say what it's for"); title.focus(); return; }
     if (!(parseFloat(amount.value) > 0)) { accToast("Enter the amount"); amount.focus(); return; }
     if (kind === "vendor" && (pn.value.trim().length < 2 || (!pu.value.trim() && !(pa.value.trim() && pi.value.trim())))) { accToast("Add who to pay, and their UPI ID or account number and IFSC"); return; }
+    if (kind !== "advance" && gcb.checked && !/^\d{2}[A-Z0-9]{13}$/.test(gi.value.trim().toUpperCase())) { accToast("Enter the seller's 15-character GSTIN"); gi.focus(); return; }
     if (kind === "reimbursement" && !files.files.length && !go.dataset.ok) { go.dataset.ok = "1"; go.textContent = "No bill attached. Send anyway?"; return; }
     go.disabled = true; go.textContent = "Sending…";
     var r = await SUPA.rpc("acc_request_create", { p: { kind: kind, title: title.value.trim(), amount: amount.value, category: cat.value, spent_on: kind === "reimbursement" ? when.value : "",
-      notes: notes.value.trim(), payee_name: pn.value, payee_upi: pu.value, payee_account: pa.value, payee_ifsc: pi.value, payee_bank: pb.value, payee_pan: pp.value } });
+      notes: notes.value.trim(), payee_name: pn.value, payee_upi: pu.value, payee_account: pa.value, payee_ifsc: pi.value, payee_bank: pb.value, payee_pan: pp.value,
+      has_gst_bill: kind !== "advance" && gcb.checked, vendor_gstin: gi.value.trim().toUpperCase() } });
     if (r.error) { accToast(accErr(r.error)); go.disabled = false; go.textContent = "Send to Accounts"; return; }
     for (var i = 0; i < files.files.length; i++) await accUpload(r.data.id, files.files[i]);
     ov.remove(); accToast("Sent to Accounts. You'll get a 🔔 when it's approved and paid."); if (after) after();
@@ -136,14 +195,30 @@ function accRequestRow(r, files, opts) {
   if (opts.select) { var cb = accEl("input"); cb.type = "checkbox"; cb.checked = !!ACC.sel[r.id]; cb.style.marginTop = "4px"; cb.onchange = function () { if (cb.checked) ACC.sel[r.id] = r; else delete ACC.sel[r.id]; if (opts.onSel) opts.onSel(); }; row.appendChild(cb); }
   main.appendChild(accEl("div", "t", r.title));
   var who = opts.mine ? "" : accName(r.user_id) + " · ";
-  main.appendChild(accEl("div", "h", who + ACC_KIND[r.kind] + (r.category ? " · " + r.category : "") + " · asked " + accDate(r.created_at) + (r.spent_on ? " · paid by them on " + accDate(r.spent_on) : "")));
+  main.appendChild(accEl("div", "h", (r.ref_no ? "TOOLS-" + r.ref_no + " · " : "") + who + ACC_KIND[r.kind] + (r.category ? " · " + accCatLabel(r.category) : "") + " · asked " + accDate(r.created_at) + (r.spent_on ? " · paid by them on " + accDate(r.spent_on) : "")));
+  var extra = [];
+  if (Number(r.tds_amount) > 0) extra.push("TDS " + (r.tds_section ? r.tds_section + " " : "") + Number(r.tds_percent) + "% = " + accInr(r.tds_amount) + " · pay " + accInr(accNet(r)));
+  if (r.has_gst_bill) extra.push("GST bill · " + r.vendor_gstin);
+  if (r.kind === "advance" && r.imprest_account) extra.push("Into " + r.imprest_account);
+  if (extra.length) main.appendChild(accEl("div", "h", extra.join(" · ")));
   if (r.kind === "vendor") main.appendChild(accEl("div", "h", "Pay to: " + r.payee_name + [r.payee_upi ? "UPI " + r.payee_upi : "", r.payee_account ? "A/c " + r.payee_account : "", r.payee_ifsc, r.payee_bank, r.payee_pan ? "PAN " + r.payee_pan : ""].filter(Boolean).map(function (x) { return " · " + x; }).join("")));
   if (r.notes) main.appendChild(accEl("div", "h", "“" + r.notes + "”"));
   if (r.decision_note) main.appendChild(accEl("div", "h", (r.status === "rejected" ? "Why not: " : "Note: ") + r.decision_note));
-  if (r.status === "paid") main.appendChild(accEl("div", "h", "Paid " + accDate(r.paid_at) + (r.paid_ref ? " · Ref " + r.paid_ref : "")));
+  if (r.status === "paid") main.appendChild(accEl("div", "h", "Paid " + accDate(r.paid_at) + (r.paid_ref ? " · Ref " + r.paid_ref : "") + (r.paid_from && r.paid_from !== "Punjab National Bank" ? " · from " + r.paid_from : "")));
+  if (!opts.mine && r.status === "paid" && r.zoho_status && r.zoho_status !== "none") {
+    var zl = accEl("div", "h"), zc = ZOHO_CHIP[r.zoho_status] || [r.zoho_status, "grey"];
+    zl.appendChild(accEl("span", "hr-chip hr-" + zc[1], zc[0]));
+    accZohoLinks(r.zoho_ids).forEach(function (l) { var a = accEl("a", null, " " + l[0] + " ↗"); a.href = l[1]; a.target = "_blank"; a.rel = "noopener"; a.style.marginLeft = "6px"; zl.appendChild(a); });
+    if (r.zoho_error) zl.appendChild(accEl("span", null, " " + r.zoho_error));
+    if (r.zoho_status !== "synced" && r.zoho_status !== "manual") {
+      var rt = accEl("button", "hr-reveal", "↻ Retry"); rt.onclick = async function () { rt.disabled = true; await accZoho({ action: "requests", ids: [r.id] }); renderAdminPage(); }; zl.appendChild(rt);
+    }
+    main.appendChild(zl);
+  }
   var fs = (files || []).filter(function (f) { return f.request_id === r.id; });
   if (fs.length) main.appendChild(accFileLinks(fs));
   side.append(accEl("div", "acc-amt", accInr(r.amount)), accChip(r.status));
+  if (Number(r.tds_amount) > 0) side.appendChild(accEl("div", "h", "net " + accInr(accNet(r))));
   if (opts.acts) { var a = accEl("div", "acc-acts"); opts.acts(a); if (a.children.length) side.appendChild(a); }
   row.append(main, side);
   return row;
@@ -189,8 +264,58 @@ function renderAdminMyPayments(wrap) {
   });
 }
 
+/* ---------- bookkeeping details (Accounts) ---------- */
+function accBooksDialog(r) {
+  var ov = accEl("div", "hr-ask"), bx = accEl("div", "box"); ov.setAttribute("data-plain", ""); bx.style.width = "min(580px,100%)";
+  bx.appendChild(accEl("h3", null, "Books · TOOLS-" + r.ref_no));
+  bx.appendChild(accEl("div", "hint", r.title + " · " + accInr(r.amount)));
+  var f = accEl("div", "hr-fields"); f.style.marginTop = "10px";
+  var fld = function (lbl, inp, wide) { var w = accEl("div", "field" + (wide ? " wide" : "")); w.append(accEl("label", null, lbl), inp); f.appendChild(w); return w; };
+  var cat = accCatSelect(r.category);
+  var sec = accEl("select"); [["", "No TDS"], ["194C", "194C contractor"], ["194J", "194J professional / technical"], ["194H", "194H commission"], ["194I", "194I rent"]].forEach(function (x) { var o = accEl("option", null, x[1]); o.value = x[0]; sec.appendChild(o); });
+  sec.value = r.tds_section || "";
+  var pct = accEl("input"); pct.type = "number"; pct.min = "0"; pct.max = "50"; pct.step = "0.1"; pct.value = Number(r.tds_percent) || "";
+  var sd = accEl("input"); sd.type = "date"; sd.value = r.spent_on || "";
+  var gcb = accEl("input"); gcb.type = "checkbox"; gcb.checked = !!r.has_gst_bill;
+  var gl = accEl("label", "hr-check"); gl.append(gcb, document.createTextNode("GST bill showing our GSTIN (claim input credit)"));
+  var gi = accEl("input"); gi.value = r.vendor_gstin || ""; gi.placeholder = "Seller's GSTIN"; gi.style.textTransform = "uppercase"; gi.maxLength = 15;
+  var imp = accEl("select"); ACC_IMPRESTS.forEach(function (x) { var o = accEl("option", null, x); o.value = x; imp.appendChild(o); }); imp.value = r.imprest_account || "Imprest";
+  var catW = fld("Zoho account", cat, true);
+  var secW = fld("TDS section", sec), pctW = fld("TDS %", pct);
+  var sdW = fld(r.kind === "vendor" ? "Invoice / service date" : "Bill date", sd);
+  var gw = accEl("div", "field wide"); gw.appendChild(gl); f.appendChild(gw);
+  var giW = fld("Seller's GSTIN", gi, true);
+  var impW = fld("Advance goes into", imp, true);
+  bx.appendChild(f);
+  var calc = accEl("div", "hr-rule-prev"); calc.style.marginTop = "10px"; bx.appendChild(calc);
+  var asset = accEl("div", "hr-note warn"); asset.textContent = "Laptops, monitors and furniture are assets: they go into Zoho as a bill with the seller. The tool will flag it for you to enter in Zoho by hand."; bx.appendChild(asset);
+  function draw() {
+    var isAdv = r.kind === "advance", isVend = r.kind === "vendor";
+    catW.hidden = gw.hidden = sdW.hidden = isAdv; impW.hidden = !isAdv; secW.hidden = pctW.hidden = !isVend; giW.hidden = isAdv || !gcb.checked;
+    var c = cat.value, t = Math.round(Number(r.amount) * (parseFloat(pct.value) || 0) / 100);
+    var hint = isVend && !sec.value ? (ACC_194C.indexOf(c) >= 0 ? "Usually 194C: 1% (individual) or 2% (company)." : ACC_194J.indexOf(c) >= 0 ? "Usually 194J: 10%." : "") : "";
+    calc.textContent = isVend ? (t ? "TDS " + accInr(t) + " · pay them " + accInr(Number(r.amount) - t) : "No TDS · pay them " + accInr(r.amount)) + (hint ? " · " + hint : "") : isAdv ? "Zoho: Dr " + imp.value + " / Cr bank" : "Zoho: expense via Employee Reimbursements, then the bank pays them back";
+    asset.hidden = ["Computer", "Furniture and Equipment"].indexOf(c) < 0;
+  }
+  sec.onchange = function () { if (sec.value === "194J" && !pct.value) pct.value = 10; if (sec.value === "194C" && !pct.value) pct.value = 1; if (!sec.value) pct.value = ""; draw(); };
+  [cat, pct, gcb, imp].forEach(function (x) { x.oninput = draw; x.onchange = draw; });
+  draw();
+  var row = accEl("div", "hr-foot");
+  var cl = accEl("button", "btn", "Cancel"); cl.onclick = function () { ov.remove(); };
+  var sv = accEl("button", "btn save", "Save");
+  sv.onclick = async function () {
+    sv.disabled = true;
+    var x = await SUPA.rpc("acc_request_edit", { p_id: r.id, p: { category: cat.value, tds_section: sec.value, tds_percent: sec.value ? pct.value : 0, has_gst_bill: gcb.checked,
+      vendor_gstin: gi.value.trim().toUpperCase(), spent_on: sd.value, imprest_account: imp.value } });
+    if (x.error) { accToast(accErr(x.error)); sv.disabled = false; return; }
+    ov.remove(); accToast("Saved"); renderAdminPage();
+  };
+  row.append(accEl("div", "grow"), cl, sv); bx.appendChild(row); ov.appendChild(bx); document.body.appendChild(ov);
+}
+
 /* ---------- Accounts → Payment requests ---------- */
-async function accMarkPaidDialog(title, count, total) {
+async function accMarkPaidDialog(title, count, total, opts) {
+  opts = opts || {};
   return new Promise(function (done) {
     var ov = accEl("div", "hr-ask"), bx = accEl("div", "box"); ov.setAttribute("data-plain", ""); bx.style.width = "min(460px,100%)";
     bx.appendChild(accEl("h3", null, title));
@@ -199,10 +324,19 @@ async function accMarkPaidDialog(title, count, total) {
     var d = accEl("input"); d.type = "date"; d.value = new Date().toISOString().slice(0, 10);
     var ref = accEl("input"); ref.placeholder = "UTR / bank reference (optional)";
     [["Paid on", d], ["Reference", ref]].forEach(function (x) { var w = accEl("div", "field"); w.append(accEl("label", null, x[0]), x[1]); f.appendChild(w); });
+    var pf = null;
+    if (opts.paidFrom) {
+      pf = accEl("select"); ACC_PAID_FROM.forEach(function (x) { var o = accEl("option", null, x[1]); o.value = x[0]; pf.appendChild(o); });
+      var w2 = accEl("div", "field wide"); w2.append(accEl("label", null, "Paid from"), pf); f.appendChild(w2);
+    }
     bx.appendChild(f);
+    var warn = accEl("div", "hr-note warn"); warn.hidden = true; bx.appendChild(warn);
+    var check = function () { var m = opts.warnFor && opts.warnFor(d.value); warn.textContent = m || ""; warn.hidden = !m; };
+    d.onchange = check; check();
+    bx.appendChild(accEl("div", "hint", "This also posts it to Zoho Books."));
     var row = accEl("div", "hr-foot");
     var cl = accEl("button", "btn", "Cancel"); cl.onclick = function () { ov.remove(); done(null); };
-    var go = accEl("button", "btn save", "Mark paid"); go.onclick = function () { ov.remove(); done({ date: d.value, ref: ref.value.trim() }); };
+    var go = accEl("button", "btn save", "Mark paid"); go.onclick = function () { ov.remove(); done({ date: d.value, ref: ref.value.trim(), paidFrom: pf ? pf.value : "Punjab National Bank" }); };
     row.append(accEl("div", "grow"), cl, go); bx.appendChild(row); ov.appendChild(bx); document.body.appendChild(ov);
   });
 }
@@ -217,15 +351,15 @@ function accDownloadCsv(name, rows) {
   a.download = name; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
 async function accRequestsCsv(list) {
-  var reimb = list.filter(function (r) { return r.kind === "reimbursement"; }).map(function (r) { return r.user_id; });
+  var reimb = list.filter(function (r) { return r.kind !== "vendor"; }).map(function (r) { return r.user_id; });
   var bank = {};
   if (reimb.length) { var b = await SUPA.rpc("acc_bank_rows", { p_users: reimb }); (b.data || []).forEach(function (x) { bank[x.user_id] = x; }); }
   var missing = [];
   var rows = list.map(function (r) {
-    if (r.kind === "vendor") return { name: r.payee_name, account: r.payee_account, ifsc: r.payee_ifsc, bank: r.payee_bank, upi: r.payee_upi, amount: r.amount, note: r.title.slice(0, 30), email: "" };
+    if (r.kind === "vendor") return { name: r.payee_name, account: r.payee_account, ifsc: r.payee_ifsc, bank: r.payee_bank, upi: r.payee_upi, amount: accNet(r), note: "TOOLS-" + r.ref_no, email: "" };
     var x = bank[r.user_id] || {};
     if (!x.account) missing.push(accName(r.user_id));
-    return { name: x.holder || accName(r.user_id), account: x.account, ifsc: x.ifsc, bank: x.bank, upi: "", amount: r.amount, note: ("Reimb " + r.title).slice(0, 30), email: x.email || "" };
+    return { name: x.holder || accName(r.user_id), account: x.account, ifsc: x.ifsc, bank: x.bank, upi: "", amount: accNet(r), note: "TOOLS-" + r.ref_no, email: x.email || "" };
   });
   accDownloadCsv("payments-" + new Date().toISOString().slice(0, 10) + ".csv", rows);
   if (missing.length) accToast("No bank details in the HR file for: " + missing.join(", "));
@@ -266,16 +400,18 @@ function renderAdminAccRequests(wrap) {
       var paid = accEl("button", "btn save", "Mark paid");
       var upd = function () {
         var s = Object.keys(ACC.sel).map(function (k) { return ACC.sel[k]; });
-        info.textContent = s.length ? s.length + " selected · " + accInr(s.reduce(function (a, r) { return a + Number(r.amount); }, 0)) : "Select the ones you're paying";
+        info.textContent = s.length ? s.length + " selected · pay " + accInr(s.reduce(function (a, r) { return a + accNet(r); }, 0)) : "Select the ones you're paying";
         csv.disabled = paid.disabled = !s.length;
       };
       csv.onclick = function () { accRequestsCsv(Object.keys(ACC.sel).map(function (k) { return ACC.sel[k]; })); };
       paid.onclick = async function () {
         var s = Object.keys(ACC.sel).map(function (k) { return ACC.sel[k]; });
-        var d = await accMarkPaidDialog("Mark as paid", s.length, s.reduce(function (a, r) { return a + Number(r.amount); }, 0)); if (!d) return;
-        var x = await SUPA.rpc("acc_mark_paid", { p_ids: s.map(function (r) { return r.id; }), p_date: d.date, p_ref: d.ref || null });
+        var d = await accMarkPaidDialog("Mark as paid", s.length, s.reduce(function (a, r) { return a + accNet(r); }, 0), { paidFrom: true }); if (!d) return;
+        var ids = s.map(function (r) { return r.id; });
+        var x = await SUPA.rpc("acc_pay", { p_ids: ids, p_date: d.date, p_ref: d.ref || null, p_paid_from: d.paidFrom });
         if (x.error) { accToast(accErr(x.error)); return; }
-        accToast(x.data + " marked paid"); ACC.sel = {}; renderAdminPage();
+        accToast(x.data + " marked paid. Posting to Zoho…"); ACC.sel = {};
+        await accZoho({ action: "requests", ids: ids }); renderAdminPage();
       };
       bar.append(allb, info, accEl("div", "grow"), csv, paid); card.appendChild(bar);
       bar._upd = upd; upd();
@@ -283,6 +419,7 @@ function renderAdminAccRequests(wrap) {
     if (!list.length) card.appendChild(accEl("div", "hint", ACC.tab === "pending" ? "Nothing waiting. 🎉" : "Nothing here."));
     list.forEach(function (r) {
       var rowEl = accRequestRow(r, files, { select: ACC.tab === "approved", onSel: function () { if (bar) bar._upd(); }, acts: function (a) {
+        if (r.status === "pending" || r.status === "approved") { var bk = accEl("button", "btn", "✎ Books"); bk.title = "Zoho category, TDS, GST bill"; bk.onclick = function () { accBooksDialog(r); }; a.appendChild(bk); }
         if (r.status !== "pending") return;
         var no = accEl("button", "btn", "Reject"), yes = accEl("button", "btn save", "✓ Approve");
         no.onclick = async function () {
@@ -328,7 +465,7 @@ function renderAdminAccPayroll(wrap) {
     };
     tools.appendChild(fill); tools.appendChild(accEl("div", "grow"));
     var ids = function (st) { return rows.filter(function (x) { return x.status === st; }); };
-    var net = function (x) { return Number(x.base) + Number(x.bonus) + Number(x.reimb) - Number(x.deductions); };
+    var net = function (x) { return Number(x.base) + Number(x.bonus) + Number(x.reimb) - Number(x.deductions) - Number(x.tds || 0); };
     if (ids("draft").length) {
       var ap = accEl("button", "btn save", "Approve " + ids("draft").length);
       ap.onclick = async function () { var x = await SUPA.rpc("acc_payroll_status", { p_ids: ids("draft").map(function (y) { return y.id; }), p_status: "approved" }); if (x.error) { accToast(accErr(x.error)); return; } accToast("Approved"); draw(); };
@@ -347,17 +484,33 @@ function renderAdminAccPayroll(wrap) {
       };
       var pd = accEl("button", "btn save", "Mark " + ids("approved").length + " paid");
       pd.onclick = async function () {
-        var list = ids("approved"); var d = await accMarkPaidDialog("Mark " + accMonthLabel(ACC.month) + " salaries paid", list.length, list.reduce(function (a, y) { return a + net(y); }, 0)); if (!d) return;
+        var list = ids("approved"), M = ACC.month;
+        var d = await accMarkPaidDialog("Mark " + accMonthLabel(M) + " salaries paid", list.length, list.reduce(function (a, y) { return a + net(y); }, 0), {
+          warnFor: function (day) { return /-03$/.test(M) && day >= M.slice(0, 4) + "-04-01" ? "Paid after 31 March — tell the CA (it may need a provision)." : ""; } });
+        if (!d) return;
         var x = await SUPA.rpc("acc_payroll_status", { p_ids: list.map(function (y) { return y.id; }), p_status: "paid", p_date: d.date, p_ref: d.ref || null });
-        if (x.error) { accToast(accErr(x.error)); return; } accToast("Marked paid. Everyone gets a 🔔."); draw();
+        if (x.error) { accToast(accErr(x.error)); return; }
+        accToast("Marked paid. Everyone gets a 🔔. Posting to Zoho…");
+        await accZoho({ action: "payroll", month: M }); draw();
       };
       tools.append(csv, pd);
     }
     body.appendChild(tools);
+    var run = (await SUPA.from("acc_payroll_runs").select("*").eq("month", ACC.month).maybeSingle()).data;
+    if (run) {
+      var zc = ZOHO_CHIP[run.zoho_status] || null, zb = accEl("div", "hr-note " + (run.zoho_status === "failed" ? "warn" : "info"));
+      zb.appendChild(document.createTextNode("Paid " + accDate(run.paid_on) + (run.paid_ref ? " · " + run.paid_ref : "") + " · "));
+      if (zc) zb.appendChild(accEl("span", "hr-chip hr-" + zc[1], zc[0]));
+      accZohoLinks(run.zoho_ids).forEach(function (l) { var a = accEl("a", null, " " + l[0] + " ↗"); a.href = l[1]; a.target = "_blank"; a.rel = "noopener"; a.style.marginLeft = "6px"; zb.appendChild(a); });
+      if (run.zoho_error) zb.appendChild(document.createTextNode(" " + run.zoho_error));
+      if (run.zoho_status !== "synced") { var rt = accEl("button", "hr-reveal", "↻ Retry Zoho"); rt.onclick = async function () { rt.disabled = true; await accZoho({ action: "payroll", month: ACC.month }); draw(); }; zb.appendChild(rt); }
+      body.appendChild(zb);
+      if (run.warning) body.appendChild(accEl("div", "hr-note warn", "⚠️ " + run.warning));
+    }
     if (!rows.length) { body.appendChild(accEl("div", "hr-note info", "No salaries for " + accMonthLabel(ACC.month) + " yet. Press Fill to start from each person's CTC (HR → Employees → job terms).")); return; }
     var card = accEl("div", "hr-card acc-tbl-wrap"); card.setAttribute("data-plain", "");
     var t = accEl("table", "acc-tbl"), th = accEl("thead"), hr = accEl("tr");
-    ["Person", "Salary", "Bonus", "Reimb.", "Deductions", "Net pay", "Note", "Status"].forEach(function (h, i) { var c = accEl("th", i >= 1 && i <= 5 ? "num" : "", h); hr.appendChild(c); });
+    ["Person", "Salary", "Bonus", "Reimb.", "Deductions", "TDS", "Net pay", "Note", "Status"].forEach(function (h, i) { var c = accEl("th", i >= 1 && i <= 6 ? "num" : "", h); hr.appendChild(c); });
     th.appendChild(hr); t.appendChild(th);
     var tb = accEl("tbody");
     rows.forEach(function (y) {
@@ -365,7 +518,7 @@ function renderAdminAccPayroll(wrap) {
       tr.appendChild(accEl("td", null, accName(y.user_id)));
       var netCell = accEl("td", "num", accInr(net(y)));
       var inputs = {};
-      ["base", "bonus", "reimb", "deductions"].forEach(function (k) {
+      ["base", "bonus", "reimb", "deductions", "tds"].forEach(function (k) {
         var td = accEl("td", "num");
         if (edit && y.status === "draft") {
           var i = accEl("input"); i.type = "number"; i.min = "0"; i.step = "1"; i.value = Number(y[k]); inputs[k] = i;
@@ -383,7 +536,7 @@ function renderAdminAccPayroll(wrap) {
       tr.appendChild(stc);
       async function save() {
         var v = function (k) { return parseFloat(inputs[k].value) || 0; };
-        var x = await SUPA.rpc("acc_payroll_save", { p_id: y.id, p_base: v("base"), p_bonus: v("bonus"), p_reimb: v("reimb"), p_deductions: v("deductions"), p_note: inputs.note.value });
+        var x = await SUPA.rpc("acc_payroll_save2", { p_id: y.id, p_base: v("base"), p_bonus: v("bonus"), p_reimb: v("reimb"), p_deductions: v("deductions"), p_tds: v("tds"), p_note: inputs.note.value });
         if (x.error) { accToast(accErr(x.error)); return; }
         Object.assign(y, x.data); netCell.textContent = accInr(net(y)); foot();
       }
@@ -395,7 +548,7 @@ function renderAdminAccPayroll(wrap) {
       ftr.innerHTML = "";
       var s = function (k) { return rows.reduce(function (a, y) { return a + Number(y[k]); }, 0); };
       ftr.appendChild(accEl("td", null, "Total · " + rows.length));
-      ["base", "bonus", "reimb", "deductions"].forEach(function (k) { ftr.appendChild(accEl("td", "num", accInr(s(k)))); });
+      ["base", "bonus", "reimb", "deductions", "tds"].forEach(function (k) { ftr.appendChild(accEl("td", "num", accInr(s(k)))); });
       ftr.appendChild(accEl("td", "num", accInr(rows.reduce(function (a, y) { return a + net(y); }, 0))));
       ftr.append(accEl("td"), accEl("td"));
     }
@@ -553,3 +706,98 @@ function renderAdminAccBonuses(wrap) {
   });
 }
 ACC_STATUS.approved_b = ["Approved · in payroll", "blue"];
+
+/* ---------- Accounts → Checks (for the owner, once a month) ---------- */
+function renderAdminAccChecks(wrap) {
+  var head = accEl("div", "module-head"); head.appendChild(accEl("h2", null, "Monthly checks")); accMonthPicker(head); wrap.appendChild(head);
+  var body = accEl("div"); body.appendChild(accEl("div", "hint", "Loading…")); wrap.appendChild(body);
+  var M = ACC.month, fyStart = (Number(M.slice(5)) >= 4 ? Number(M.slice(0, 4)) : Number(M.slice(0, 4)) - 1) + "-04-01";
+  Promise.all([SUPA.from("acc_requests").select("*").limit(5000), SUPA.from("acc_payroll").select("*").eq("status", "paid"), SUPA.from("acc_payroll_runs").select("*"),
+               SUPA.from("acc_zoho_settings").select("*").eq("id", 1).maybeSingle(), SUPA.from("acc_zoho_log").select("*").order("at", { ascending: false }).limit(15),
+               accZoho({ action: "status" }, true)]).then(function (res) {
+    body.innerHTML = "";
+    if (res[0].error) { body.appendChild(accEl("div", "hr-note warn", "Run supabase/stage19c_accounts_zoho.sql first (" + accErr(res[0].error) + ")")); return; }
+    var reqs = res[0].data || [], pay = res[1].data || [], runs = res[2].data || [], zs = res[3].data || {}, logs = res[4].data || [], st = res[5];
+    var sec = function (title, hint) { var c = accEl("div", "hr-card"); c.style.marginTop = "14px"; c.setAttribute("data-plain", ""); c.appendChild(accEl("h3", null, title)); if (hint) c.appendChild(accEl("div", "hint", hint)); body.appendChild(c); return c; };
+
+    // Zoho connection
+    var zc = sec("Zoho Books");
+    var line = accEl("div", "h");
+    line.textContent = !st ? "Couldn't reach the zoho-sync function." : !st.connected ? "Not connected yet: add ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET and ZOHO_REFRESH_TOKEN to the Supabase Edge Function secrets. Until then, payments are only logged (dry run)."
+      : st.dry ? "Connected · DRY RUN: payloads are logged below, nothing is posted. Set ZOHO_DRY_RUN=false to go live." : "Connected · LIVE: posting to Zoho Books (organisation " + st.org + ").";
+    zc.appendChild(line);
+    var acc = zs.accounts ? Object.keys(zs.accounts).length : 0;
+    zc.appendChild(accEl("div", "h", acc ? acc + " Zoho accounts linked · fetched " + accDate(zs.fetched_at) + ((zs.missing || []).length ? " · not found: " + zs.missing.join(", ") : " · all found") : "Accounts not fetched yet."));
+    if (st && st.connected) { var fb = accEl("button", "btn", "Fetch Zoho accounts"); fb.style.marginTop = "8px"; fb.onclick = async function () { fb.disabled = true; var x = await accZoho({ action: "setup" }, true); accToast(x ? "Linked " + x.accounts + " accounts" : "Couldn't fetch"); renderAdminPage(); }; zc.appendChild(fb); }
+
+    // paid this month by Zoho account
+    var by = {}, add = function (k, v) { by[k] = (by[k] || 0) + v; };
+    reqs.forEach(function (r) {
+      if (r.status !== "paid" || String(r.paid_at || "").slice(0, 7) !== M) return;
+      add(r.kind === "advance" ? (r.imprest_account || "Imprest") + " (advance)" : accCatOf(r.category) || "Other Expenses", Number(r.amount));
+    });
+    pay.forEach(function (p) { if (String(p.paid_at || "").slice(0, 7) !== M) return; add("Salaries and Employee Wages", Number(p.base) - Number(p.deductions)); if (Number(p.bonus)) add("Diwali Bonus", Number(p.bonus)); });
+    var pc = sec("Paid in " + accMonthLabel(M) + " by Zoho account", "Should match the month in Zoho's Profit & Loss (expense side).");
+    var keys = Object.keys(by).sort(function (a, b) { return by[b] - by[a]; });
+    if (!keys.length) pc.appendChild(accEl("div", "hint", "Nothing paid this month."));
+    keys.forEach(function (k) { var r = accEl("div", "acc-row"); r.append(accEl("div", "main", k), accEl("div", "acc-amt", accInr(by[k]))); pc.appendChild(r); });
+    if (keys.length) { var tr = accEl("div", "acc-row"); tr.append(accEl("b", "main", "Total"), accEl("div", "acc-amt", accInr(keys.reduce(function (a, k) { return a + by[k]; }, 0)))); pc.appendChild(tr); }
+
+    // not in Zoho yet
+    var bad = reqs.filter(function (r) { return r.status === "paid" && ["pending", "failed", "dry_run", "manual"].indexOf(r.zoho_status) >= 0; });
+    var badRuns = runs.filter(function (r) { return r.zoho_status !== "synced" && r.zoho_status !== "none"; });
+    var fc = sec("Not in Zoho yet (" + (bad.length + badRuns.length) + ")", "Failed, waiting, dry run or to enter by hand.");
+    if (!bad.length && !badRuns.length) fc.appendChild(accEl("div", "hint", "Everything paid is in Zoho. ✓"));
+    badRuns.forEach(function (r) { var row = accEl("div", "acc-row"), m = accEl("div", "main"); m.append(accEl("div", "t", "Payroll " + accMonthLabel(r.month)), accEl("div", "h", (ZOHO_CHIP[r.zoho_status] || [r.zoho_status])[0] + (r.zoho_error ? " · " + r.zoho_error : ""))); row.appendChild(m); fc.appendChild(row); });
+    bad.forEach(function (r) { var row = accEl("div", "acc-row"), m = accEl("div", "main"); m.append(accEl("div", "t", "TOOLS-" + r.ref_no + " · " + r.title), accEl("div", "h", (ZOHO_CHIP[r.zoho_status] || [r.zoho_status])[0] + (r.zoho_error ? " · " + r.zoho_error : ""))); row.append(m, accEl("div", "acc-amt", accInr(r.amount))); fc.appendChild(row); });
+    var retryable = bad.filter(function (r) { return r.zoho_status !== "manual"; });
+    if (retryable.length || badRuns.length) {
+      var ra = accEl("button", "btn save", "↻ Retry all"); ra.style.marginTop = "8px";
+      ra.onclick = async function () {
+        ra.disabled = true;
+        for (var i = 0; i < badRuns.length; i++) await accZoho({ action: "payroll", month: badRuns[i].month }, true);
+        if (retryable.length) await accZoho({ action: "requests", ids: retryable.map(function (r) { return r.id; }) }, true);
+        accToast("Done. Check the list again."); renderAdminPage();
+      };
+      fc.appendChild(ra);
+    }
+
+    // TDS deducted this month
+    var tdsReq = reqs.filter(function (r) { return r.status === "paid" && Number(r.tds_amount) > 0 && String(r.paid_at || "").slice(0, 7) === M; });
+    var tdsPay = pay.filter(function (p) { return Number(p.tds) > 0 && String(p.paid_at || "").slice(0, 7) === M; });
+    var tdsTotal = tdsReq.reduce(function (a, r) { return a + Number(r.tds_amount); }, 0) + tdsPay.reduce(function (a, p) { return a + Number(p.tds); }, 0);
+    var nx = new Date(M + "-01T00:00:00"); nx.setMonth(nx.getMonth() + 1);
+    var tc = sec("TDS deducted in " + accMonthLabel(M) + ": " + accInr(tdsTotal), tdsTotal ? "Deposit by 7 " + nx.toLocaleDateString("en-GB", { month: "long", year: "numeric" }) + " with challan 281." : "");
+    var bySec = {}; tdsReq.forEach(function (r) { bySec[r.tds_section || "Other"] = (bySec[r.tds_section || "Other"] || 0) + Number(r.tds_amount); });
+    var salT = tdsPay.reduce(function (a, p) { return a + Number(p.tds); }, 0); if (salT) bySec["192 (salaries)"] = salT;
+    Object.keys(bySec).forEach(function (k) { var r = accEl("div", "acc-row"); r.append(accEl("div", "main", "Section " + k), accEl("div", "acc-amt", accInr(bySec[k]))); tc.appendChild(r); });
+
+    // payees crossing TDS limits without TDS (this financial year)
+    var py = {};
+    reqs.forEach(function (r) {
+      if (r.kind !== "vendor" || r.status === "rejected" || r.status === "cancelled" || String(r.paid_at || r.created_at).slice(0, 10) < fyStart) return;
+      var c = accCatOf(r.category), sec2 = ACC_194C.indexOf(c) >= 0 ? "194C" : ACC_194J.indexOf(c) >= 0 ? "194J" : "";
+      if (!sec2) return;
+      var k = (r.payee_pan || r.payee_name || "").toUpperCase().trim(); if (!k) return;
+      var x = py[k] = py[k] || { name: r.payee_name, pan: r.payee_pan, sec: sec2, total: 0, max: 0, tds: 0 };
+      x.total += Number(r.amount); x.max = Math.max(x.max, Number(r.amount)); x.tds += Number(r.tds_amount || 0);
+    });
+    var warn = Object.keys(py).map(function (k) { return py[k]; }).filter(function (x) {
+      if (x.tds > 0) return false;
+      return x.sec === "194C" ? (x.max > 30000 || x.total > 100000) : x.total > 30000;
+    });
+    var wc = sec("TDS limits crossed without TDS (" + warn.length + ")", "194C: over ₹30,000 in one payment or ₹1,00,000 in the year. 194J: over ₹30,000 in the year. Counted from " + accDate(fyStart) + ".");
+    if (!warn.length) wc.appendChild(accEl("div", "hint", "None. ✓"));
+    warn.forEach(function (x) { var r = accEl("div", "acc-row"), m = accEl("div", "main"); m.append(accEl("div", "t", x.name + (x.pan ? " · PAN " + x.pan : " · no PAN")), accEl("div", "h", x.sec + " · biggest payment " + accInr(x.max))); r.append(m, accEl("div", "acc-amt", accInr(x.total))); wc.appendChild(r); });
+
+    // audit log
+    var lc = sec("Zoho log (latest 15)", "Every request sent to Zoho, or logged in a dry run. No passwords or tokens are kept.");
+    logs.forEach(function (l) {
+      var d = accEl("details"); d.style.cssText = "border-top:1px solid var(--line);padding:6px 0";
+      var sm = accEl("summary", null, new Date(l.at).toLocaleString("en-GB") + " · " + (l.dry ? "DRY " : "") + l.method + " " + l.path + " · " + (l.ref || "") + (l.ok ? "" : " · ❌")); sm.style.cursor = "pointer"; sm.style.fontSize = "12.5px";
+      var pre = accEl("pre", null, JSON.stringify({ request: l.request, response: l.response }, null, 2)); pre.style.cssText = "white-space:pre-wrap;font-size:11.5px;background:var(--paper);padding:8px;border-radius:8px;max-height:260px;overflow:auto";
+      d.append(sm, pre); lc.appendChild(d);
+    });
+    if (!logs.length) lc.appendChild(accEl("div", "hint", "Nothing yet."));
+  });
+}

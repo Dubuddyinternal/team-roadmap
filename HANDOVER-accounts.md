@@ -40,9 +40,31 @@ Payment requests, payroll and bank files, in Administration. Built on top of the
   - Functions: `acc_request_create / cancel`, `acc_decide`, `acc_mark_paid`, `acc_payroll_fill / save / status`, `acc_bank_rows`.
 - Everything is written through these functions. People can only read their own rows unless they have the Accounts permission.
 
+## Zoho Books (stage 19c)
+
+When a payment request or a payroll month is marked paid, the page calls the Edge Function **`zoho-sync`** (Verify JWT ON; it checks the Accounts permission). The function writes to Zoho Books India (org 60041846412). The payment itself is still made from PNB by hand.
+
+- **Secrets** (Supabase → Edge Functions → Secrets):
+  - `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN` (scope `ZohoBooks.fullaccess.all`, from accounts.zoho.in).
+  - `ZOHO_DRY_RUN`. Unset or anything other than `false` means **dry run**: payloads are only logged in `acc_zoho_log`, and rows show "Zoho: dry run". Set it to `false` to go live. Rows still in dry run get posted on the next Retry.
+- **Accounts:** the exact account names are listed in the function (`ACCOUNTS`). Their ids are fetched once (Accounts → Monthly checks → **Fetch Zoho accounts**) into `acc_zoho_settings`, along with the taxes IGST18 / GST18. Accounts are never created from code.
+- **Posting rules:**
+  - **A. Payroll:** one journal per run, `TOOLS-PAYROLL-YYYY-MM`. Dr Salaries and Employee Wages (one line per person, salary − deductions), Dr Diwali Bonus for bonuses, Cr TDS Payable, Cr bank (net). Reimbursements paid with salaries are posted under rule B. A March salary paid in April shows a warning.
+  - **B. Reimbursement:** an expense (category account, via Employee Reimbursements, tax-inclusive, `TOOLS-<n>`, with the receipt), then a journal Dr Employee Reimbursements / Cr bank. That journal is one per person + UTR, with one line per request. If paid from an imprest, the expense goes through that imprest and there's no bank journal.
+  - **C. Vendor:** an expense via "paid from". If there's TDS, a journal instead: Dr category (gross) / Cr TDS Payable / Cr bank (net). That journal's reference is `TOOLS-<n>`, with the UTR in the notes, so the duplicate check stays exact.
+  - **D. Card spend:** a vendor payment with paid from = Pancham Imprest becomes an expense through Pancham Imprest, with no bank journal. `source = 'tools'` lets the card-statement import skip it.
+  - **E. Advance** ("💼 I need an advance"): a journal Dr <imprest> / Cr bank.
+  - **F. Assets** (Computer, Furniture and Equipment): **not automated**. The row is marked "Zoho: enter by hand", because Zoho needs a bill with a vendor contact.
+  - **GST:** only when "the bill shows our GSTIN" is ticked with the seller's GSTIN. Same state (06) uses GST18, otherwise IGST18. Place of supply comes from the GSTIN's first two digits.
+- **Duplicates and retry:**
+  - The Zoho ids are saved on each row and run (`zoho_ids`). Before creating anything, the function also searches Zoho by reference.
+  - Failed rows show the error and a **↻ Retry**. Paid is never undone, and a synced row can't be edited.
+- **Monthly checks:** paid this month by Zoho account, rows not yet in Zoho (with Retry all), TDS deducted this month (deposit by the 7th, challan 281), 194C / 194J limits crossed without TDS, and the latest Zoho log.
+- **Bank file:** amounts are net of TDS, and the remark is `TOOLS-<n>`. Match the columns to PNB's sample once it arrives.
+
 ## Later
 
 - **Cashfree Payouts:** on **Mark paid** (or a new "Pay now"), send the selected rows to Cashfree from an Edge Function. Store the Cashfree reference in `paid_ref`.
-- **Zoho Books:** after a payment is marked paid, push an expense or bill payment (vendor = `payee_name`, account from `category`).
+- **Assets as Zoho bills (rule F)**, once vendors are kept as Zoho contacts.
 - **Automatic sales bonuses:** feed the count (e.g. sales) from your sales data into `acc_bonus_save` with the agreed rate, instead of typing it.
 - **TDS** on vendor payments using `payee_pan`.
