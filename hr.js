@@ -256,6 +256,7 @@ function hrEditable(rec) { return !rec || rec.status === "draft" || rec.status =
     + ".hr-tpl{width:100%;min-height:360px;font-family:var(--mono);font-size:12.5px;padding:12px;border:1px solid var(--line-strong);border-radius:10px}"
     + ".hr-profile-link{display:flex;gap:10px;align-items:center;background:var(--indigo-soft);border:1px solid #F5CDB6;border-radius:12px;padding:10px 12px;margin-bottom:14px;font-size:13.5px}"
     + ".hr-profile-link .grow{flex:1}"
+    + ".hr-done{text-align:center;padding:22px 16px;border:1px solid #BFE3C9;background:#EEF8F1;border-radius:14px;margin-top:6px}.hr-done .big{font-size:34px}.hr-done b{display:block;font-size:17px;margin:4px 0}.hr-done .h{color:var(--muted);font-size:13.5px}"
     + ".hr-wait{display:flex;flex-direction:column;gap:8px;margin-top:8px}.hr-wait .r{display:flex;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:12px;font-size:13.5px}"
     + ".hr-wait .r.now{border-color:#F5CDB6;background:var(--indigo-soft)}.hr-wait .n{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--line);font-weight:700;flex:none}.hr-wait .h{color:var(--muted);font-size:12.5px}"
     + ".hr-sig{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.hr-sig .pic{width:220px;height:76px;border:1.5px dashed var(--line-strong);border-radius:10px;background:#fff;display:grid;place-items:center;font-size:12.5px;color:var(--muted);overflow:hidden}"
@@ -574,10 +575,18 @@ function hrMissing(d) {
 function hrRenderSubmit(card, d, editable) {
   card.appendChild(hrEl("h3", null, "✅ Check and submit"));
   if (!editable) {
-    card.appendChild(hrEl("div", "hint", HR.rec.status === "submitted" ? "Submitted on " + hrDate(HR.rec.submitted_at) + ". HR is checking it." : "Submitted. HR has your file."));
+    var done = hrEl("div", "hr-done");
+    done.append(hrEl("div", "big", "🎉"), hrEl("b", null, "Submitted to HR" + (HR.rec.submitted_at ? " on " + hrDate(HR.rec.submitted_at) : "")),
+      hrEl("div", "h", HR.rec.status === "submitted" ? "HR is checking your file now. You'll get a 🔔 and an email when your offer letter is ready." : "HR has your file."));
+    card.appendChild(done);
+    var pol = HR_STEPS.findIndex(function (z) { return z.k === "policies"; });
+    var nx = hrEl("button", "btn save", "Next: sign the company policies →"); nx.style.marginTop = "12px";
+    nx.onclick = function () { HR.step = pol; hrRenderMine(); };
+    card.appendChild(nx);
     return;
   }
   var miss = hrMissing(d);
+  var warn = hrEl("div", "hr-note warn"); warn.hidden = true;
   if (miss.length) {
     card.appendChild(hrEl("div", "hint", "A few things are still needed:"));
     var ul = hrEl("ul", "hr-list");
@@ -591,16 +600,19 @@ function hrRenderSubmit(card, d, editable) {
   lab.append(cb, document.createTextNode("I confirm these details are true, and I agree that Cyberflow Tech Pvt Ltd may keep them and my documents for my employment records, payroll and the law (for example tax and PF)."));
   card.appendChild(lab);
   var foot = hrEl("div", "hr-foot"); foot.appendChild(hrEl("div", "grow"));
-  var go = hrEl("button", "btn save", "Submit to HR"); go.disabled = !!miss.length;
+  var go = hrEl("button", "btn save", "Submit to HR");
+  var say = function (m) { warn.textContent = m; warn.hidden = false; warn.scrollIntoView({ block: "nearest", behavior: "smooth" }); };
   go.onclick = async function () {
-    if (!cb.checked) { hrToast("Please tick the box first"); return; }
+    if (miss.length) { say("You can't submit yet: " + miss.length + (miss.length === 1 ? " thing is" : " things are") + " still missing. Press any line above to fill it in."); return; }
+    if (!cb.checked) { say("Please tick the box above first."); return; }
+    warn.hidden = true;
     go.disabled = true; go.textContent = "Submitting…";
     await hrSaveDraft(true);
     var r = await SUPA.rpc("hr_save", { p_details: hrClean(HR.rec.details || {}), p_submit: true, p_consent: true });
-    if (r.error) { hrToast(hrErr(r.error)); go.disabled = false; go.textContent = "Submit to HR"; return; }
-    HR.rec = r.data; hrToast("Sent to HR. Thank you!"); hrRenderMine();
+    if (r.error) { say("Couldn't submit: " + hrErr(r.error)); go.disabled = false; go.textContent = "Submit to HR"; return; }
+    HR.rec = r.data; hrToast("Submitted to HR ✅"); hrRenderMine();
   };
-  foot.appendChild(go); card.appendChild(foot);
+  foot.appendChild(go); card.append(warn, foot);
 }
 // the signature line under a signed offer letter
 function hrOfferStamp(rec, docs, view, done) {
