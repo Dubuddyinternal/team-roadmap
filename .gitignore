@@ -1,3 +1,5 @@
 local/data/
 .DS_Store
 __pycache__/
+video-use/.env
+video-use/.venv/

@@ -24,6 +24,13 @@ python3 -m pip install -q --break-system-packages pillow
 npx --yes hyperframes@0.8.111 --version >/dev/null 2>&1 || true
 npx --yes hyperframes@0.8.34 --version >/dev/null 2>&1 || true
 
+# video-use and the skill read their keys from ~/Developer/video-use/.env (never kept in the repo):
+# write it from the environment's secrets (claude.ai → Environment → Secrets: ELEVENLABS_API_KEY, PEXELS_API_KEY)
+: > "$REPO/video-use/.env"
+for k in ELEVENLABS_API_KEY PEXELS_API_KEY; do
+  if [ -n "${!k:-}" ]; then echo "$k=${!k}" >> "$REPO/video-use/.env"; else echo "warning: $k is not set in the environment's secrets"; fi
+done
+
 # the skill reads the SFX library from this env var when set (sfx/ in the repo)
 echo "export DUBUDDY_SFX_DIR=\"$REPO/sfx\"" >> ~/.bashrc
 echo "setup done"
