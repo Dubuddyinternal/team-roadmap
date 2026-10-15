@@ -8,6 +8,10 @@ in the message that started you.
 
 ## Always
 
+0. If the payload has a `ref` (a branch name), this run comes from that branch's preview site: in the repository run
+   `git fetch -q origin "<ref>" && git checkout -q FETCH_HEAD`, then read this file again from that checkout and
+   follow that version. The setup links point into the repository, so the skill switches with it.
+
 1. Run `python3 "$PIPE" start "$FIRE"`. It downloads this step's inputs and prints the folders as JSON. `edit_folder`
    is the skill's edit folder (**ED**) and `out` is where your result files go (**OUT**).
 2. Do the step below.
