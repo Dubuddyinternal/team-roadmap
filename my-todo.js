@@ -438,14 +438,16 @@ function todoDayLabel(iso) {
   var t = todoToday();
   return iso === t ? "Today" : iso === todoAddDays(t, 1) ? "Tomorrow" : todoDayName(iso) + " " + fmtD(iso);
 }
+// the day a card is planned for, or null (no day, or sent back with "-")
+function todoPlanned(key) { var p = TODO.plan[key]; return p && p !== "-" ? p : null; }
 function todoPlanSet(key, iso) {
-  if (iso) TODO.plan[key] = iso; else delete TODO.plan[key];
+  TODO.plan[key] = iso || "-";   // "-" = sent back to All to be done: kept off Today even if due / in progress
   todoSave();
 }
 function todoPlanPick(key, title) {
   var t = todoToday(), opts = [];
   for (var i = 0; i < 7; i++) { var iso = todoAddDays(t, i); opts.push({ label: "📅 " + todoDayLabel(iso), value: iso }); }
-  if (TODO.plan[key]) opts.push({ label: "✕ No day (back to All to be done)", value: "" });
+  if (todoPlanned(key)) opts.push({ label: "✕ No day (back to All to be done)", value: "" });
   openChoice("Which day for “" + title + "”?", opts, function (v) { todoPlanSet(key, v); });
 }
 // on Today's board?
@@ -453,7 +455,8 @@ function todoPlanPick(key, title) {
 //   cards assigned to me on a board: only once I've planned them for today (or earlier) —
 //   until then they wait in All to be done, whatever their column or due date
 function todoForToday(key, col, due, assigned) {
-  var t = todoToday(), p = TODO.plan[key];
+  var t = todoToday(), p = todoPlanned(key);
+  if (TODO.plan[key] === "-" && col !== "done") return false;   // I sent it back to All to be done
   if (assigned) return !!p && p <= t;
   if (col !== "todo") return true;
   return (!!p && p <= t) || (!!due && due <= t);
@@ -493,7 +496,7 @@ function todoCard(entry, own) {
     meta.appendChild(s);
   }
   var dc = todoDueChip(own ? own.due : entry.due, col); if (dc) meta.appendChild(dc);
-  var pl = TODO.plan[key];
+  var pl = todoPlanned(key);
   if (pl && col !== "done") {
     var tdy = todoToday();
     meta.appendChild(todoEl("span", "td-plan" + (pl <= tdy ? " now" : ""), "🗓 " + (pl < tdy ? "Today (from " + fmtD(pl) + ")" : todoDayLabel(pl))));
@@ -508,6 +511,11 @@ function todoCard(entry, own) {
   } else {
     var op = todoEl("button", "td-act", "Open ↗"); op.onclick = function (ev) { ev.stopPropagation(); entry.open(); };
     acts.appendChild(op);
+  }
+  if (col !== "done" && todoMode === "today") {
+    var back = todoEl("button", "td-act", "↩ All to be done"); back.title = "Take it off Today — it waits in All to be done";
+    back.onclick = function (ev) { ev.stopPropagation(); todoPlanSet(key, ""); toast("Moved to All to be done"); };
+    acts.appendChild(back);
   }
   if (col !== "done") {
     var pd = todoEl("button", "td-act", "📅 Day…"); pd.title = "Pick the day you'll do it";
@@ -617,7 +625,7 @@ function todoAllOpen(assigned) {
     .concat(assigned.filter(function (e) { return e.col !== "done"; }).map(function (e) { return e.key; }));
   var slot = function (iso, label) {
     var b = todoEl("div", "td-dayslot" + (iso === "" ? " none" : ""));
-    var n = openKeys.filter(function (k) { var p = TODO.plan[k]; return iso === today ? p && p <= today : p === iso; }).length;
+    var n = openKeys.filter(function (k) { var p = todoPlanned(k); return iso === today ? !!p && p <= today : p === iso; }).length;
     b.appendChild(todoEl("b", "", label));
     if (iso) b.appendChild(todoEl("span", "", n ? n + " planned" : "—"));
     b.addEventListener("dragover", function (ev) { ev.preventDefault(); ev.dataTransfer.dropEffect = "move"; b.classList.add("kover"); });
@@ -629,7 +637,7 @@ function todoAllOpen(assigned) {
   slot("", "✕ No day");
   wrap.appendChild(strip);
   // in progress first, then not yet planned (to pick from), then planned by day; due date breaks ties
-  var rank = function (k, x) { var p = TODO.plan[k]; return (x.col === "progress" ? "0" : p ? "2" + p : "1") + String(x.due || "9999"); };
+  var rank = function (k, x) { var p = todoPlanned(k); return (x.col === "progress" ? "0" : p ? "2" + p : "1") + String(x.due || "9999"); };
   TODO_HATS.forEach(function (H) {
     var fx = todoFixedFor(H.key, today).filter(function (f) { return !todoFixedIsDone(f, today); });
     var cards = TODO.items.filter(function (x) { return x.hat === H.key && x.col !== "done"; }).map(function (x) { return { r: rank("own:" + x.id, x), el: function () { return todoCard(null, x); } }; })
@@ -670,8 +678,8 @@ function todoUpcoming(assigned) {
   var start = todoAddDays(today, 1), end = todoAddDays(today, todoRange);
   var due = [];
   // a card shows on the day I planned it (from today on), otherwise on its due date
-  var dayOf = function (k, d) { var p = TODO.plan[k]; return p && p >= today ? p : d; };
-  var tag = function (k, src) { var p = TODO.plan[k]; return p && p >= today ? src + " · 🗓 planned" : src; };
+  var dayOf = function (k, d) { if (TODO.plan[k] === "-") return null; var p = todoPlanned(k); return p && p >= today ? p : d; };
+  var tag = function (k, src) { var p = todoPlanned(k); return p && p >= today ? src + " · 🗓 planned" : src; };
   TODO.items.forEach(function (x) { var k = "own:" + x.id, d = dayOf(k, x.due); if (d && x.col !== "done") due.push({ due: d, title: x.title, hat: x.hat, src: tag(k, "✏️ My to-do"), open: function () { todoEdit(x); } }); });
   assigned.forEach(function (e) { var d = dayOf(e.key, e.due); if (d && e.col !== "done") due.push({ due: d, title: e.title, hat: e.hat, src: tag(e.key, e.icon + " " + e.src + " · " + e.where), open: e.open }); });
   var row = function (d, sub) {
