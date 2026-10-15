@@ -11,8 +11,9 @@
    fixed rule:
      🧩 Product Head — Development / scrum cards, bugs, Product Roadmap
         ideas, roadmap module tasks, Product All in One items
-     🧭 CEO          — OKR objectives and key results, Educational Content
-        tasks, Campaign pieces, Keep an Eye studies, Widen our Horizon topics
+     🧭 CEO          — Educational Content tasks, Campaign pieces, Keep an
+        Eye studies, Widen our Horizon topics
+   OKRs are not pulled in (they stay on the OKRs page).
    A card's column follows its board (done there = Done here). Moving a dev
    card, bug or roadmap / content task here moves it on its board too (if I
    can edit); anything else just remembers where I put it.
@@ -291,24 +292,7 @@ function todoAssigned() {
         open: function () { view = "horizon"; activeCspace = cs.id; horizonView = mine ? "fill" : "check"; renderAll(); } });
     });
   });
-  // OKRs: objectives and key results of the current cycle
-  var cyc = OKRS && (OKRS.cycles || []).find(function (c) { return c.key === activeCycle; }) || (OKRS && (OKRS.cycles || [])[0]);
-  if (cyc) (cyc.objectives || []).forEach(function (ob) {
-    var goOkr = function () { activeCycle = cyc.key; view = "okr"; renderAll(); };
-    var owns = (typeof okrOwners === "function" ? okrOwners(ob) : []).map(function (e) { return String(e).toLowerCase(); });
-    if (owns.indexOf(me.email) >= 0) {
-      var p = typeof objPct === "function" ? objPct(ob) : 0;
-      out.push({ key: "okr:" + (ob.id || ob.title), hat: "ceo", icon: "🎯", src: "Objective", title: ob.title, where: "OKRs · " + (cyc.name || cyc.key) + " · " + p + "%",
-        col: p >= 100 ? "done" : p > 0 ? "progress" : "todo", due: todoISO(ob.deadline), write: null, open: goOkr });
-    }
-    (ob.krs || []).forEach(function (kr, n) {
-      var ko = (typeof krOwners === "function" ? krOwners(kr) : []).map(function (e) { return String(e).toLowerCase(); });
-      if (ko.indexOf(me.email) < 0 && !todoNameIsMe(me, kr.owner)) return;
-      var q = typeof krPct === "function" ? krPct(kr) : 0;
-      out.push({ key: "kr:" + (ob.id || ob.title) + ":" + n, hat: "ceo", icon: "📈", src: "Key result", title: kr.title, where: (ob.title || "OKR") + " · " + q + "%",
-        col: q >= 100 ? "done" : q > 0 ? "progress" : "todo", due: todoISO(kr.deadline), write: null, open: goOkr });
-    });
-  });
+  // (OKR objectives / key results are left out on purpose — they live on the OKRs page)
   // roadmap module tasks (owner typed as a name) — product work
   var walkMod = function (m, path, label) {
     var leaf = function (t, trail) {
