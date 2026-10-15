@@ -42,7 +42,7 @@
    Uses index.html globals (SUPA, TEAM, DEV, BUGS, CSPACES, OKRS, DATA,
    CONTENT, view, renderAll, openDialog, openChoice, toast, fmtD, todayISO …).
    ===================================================================== */
-var TODO = { team: null, loaded: false, loading: false, local: false, items: [], over: {}, fixed: [], fixedDone: {}, learn: {}, deep: null, deepLog: {}, reasonLog: {}, settings: null, feeds: [], feedItems: {}, feedSeen: {}, feedAt: 0 };
+var TODO = { team: null, loaded: false, loading: false, local: false, items: [], over: {}, fixed: [], fixedDone: {}, learn: {}, deep: null, deepLog: {}, reasonLog: {}, settings: null, feeds: [], feedItems: {}, feedSeen: {}, feedAt: 0, sleepLog: {} };
 // the two full-screen timers in Personal
 var TODO_TIMERS = {
   deep: { icon: "🧘", title: "Deep thinking", line: "Talk to yourself. Walk. Don't do anything.",
@@ -100,6 +100,7 @@ function todoApply(d) {
   TODO.feedItems = d.feedItems && typeof d.feedItems === "object" ? d.feedItems : {};
   TODO.feedSeen = d.feedSeen && typeof d.feedSeen === "object" ? d.feedSeen : {};
   TODO.feedAt = Number(d.feedAt) || 0;
+  TODO.sleepLog = d.sleepLog && typeof d.sleepLog === "object" ? d.sleepLog : {};   // { "YYYY-MM-DD": { wake: "HH:MM", sleep: "HH:MM" } } — when I ticked it
   TODO.deepLog = d.deepLog && typeof d.deepLog === "object" ? d.deepLog : {};       // deep thinking { "YYYY-MM-DD": minutes }
   TODO.reasonLog = d.reasonLog && typeof d.reasonLog === "object" ? d.reasonLog : {}; // reasoning (chess, maths, puzzles)
   // { start, end, kind:"deep"|"reason" } (ms) while a timer runs
@@ -138,7 +139,7 @@ function todoSave() {
   var cut = todoAddDays(todoToday(), -400);
   Object.keys(TODO.fixedDone).forEach(function (k) { if (k.split("|")[1] < cut) delete TODO.fixedDone[k]; });
   var data = { items: TODO.items, over: TODO.over, fixed: TODO.fixed, fixedDone: TODO.fixedDone, learn: TODO.learn, deep: TODO.deep, deepLog: TODO.deepLog, reasonLog: TODO.reasonLog, settings: TODO.settings,
-    feeds: TODO.feeds, feedItems: TODO.feedItems, feedSeen: TODO.feedSeen, feedAt: TODO.feedAt };
+    feeds: TODO.feeds, feedItems: TODO.feedItems, feedSeen: TODO.feedSeen, feedAt: TODO.feedAt, sleepLog: TODO.sleepLog };
   clearTimeout(_todoSaveT);
   _todoSaveT = setTimeout(async function () {
     if (!TODO.local && SUPA) {
@@ -599,6 +600,8 @@ function todoSettingsNorm(s) {
   s.deepMin = Math.max(5, Math.min(600, Math.round(Number(s.deepMin) || 120)));
   var rm = Array.isArray(s.reasonMins) ? s.reasonMins.map(Number).filter(function (n) { return n >= 5 && n <= 600; }).map(Math.round) : [];
   s.reasonMins = rm.length ? rm.slice(0, 4) : [30, 60, 120];
+  s.wakeAt = /^\d{2}:\d{2}$/.test(s.wakeAt || "") ? s.wakeAt : "06:00";    // ⏰ first thing in My To-do
+  s.sleepAt = /^\d{2}:\d{2}$/.test(s.sleepAt || "") ? s.sleepAt : "21:00";  // 🌙 last thing
   return s;
 }
 function todoLearnParts() { return TODO.settings.learnParts; }
@@ -1078,9 +1081,10 @@ function todoSumData() {
   }).filter(function (r) { return r.due; });
   var fxDue = fixed.reduce(function (a, r) { return a + r.due; }, 0), fxDone = fixed.reduce(function (a, r) { return a + r.done; }, 0);
   var varDone = TODO.items.filter(function (x) { return x.col === "done" && x.doneAt && x.doneAt >= start; }).length;
+  var wakeDays = days.filter(function (x) { return (TODO.sleepLog[x] || {}).wake; }).length, sleepDays = days.filter(function (x) { return (TODO.sleepLog[x] || {}).sleep; }).length;
   return { today: today, start: start, days: days, weeks: weeks, parts: parts, learnDays: learnDays, best: best,
     deep: sum(TODO.deepLog), deepDays: on(TODO.deepLog), reason: sum(TODO.reasonLog), reasonDays: on(TODO.reasonLog),
-    fixed: fixed, fxDue: fxDue, fxDone: fxDone, varDone: varDone };
+    fixed: fixed, fxDue: fxDue, fxDone: fxDone, varDone: varDone, wakeDays: wakeDays, sleepDays: sleepDays };
 }
 function todoRenderSummary(pane, show) {
   var old = document.getElementById("td-summary"); if (old) old.remove();
@@ -1105,6 +1109,7 @@ function todoRenderSummary(pane, show) {
     cards.appendChild(c);
   };
   var nd = D.days.length;
+  card("⏰", "Wake & sleep", D.wakeDays + " · " + D.sleepDays + " / " + nd, "woke up · went to bed (target " + todoFmtHM(TODO.settings.wakeAt) + " · " + todoFmtHM(TODO.settings.sleepAt) + ")", todoPct(D.wakeDays + D.sleepDays, nd * 2));
   card("📚", "New learning", D.learnDays + " / " + nd + " days", todoPct(D.learnDays, nd) + "% · best streak " + D.best + " · now " + todoLearnStreak(), todoPct(D.learnDays, nd));
   card("🧘", "Deep thinking", todoFmtMins(D.deep), D.deepDays + " day" + (D.deepDays === 1 ? "" : "s") + " · avg " + todoFmtMins(Math.round(D.deep / D.weeks.length)) + " / week", null);
   card("♟️", "Reasoning time", todoFmtMins(D.reason), D.reasonDays + " day" + (D.reasonDays === 1 ? "" : "s") + " · avg " + todoFmtMins(Math.round(D.reason / D.weeks.length)) + " / week", null);
@@ -1132,7 +1137,7 @@ function todoRenderSummary(pane, show) {
   var wk = todoEl("section", "td-sum-sec");
   wk.appendChild(todoEl("h3", "", "📅 Week by week"));
   var tbl = todoEl("table", "td-sum-tbl");
-  tbl.innerHTML = "<thead><tr><th>Week of</th><th>Learning days</th><th>Deep thinking</th><th>Reasoning</th><th>Routines</th><th>To-dos done</th></tr></thead>";
+  tbl.innerHTML = "<thead><tr><th>Week of</th><th>Learning days</th><th>Deep thinking</th><th>Reasoning</th><th>Routines</th><th>Wake · Sleep</th><th>To-dos done</th></tr></thead>";
   var tb = todoEl("tbody"), maxM = 1;
   var rows = D.weeks.map(function (w) {
     var ds = []; for (var i = 0; i < 7; i++) { var x = todoAddDays(w, i); if (x <= D.today) ds.push(x); }
@@ -1141,13 +1146,14 @@ function todoRenderSummary(pane, show) {
     var due = 0, done = 0; TODO.fixed.forEach(function (f) { ds.forEach(function (x) { if (todoFixedOn(f, x)) { due++; if (todoFixedIsDone(f, x)) done++; } }); });
     var end = todoAddDays(w, 6);
     var vd = TODO.items.filter(function (x) { return x.col === "done" && x.doneAt && x.doneAt >= w && x.doneAt <= end; }).length;
-    return { w: w, n: ds.length, learn: ds.filter(todoLearnedOn).length, dm: dm, rm: rm, due: due, done: done, vd: vd };
+    var wk = ds.filter(function (x) { return (TODO.sleepLog[x] || {}).wake; }).length, sl = ds.filter(function (x) { return (TODO.sleepLog[x] || {}).sleep; }).length;
+    return { w: w, n: ds.length, learn: ds.filter(todoLearnedOn).length, dm: dm, rm: rm, due: due, done: done, vd: vd, wk: wk, sl: sl };
   }).reverse();   // newest first
   var minibar = function (m, cls) { return "<span class=\"td-mb " + cls + "\"><i style=\"width:" + Math.round(m / maxM * 100) + "%\"></i></span>" + todoFmtMins(m); };
   rows.forEach(function (r) {
     var tr = todoEl("tr");
     tr.innerHTML = "<td>" + fmtD(r.w) + "</td><td>" + r.learn + " / " + r.n + "</td><td>" + minibar(r.dm, "deep") + "</td><td>" + minibar(r.rm, "reason") + "</td><td>"
-      + (r.due ? todoPct(r.done, r.due) + "% <span class=\"td-dim\">(" + r.done + "/" + r.due + ")</span>" : "<span class=\"td-dim\">—</span>") + "</td><td>" + r.vd + "</td>";
+      + (r.due ? todoPct(r.done, r.due) + "% <span class=\"td-dim\">(" + r.done + "/" + r.due + ")</span>" : "<span class=\"td-dim\">—</span>") + "</td><td>" + r.wk + " · " + r.sl + " <span class=\"td-dim\">/ " + r.n + "</span></td><td>" + r.vd + "</td>";
     tb.appendChild(tr);
   });
   tbl.appendChild(tb); wk.appendChild(tbl); box.appendChild(wk);
@@ -1166,6 +1172,39 @@ function todoRenderSummary(pane, show) {
   pane.appendChild(box);
 }
 
+/* ---------- ⏰ Wake up (first) and 🌙 Sleep (last): a target time I can change, and a daily tick ---------- */
+function todoHM(s) { var p = String(s || "").split(":"); return Number(p[0]) * 60 + Number(p[1] || 0); }
+function todoFmtHM(s) { var m = todoHM(s), h = Math.floor(m / 60), x = m % 60; return (h % 12 || 12) + ":" + String(x).padStart(2, "0") + (h < 12 ? " am" : " pm"); }
+function todoNowHM() { var d = new Date(); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
+function todoBookend(kind) {
+  var S = TODO.settings, wake = kind === "wake", key = wake ? "wakeAt" : "sleepAt", today = todoToday();
+  var day = TODO.sleepLog[today] || {}, done = day[kind];
+  var box = todoEl("section", "td-bk td-bk-" + kind + (done ? " ok" : ""));
+  box.appendChild(todoEl("span", "td-bk-ic", wake ? "⏰" : "🌙"));
+  var tx = todoEl("div", "td-bk-tx");
+  var h = todoEl("div", "td-bk-h"); h.appendChild(todoEl("b", "", wake ? "Wake up" : "Go to bed"));
+  var tm = todoEl("input", "td-bk-time"); tm.type = "time"; tm.value = S[key]; tm.title = "Your target time — change it any time";
+  tm.onchange = function () { if (/^\d{2}:\d{2}$/.test(tm.value)) { S[key] = tm.value; todoSave(); } };
+  h.appendChild(todoEl("span", "td-dim", "target")); h.appendChild(tm);
+  tx.appendChild(h);
+  var late = done && todoHM(done) > todoHM(S[key]) + 15;   // 15 minutes' grace
+  tx.appendChild(todoEl("div", "td-bk-sub" + (late ? " late" : ""), done
+    ? (wake ? "Up at " : "In bed at ") + todoFmtHM(done) + (late ? " — " + (todoHM(done) - todoHM(S[key])) + " min after " + todoFmtHM(S[key]) : " — on time ✅")
+    : (wake ? "Tick it when you're up." : "Tick it when you go to bed.")));
+  var go = todoEl("button", done ? "btn" : "btn save", done ? "↺ Undo" : (wake ? "✓ I'm up" : "✓ Going to bed"));
+  go.onclick = function () {
+    var d = TODO.sleepLog[today] = TODO.sleepLog[today] || {};
+    if (d[kind]) delete d[kind]; else d[kind] = todoNowHM();
+    if (!Object.keys(d).length) delete TODO.sleepLog[today];
+    todoSave();
+  };
+  var n = 0, x = todoToday(); if (!(TODO.sleepLog[x] || {})[kind]) x = todoAddDays(x, -1);
+  while ((TODO.sleepLog[x] || {})[kind]) { n++; x = todoAddDays(x, -1); }
+  if (n > 1) tx.appendChild(todoEl("span", "td-streak td-bk-streak", "🔥 " + n + " days in a row"));
+  box.append(tx, go);
+  return box;
+}
+
 /* ---------- the page ---------- */
 function renderContentTodo() {
   var wrap = $("content");
@@ -1177,13 +1216,15 @@ function renderContentTodo() {
     todoLoad(); return;
   }
   if (TODO.local) wrap.appendChild(todoEl("div", "td-note", "Couldn't reach the database — your to-dos are saved in this browser for now."));
-  // daily new learning first; until today's is written, the rest is frozen
+  var page = wrap;                   // the 🌙 Sleep row goes at the very end, outside any freeze
+  wrap.appendChild(todoBookend("wake"));   // ⏰ first thing of the day
+  // daily new learning next; until today's is written, the rest is frozen
   wrap.appendChild(todoLearnBox());
   wrap.appendChild(todoDeepBox());   // always usable, even before today's learning is written
   wrap.appendChild(todoReasonBox());
   if (!todoLearnedToday()) {
     var fz = todoEl("div", "td-frozen"); fz.setAttribute("aria-disabled", "true"); fz.inert = true;
-    var lock = todoEl("div", "td-frozen-msg", "🔒 Frozen until you write all four of today's learnings above");
+    var lock = todoEl("div", "td-frozen-msg", "🔒 Frozen until you write today's learnings above");
     wrap.appendChild(lock);
     wrap.appendChild(fz);
     wrap = fz;
@@ -1197,8 +1238,9 @@ function renderContentTodo() {
   });
   wrap.appendChild(bar);
   var assigned = todoAssigned();
-  if (todoMode === "upcoming") { wrap.appendChild(todoUpcoming(assigned)); return; }
-  TODO_HATS.forEach(function (H) { wrap.appendChild(todoHatBlock(H, assigned)); });
+  if (todoMode === "upcoming") wrap.appendChild(todoUpcoming(assigned));
+  else TODO_HATS.forEach(function (H) { wrap.appendChild(todoHatBlock(H, assigned)); });
+  page.appendChild(todoBookend("sleep"));   // 🌙 last thing of the day
 }
 /* after sign-in, load once even if the sidebar isn't on screen (e.g. reloaded on OKRs),
    so a running deep-thinking block comes back straight away */
