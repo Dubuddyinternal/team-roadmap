@@ -634,6 +634,7 @@ tr.in-mvp .an-rowhead{border-left:3px solid var(--indigo)}
 .disc-chip.stage.st-next{background:var(--indigo-soft);color:var(--indigo);border-color:transparent}
 .disc-chip.stage.st-primary{background:#FEF3C7;color:#92400E;border-color:transparent}
 .disc-chip.stage.st-implres{background:var(--indigo-soft);color:var(--indigo);border-color:transparent}
+.disc-chip.stage.st-done{background:var(--done);color:#fff;border-color:transparent}
 .disc-chip.stage.st-ready{background:var(--done-bg);color:var(--done);border-color:transparent}
 .disc-chip.stage.st-wont{background:#E5E7EB;color:#4B5563;border-color:transparent}
 .disc-chip.dates{cursor:default}
@@ -644,6 +645,7 @@ tr.in-mvp .an-rowhead{border-left:3px solid var(--indigo)}
 .disc-col.dc-primary{background:#FFFBEB}
 .disc-col.dc-implres{background:#F5F7FE}
 .disc-col.dc-ready{background:#F0FDF4}
+.disc-col.dc-done{background:#E7F6EC}
 .disc-rows{padding-top:14px}
 /* All ideas table */
 .disc-table-scroll{overflow-x:auto}
@@ -1087,7 +1089,7 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 
 /* kanban (Development + Bugs) */
 .kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-.kanban.cols-5{grid-template-columns:repeat(5,minmax(0,1fr))}
+.kanban.cols-wide{overflow-x:auto;padding-bottom:8px}
 @media(max-width:1100px){.kanban{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:600px){.kanban{grid-template-columns:1fr}}
 .kcol{background:#EEF0F4;border-radius:12px;padding:10px;min-height:120px}
@@ -5080,17 +5082,20 @@ const DISC_STAGES = [
   {key:"later", label:"Later"},
   {key:"wont",  label:"Won't do"},
 ];
-// Product Roadmap (discovery) spaces walk an idea through research before it is built;
-// every new idea lands in Backlog. Other idea boards (product dev / social) keep Now / Next / Later.
+// Product Roadmap (discovery) spaces walk an idea from Backlog through primary research, a
+// Now / Next / Later call, implementation research, to Ready to implement and Done.
+// Every new idea lands in Backlog. Other idea boards (product dev / social) keep Now / Next / Later.
 const PIPE_STAGES = [
   {key:"backlog", label:"Backlog"},
   {key:"primary", label:"Primary research / discussion"},
+  {key:"now",     label:"Now"},
+  {key:"next",    label:"Next"},
+  {key:"later",   label:"Later"},
   {key:"implres", label:"Implementation research / discussion"},
   {key:"ready",   label:"Ready to implement"},
   {key:"wont",    label:"Won't do"},
+  {key:"done",    label:"Done"},
 ];
-// where Now / Next / Later ideas land when a Product Roadmap switches to the research pipeline
-const PIPE_FROM_OLD = { now:"ready", next:"implres", later:"backlog" };
 function discStages(cs){ return cs && cs.type==="discovery" ? PIPE_STAGES : DISC_STAGES; }
 function discDefaultStage(cs){ return discStages(cs)[0].key==="backlog" ? "backlog" : "later"; }
 const DISC_STATES = ["Pending","On track","At risk","Off track"];
@@ -5161,7 +5166,6 @@ function normalizeCspaces(c){
       x.ideas.forEach(i=>{
         if(!i.id) i.id = "idea-" + Math.random().toString(36).slice(2,8);
         const _stg = discStages(x);
-        if(x.type==="discovery" && PIPE_FROM_OLD[i.stage]) i.stage = PIPE_FROM_OLD[i.stage];
         if(!_stg.some(st=>st.key===i.stage)) i.stage = discDefaultStage(x);
         if(!DISC_STATES.includes(i.state)) i.state = "Pending";
         i.status = discStatusOf(i.state);
@@ -6851,7 +6855,7 @@ function renderHeader(){
     : view==="admin"
     ? "Manage who can access this team and what each role can do."
     : view==="disc"
-    ? "Collect ideas, move them from Backlog through research to Ready to implement, and put them on a timeline."
+    ? "Collect ideas, research them, decide Now / Next / Later, then take them through to Ready to implement and Done."
     : view==="social"
     ? "Every post has a reason before it is made and a verdict after it ships. Two people, one record."
     : view==="campaign"
@@ -13327,7 +13331,9 @@ function discIdeasPane(cs){
 function discRoadmapPane(cs){
   const wrap = $("content");
   const board = document.createElement("div");
-  board.className = "kanban disc-board" + (discStages(cs).length===5 ? " cols-5" : "");
+  const _ncol = discStages(cs).length;
+  board.className = "kanban disc-board" + (_ncol > 4 ? " cols-wide" : "");
+  if(_ncol > 4) board.style.gridTemplateColumns = "repeat(" + _ncol + ", minmax(230px, 1fr))";
   ensureOrd(cs.ideas);
   discStages(cs).forEach((st, si)=>{
     const col = document.createElement("div");
