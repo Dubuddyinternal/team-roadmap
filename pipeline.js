@@ -195,6 +195,8 @@ const CSS = `<style>
 .pp .pp-score{margin-left:auto;font-family:var(--mono);font-weight:600;white-space:nowrap}
 .pp .pp-count{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);float:right}
 .pp .pp-count.over{color:var(--crit)}
+.pp .pp-studio{margin:10px 0;padding:8px 12px;border:1px solid var(--line);border-radius:var(--r-s)}
+.pp .pp-studio summary{cursor:pointer;font-size:13px;font-weight:600}
 .pp .pp-link{font-size:12px;color:var(--accent-ink)}
 .pp ul{margin:4px 0 8px 18px;padding:0;font-size:12.5px}
 </style>`;
@@ -282,12 +284,29 @@ function briefView(job, me){
     ${(b.questions||[]).length?`<div class="pp-note"><b>Claude decided these — change any you like:</b>${list(b.questions)}</div>`:""}
     ${(b.warnings||[]).length?`<div class="pp-note crit"><b>Warnings</b>${list(b.warnings)}</div>`:""}
     <div class="pp-row">${md.brief_md?`<a class="pp-link" href="${esc(md.brief_md)}" target="_blank">Full brief</a>`:""}${watchLink(job)}</div>
+    ${studioBlock(job, me)}
     <div class="fld" style="margin-top:12px"><label>What should change? (only for "Request changes")</label>
       <textarea data-pp-notes placeholder="e.g. Shorter hook, drop the second B-roll, bigger captions…"></textarea></div>
     <div class="pp-row"><button class="btn pri" data-pp="approve_edit" ${me.canApprove?"":"disabled"}>✅ Approve — render it</button>
       <button class="btn" data-pp="request_changes" ${me.canRun?"":"disabled"}>✏️ Request changes</button>
       ${me.canRun?`<button class="btn sm" data-pp="cancel" style="margin-left:auto">Cancel job</button>`:""}</div>
     ${me.canApprove?"":`<p class="hint" style="margin:8px 0 0">Only an owner or admin can approve.</p>`}`;
+}
+
+// 🎬 HyperFrames Studio on the Mac: one Terminal line downloads this edit, opens both versions in Studio,
+// and sends the edited folder back when you press Enter. Approve then renders exactly what Studio shows.
+function studioBlock(job, me){
+  if(!me.canRun) return "";
+  const m = S.mounted || {}, cmd = m.studioCmd && m.studioCmd.job === job.card_id ? m.studioCmd.cmd : "";
+  return `<details class="pp-studio" ${cmd?"open":""}><summary>🎬 See it moving &amp; fix it in HyperFrames Studio (Mac)</summary>
+    ${job.studio?`<div class="pp-note"><b>✅ Your Studio edits arrived</b> (${esc(new Date(job.studio.at).toLocaleString())}). Approve renders them exactly as you left them.</div>`:""}
+    <p class="hint" style="margin:6px 0">Plays the real motion, captions and sound — no render. Cut, trim, move or retime anything, then send it back.</p>
+    ${cmd?`<ol class="hint" style="margin:4px 0 8px;padding-left:18px"><li>Open <b>Terminal</b> on your Mac, paste this line and press Return:</li></ol>${copyBlock(cmd)}
+      <ol class="hint" start="2" style="margin:8px 0 0;padding-left:18px"><li>Studio opens the YouTube and Instagram versions in your browser. Edit them there (Studio saves by itself).</li>
+      <li>Back in Terminal press <b>Return</b> — your changes are sent here. Then press <b>Approve — render it</b>.</li></ol>
+      <p class="hint" style="margin:6px 0 0">The line works for 12 hours.</p>`
+    :`<div class="pp-row"><button class="btn" data-pp-studio>🎬 Open in Studio</button></div>`}
+  </details>`;
 }
 
 function finalView(job, c, me){
@@ -372,6 +391,17 @@ function wire(){
     b.disabled = true; const label = b.textContent; b.textContent = "…";
     try{ await action(c.id, act, Object.assign({ card_info: cardInfo(c, h) }, extra||{})); m.draft = null; if(act==="start") m.raw = null; render(); poll(); }
     catch(e){ b.disabled = false; b.textContent = label; toast(e.message); }
+  };
+
+  const sb = q("[data-pp-studio]");
+  if(sb) sb.onclick = async () => {
+    sb.disabled = true; sb.textContent = "…";
+    try{
+      const { data } = await call("/api/pipeline/action", { team: team(), job: c.id, action: "studio" });
+      const qq = v => "'" + String(v).replace(/'/g, "'\\''") + "'";
+      m.studioCmd = { job: c.id, cmd: `bash <(curl -fsSL ${location.origin}/studio/dubuddy-studio.sh) ${qq(c.id)} ${qq(data.get)} ${qq(data.put)} ${qq(data.done)}` };
+      render();
+    }catch(e){ sb.disabled = false; sb.textContent = "🎬 Open in Studio"; toast(e.message); }
   };
 
   host.querySelectorAll("[data-copy]").forEach(b=>b.onclick=async()=>{
@@ -466,7 +496,7 @@ window.PIPE = {
     // a raw video already uploaded in the card's Raw video box is the one Claude edits
     const cr = helpers && helpers.raw && helpers.raw();
     const raw = keep.raw || (cr && cr.kind === "file" && cr.file ? { file: cr.file, name: cr.name, size: cr.size } : undefined);
-    S.mounted = { host, card, h: helpers||{}, raw, draft: keep.draft, rsig: keep.rsig };
+    S.mounted = { host, card, h: helpers||{}, raw, draft: keep.draft, rsig: keep.rsig, studioCmd: keep.studioCmd };
     ensurePolling(); render(); poll();     // fresh status as soon as a card opens
   },
 };

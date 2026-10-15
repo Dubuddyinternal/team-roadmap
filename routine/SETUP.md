@@ -28,7 +28,8 @@ Run `supabase/stage17a_edit_jobs.sql` (SQL Editor → paste → Run), or let Cla
 2. claude.ai → Code → **Environments → New**:
    - Setup script: the contents of `routine/setup.sh`
    - Network: *Custom*. Allow `*.r2.cloudflarestorage.com`, `tools.dubuddy.in`, `api.elevenlabs.io`, `api.pexels.com`,
-     `*.pexels.com`, `api.openverse.org`, `*.wikimedia.org`, `dubuddy.in`, plus the package registries
+     `*.pexels.com`, `api.openverse.org`, `*.wikimedia.org`, `dubuddy.in`, `www.dubuddy.in`,
+     `cdn.jsdelivr.net` (GSAP: without it every animation is frozen), `hyperframes.heygen.com`, plus the package registries
    - Secret: `ELEVENLABS_API_KEY`
 3. claude.ai → Code → **Routines → New** → repo `team-roadmap`, that environment, prompt = `routine/ROUTINE_PROMPT.md`.
    Trigger: **API**. Copy the **routine ID** and the **token**.
@@ -56,3 +57,9 @@ Redeploy. The card panel then shows **☁️ Cloud routine**.
 `local/data/pipeline-config.json`: `{"mode":"fake"}` (dummy files, costs nothing) or `{"mode":"local"}`
 (Claude Code on this Mac: run `claude` once and /login, then `node local/runner.mjs --doctor`). Restart the local server
 after changing it. `node local/test-sigv4.mjs` checks the R2 link signing.
+
+## 🎬 HyperFrames Studio (on a Mac)
+When a brief is ready, the card's **Open in Studio** gives a one-line Terminal command (`studio/dubuddy-studio.sh`, valid 12 h).
+It downloads the edit folder, opens the YouTube and Instagram versions in Studio, and on Return sends the edited folder back.
+**Approve** then renders exactly what Studio showed. Needs Node.js on the Mac.
+

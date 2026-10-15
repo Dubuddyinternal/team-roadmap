@@ -34,7 +34,25 @@ skill expects footage: `<work>/raw/raw.<ext>`, which makes the edit folder ED = 
 
 Run storyboard → analyse (prep.py) → plan.json → cut/build both variants → brief.py. **Stop before rendering**: the
 owner approves the storyboard and brief on the website after you finish. Never run finish.sh in this step.
+- First check the animation library loads: `curl -fsI https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js`. If it
+  fails, run `python3 "$PIPE" fail "The environment can't reach cdn.jsdelivr.net — add it to the network allowlist"` and stop:
+  without it every animation renders frozen.
+- **This is the full Dubuddy edit, not a light one.** Nobody approves the storyboard mid-run, so the storyboard you put in
+  `plan_result.json` *is* stage 0's storyboard: decide it yourself, then build it. Follow every stage-0 rule in SKILL.md:
+  - Read `references/animation-lessons.md` and `references/scenes/README.md` before planning.
+  - Turn every moment that can be demonstrated into a **custom vector animation** (illustrated scene with depth, alive,
+    eased): write a `scenes.py` in ED that imports `references/scenes/common.py` and adapts the recipes in
+    `references/scenes/` (hook, calendar, study room, notebook, road, ending cards). Their hard-coded `/Users/adi/...`
+    paths are examples: point them at ED. Aim for 3–5 such scenes in a 30–45 s clip, never text pills alone.
+  - Any app, site or PYQ list shown on a phone uses `common.iphone()` — never a plain rounded rectangle.
+  - The CTA is the default `common.comment_cards(...)` + `common.comment_cta(...)` from the "comment" line (set
+    `cta.comment=false`), with the Subscribe/Follow card at the end. Run `sfx_lib.py` first.
+  - Do the Animation QA (6–10 snapshots per scene) and fix what it finds before brief.py.
+  - In `storyboard`, describe each scene concretely (what's drawn, how it moves), so the owner can judge it on the card.
 - Use the card's title, hook and keywords to guide the hook and emphasis, but never invent dialogue.
+- If ED holds a `STUDIO_EDITS` file, the owner edited `hf*/index.html` in HyperFrames Studio. Keep those edits: change
+  only what the notes ask for, directly in `hf_yt/index.html` and `hf_ig/index.html` where you can. Use
+  `build.py --force` only if the notes need a rebuild from plan.json, and then say in `warnings` which Studio edits were redone.
 - If `notes` is set, it's the owner's change request for this clip. If ED already holds a plan.json (a re-plan), apply
   the notes to it, re-run only the build steps that need it, then brief.py.
 - Fix every error brief.py reports, then write `OUT/plan_result.json`:
@@ -47,7 +65,9 @@ owner approves the storyboard and brief on the website after you finish. Never r
 
 ## Step: `render` (skill stage 3)
 
-The owner approved the brief. Run `bash ~/.agents/skills/dubuddy-short/scripts/finish.sh "<ED>"`. Renders are long: run it
+The owner approved the brief. Render the edit folder **as it is**: never run cut.py or build.py here (if ED holds a
+`STUDIO_EDITS` file, the owner's Studio edits are in `hf*/index.html` and must reach the video unchanged).
+Run `bash ~/.agents/skills/dubuddy-short/scripts/finish.sh "<ED>"`. Renders are long: run it
 in the background and check on it, and keep reporting progress (for example "rendering YouTube 40%"). finish.sh
 resumes after an interruption, so if it stops, run it again.
 - Read `qc_yt/sheet.jpg` and `qc_ig/sheet.jpg`. If something is clearly broken, fix it and re-render that version once.
