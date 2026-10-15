@@ -32,8 +32,12 @@
    reload (the end time is saved), can be ended early only after a
    warning, and today's minutes are logged.
 
-   "All to be done" lists everything still open, hat by hat: today's fixed
-   things not yet ticked, then in-progress and to-do cards (overdue first).
+   "All to be done" is the backlog: everything still open, hat by hat. From
+   there I drag a card (or use its "📅 Day…" button) onto Today, Tomorrow or
+   one of the next days. Today's hats then show only what I planned for today
+   (or earlier and not finished), what is due today / overdue, and what is in
+   progress; Upcoming shows planned cards on their day. The planned day is
+   mine only (TODO.plan, by card key) and never changes the card's board.
 
    "Upcoming" lists tomorrow / the next 5 / the next 7 days: fixed things on
    each day plus every to-do and assigned card due that day, and overdue ones.
@@ -46,7 +50,7 @@
    Uses index.html globals (SUPA, TEAM, DEV, BUGS, CSPACES, OKRS, DATA,
    CONTENT, view, renderAll, openDialog, openChoice, toast, fmtD, todayISO …).
    ===================================================================== */
-var TODO = { team: null, loaded: false, loading: false, local: false, items: [], over: {}, fixed: [], fixedDone: {}, learn: {}, deep: null, deepLog: {}, reasonLog: {}, settings: null, feeds: [], feedItems: {}, feedSeen: {}, feedAt: 0, sleepLog: {} };
+var TODO = { team: null, loaded: false, loading: false, local: false, items: [], over: {}, plan: {}, fixed: [], fixedDone: {}, learn: {}, deep: null, deepLog: {}, reasonLog: {}, settings: null, feeds: [], feedItems: {}, feedSeen: {}, feedAt: 0, sleepLog: {} };
 // the two full-screen timers in Personal
 var TODO_TIMERS = {
   deep: { icon: "🧘", title: "Deep thinking", line: "Talk to yourself. Walk. Don't do anything.",
@@ -92,6 +96,7 @@ function todoApply(d) {
     if (!TODO_HATS.some(function (h) { return h.key === x.hat; })) x.hat = "personal";
   });
   TODO.over = d.over && typeof d.over === "object" ? d.over : {};
+  TODO.plan = d.plan && typeof d.plan === "object" ? d.plan : {};   // { cardKey: "YYYY-MM-DD" } — the day I picked for it
   TODO.fixed = Array.isArray(d.fixed) ? d.fixed.filter(function (f) { return f && f.title; }) : [];
   TODO.fixed.forEach(function (f) {
     if (!f.id) f.id = todoId();
@@ -143,7 +148,10 @@ function todoSave() {
   // tick marks older than ~13 months are dropped so the row stays small (the Summary looks back 6 months)
   var cut = todoAddDays(todoToday(), -400);
   Object.keys(TODO.fixedDone).forEach(function (k) { if (k.split("|")[1] < cut) delete TODO.fixedDone[k]; });
-  var data = { items: TODO.items, over: TODO.over, fixed: TODO.fixed, fixedDone: TODO.fixedDone, learn: TODO.learn, deep: TODO.deep, deepLog: TODO.deepLog, reasonLog: TODO.reasonLog, settings: TODO.settings,
+  // planned days of cards that are gone or done for a month are dropped
+  var live = {}; TODO.items.forEach(function (x) { live["own:" + x.id] = 1; }); try { todoAssigned().forEach(function (e) { live[e.key] = 1; }); } catch (_) { }
+  Object.keys(TODO.plan).forEach(function (k) { if (!live[k] && TODO.plan[k] < todoAddDays(todoToday(), -30)) delete TODO.plan[k]; });
+  var data = { items: TODO.items, over: TODO.over, plan: TODO.plan, fixed: TODO.fixed, fixedDone: TODO.fixedDone, learn: TODO.learn, deep: TODO.deep, deepLog: TODO.deepLog, reasonLog: TODO.reasonLog, settings: TODO.settings,
     feeds: TODO.feeds, feedItems: TODO.feedItems, feedSeen: TODO.feedSeen, feedAt: TODO.feedAt, sleepLog: TODO.sleepLog };
   clearTimeout(_todoSaveT);
   _todoSaveT = setTimeout(async function () {
@@ -398,7 +406,7 @@ function todoMove(key, toCol, toHat) {
 }
 
 /* ---------- my own (variable) to-dos ---------- */
-function todoEdit(item, col, hat) {
+function todoEdit(item, col, hat, planDay) {
   openDialog(item ? "Edit to-do" : "New to-do — " + todoHat(hat).label, item ? { title: item.title, note: item.note, duedate: item.due } : {}, function (v) {
     if (!v.title) return;
     if (item) { item.title = v.title; item.note = v.note || ""; if (v.duedate) item.due = v.duedate; else delete item.due; }
@@ -407,6 +415,7 @@ function todoEdit(item, col, hat) {
       if (v.duedate) n.due = v.duedate;
       if (n.col === "done") n.doneAt = todayISO();
       TODO.items.push(n);
+      if (planDay) TODO.plan["own:" + n.id] = planDay;
     }
     todoSave();
   }, { duedate: true, noOwner: true, noteLabel: "Note (optional)" });
@@ -414,11 +423,34 @@ function todoEdit(item, col, hat) {
 function todoDelete(item) {
   if (!confirm("Delete the to-do “" + item.title + "”?")) return;
   TODO.items.splice(TODO.items.indexOf(item), 1);
+  delete TODO.plan["own:" + item.id];
   todoSave();
 }
 function todoMoveHat(item) {
   openChoice("Move “" + item.title + "” to which hat?", TODO_HATS.filter(function (h) { return h.key !== item.hat; }).map(function (h) { return { label: h.icon + " " + h.label, value: h.key }; }),
     function (k) { item.hat = k; todoSave(); });
+}
+
+/* ---------- planning: which day I'll do a card ---------- */
+function todoDayLabel(iso) {
+  var t = todoToday();
+  return iso === t ? "Today" : iso === todoAddDays(t, 1) ? "Tomorrow" : todoDayName(iso) + " " + fmtD(iso);
+}
+function todoPlanSet(key, iso) {
+  if (iso) TODO.plan[key] = iso; else delete TODO.plan[key];
+  todoSave();
+}
+function todoPlanPick(key, title) {
+  var t = todoToday(), opts = [];
+  for (var i = 0; i < 7; i++) { var iso = todoAddDays(t, i); opts.push({ label: "📅 " + todoDayLabel(iso), value: iso }); }
+  if (TODO.plan[key]) opts.push({ label: "✕ No day (back to All to be done)", value: "" });
+  openChoice("Which day for “" + title + "”?", opts, function (v) { todoPlanSet(key, v); });
+}
+// on Today's board? in progress, planned for today or earlier, or due today / overdue
+function todoForToday(key, col, due) {
+  if (col !== "todo") return true;
+  var t = todoToday(), p = TODO.plan[key];
+  return (!!p && p <= t) || (!!due && due <= t);
 }
 
 /* ---------- counts (Summary tab, sidebar) ---------- */
@@ -455,6 +487,11 @@ function todoCard(entry, own) {
     meta.appendChild(s);
   }
   var dc = todoDueChip(own ? own.due : entry.due, col); if (dc) meta.appendChild(dc);
+  var pl = TODO.plan[key];
+  if (pl && col !== "done") {
+    var tdy = todoToday();
+    meta.appendChild(todoEl("span", "td-plan" + (pl <= tdy ? " now" : ""), "🗓 " + (pl < tdy ? "Today (from " + fmtD(pl) + ")" : todoDayLabel(pl))));
+  }
   card.appendChild(meta);
   var acts = todoEl("div", "td-acts");
   if (own) {
@@ -465,6 +502,11 @@ function todoCard(entry, own) {
   } else {
     var op = todoEl("button", "td-act", "Open ↗"); op.onclick = function (ev) { ev.stopPropagation(); entry.open(); };
     acts.appendChild(op);
+  }
+  if (col !== "done") {
+    var pd = todoEl("button", "td-act", "📅 Day…"); pd.title = "Pick the day you'll do it";
+    pd.onclick = function (ev) { ev.stopPropagation(); todoPlanPick(key, own ? own.title : entry.title || "(untitled)"); };
+    acts.appendChild(pd);
   }
   // quick move without dragging (phones)
   TODO_COLS.forEach(function (c) {
@@ -485,7 +527,7 @@ function todoHatMenu(anchor, hat) {
     openDiscPick(anchor, { current: null, options: [
       { key: "fixed", label: "⚙️ Set up fixed things" },
       { key: "add", label: "＋ Add a to-do" },
-    ], onPick: function (k) { if (k === "fixed") todoFixedSetup(hat); else if (k === "add") todoEdit(null, "todo", hat); } });
+    ], onPick: function (k) { if (k === "fixed") todoFixedSetup(hat); else if (k === "add") todoEdit(null, "todo", hat, todoMode === "today" ? todoToday() : null); } });
   } else todoFixedSetup(hat);
 }
 function todoHatBlock(H, assigned) {
@@ -493,8 +535,12 @@ function todoHatBlock(H, assigned) {
   var sec = todoEl("section", "td-hat th-" + H.key);
   var head = todoEl("div", "td-hat-h");
   head.appendChild(todoEl("h2", "", H.icon + " " + H.label));
-  var mine = TODO.items.filter(function (x) { return x.hat === H.key; });
-  var theirs = assigned.filter(function (e) { return e.hat === H.key; });
+  // To do shows only what's planned / due for today; the rest waits in All to be done
+  var allMine = TODO.items.filter(function (x) { return x.hat === H.key; });
+  var allTheirs = assigned.filter(function (e) { return e.hat === H.key; });
+  var mine = allMine.filter(function (x) { return todoForToday("own:" + x.id, x.col, x.due); });
+  var theirs = allTheirs.filter(function (e) { return todoForToday(e.key, e.col, e.due); });
+  var waiting = allMine.length + allTheirs.length - mine.length - theirs.length;
   var open = mine.concat(theirs).filter(function (x) { return x.col !== "done"; }).length;
   head.appendChild(todoEl("span", "td-hat-n", open + " open"));
   var more = todoEl("button", "td-more", "⋯"); more.title = "Set up fixed things · add a to-do";
@@ -540,8 +586,13 @@ function todoHatBlock(H, assigned) {
       m.slice().sort(byDue).forEach(function (x) { col.appendChild(todoCard(null, x)); });
       th.slice().sort(byDue).forEach(function (e) { col.appendChild(todoCard(e)); });
       var add = todoEl("button", "addline k-add", "＋ Add to-do");
-      add.onclick = function () { todoEdit(null, c.key, H.key); };
+      add.onclick = function () { todoEdit(null, c.key, H.key, today); };
       col.appendChild(add);
+      if (c.key === "todo" && waiting) {
+        var wb = todoEl("button", "td-fx-hint", "＋ Pick from " + waiting + " in All to be done");
+        wb.onclick = function () { todoMode = "all"; renderAll(); };
+        col.appendChild(wb);
+      }
     }
     board.appendChild(col);
   });
@@ -553,12 +604,30 @@ function todoHatBlock(H, assigned) {
 function todoAllOpen(assigned) {
   var wrap = todoEl("div", "td-up");
   var today = todoToday(), any = false;
-  // in progress before to do, then by due date (no date last)
-  var rank = function (x) { return (x.col === "progress" ? "0" : "1") + String(x.due || "9999"); };
+  // the days to drop cards on
+  var strip = todoEl("div", "td-plan-strip");
+  strip.appendChild(todoEl("span", "td-lbl", "Drag onto a day"));
+  var openKeys = TODO.items.filter(function (x) { return x.col !== "done"; }).map(function (x) { return "own:" + x.id; })
+    .concat(assigned.filter(function (e) { return e.col !== "done"; }).map(function (e) { return e.key; }));
+  var slot = function (iso, label) {
+    var b = todoEl("div", "td-dayslot" + (iso === "" ? " none" : ""));
+    var n = openKeys.filter(function (k) { var p = TODO.plan[k]; return iso === today ? p && p <= today : p === iso; }).length;
+    b.appendChild(todoEl("b", "", label));
+    if (iso) b.appendChild(todoEl("span", "", n ? n + " planned" : "—"));
+    b.addEventListener("dragover", function (ev) { ev.preventDefault(); ev.dataTransfer.dropEffect = "move"; b.classList.add("kover"); });
+    b.addEventListener("dragleave", function () { b.classList.remove("kover"); });
+    b.addEventListener("drop", function (ev) { ev.preventDefault(); b.classList.remove("kover"); var k = ""; try { k = ev.dataTransfer.getData("text/plain"); } catch (_) { } if (k) todoPlanSet(k, iso); });
+    strip.appendChild(b);
+  };
+  for (var i = 0; i < 7; i++) { var iso = todoAddDays(today, i); slot(iso, todoDayLabel(iso)); }
+  slot("", "✕ No day");
+  wrap.appendChild(strip);
+  // in progress first, then not yet planned (to pick from), then planned by day; due date breaks ties
+  var rank = function (k, x) { var p = TODO.plan[k]; return (x.col === "progress" ? "0" : p ? "2" + p : "1") + String(x.due || "9999"); };
   TODO_HATS.forEach(function (H) {
     var fx = todoFixedFor(H.key, today).filter(function (f) { return !todoFixedIsDone(f, today); });
-    var cards = TODO.items.filter(function (x) { return x.hat === H.key && x.col !== "done"; }).map(function (x) { return { r: rank(x), el: function () { return todoCard(null, x); } }; })
-      .concat(assigned.filter(function (e) { return e.hat === H.key && e.col !== "done"; }).map(function (e) { return { r: rank(e), el: function () { return todoCard(e); } }; }))
+    var cards = TODO.items.filter(function (x) { return x.hat === H.key && x.col !== "done"; }).map(function (x) { return { r: rank("own:" + x.id, x), el: function () { return todoCard(null, x); } }; })
+      .concat(assigned.filter(function (e) { return e.hat === H.key && e.col !== "done"; }).map(function (e) { return { r: rank(e.key, e), el: function () { return todoCard(e); } }; }))
       .sort(function (a, b) { return a.r.localeCompare(b.r); });
     if (!fx.length && !cards.length) return;
     any = true;
@@ -590,8 +659,11 @@ function todoUpcoming(assigned) {
   var today = todoToday();
   var start = todoAddDays(today, 1), end = todoAddDays(today, todoRange);
   var due = [];
-  TODO.items.forEach(function (x) { if (x.due && x.col !== "done") due.push({ due: x.due, title: x.title, hat: x.hat, src: "✏️ My to-do", open: function () { todoEdit(x); } }); });
-  assigned.forEach(function (e) { if (e.due && e.col !== "done") due.push({ due: e.due, title: e.title, hat: e.hat, src: e.icon + " " + e.src + " · " + e.where, open: e.open }); });
+  // a card shows on the day I planned it (from today on), otherwise on its due date
+  var dayOf = function (k, d) { var p = TODO.plan[k]; return p && p >= today ? p : d; };
+  var tag = function (k, src) { var p = TODO.plan[k]; return p && p >= today ? src + " · 🗓 planned" : src; };
+  TODO.items.forEach(function (x) { var k = "own:" + x.id, d = dayOf(k, x.due); if (d && x.col !== "done") due.push({ due: d, title: x.title, hat: x.hat, src: tag(k, "✏️ My to-do"), open: function () { todoEdit(x); } }); });
+  assigned.forEach(function (e) { var d = dayOf(e.key, e.due); if (d && e.col !== "done") due.push({ due: d, title: e.title, hat: e.hat, src: tag(e.key, e.icon + " " + e.src + " · " + e.where), open: e.open }); });
   var row = function (d, sub) {
     var r = todoEl("button", "td-uprow");
     r.appendChild(todoEl("span", "td-uphat", todoHat(d.hat).icon));
