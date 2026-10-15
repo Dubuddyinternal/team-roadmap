@@ -23,6 +23,11 @@
    out, can't be ticked, moved or added to). Past days collect in a log
    with a streak count.
 
+   Personal · Deep thinking: "Start 2 hours" covers the whole app with a
+   countdown (talk to yourself, walk, don't do anything). It survives a
+   reload (the end time is saved), can be ended early only after a
+   warning, and today's minutes are logged.
+
    "Upcoming" lists tomorrow / the next 5 / the next 7 days: fixed things on
    each day plus every to-do and assigned card due that day, and overdue ones.
 
@@ -34,7 +39,8 @@
    Uses index.html globals (SUPA, TEAM, DEV, BUGS, CSPACES, OKRS, DATA,
    CONTENT, view, renderAll, openDialog, openChoice, toast, fmtD, todayISO …).
    ===================================================================== */
-var TODO = { team: null, loaded: false, loading: false, local: false, items: [], over: {}, fixed: [], fixedDone: {}, learn: {} };
+var TODO = { team: null, loaded: false, loading: false, local: false, items: [], over: {}, fixed: [], fixedDone: {}, learn: {}, deep: null, deepLog: {} };
+var TODO_DEEP_MS = 2 * 60 * 60 * 1000;   // a deep-thinking block lasts 2 hours
 var todoLearnEdit = false;     // editing today's learning after it was saved
 var todoLearnLog = false;      // the past-learnings list is open
 var TODO_COLS = [
@@ -80,6 +86,15 @@ function todoApply(d) {
   });
   TODO.fixedDone = d.fixedDone && typeof d.fixedDone === "object" ? d.fixedDone : {};
   TODO.learn = d.learn && typeof d.learn === "object" ? d.learn : {};   // { "YYYY-MM-DD": "what I learned" }, kept forever
+  TODO.deepLog = d.deepLog && typeof d.deepLog === "object" ? d.deepLog : {};   // { "YYYY-MM-DD": minutes }
+  TODO.deep = d.deep && d.deep.end > Date.now() ? d.deep : (d.deep ? todoDeepLog(d.deep, TODO.deepLog) : null);   // { start, end } ms while a block runs
+}
+// a finished block that was never closed (page was shut): count it, then clear it
+function todoDeepLog(deep, log) {
+  if (!deep || !log || deep.logged) return null;
+  var day = new Date(deep.start), k = day.getFullYear() + "-" + String(day.getMonth() + 1).padStart(2, "0") + "-" + String(day.getDate()).padStart(2, "0");
+  log[k] = (log[k] || 0) + Math.round((Math.min(deep.end, Date.now()) - deep.start) / 60000);
+  return null;
 }
 async function todoLoad() {
   if (TODO.loading) return;
@@ -97,13 +112,14 @@ async function todoLoad() {
   todoApply(d);
   TODO.local = local; TODO.team = TEAM; TODO.loaded = true; TODO.loading = false;
   renderAll();   // the board and the sidebar count
+  if (TODO.deep) todoDeepShow();   // a deep-thinking block is still running: back behind the curtain
 }
 var _todoSaveT = null;
 function todoSave() {
   // tick marks older than 60 days are dropped so the row stays small
   var cut = todoAddDays(todoToday(), -60);
   Object.keys(TODO.fixedDone).forEach(function (k) { if (k.split("|")[1] < cut) delete TODO.fixedDone[k]; });
-  var data = { items: TODO.items, over: TODO.over, fixed: TODO.fixed, fixedDone: TODO.fixedDone, learn: TODO.learn };
+  var data = { items: TODO.items, over: TODO.over, fixed: TODO.fixed, fixedDone: TODO.fixedDone, learn: TODO.learn, deep: TODO.deep, deepLog: TODO.deepLog };
   clearTimeout(_todoSaveT);
   _todoSaveT = setTimeout(async function () {
     if (!TODO.local && SUPA) {
@@ -615,6 +631,80 @@ function todoLearnBox() {
   return box;
 }
 
+/* ---------- Personal · 2-hour deep thinking (the whole app freezes while it runs) ---------- */
+function todoDeepToday() { return TODO.deepLog[todoToday()] || 0; }
+function todoFmtClock(ms) {
+  var s = Math.max(0, Math.ceil(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+  return h + ":" + String(m).padStart(2, "0") + ":" + String(x).padStart(2, "0");
+}
+function todoDeepBox() {
+  var box = todoEl("section", "td-deepcard");
+  var tx = todoEl("div", "td-deep-tx");
+  tx.appendChild(todoEl("h2", "", "🧘 Deep thinking · 2 hours"));
+  var mins = todoDeepToday();
+  tx.appendChild(todoEl("div", "td-deep-sub", "Talk to yourself. Walk. Don't do anything. Everything here freezes until the 2 hours are up."
+    + (mins ? "  ✅ Today: " + (mins >= 60 ? Math.floor(mins / 60) + " h " : "") + (mins % 60 ? mins % 60 + " min" : "") : "")));
+  var go = todoEl("button", "btn save td-deep-go", "▶ Start 2 hours");
+  go.onclick = todoDeepStart;
+  box.append(tx, go);
+  return box;
+}
+function todoDeepStart() {
+  if (TODO.deep) { todoDeepShow(); return; }
+  if (!confirm("Start 2 hours of deep thinking?\n\nThe app will be covered by a timer until it's over. Put the laptop away — talk to yourself, walk, don't do anything.")) return;
+  var now = Date.now();
+  TODO.deep = { start: now, end: now + TODO_DEEP_MS };
+  todoSave();
+  todoDeepShow();
+}
+var _todoDeepT = null;
+function todoDeepFinish(early) {
+  var d = TODO.deep; if (!d) return;
+  var day = new Date(d.start), k = day.getFullYear() + "-" + String(day.getMonth() + 1).padStart(2, "0") + "-" + String(day.getDate()).padStart(2, "0");
+  TODO.deepLog[k] = (TODO.deepLog[k] || 0) + Math.round((Math.min(d.end, Date.now()) - d.start) / 60000);
+  TODO.deep = null;
+  clearInterval(_todoDeepT); _todoDeepT = null;
+  todoSave();
+  var ov = document.getElementById("td-deep");
+  if (!ov) return;
+  if (early) { ov.remove(); document.body.style.overflow = ""; return; }
+  ov.querySelector(".td-deep-clock").textContent = "Done";
+  ov.querySelector(".td-deep-line").textContent = "Welcome back. What came to you? Write it down before it's gone.";
+  ov.querySelector(".td-deep-bar i").style.width = "100%";
+  var end = ov.querySelector(".td-deep-end"); end.textContent = "Back to work"; end.className = "td-deep-back";
+  end.onclick = function () { ov.remove(); document.body.style.overflow = ""; };
+}
+function todoDeepShow() {
+  var d = TODO.deep; if (!d) return;
+  if (Date.now() >= d.end) { todoDeepFinish(false); return; }
+  var ov = document.getElementById("td-deep");
+  if (!ov) {
+    ov = todoEl("div", "td-deep"); ov.id = "td-deep"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-modal", "true");
+    ov.innerHTML = "<div class=\"td-deep-in\"><div class=\"td-deep-ic\">🧘</div><div class=\"td-deep-h\">Deep thinking</div>"
+      + "<div class=\"td-deep-line\">Talk to yourself. Walk. Don't do anything.</div><div class=\"td-deep-clock\"></div>"
+      + "<div class=\"td-deep-bar\"><i></i></div><div class=\"td-deep-until\"></div><button class=\"td-deep-end\">End early</button></div>";
+    ov.querySelector(".td-deep-end").onclick = function () {
+      if (confirm("End deep thinking early?\n\nThe whole point is to stay away. Only stop if something truly can't wait.")) todoDeepFinish(true);
+    };
+    // nothing behind the curtain can be reached by keyboard either
+    ov.addEventListener("keydown", function (e) { if (e.key === "Tab") { e.preventDefault(); ov.querySelector("button").focus(); } }, true);
+    document.body.appendChild(ov);
+    document.body.style.overflow = "hidden";
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  }
+  var until = new Date(d.end);
+  ov.querySelector(".td-deep-until").textContent = "Until " + until.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  var tick = function () {
+    if (!TODO.deep) return;
+    var left = TODO.deep.end - Date.now();
+    if (left <= 0) { todoDeepFinish(false); return; }
+    ov.querySelector(".td-deep-clock").textContent = todoFmtClock(left);
+    ov.querySelector(".td-deep-bar i").style.width = (100 - left / (TODO.deep.end - TODO.deep.start) * 100).toFixed(2) + "%";
+  };
+  tick();
+  clearInterval(_todoDeepT); _todoDeepT = setInterval(tick, 1000);
+}
+
 /* ---------- the page ---------- */
 function renderContentTodo() {
   var wrap = $("content");
@@ -628,6 +718,7 @@ function renderContentTodo() {
   if (TODO.local) wrap.appendChild(todoEl("div", "td-note", "Couldn't reach the database — your to-dos are saved in this browser for now."));
   // daily new learning first; until today's is written, the rest is frozen
   wrap.appendChild(todoLearnBox());
+  wrap.appendChild(todoDeepBox());   // always usable, even before today's learning is written
   if (!todoLearnedToday()) {
     var fz = todoEl("div", "td-frozen"); fz.setAttribute("aria-disabled", "true"); fz.inert = true;
     var lock = todoEl("div", "td-frozen-msg", "🔒 Frozen until you write today's new learning above");
@@ -647,6 +738,17 @@ function renderContentTodo() {
   if (todoMode === "upcoming") { wrap.appendChild(todoUpcoming(assigned)); return; }
   TODO_HATS.forEach(function (H) { wrap.appendChild(todoHatBlock(H, assigned)); });
 }
+/* after sign-in, load once even if the sidebar isn't on screen (e.g. reloaded on OKRs),
+   so a running deep-thinking block comes back straight away */
+(function () {
+  var tries = 0, t = setInterval(function () {
+    tries++;
+    try {
+      if (typeof TEAM !== "undefined" && TEAM && todoCan()) { clearInterval(t); if (!TODO.loaded && !TODO.loading) todoLoad(); }
+      else if (tries > 60) clearInterval(t);   // not signed in / no permission within ~30 s
+    } catch (_) { if (tries > 60) clearInterval(t); }
+  }, 500);
+})();
 /* the sidebar entry, at the top of Spaces */
 function todoSideItem() {
   var b = todoEl("button", "ws-item td-side" + (view === "todo" ? " active" : ""));
