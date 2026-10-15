@@ -4,7 +4,9 @@
 # It runs as root on Ubuntu 24.04 when a session starts; the result is cached if it finishes in about 5 minutes.
 # Expected repo layout:  routine/  skills/dubuddy-short/  video-use/  sfx/  (the SFX library the skill uses)
 set -euo pipefail
-REPO="$(pwd)"
+# the repo is the folder above this script (the environment's launcher runs it from wherever the repo was cloned)
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+echo "repo: $REPO"
 
 apt-get update -qq
 apt-get install -y -qq ffmpeg fonts-noto fonts-noto-color-emoji fonts-noto-core >/dev/null
