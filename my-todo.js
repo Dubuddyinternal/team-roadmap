@@ -40,6 +40,14 @@
    always land in All to be done first and reach Today only once I plan them; Upcoming shows planned cards on their day. The planned day is
    mine only (TODO.plan, by card key) and never changes the card's board.
 
+   Today by the clock: each hat block can get a time (🕘 in its header,
+   e.g. 09:00–11:00), and any single thing — a card, a fixed thing like
+   Running, or the New learning / Deep thinking / Reasoning boxes — can get
+   its own time by dragging it onto a gap between blocks (or its 🕘 button).
+   A timed thing leaves its block and sits on the day at its time; ✕ puts it
+   back. Times are kept (TODO.times) so Running at 18:00 stays there every
+   day. If New learning is timed for later, nothing freezes until that time.
+
    "Upcoming" lists tomorrow / the next 5 / the next 7 days: fixed things on
    each day plus every to-do and assigned card due that day, and overdue ones.
 
@@ -51,7 +59,7 @@
    Uses index.html globals (SUPA, TEAM, DEV, BUGS, CSPACES, OKRS, DATA,
    CONTENT, view, renderAll, openDialog, openChoice, toast, fmtD, todayISO …).
    ===================================================================== */
-var TODO = { team: null, loaded: false, loading: false, local: false, items: [], over: {}, plan: {}, fixed: [], fixedDone: {}, learn: {}, deep: null, deepLog: {}, reasonLog: {}, settings: null, feeds: [], feedItems: {}, feedSeen: {}, feedAt: 0, sleepLog: {} };
+var TODO = { team: null, loaded: false, loading: false, local: false, items: [], over: {}, plan: {}, times: { hats: {}, at: {} }, fixed: [], fixedDone: {}, learn: {}, deep: null, deepLog: {}, reasonLog: {}, settings: null, feeds: [], feedItems: {}, feedSeen: {}, feedAt: 0, sleepLog: {} };
 // the two full-screen timers in Personal
 var TODO_TIMERS = {
   deep: { icon: "🧘", title: "Deep thinking", line: "Talk to yourself. Walk. Don't do anything.",
@@ -97,7 +105,10 @@ function todoApply(d) {
     if (!TODO_HATS.some(function (h) { return h.key === x.hat; })) x.hat = "personal";
   });
   TODO.over = d.over && typeof d.over === "object" ? d.over : {};
-  TODO.plan = d.plan && typeof d.plan === "object" ? d.plan : {};   // { cardKey: "YYYY-MM-DD" } — the day I picked for it
+  TODO.plan = d.plan && typeof d.plan === "object" ? d.plan : {};
+  // { hats: { hatKey: { from:"HH:MM", to:"HH:MM" } }, at: { thingKey: "HH:MM" } } — Today by the clock
+  var tm = d.times && typeof d.times === "object" ? d.times : {};
+  TODO.times = { hats: tm.hats && typeof tm.hats === "object" ? tm.hats : {}, at: tm.at && typeof tm.at === "object" ? tm.at : {} };   // { cardKey: "YYYY-MM-DD" } — the day I picked for it
   TODO.fixed = Array.isArray(d.fixed) ? d.fixed.filter(function (f) { return f && f.title; }) : [];
   TODO.fixed.forEach(function (f) {
     if (!f.id) f.id = todoId();
@@ -152,7 +163,7 @@ function todoSave() {
   // planned days of cards that are gone or done for a month are dropped
   var live = {}; TODO.items.forEach(function (x) { live["own:" + x.id] = 1; }); try { todoAssigned().forEach(function (e) { live[e.key] = 1; }); } catch (_) { }
   Object.keys(TODO.plan).forEach(function (k) { if (!live[k] && TODO.plan[k] < todoAddDays(todoToday(), -30)) delete TODO.plan[k]; });
-  var data = { items: TODO.items, over: TODO.over, plan: TODO.plan, fixed: TODO.fixed, fixedDone: TODO.fixedDone, learn: TODO.learn, deep: TODO.deep, deepLog: TODO.deepLog, reasonLog: TODO.reasonLog, settings: TODO.settings,
+  var data = { items: TODO.items, over: TODO.over, plan: TODO.plan, times: TODO.times, fixed: TODO.fixed, fixedDone: TODO.fixedDone, learn: TODO.learn, deep: TODO.deep, deepLog: TODO.deepLog, reasonLog: TODO.reasonLog, settings: TODO.settings,
     feeds: TODO.feeds, feedItems: TODO.feedItems, feedSeen: TODO.feedSeen, feedAt: TODO.feedAt, sleepLog: TODO.sleepLog };
   clearTimeout(_todoSaveT);
   _todoSaveT = setTimeout(async function () {
@@ -462,6 +473,108 @@ function todoForToday(key, col, due, assigned) {
   return (!!p && p <= t) || (!!due && due <= t);
 }
 
+/* ---------- Today by the clock ---------- */
+function todoHM2m(hm) { var p = String(hm || "").split(":"); return Number(p[0]) * 60 + Number(p[1] || 0); }
+function todoM2HM(m) { m = Math.max(0, Math.min(23 * 60 + 59, Math.round(m))); return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0"); }
+function todoTimeSet(key, hm) { if (hm) TODO.times.at[key] = hm; else delete TODO.times.at[key]; todoSave(); }
+// a small window asking for one time ("" = no time)
+function todoTimeAsk(title, cur, cb) {
+  var inp;
+  todoDialog(title, function (body) {
+    inp = todoEl("input"); inp.type = "time"; inp.value = cur || "";
+    body.appendChild(todoField("Time — leave empty to take the time off", inp));
+  }, function () { if (inp.value) TODO.times.at[cb] = inp.value; else delete TODO.times.at[cb]; });
+}
+function todoHatTimeAsk(H) {
+  var r = TODO.times.hats[H.key] || {}, a, b;
+  todoDialog("🕘 " + H.icon + " " + H.label + " — when do you do it?", function (body) {
+    a = todoEl("input"); a.type = "time"; a.value = r.from || "";
+    b = todoEl("input"); b.type = "time"; b.value = r.to || "";
+    body.appendChild(todoField("From", a)); body.appendChild(todoField("To", b));
+    body.appendChild(todoEl("div", "hint", "Leave both empty to take the time off. Things inside this block can still get their own time."));
+  }, function () {
+    if (!a.value && !b.value) { delete TODO.times.hats[H.key]; return; }
+    if (!a.value) return "Pick a start time.";
+    if (b.value && b.value <= a.value) return "The end has to be after the start.";
+    TODO.times.hats[H.key] = b.value ? { from: a.value, to: b.value } : { from: a.value };
+  });
+}
+// the 🕘 handle on New learning / Deep thinking / Reasoning: drag it onto the day, or click to type a time
+function todoBoxTimeBtn(k) {
+  var t = TODO.times.at["box:" + k];
+  var b = todoEl("button", "td-act td-timebtn", t ? "🕘 " + todoFmtHM(t) : "🕘 Give a time");
+  b.title = "Drag onto a gap in Today to place it there, or click to type a time";
+  b.draggable = true;
+  b.addEventListener("dragstart", function (ev) { try { ev.dataTransfer.setData("text/plain", "box:" + k); } catch (_) { } ev.dataTransfer.effectAllowed = "move"; });
+  b.onclick = function () { todoTimeAsk("🕘 When will you do it?", t, "box:" + k); };
+  return b;
+}
+// Today: timed blocks and things in clock order, gaps between them to drop onto, untimed blocks after
+function todoDayPlan(assigned, boxes) {
+  var wrap = todoEl("div", "td-dayplan");
+  var today = todoToday(), at = TODO.times.at, now = todoNowHM();
+  var slotted = {}, timed = [], untimed = [];
+  var BOX = { learn: todoLearnBox, deep: todoDeepBox, reason: todoReasonBox };
+  boxes.forEach(function (k) { timed.push({ t: at["box:" + k], key: "box:" + k, H: todoHat("personal"), el: BOX[k] }); });
+  TODO_HATS.forEach(function (H) {
+    var r = TODO.times.hats[H.key];
+    if (r && r.from) timed.push({ t: r.from, end: r.to || todoM2HM(todoHM2m(r.from) + 60), hat: H });
+    else untimed.push(H);
+    TODO.items.forEach(function (x) {
+      var k = "own:" + x.id;
+      if (x.hat === H.key && x.col !== "done" && at[k] && todoForToday(k, x.col, x.due)) { slotted[k] = 1; timed.push({ t: at[k], key: k, H: H, el: function () { return todoCard(null, x); } }); }
+    });
+    assigned.forEach(function (e) {
+      if (e.hat === H.key && e.col !== "done" && at[e.key] && todoForToday(e.key, e.col, e.due, true)) { slotted[e.key] = 1; timed.push({ t: at[e.key], key: e.key, H: H, el: function () { return todoCard(e); } }); }
+    });
+    todoFixedFor(H.key, today).forEach(function (f) {
+      var k = "fx:" + f.id;
+      if (at[k]) { slotted[k] = 1; timed.push({ t: at[k], key: k, H: H, el: function () { var c = todoFixedChip(f, today); todoFixedDrag(c, f); return c; } }); }
+    });
+  });
+  timed.sort(function (a, b) { return a.t.localeCompare(b.t) || (a.hat ? -1 : 0) - (b.hat ? -1 : 0); });
+  var endOf = function (e) { return e.end || todoM2HM(todoHM2m(e.t) + 30); };
+  var gap = function (prev, next) {
+    var t = prev ? endOf(prev) : next ? todoM2HM(todoHM2m(next.t) - 30) : "09:00";
+    if (next && t > next.t) t = next.t;
+    var g = todoEl("div", "td-gap" + (prev || next ? "" : " first"));
+    g.appendChild(todoEl("span", "", prev || next ? "Drop here · " + todoFmtHM(t) : "Drag anything here (a card, Running, New learning…) or 🕘 a block to plan your day by the clock"));
+    g.addEventListener("dragover", function (ev) { ev.preventDefault(); ev.dataTransfer.dropEffect = "move"; g.classList.add("kover"); });
+    g.addEventListener("dragleave", function () { g.classList.remove("kover"); });
+    g.addEventListener("drop", function (ev) { ev.preventDefault(); g.classList.remove("kover"); var k = ""; try { k = ev.dataTransfer.getData("text/plain"); } catch (_) { } if (k) todoTimeSet(k, t); });
+    wrap.appendChild(g);
+  };
+  var slot = function (e) {
+    var s = todoEl("div", "td-slot");
+    var side = todoEl("div", "td-slot-side");
+    var tm = todoEl("input", "td-slot-t"); tm.type = "time"; tm.value = e.t; tm.title = "Change the time";
+    tm.onchange = function () { if (tm.value) todoTimeSet(e.key, tm.value); };
+    var x = todoEl("button", "td-act", "✕"); x.title = "Take the time off — back into its block";
+    x.onclick = function () { todoTimeSet(e.key, ""); };
+    side.append(tm, todoEl("span", "td-slot-hat", e.H.icon + " " + e.H.label), x);
+    var body = todoEl("div", "td-slot-body"); body.appendChild(e.el());
+    s.append(side, body);
+    return s;
+  };
+  if (!timed.length) gap(null, null);
+  timed.forEach(function (e, i) {
+    if (i === 0) gap(null, e);
+    if (e.hat) {
+      var blk = todoHatBlock(e.hat, assigned, slotted);
+      if (now >= e.t && now < e.end) blk.classList.add("td-now");
+      wrap.appendChild(blk);
+    } else wrap.appendChild(slot(e));
+    gap(e, timed[i + 1] || null);
+  });
+  if (timed.length && untimed.length) wrap.appendChild(todoEl("div", "td-lbl td-anytime", "No time yet"));
+  untimed.forEach(function (H) { wrap.appendChild(todoHatBlock(H, assigned, slotted)); });
+  return wrap;
+}
+function todoFixedDrag(chip, f) {
+  chip.draggable = true;
+  chip.addEventListener("dragstart", function (ev) { try { ev.dataTransfer.setData("text/plain", "fx:" + f.id); } catch (_) { } ev.dataTransfer.effectAllowed = "move"; });
+}
+
 /* ---------- counts (Summary tab, sidebar) ---------- */
 function todoCounts() {
   var c = { todo: 0, progress: 0, done: 0 }, t = todoToday();
@@ -517,6 +630,12 @@ function todoCard(entry, own) {
     back.onclick = function (ev) { ev.stopPropagation(); todoPlanSet(key, ""); toast("Moved to All to be done"); };
     acts.appendChild(back);
   }
+  if (col !== "done" && todoMode === "today") {
+    var tt = TODO.times.at[key];
+    var tb = todoEl("button", "td-act", tt ? "🕘 " + todoFmtHM(tt) : "🕘 Time…"); tb.title = "Give it its own time on Today (or drag it onto a gap)";
+    tb.onclick = function (ev) { ev.stopPropagation(); todoTimeAsk("🕘 When will you do “" + (own ? own.title : entry.title) + "”?", tt, key); };
+    acts.appendChild(tb);
+  }
   if (col !== "done") {
     var pd = todoEl("button", "td-act", "📅 Day…"); pd.title = "Pick the day you'll do it";
     pd.onclick = function (ev) { ev.stopPropagation(); todoPlanPick(key, own ? own.title : entry.title || "(untitled)"); };
@@ -544,7 +663,8 @@ function todoHatMenu(anchor, hat) {
     ], onPick: function (k) { if (k === "fixed") todoFixedSetup(hat); else if (k === "add") todoEdit(null, "todo", hat, null, true); } });
   } else todoFixedSetup(hat);
 }
-function todoHatBlock(H, assigned) {
+function todoHatBlock(H, assigned, slotted) {
+  slotted = slotted || {};
   var today = todoToday();
   var sec = todoEl("section", "td-hat th-" + H.key);
   var head = todoEl("div", "td-hat-h");
@@ -552,20 +672,34 @@ function todoHatBlock(H, assigned) {
   // To do shows only what's planned / due for today; the rest waits in All to be done
   var allMine = TODO.items.filter(function (x) { return x.hat === H.key; });
   var allTheirs = assigned.filter(function (e) { return e.hat === H.key; });
-  var mine = allMine.filter(function (x) { return todoForToday("own:" + x.id, x.col, x.due); });
-  var theirs = allTheirs.filter(function (e) { return todoForToday(e.key, e.col, e.due, true); });
-  var waiting = allMine.length + allTheirs.length - mine.length - theirs.length;
+  var mine = allMine.filter(function (x) { return todoForToday("own:" + x.id, x.col, x.due) && !slotted["own:" + x.id]; });
+  var theirs = allTheirs.filter(function (e) { return todoForToday(e.key, e.col, e.due, true) && !slotted[e.key]; });
+  var waiting = allMine.filter(function (x) { return !todoForToday("own:" + x.id, x.col, x.due); }).length
+    + allTheirs.filter(function (e) { return !todoForToday(e.key, e.col, e.due, true); }).length;   // timed ones sit on the day, not waiting
   var open = mine.concat(theirs).filter(function (x) { return x.col !== "done"; }).length;
   head.appendChild(todoEl("span", "td-hat-n", open + " open"));
+  var hr = TODO.times.hats[H.key];
+  var tbtn = todoEl("button", "td-act td-timebtn" + (hr ? " on" : ""), hr ? "🕘 " + todoFmtHM(hr.from) + (hr.to ? " – " + todoFmtHM(hr.to) : "") : "🕘 Set time");
+  tbtn.title = "When do you do this block?"; tbtn.onclick = function () { todoHatTimeAsk(H); };
+  head.appendChild(tbtn);
   var more = todoEl("button", "td-more", "⋯"); more.title = "Set up fixed things · add a to-do";
   more.onclick = function (ev) { ev.stopPropagation(); todoHatMenu(more, H.key); };
   head.appendChild(more);
   sec.appendChild(head);
-  // fixed things due today
-  var fx = todoFixedFor(H.key, today);
+  // fixed things due today (ones with their own time sit on the day instead)
+  var fx = todoFixedFor(H.key, today).filter(function (f) { return !slotted["fx:" + f.id]; });
   var fxRow = todoEl("div", "td-fxrow-today");
   fxRow.appendChild(todoEl("span", "td-lbl", "Fixed today"));
-  if (fx.length) fx.forEach(function (f) { fxRow.appendChild(todoFixedChip(f, today)); });
+  if (fx.length) {
+    fx.forEach(function (f) { var c = todoFixedChip(f, today); todoFixedDrag(c, f); fxRow.appendChild(c); });
+    var ft = todoEl("button", "td-fx-hint", "🕘 Time…"); ft.title = "Give one of these its own time (or drag it onto a gap)";
+    ft.onclick = function () {
+      openChoice("Which one gets its own time?", fx.map(function (f) { return { label: f.title, value: f.id }; }), function (id) {
+        var f = fx.find(function (z) { return z.id === id; }); if (f) todoTimeAsk("🕘 When will you do “" + f.title + "”?", TODO.times.at["fx:" + id], "fx:" + id);
+      });
+    };
+    fxRow.appendChild(ft);
+  }
   else {
     var hint = todoEl("button", "td-fx-hint", TODO.fixed.some(function (f) { return f.hat === H.key; }) ? "Nothing fixed today" : "＋ Set up fixed things (⋯)");
     hint.onclick = function () { todoFixedSetup(H.key); };
@@ -892,6 +1026,7 @@ function todoLearnBox() {
   head.appendChild(logB);
   var fb = todoEl("button", "td-act", "📡 Feeds" + (TODO.feeds.length ? " · " + TODO.feeds.length : "")); fb.title = "What the agent follows for these boxes"; fb.onclick = todoFeedsPanel;
   head.appendChild(fb);
+  head.appendChild(todoBoxTimeBtn("learn"));
   head.appendChild(todoMoreBtn("Settings — boxes and how many unlock", todoLearnSettings));
   box.appendChild(head);
   if (!open) box.appendChild(todoEl("div", "td-learn-q", "🔒 Write " + (need === parts.length ? "all " + need : need + " of " + parts.length) + " for today to unlock the rest of your to-dos."));
@@ -936,7 +1071,7 @@ function todoDeepBox() {
     + (mins ? "  ✅ Today: " + todoFmtMins(mins) : "")));
   var go = todoEl("button", "btn save td-deep-go", "▶ Start " + todoFmtLen(len));
   go.onclick = function () { todoTimerStart("deep", len * 60000, todoFmtLen(len)); };
-  box.append(tx, go, todoMoreBtn("Settings — how long", todoDeepSettings));
+  box.append(tx, go, todoBoxTimeBtn("deep"), todoMoreBtn("Settings — how long", todoDeepSettings));
   return box;
 }
 function todoReasonBox() {
@@ -952,7 +1087,7 @@ function todoReasonBox() {
     b.onclick = function () { todoTimerStart("reason", m * 60000, todoFmtLen(m)); };
     bs.appendChild(b);
   });
-  box.append(tx, bs, todoMoreBtn("Settings — durations", todoReasonSettings));
+  box.append(tx, bs, todoBoxTimeBtn("reason"), todoMoreBtn("Settings — durations", todoReasonSettings));
   return box;
 }
 
@@ -1348,11 +1483,16 @@ function renderContentTodo() {
   if (TODO.local) wrap.appendChild(todoEl("div", "td-note", "Couldn't reach the database — your to-dos are saved in this browser for now."));
   var page = wrap;                   // the 🌙 Sleep row goes at the very end, outside any freeze
   wrap.appendChild(todoBookend("wake"));   // ⏰ first thing of the day
-  // daily new learning next; until today's is written, the rest is frozen
-  wrap.appendChild(todoLearnBox());
-  wrap.appendChild(todoDeepBox());   // always usable, even before today's learning is written
-  wrap.appendChild(todoReasonBox());
-  if (!todoLearnedToday()) {
+  // daily new learning next; until today's is written, the rest is frozen —
+  // unless it has a time later today: then it waits on the day and nothing freezes yet.
+  // On Today, a box with a time sits on the day at that time instead of up here.
+  var at = TODO.times.at, onDay = function (k) { return todoMode === "today" && !!at["box:" + k]; };
+  var learnLater = onDay("learn") && (todoLearnedToday() || todoNowHM() < at["box:learn"]);
+  var dayBoxes = [];
+  if (learnLater) dayBoxes.push("learn"); else wrap.appendChild(todoLearnBox());
+  if (onDay("deep")) dayBoxes.push("deep"); else wrap.appendChild(todoDeepBox());   // always usable, even before today's learning is written
+  if (onDay("reason")) dayBoxes.push("reason"); else wrap.appendChild(todoReasonBox());
+  if (!todoLearnedToday() && !learnLater) {
     var fz = todoEl("div", "td-frozen"); fz.setAttribute("aria-disabled", "true"); fz.inert = true;
     var lock = todoEl("div", "td-frozen-msg", "🔒 Frozen until you write today's learnings above");
     wrap.appendChild(lock);
@@ -1371,7 +1511,7 @@ function renderContentTodo() {
   var assigned = todoAssigned();
   if (todoMode === "all") wrap.appendChild(todoAllOpen(assigned));
   else if (todoMode === "upcoming") wrap.appendChild(todoUpcoming(assigned));
-  else TODO_HATS.forEach(function (H) { wrap.appendChild(todoHatBlock(H, assigned)); });
+  else wrap.appendChild(todoDayPlan(assigned, dayBoxes));
   page.appendChild(todoBookend("sleep"));   // 🌙 last thing of the day
 }
 /* after sign-in, load once even if the sidebar isn't on screen (e.g. reloaded on OKRs),
