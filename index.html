@@ -639,6 +639,9 @@ tr.in-mvp .an-rowhead{border-left:3px solid var(--indigo)}
 .disc-chip.stage.st-ready{background:var(--done-bg);color:var(--done);border-color:transparent}
 .disc-chip.stage.st-wont{background:#E5E7EB;color:#4B5563;border-color:transparent}
 .disc-chip.dates{cursor:default}
+.disc-chip.dates.click{cursor:pointer}
+.disc-chip.dates.missing{background:#FFF2DE;color:#9A6A1B;border-color:transparent;cursor:pointer}
+.disc-chip.dates.overdue{background:var(--blocked-bg);color:var(--blocked);border-color:transparent}
 .disc-meta{flex-wrap:wrap}
 
 .disc-col.dc-now{background:#EFF6FF}
@@ -5101,6 +5104,54 @@ const PIPE_STAGES = [
 const PIPE_FROM_OLD = { next:"now", later:"backlog" };
 function discStages(cs){ return cs && cs.type==="discovery" ? PIPE_STAGES : DISC_STAGES; }
 function discDefaultStage(cs){ return discStages(cs)[0].key==="backlog" ? "backlog" : "later"; }
+// from Implementation research on, a Product Roadmap idea needs a start and end date (its timeline slot)
+const PIPE_DATED = ["implres","ready","building"];
+function discNeedsDates(cs, stage){ return !!cs && cs.type==="discovery" && PIPE_DATED.includes(stage); }
+function discTlItem(cs, idea, make){
+  cs.tl = cs.tl || { id:"rmtl-"+cs.id, items:[], markers:[] };
+  cs.tl.items = cs.tl.items || [];
+  let it = cs.tl.items.find(t=>t.tid===idea.id);
+  if(!it && make){ it = { rid:"ri-"+Math.random().toString(36).slice(2,7), tid:idea.id }; cs.tl.items.push(it); }
+  return it || null;
+}
+function discHasDates(cs, idea){ const it = discTlItem(cs, idea, false); return !!(it && it.start && it.end); }
+// move an idea to a stage; entering Implementation research (or later) without dates asks for them
+function discSetStage(cs, idea, stage){
+  const was = idea.stage;
+  idea.stage = stage;
+  saveDisc();
+  if(stage!==was && discNeedsDates(cs, stage) && !discHasDates(cs, idea)) openIdeaDates(cs, idea);
+}
+function openIdeaDates(cs, idea){
+  const it0 = discTlItem(cs, idea, false) || {};
+  const ov = document.createElement("div");
+  ov.className = "overlay show";
+  ov.innerHTML = '<div class="dialog" role="dialog" aria-modal="true" style="max-width:420px">'
+    + '<h3>Timeline</h3><div class="dlg-body">'
+    + '<div class="hint" style="margin-bottom:12px"></div>'
+    + '<div class="field-row">'
+    + '<div class="field"><label for="idt-start">Start date</label><input id="idt-start" type="date"></div>'
+    + '<div class="field"><label for="idt-end">End date (deadline)</label><input id="idt-end" type="date"></div>'
+    + '</div><div class="hint err" style="color:var(--blocked);min-height:16px"></div></div>'
+    + '<div class="btns"><button class="btn" data-k="later">Later</button><button class="btn save" data-k="save">Save dates</button></div></div>';
+  ov.querySelector(".hint").textContent = "When will work on \u201C" + idea.title + "\u201D start and end? It shows on the card and the Timeline.";
+  const sIn = ov.querySelector("#idt-start"), eIn = ov.querySelector("#idt-end"), err = ov.querySelector(".err");
+  sIn.value = it0.start || todayISO();
+  eIn.value = it0.end || "";
+  const close = ()=>{ if(ov.parentNode) ov.parentNode.removeChild(ov); };
+  ov.querySelector('[data-k="later"]').onclick = close;
+  ov.onclick = e=>{ if(e.target===ov) close(); };
+  ov.querySelector('[data-k="save"]').onclick = ()=>{
+    const a = sIn.value, b = eIn.value;
+    if(!a || !b){ err.textContent = "Pick both a start and an end date."; return; }
+    if(b < a){ err.textContent = "The end date is before the start date."; return; }
+    const it = discTlItem(cs, idea, true);
+    it.start = a; it.end = b;
+    close(); saveDisc();
+  };
+  document.body.appendChild(ov);
+  (eIn.value ? sIn : eIn).focus();
+}
 const DISC_STATES = ["Pending","On track","At risk","Off track"];
 const DISC_THEMES = [
   {key:"revenue",  label:"🌱 Increase revenue"},
@@ -12241,7 +12292,7 @@ function discStageChip(idea, cs){
     openDiscPick(c, {
       current: idea.stage,
       options: stages.map(x=>({key:x.key, label:x.label, cls:"stage st-"+x.key})),
-      onPick: k=>{ idea.stage = k; saveDisc(); },
+      onPick: k=>{ discSetStage(cs, idea, k); },
     });
   };
   return c;
@@ -12270,6 +12321,9 @@ function openIdeaDialog(cs, idea, presetStage){
         stage: presetStage || discDefaultStage(cs), state:"Pending" };
       if(v.photos && v.photos.length) _ni.photos = v.photos;
       cs.ideas.push(_ni);
+      saveDisc();
+      if(discNeedsDates(cs, _ni.stage)) openIdeaDates(cs, _ni);
+      return;
     }
     saveDisc();
   }, {photos:true});
@@ -13366,9 +13420,18 @@ function discRoadmapPane(cs){
       meta.appendChild(discThemeChip(idea, cs));
       if(cs.type!=="social") meta.appendChild(discStateChip(idea));
       const tlIt = (cs.tl && cs.tl.items || []).find(t=>t.tid===idea.id);
+      const _dated = cs.type==="discovery";
       if(tlIt && tlIt.start && tlIt.end){
-        const d = document.createElement("span"); d.className = "disc-chip dates";
-        d.textContent = fmtD(tlIt.start) + " \u2192 " + fmtD(tlIt.end);
+        const d = document.createElement(_dated ? "button" : "span"); d.className = "disc-chip dates";
+        d.textContent = "\uD83D\uDCC5 " + fmtD(tlIt.start) + " \u2192 " + fmtD(tlIt.end);
+        if(_dated && tlIt.end < todayISO() && idea.stage!=="done" && idea.stage!=="wont"){ d.classList.add("overdue"); d.title = "Past the end date"; }
+        if(_dated && editMode){ d.classList.add("click"); d.onclick = e=>{ e.stopPropagation(); openIdeaDates(cs, idea); }; }
+        meta.appendChild(d);
+      } else if(discNeedsDates(cs, idea.stage)){
+        const d = document.createElement("button"); d.className = "disc-chip dates missing";
+        d.textContent = "\uD83D\uDCC5 Set start & end";
+        d.title = "This idea is in implementation \u2014 give it a start and end date";
+        d.onclick = e=>{ e.stopPropagation(); if(editMode) openIdeaDates(cs, idea); };
         meta.appendChild(d);
       }
       meta.appendChild(commentChip(idea, saveDisc));
@@ -13390,7 +13453,8 @@ function discRoadmapPane(cs){
         const actRow = document.createElement("div"); actRow.className = "kmove-acts";
         actRow.appendChild(discIdeaActs(cs, idea));
         card.appendChild(actRow);
-        makeCardDraggable(card, idea.id, st.key, (id, toStage, refId, after)=>{ placeByDrop(cs.ideas, idea, toStage, refId, after, x=>x.stage, (x,c)=>x.stage=c, x=>x.id); saveDisc(); });
+        makeCardDraggable(card, idea.id, st.key, (id, toStage, refId, after)=>{ const was = idea.stage; placeByDrop(cs.ideas, idea, toStage, refId, after, x=>x.stage, (x,c)=>x.stage=c, x=>x.id); saveDisc();
+          if(idea.stage!==was && discNeedsDates(cs, idea.stage) && !discHasDates(cs, idea)) openIdeaDates(cs, idea); });
       }
       col.appendChild(card);
     });
