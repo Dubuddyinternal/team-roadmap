@@ -898,6 +898,15 @@ var TODO_LEARN_DEFAULT = [
 // TODO.settings = { learnParts:[{key,icon,label,ph}], learnNeed:n (0 = never freeze), deepMin, reasonMins:[…] }
 function todoSettingsNorm(s) {
   s = s && typeof s === "object" ? s : {};
+  // my own words on the Deep thinking / Reasoning cards: { deep: { title, line }, reason: { title, line } }
+  var bt = s.boxText && typeof s.boxText === "object" ? s.boxText : {};
+  s.boxText = {};
+  ["deep", "reason"].forEach(function (k) {
+    var v = bt[k] && typeof bt[k] === "object" ? bt[k] : {}, o = {};
+    if (typeof v.title === "string" && v.title.trim()) o.title = v.title.trim().slice(0, 80);
+    if (typeof v.line === "string" && v.line.trim()) o.line = v.line.trim().slice(0, 400);
+    s.boxText[k] = o;
+  });
   var parts = Array.isArray(s.learnParts) ? s.learnParts.filter(function (p) { return p && p.key && p.label; }) : [];
   s.learnParts = parts.length ? parts.slice(0, 8) : TODO_LEARN_DEFAULT.map(function (p) { return Object.assign({}, p); });
   s.learnNeed = typeof s.learnNeed === "number" ? Math.max(0, Math.min(s.learnParts.length, Math.round(s.learnNeed))) : s.learnParts.length;
@@ -1123,13 +1132,45 @@ function todoFmtClock(ms) {
   var s = Math.max(0, Math.ceil(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
   return h + ":" + String(m).padStart(2, "0") + ":" + String(x).padStart(2, "0");
 }
+var TODO_BOX_TEXT = {
+  deep: { title: "Deep thinking", line: "Talk to yourself. Walk. Don't do anything. Everything here freezes until the time is up." },
+  reason: { title: "Reasoning time", line: "Grow your reasoning: play chess, solve maths, crack puzzles. Pick how long — everything here freezes till then." },
+};
+function todoBoxText(kind) { return Object.assign({}, TODO_BOX_TEXT[kind], TODO.settings.boxText[kind] || {}); }
+// click a card's title or line to write your own words; Enter (or clicking away) saves, Esc cancels, empty = back to the default
+function todoEditable(el, kind, field, multi) {
+  el.classList.add("td-editable"); el.title = "Click to write your own";
+  el.tabIndex = 0;
+  var open = function () {
+    var cur = todoBoxText(kind)[field];
+    var inp = todoEl(multi ? "textarea" : "input", "td-edit-in"); inp.value = cur; if (multi) inp.rows = 2;
+    var done = false, finish = function (save) {
+      if (done) return; done = true;
+      if (save) {
+        var v = inp.value.trim(), o = TODO.settings.boxText[kind];
+        if (!v || v === TODO_BOX_TEXT[kind][field]) delete o[field]; else o[field] = v;
+        todoSave();
+      } else renderAll();
+    };
+    inp.onkeydown = function (e) { if (e.key === "Enter" && (!multi || !e.shiftKey)) { e.preventDefault(); finish(true); } else if (e.key === "Escape") finish(false); };
+    inp.onblur = function () { finish(true); };
+    el.replaceWith(inp); inp.focus(); inp.select();
+  };
+  el.onclick = open;
+  el.onkeydown = function (e) { if (e.key === "Enter") { e.preventDefault(); open(); } };
+  return el;
+}
 function todoDeepBox() {
   var len = TODO.settings.deepMin, box = todoEl("section", "td-deepcard");
   var tx = todoEl("div", "td-deep-tx");
-  tx.appendChild(todoEl("h2", "", "🧘 Deep thinking · " + todoFmtLen(len)));
+  var T = todoBoxText("deep"), h = todoEl("h2", "");
+  h.append("🧘 ", todoEditable(todoEl("span", "", T.title), "deep", "title"), " · " + todoFmtLen(len));
+  tx.appendChild(h);
   var mins = TODO.deepLog[todoToday()] || 0;
-  tx.appendChild(todoEl("div", "td-deep-sub", "Talk to yourself. Walk. Don't do anything. Everything here freezes until the time is up."
-    + (mins ? "  ✅ Today: " + todoFmtMins(mins) : "")));
+  var sub = todoEl("div", "td-deep-sub");
+  sub.appendChild(todoEditable(todoEl("span", "", T.line), "deep", "line", true));
+  if (mins) sub.append("  ✅ Today: " + todoFmtMins(mins));
+  tx.appendChild(sub);
   var go = todoEl("button", "btn save td-deep-go", "▶ Start " + todoFmtLen(len));
   go.onclick = function () { todoTimerStart("deep", len * 60000, todoFmtLen(len)); };
   box.append(tx, go, todoBoxTimeBtn("deep"), todoMoreBtn("Settings — how long", todoDeepSettings));
@@ -1138,10 +1179,14 @@ function todoDeepBox() {
 function todoReasonBox() {
   var box = todoEl("section", "td-deepcard td-reasoncard");
   var tx = todoEl("div", "td-deep-tx");
-  tx.appendChild(todoEl("h2", "", "♟️ Reasoning time"));
+  var T = todoBoxText("reason"), h = todoEl("h2", "");
+  h.append("♟️ ", todoEditable(todoEl("span", "", T.title), "reason", "title"));
+  tx.appendChild(h);
   var mins = TODO.reasonLog[todoToday()] || 0;
-  tx.appendChild(todoEl("div", "td-deep-sub", "Grow your reasoning: play chess, solve maths, crack puzzles. Pick how long — everything here freezes till then."
-    + (mins ? "  ✅ Today: " + todoFmtMins(mins) : "")));
+  var sub = todoEl("div", "td-deep-sub");
+  sub.appendChild(todoEditable(todoEl("span", "", T.line), "reason", "line", true));
+  if (mins) sub.append("  ✅ Today: " + todoFmtMins(mins));
+  tx.appendChild(sub);
   var bs = todoEl("div", "td-reason-btns"), list = TODO.settings.reasonMins, mid = list[Math.floor((list.length - 1) / 2)];
   list.forEach(function (m) {
     var b = todoEl("button", "btn" + (m === mid ? " save" : ""), "▶ " + todoFmtLen(m));
@@ -1184,7 +1229,7 @@ function todoDeepFinish(early) {
 function todoDeepShow() {
   var d = TODO.deep; if (!d) return;
   if (Date.now() >= d.end) { todoDeepFinish(false); return; }
-  var T = TODO_TIMERS[d.kind] || TODO_TIMERS.deep;
+  var T = Object.assign({}, TODO_TIMERS[d.kind] || TODO_TIMERS.deep, TODO.settings.boxText[d.kind === "reason" ? "reason" : "deep"] || {});   // only words I wrote myself
   var ov = document.getElementById("td-deep");
   if (!ov) {
     ov = todoEl("div", "td-deep" + (d.kind === "reason" ? " reason" : "")); ov.id = "td-deep"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-modal", "true");

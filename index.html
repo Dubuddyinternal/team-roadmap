@@ -1336,6 +1336,10 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .td-deepcard{display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#EEF2FF,#F0FDF4);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:14px}
 .td-deep-tx{flex:1;min-width:0}.td-deep-tx h2{font-size:17px;margin:0 0 4px}
 .td-deep-sub{font-size:13px;color:var(--muted)}
+.td-editable{cursor:text;border-radius:4px;outline:1px dashed transparent;outline-offset:2px}
+.td-editable:hover,.td-editable:focus-visible{outline-color:var(--line);background:rgba(255,255,255,.5)}
+.td-editable:hover::after{content:" ✎";font-size:.8em;color:var(--muted)}
+.td-edit-in{font:inherit;width:100%;max-width:640px;padding:4px 8px;border:1px solid var(--indigo);border-radius:8px;background:var(--card);color:var(--ink);resize:vertical}
 .td-deep-go{flex:none;white-space:nowrap}
 .td-reasoncard{background:linear-gradient(135deg,#FFF7ED,#FEF3C7)}
 .td-reason-btns{display:flex;flex-wrap:wrap;gap:6px;flex:none}
