@@ -18,8 +18,10 @@
    card, bug or roadmap / content task here moves it on its board too (if I
    can edit); anything else just remembers where I put it.
 
-   Personal · New learning: every day I write what new thing I learned.
-   Until today's is written, everything else on My To-do is frozen (greyed
+   Personal · New learning: every day I write four things, each with its own
+   Save — AI & automation; what's happening in the world; top 3 posts on
+   Twitter / LinkedIn; EdTech & education.
+   Until all four are written, everything else on My To-do is frozen (greyed
    out, can't be ticked, moved or added to). Past days collect in a log
    with a streak count.
 
@@ -49,7 +51,7 @@ var TODO_TIMERS = {
     done: "Time's up. What did you solve — and where did you get stuck?" },
 };
 var TODO_DEEP_MS = 2 * 60 * 60 * 1000;   // a deep-thinking block lasts 2 hours
-var todoLearnEdit = false;     // editing today's learning after it was saved
+var todoLearnEdit = {};        // which of today's four learning boxes are being edited again
 var todoLearnLog = false;      // the past-learnings list is open
 var TODO_COLS = [
   { key: "todo", label: "To do" },
@@ -93,7 +95,7 @@ function todoApply(d) {
     if (["daily", "weekly", "monthly", "once"].indexOf(f.freq) < 0) f.freq = "daily";
   });
   TODO.fixedDone = d.fixedDone && typeof d.fixedDone === "object" ? d.fixedDone : {};
-  TODO.learn = d.learn && typeof d.learn === "object" ? d.learn : {};   // { "YYYY-MM-DD": "what I learned" }, kept forever
+  TODO.learn = d.learn && typeof d.learn === "object" ? d.learn : {};   // { "YYYY-MM-DD": { ai, world, social, edtech } } (older days: a string), kept forever
   TODO.deepLog = d.deepLog && typeof d.deepLog === "object" ? d.deepLog : {};       // deep thinking { "YYYY-MM-DD": minutes }
   TODO.reasonLog = d.reasonLog && typeof d.reasonLog === "object" ? d.reasonLog : {}; // reasoning (chess, maths, puzzles)
   // { start, end, kind:"deep"|"reason" } (ms) while a timer runs
@@ -575,12 +577,23 @@ function todoUpcoming(assigned) {
   return wrap;
 }
 
-/* ---------- Personal · daily new learning (everything else stays frozen until it's written) ---------- */
-function todoLearnedToday() { return !!(TODO.learn[todoToday()] || "").trim(); }
+/* ---------- Personal · daily new learning, in four parts (everything else stays frozen until all four are written) ---------- */
+var TODO_LEARN = [
+  { key: "ai", icon: "🤖", label: "AI & automation", ph: "What did you learn about AI or automation today? A tool, a trick, a model, a workflow…" },
+  { key: "world", icon: "🌍", label: "What's happening in the world", ph: "One thing happening in the world (or in AI) and why it matters…" },
+  { key: "social", icon: "🐦", label: "Twitter / LinkedIn — top 3 posts", ph: "1. Who — what they said / link\n2. …\n3. …" },
+  { key: "edtech", icon: "🎓", label: "EdTech & education", ph: "Something new in EdTech, education or our field — a competitor move, a study, an idea…" },
+];
+// a day's entry: { ai, world, social, edtech } (older days may be one plain string — counts as complete)
+function todoLearnDay(d) { var v = TODO.learn[d]; return v && typeof v === "object" ? v : (typeof v === "string" && v.trim() ? { _old: v } : {}); }
+function todoLearnPart(d, k) { return String(todoLearnDay(d)[k] || "").trim(); }
+function todoLearnCount(d) { var day = todoLearnDay(d); if (day._old) return TODO_LEARN.length; return TODO_LEARN.filter(function (p) { return String(day[p.key] || "").trim(); }).length; }
+function todoLearnedOn(d) { return todoLearnCount(d) === TODO_LEARN.length; }
+function todoLearnedToday() { return todoLearnedOn(todoToday()); }
 function todoLearnStreak() {
   var n = 0, d = todoToday();
-  if (!todoLearnedToday()) d = todoAddDays(d, -1);   // today not written yet: count up to yesterday
-  while ((TODO.learn[d] || "").trim()) { n++; d = todoAddDays(d, -1); }
+  if (!todoLearnedToday()) d = todoAddDays(d, -1);   // today not finished yet: count up to yesterday
+  while (todoLearnedOn(d)) { n++; d = todoAddDays(d, -1); }
   return n;
 }
 function todoLearnText(s) {   // saved learnings may carry richtext.js markdown (bold, lists)
@@ -588,54 +601,70 @@ function todoLearnText(s) {   // saved learnings may carry richtext.js markdown 
   if (window.RT && RT.html) d.innerHTML = RT.html(s); else d.textContent = s;
   return d;
 }
+function todoLearnPartBox(P, today) {
+  var val = todoLearnPart(today, P.key), editing = !val || todoLearnEdit[P.key];
+  var b = todoEl("div", "td-lp" + (val ? " ok" : ""));
+  var h = todoEl("div", "td-lp-h");
+  h.appendChild(todoEl("b", "", P.icon + " " + P.label));
+  h.appendChild(todoEl("span", "td-lp-st", val ? "✓ Saved" : "To do"));
+  b.appendChild(h);
+  if (!editing) {
+    b.appendChild(todoLearnText(val));
+    var ed = todoEl("button", "td-act", "Edit"); ed.onclick = function () { todoLearnEdit[P.key] = true; renderAll(); };
+    var r0 = todoEl("div", "td-learn-btns"); r0.appendChild(ed); b.appendChild(r0);
+    return b;
+  }
+  var ta = document.createElement("textarea");
+  ta.className = "td-learn-in"; ta.rows = 3; ta.value = val; ta.placeholder = P.ph;
+  b.appendChild(ta);
+  var row = todoEl("div", "td-learn-btns"), err = todoEl("span", "td-learn-err");
+  if (val) { var cn = todoEl("button", "btn", "Cancel"); cn.onclick = function () { delete todoLearnEdit[P.key]; renderAll(); }; row.appendChild(cn); }
+  var sv = todoEl("button", "btn save", "Save");
+  sv.onclick = function () {
+    var v = ta.value.trim();
+    if (v.length < 10) { err.textContent = "Write at least a full sentence."; ta.focus(); return; }
+    var wasDone = todoLearnedToday();
+    var day = todoLearnDay(today); if (day._old) day = {};   // today is always in four parts
+    day[P.key] = v; TODO.learn[today] = day;
+    delete todoLearnEdit[P.key];
+    todoSave();
+    if (!wasDone && todoLearnedToday()) toast("🔓 All four done — unlocked. Keep the streak going.");
+    else if (!wasDone) toast("✓ Saved — " + todoLearnCount(today) + " of " + TODO_LEARN.length + " done");
+  };
+  row.append(err, sv); b.appendChild(row);
+  return b;
+}
 function todoLearnBox() {
-  var today = todoToday(), done = todoLearnedToday();
+  var today = todoToday(), n = todoLearnCount(today), done = n === TODO_LEARN.length;
   var box = todoEl("section", "td-learn" + (done ? " ok" : ""));
   var head = todoEl("div", "td-learn-h");
   head.appendChild(todoEl("h2", "", "👤 Personal · 📚 New learning"));
+  head.appendChild(todoEl("span", "td-lp-count" + (done ? " ok" : ""), n + " / " + TODO_LEARN.length));
   var st = todoLearnStreak();
   if (st) head.appendChild(todoEl("span", "td-streak", "🔥 " + st + " day" + (st === 1 ? "" : "s") + " in a row"));
   var logB = todoEl("button", "td-act", todoLearnLog ? "Hide past learnings" : "Past learnings");
   logB.onclick = function () { todoLearnLog = !todoLearnLog; renderAll(); };
   head.appendChild(logB);
   box.appendChild(head);
-  if (done && !todoLearnEdit) {
-    var p = todoEl("div", "td-learn-saved");
-    p.appendChild(todoEl("span", "td-learn-lbl", "Today I learned"));
-    p.appendChild(todoLearnText(TODO.learn[today]));
-    var ed = todoEl("button", "td-act", "Edit"); ed.onclick = function () { todoLearnEdit = true; renderAll(); };
-    p.appendChild(ed);
-    box.appendChild(p);
-  } else {
-    box.appendChild(todoEl("div", "td-learn-q", done ? "Edit what you learned today" : "🔒 What new thing did you learn today? Write it down to unlock the rest of your to-dos."));
-    var ta = document.createElement("textarea");
-    ta.className = "td-learn-in"; ta.rows = 3; ta.value = TODO.learn[today] || "";
-    ta.placeholder = "e.g. How cohort retention is calculated in Amplitude, and why week-1 retention matters most…";
-    box.appendChild(ta);
-    var row = todoEl("div", "td-learn-btns");
-    var err = todoEl("span", "td-learn-err");
-    if (done) { var cn = todoEl("button", "btn", "Cancel"); cn.onclick = function () { todoLearnEdit = false; renderAll(); }; row.appendChild(cn); }
-    var sv = todoEl("button", "btn save", done ? "Save" : "Save & unlock");
-    sv.onclick = function () {
-      var v = ta.value.trim();
-      if (v.length < 10) { err.textContent = "Write at least a full sentence — what did you actually learn?"; ta.focus(); return; }
-      TODO.learn[today] = v; todoLearnEdit = false; todoSave();
-      if (!done) toast("🔓 Unlocked — nice. Keep the streak going.");
-    };
-    row.append(err, sv);
-    box.appendChild(row);
-    // richtext.js swaps the textarea for its editor (bold, lists); focus whichever is showing
-    setTimeout(function () { if (done) return; var ed = box.querySelector(".rt-ed"); (ed || ta).focus(); }, 60);
-  }
+  if (!done) box.appendChild(todoEl("div", "td-learn-q", "🔒 Write all four for today to unlock the rest of your to-dos."));
+  var grid = todoEl("div", "td-lp-grid");
+  TODO_LEARN.forEach(function (P) { grid.appendChild(todoLearnPartBox(P, today)); });
+  box.appendChild(grid);
   if (todoLearnLog) {
     var log = todoEl("div", "td-learn-log");
-    var days = Object.keys(TODO.learn).filter(function (d) { return d !== today && (TODO.learn[d] || "").trim(); }).sort().reverse();
+    var days = Object.keys(TODO.learn).filter(function (d) { return d !== today && todoLearnCount(d); }).sort().reverse();
     if (!days.length) log.appendChild(todoEl("div", "td-empty", "Nothing yet — your past learnings will collect here."));
     days.forEach(function (d) {
       var r = todoEl("div", "td-learn-row");
       r.appendChild(todoEl("span", "td-learn-d", todoDayName(d) + " " + fmtD(d)));
-      r.appendChild(todoLearnText(TODO.learn[d]));
-      log.appendChild(r);
+      var col = todoEl("div", "td-learn-day"), day = todoLearnDay(d);
+      if (day._old) col.appendChild(todoLearnText(day._old));
+      TODO_LEARN.forEach(function (P) {
+        if (!String(day[P.key] || "").trim()) return;
+        var it = todoEl("div", "td-learn-item"); it.appendChild(todoEl("span", "td-learn-k", P.icon + " " + P.label));
+        it.appendChild(todoLearnText(day[P.key])); col.appendChild(it);
+      });
+      r.appendChild(col); log.appendChild(r);
     });
     box.appendChild(log);
   }
@@ -758,7 +787,7 @@ function renderContentTodo() {
   wrap.appendChild(todoReasonBox());
   if (!todoLearnedToday()) {
     var fz = todoEl("div", "td-frozen"); fz.setAttribute("aria-disabled", "true"); fz.inert = true;
-    var lock = todoEl("div", "td-frozen-msg", "🔒 Frozen until you write today's new learning above");
+    var lock = todoEl("div", "td-frozen-msg", "🔒 Frozen until you write all four of today's learnings above");
     wrap.appendChild(lock);
     wrap.appendChild(fz);
     wrap = fz;
