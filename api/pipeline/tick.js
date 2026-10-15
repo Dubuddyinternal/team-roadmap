@@ -2,3 +2,6 @@
 // to post scheduled videos whose time has come.
 import { tick } from "../../lib/pipeline/core.js";
 export default tick;
+
+// starting a cloud run can take a while: give the function up to a minute (Vercel Hobby allows 60 s)
+export const maxDuration = 60;
