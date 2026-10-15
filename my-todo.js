@@ -35,8 +35,9 @@
    "All to be done" is the backlog: everything still open, hat by hat. From
    there I drag a card (or use its "📅 Day…" button) onto Today, Tomorrow or
    one of the next days. Today's hats then show only what I planned for today
-   (or earlier and not finished), what is due today / overdue, and what is in
-   progress; Upcoming shows planned cards on their day. The planned day is
+   (or earlier and not finished), plus — for my own to-dos — what is due
+   today / overdue and what is in progress. Cards assigned to me on any board
+   always land in All to be done first and reach Today only once I plan them; Upcoming shows planned cards on their day. The planned day is
    mine only (TODO.plan, by card key) and never changes the card's board.
 
    "Upcoming" lists tomorrow / the next 5 / the next 7 days: fixed things on
@@ -446,10 +447,14 @@ function todoPlanPick(key, title) {
   if (TODO.plan[key]) opts.push({ label: "✕ No day (back to All to be done)", value: "" });
   openChoice("Which day for “" + title + "”?", opts, function (v) { todoPlanSet(key, v); });
 }
-// on Today's board? in progress, planned for today or earlier, or due today / overdue
-function todoForToday(key, col, due) {
-  if (col !== "todo") return true;
+// on Today's board?
+//   my own to-dos: in progress / done, planned for today or earlier, or due today / overdue
+//   cards assigned to me on a board: only once I've planned them for today (or earlier) —
+//   until then they wait in All to be done, whatever their column or due date
+function todoForToday(key, col, due, assigned) {
   var t = todoToday(), p = TODO.plan[key];
+  if (assigned) return !!p && p <= t;
+  if (col !== "todo") return true;
   return (!!p && p <= t) || (!!due && due <= t);
 }
 
@@ -539,7 +544,7 @@ function todoHatBlock(H, assigned) {
   var allMine = TODO.items.filter(function (x) { return x.hat === H.key; });
   var allTheirs = assigned.filter(function (e) { return e.hat === H.key; });
   var mine = allMine.filter(function (x) { return todoForToday("own:" + x.id, x.col, x.due); });
-  var theirs = allTheirs.filter(function (e) { return todoForToday(e.key, e.col, e.due); });
+  var theirs = allTheirs.filter(function (e) { return todoForToday(e.key, e.col, e.due, true); });
   var waiting = allMine.length + allTheirs.length - mine.length - theirs.length;
   var open = mine.concat(theirs).filter(function (x) { return x.col !== "done"; }).length;
   head.appendChild(todoEl("span", "td-hat-n", open + " open"));
