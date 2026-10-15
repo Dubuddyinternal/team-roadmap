@@ -635,6 +635,7 @@ tr.in-mvp .an-rowhead{border-left:3px solid var(--indigo)}
 .disc-chip.stage.st-primary{background:#FEF3C7;color:#92400E;border-color:transparent}
 .disc-chip.stage.st-implres{background:var(--indigo-soft);color:var(--indigo);border-color:transparent}
 .disc-chip.stage.st-done{background:var(--done);color:#fff;border-color:transparent}
+.disc-chip.stage.st-building{background:#DBEAFE;color:#1D4ED8;border-color:transparent}
 .disc-chip.stage.st-ready{background:var(--done-bg);color:var(--done);border-color:transparent}
 .disc-chip.stage.st-wont{background:#E5E7EB;color:#4B5563;border-color:transparent}
 .disc-chip.dates{cursor:default}
@@ -645,6 +646,7 @@ tr.in-mvp .an-rowhead{border-left:3px solid var(--indigo)}
 .disc-col.dc-primary{background:#FFFBEB}
 .disc-col.dc-implres{background:#F5F7FE}
 .disc-col.dc-ready{background:#F0FDF4}
+.disc-col.dc-building{background:#EFF6FF}
 .disc-col.dc-done{background:#E7F6EC}
 .disc-rows{padding-top:14px}
 /* All ideas table */
@@ -5083,7 +5085,7 @@ const DISC_STAGES = [
   {key:"wont",  label:"Won't do"},
 ];
 // Product Roadmap (discovery) spaces walk an idea from Backlog through primary research, a
-// Now / Next / Later call, implementation research, to Ready to implement and Done.
+// Now / Next / Later call, implementation research, Ready to implement, engineering, and Done.
 // Every new idea lands in Backlog. Other idea boards (product dev / social) keep Now / Next / Later.
 const PIPE_STAGES = [
   {key:"backlog", label:"Backlog"},
@@ -5093,6 +5095,7 @@ const PIPE_STAGES = [
   {key:"later",   label:"Later"},
   {key:"implres", label:"Implementation research / discussion"},
   {key:"ready",   label:"Ready to implement"},
+  {key:"building",label:"Under implementation by engineering"},
   {key:"wont",    label:"Won't do"},
   {key:"done",    label:"Done"},
 ];
@@ -6855,7 +6858,7 @@ function renderHeader(){
     : view==="admin"
     ? "Manage who can access this team and what each role can do."
     : view==="disc"
-    ? "Collect ideas, research them, decide Now / Next / Later, then take them through to Ready to implement and Done."
+    ? "Collect ideas, research them, decide Now / Next / Later, then take them through to Ready to implement, engineering and Done."
     : view==="social"
     ? "Every post has a reason before it is made and a verdict after it ships. Two people, one record."
     : view==="campaign"

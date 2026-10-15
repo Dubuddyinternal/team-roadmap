@@ -10,7 +10,7 @@
      * Status sync — moving a linked idea on the roadmap changes what the
        student (or a team member who pitched it) sees:
          Backlog / Later → In review · Primary research / Next / Implementation
-         research → Planned · Now / Ready to implement → In progress · Done → Completed ·
+         research → Planned · Now / Ready to implement / Under implementation → In progress · Done → Completed ·
          Won't do → Not planned · "✅ Shipped" → Completed
        and emails them when it changes (if we have their email); a teammate
        also gets a 🔔 in their bell. Everyone gets a thank-you email right
@@ -88,7 +88,7 @@ function sidIsTarget(cs) { return typeof pitchTarget === "function" && pitchTarg
 function sidStatusOf(idea) {
   if (idea.shipped) return "done";
   return ({ backlog: "review", primary: "planned", now: "progress", next: "planned", later: "review",
-           implres: "planned", ready: "progress", done: "done", wont: "declined" })[idea.stage] || "review";
+           implres: "planned", ready: "progress", building: "progress", done: "done", wont: "declined" })[idea.stage] || "review";
 }
 function sidLinked(idea) { return !!(idea && (idea.student || (idea.pitch && idea.pitch.id && !idea.pitch.anonymous))); }
 
