@@ -1,5 +1,6 @@
 Paste this as the routine's prompt on claude.ai (Routines → New → API trigger). The routine's repo is the
-Dubuddy pipeline repo, which holds this `routine/` folder, the dubuddy-short skill and video-use.
+team-roadmap repo (the website's own repo), which holds this `routine/` folder and, at its root, `skills/dubuddy-short/`,
+`video-use/` and `sfx/`. `.vercelignore` keeps those out of the published website.
 
 ---
 
