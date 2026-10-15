@@ -407,7 +407,7 @@ function todoMove(key, toCol, toHat) {
 }
 
 /* ---------- my own (variable) to-dos ---------- */
-function todoEdit(item, col, hat, planDay) {
+function todoEdit(item, col, hat, planDay, toAll) {
   openDialog(item ? "Edit to-do" : "New to-do — " + todoHat(hat).label, item ? { title: item.title, note: item.note, duedate: item.due } : {}, function (v) {
     if (!v.title) return;
     if (item) { item.title = v.title; item.note = v.note || ""; if (v.duedate) item.due = v.duedate; else delete item.due; }
@@ -417,6 +417,7 @@ function todoEdit(item, col, hat, planDay) {
       if (n.col === "done") n.doneAt = todayISO();
       TODO.items.push(n);
       if (planDay) TODO.plan["own:" + n.id] = planDay;
+      if (toAll && todoMode !== "all") toast("Added to All to be done — drag it onto a day from there");
     }
     todoSave();
   }, { duedate: true, noOwner: true, noteLabel: "Note (optional)" });
@@ -532,7 +533,7 @@ function todoHatMenu(anchor, hat) {
     openDiscPick(anchor, { current: null, options: [
       { key: "fixed", label: "⚙️ Set up fixed things" },
       { key: "add", label: "＋ Add a to-do" },
-    ], onPick: function (k) { if (k === "fixed") todoFixedSetup(hat); else if (k === "add") todoEdit(null, "todo", hat, todoMode === "today" ? todoToday() : null); } });
+    ], onPick: function (k) { if (k === "fixed") todoFixedSetup(hat); else if (k === "add") todoEdit(null, "todo", hat, null, true); } });
   } else todoFixedSetup(hat);
 }
 function todoHatBlock(H, assigned) {
@@ -639,6 +640,9 @@ function todoAllOpen(assigned) {
     var hd = todoEl("div", "td-all-h");
     hd.appendChild(todoEl("h3", "", H.icon + " " + H.label));
     hd.appendChild(todoEl("span", "td-hat-n", (fx.length + cards.length) + " to do"));
+    var more = todoEl("button", "td-more", "⋯"); more.title = "Set up fixed things · add a to-do";
+    more.onclick = function (ev) { ev.stopPropagation(); todoHatMenu(more, H.key); };
+    hd.appendChild(more);
     sec.appendChild(hd);
     if (fx.length) {
       var fr = todoEl("div", "td-upfx");
