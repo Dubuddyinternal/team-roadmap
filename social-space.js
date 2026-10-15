@@ -2605,7 +2605,7 @@ function openCard(id,showGate){
       <button class="btn sm" id="xClose">Close</button></div>
 
     ${reviewing&&useClaude?`<div id="pipePanel"></div>
-    <details class="dr-more"><summary>Card details — idea, pre-production, post-production</summary>`:""}
+    <details class="dr-more"><summary>Card details — idea, draft copy, shoot, post-production</summary>`:""}
     <div class="dr-cols"><div class="dr-col">
     <div class="fld"><label for="c-idea">Idea</label>
       <input id="c-idea" value="${esc(c.idea)}" placeholder="What is this video, in one line?"></div>
