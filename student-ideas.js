@@ -9,7 +9,8 @@
          Reject   → hidden, with an optional reason the student sees.
      * Status sync — moving a linked idea on the roadmap changes what the
        student (or a team member who pitched it) sees:
-         Later → In review · Next → Planned · Now → In progress ·
+         Backlog → In review · Primary / Implementation research → Planned ·
+         Ready to implement → In progress ·
          Won't do → Not planned · "✅ Shipped" → Completed
        and emails them when it changes (if we have their email); a teammate
        also gets a 🔔 in their bell. Everyone gets a thank-you email right
@@ -86,7 +87,8 @@ function sidIsTarget(cs) { return typeof pitchTarget === "function" && pitchTarg
 /* what students / the pitcher see, from where the idea sits on the roadmap */
 function sidStatusOf(idea) {
   if (idea.shipped) return "done";
-  return ({ now: "progress", next: "planned", later: "review", wont: "declined" })[idea.stage] || "review";
+  return ({ ready: "progress", implres: "planned", primary: "planned", backlog: "review",
+           now: "progress", next: "planned", later: "review", wont: "declined" })[idea.stage] || "review";
 }
 function sidLinked(idea) { return !!(idea && (idea.student || (idea.pitch && idea.pitch.id && !idea.pitch.anonymous))); }
 
@@ -216,7 +218,7 @@ function sidCard(cs, x, mode) {
 async function sidApprove(cs, x) {
   var idea = { id: "idea-" + Math.random().toString(36).slice(2, 9), title: "🎓 " + x.title,
                note: (x.details ? x.details + "\n\n" : "") + "🎓 Student idea · " + (x.name || "no name") + " · " + (SID_CATS[x.category] || x.category),
-               stage: "later", state: "Pending", student: { id: x.id, votes: x.votes || 0, hasEmail: !!x.email }, syncedStatus: "review" };
+               stage: "backlog", state: "Pending", student: { id: x.id, votes: x.votes || 0, hasEmail: !!x.email }, syncedStatus: "review" };
   if (typeof discStatusOf === "function") idea.status = discStatusOf(idea.state);
   var r = await SUPA.rpc("student_idea_set", { p_id: x.id, p_action: "approve", p_space: cs.id, p_ref: idea.id });
   if (r.error) { toast("Couldn't approve: " + r.error.message); return; }

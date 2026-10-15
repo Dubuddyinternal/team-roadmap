@@ -131,7 +131,7 @@ async function pitchImport() {
       var who = p.by_name ? "🙋 Pitched by " + p.by_name : "🤫 Pitched anonymously";
       var idea = { id: "idea-" + Math.random().toString(36).slice(2, 9), title: "💡 " + title,
                    note: who + " · from Social Media → Ideation\n\n" + text,
-                   stage: "later", state: "Pending", syncedStatus: "review",
+                   stage: "backlog", state: "Pending", syncedStatus: "review",
                    pitch: { id: p.id, anonymous: !p.by_name, by: p.by_name || null, at: p.created_at } };
       if (typeof discStatusOf === "function") idea.status = discStatusOf(idea.state);
       target.ideas.push(idea);
