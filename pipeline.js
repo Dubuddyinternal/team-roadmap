@@ -208,15 +208,14 @@ const CSS = `<style>
 /* ------------------------------------------------------------ panel */
 // what Claude uses from the card, and whether it's there
 function readiness(c){
-  const k = (c.pre.keywords||[]).find(x=>x.rank==="primary") || (c.pre.keywords||[])[0];
-  return [["Title", !!c.pre.title], ["Description", !!c.pre.desc], ["Hashtags", !!c.pre.hashtags], ["Primary keyword", !!(k && k.kw)]];
+  return [["Title", !!c.pre.title], ["Description", !!c.pre.desc], ["Hashtags", !!c.pre.hashtags]];
 }
 const mmss = s => s ? Math.floor(s/60) + ":" + String(Math.round(s%60)).padStart(2,"0") : "";
 function startView(c, canRun, m){
   const ready = readiness(c), missing = ready.filter(x=>!x[1]).map(x=>x[0].toLowerCase());
   const r = m.raw;
   return `<p class="hint" style="margin:0 0 10px">Give Claude the raw clip. It plans the edit with the <b>dubuddy-short</b> skill using this card's
-      title, description, hook and keywords, then waits for a check. Nothing renders or posts without an owner's click.</p>
+      title, description and hook, then waits for a check. Nothing renders or posts without an owner's click.</p>
     <div class="pp-ready">${ready.map(([l,ok])=>`<span class="gchip ${ok?"ok":"no"}">${ok?"✓":"✗"} ${l}</span>`).join("")}</div>
     ${missing.length?`<p class="hint" style="margin:6px 0 12px">Claude can start without the ${esc(missing.join(", "))}, but the hook and SEO get weaker — fill ${missing.length>1?"them":"it"} in on the left first if you can.</p>`:`<div style="height:10px"></div>`}
     <div class="fld" style="margin-bottom:10px"><label>Raw video</label>

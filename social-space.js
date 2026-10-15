@@ -658,9 +658,9 @@ function gEdited(c){   // an edited video (Claude's or your own) + a thumbnail w
 function gAssets(c){
   const j=window.PIPE&&PIPE.job(c.id), byClaude=!!(j&&j.media&&(j.media.yt||j.media.ig));   // Claude's render counts as the edited file
   return !!((c.post?.reel||byClaude) && c.post?.postUrl && (!plats(c).includes("yt") || c.vtype!=="long" || c.post?.thumb)); }
-// Ideas → To shoot is free · leaving To shoot needs the research AND the title, description and hashtags ·
-// leaving Editing needs the edited video · leaving Your check needs the copy · going Live needs the link
-function gateFor(f){ return f==="draft"?"prep":f==="inprogress"?"edited":f==="inreview"?"copy":f==="approved"?"live":null; }
+// Ideas → To shoot → Editing are free (the research block is off for now) · leaving Editing needs the edited video ·
+// leaving Your check needs the copy · going Live needs the link
+function gateFor(f){ return f==="inprogress"?"edited":f==="inreview"?"copy":f==="approved"?"live":null; }
 function prepMissing(c){ const p=c.pre||{}, k=p.keywords||[], prim=k.find(x=>x.rank==="primary")||k[0], out=[];
   if(!(gResearch(p)||c.override)){
     if(!p.source) out.push("idea source"); if(!p.tool) out.push("research tool");
@@ -2028,7 +2028,6 @@ function renderIdeation(){
 let DRAG=null;
 function gateChips(c){ const r=gResearch(c.pre)||!!c.override, e=gEdited(c), cp=gCopy(c.pre);
   return `<div class="gates">
-    <span class="gchip ${r?"ok":"no"}">${r?"✓":"×"} research${c.override&&!gResearch(c.pre)?" (ovr)":""}</span>
     <span class="gchip ${e?"ok":""}">${e?"✓":"·"} edited</span>
     <span class="gchip ${cp?"ok":"no"}">${cp?"✓":"×"} copy</span></div>`; }
 
@@ -2047,7 +2046,7 @@ function renderProcess(){
           ${lp?`<span class="badge good">${kfmt(lp.views)} views</span>`:""}
           ${window.PIPE?PIPE.badge(c.id):""}</div>
         ${gateChips(c)}
-        ${s.id==="todo"&&!gatePass(c,"research")?`<div class="hint" style="margin-top:7px;color:var(--crit);font-size:11px">Fill the research block to move it on</div>`:""}</div>`; }).join("")||`<div class="dashed" style="margin:0">${ro?"empty":"drop here"}</div>`}
+</div>`; }).join("")||`<div class="dashed" style="margin:0">${ro?"empty":"drop here"}</div>`}
       </div>`;}).join("");
 
   $("#pane-process").innerHTML=`
@@ -2055,8 +2054,8 @@ function renderProcess(){
       <span class="ic" style="color:var(--accent);border-color:var(--accent)">FLOW</span>
       <p><b>Ideas → To shoot → Editing → Your check → Scheduled → Live.</b> Accepting an idea books the next free posting slot.
       Claude moves cards through Editing and Your check by itself; you approve the edit, then post now or at the slot.
-      A card moves from <b>Ideas</b> to <b>To shoot</b> freely, leaves <b>To shoot</b> only with its research done and title,
-      description and hashtags filled in, leaves <b>Editing</b> only with an edited video, and leaves <b>Your check</b> only with the copy.</p></div>
+      A card moves through <b>Ideas</b> and <b>To shoot</b> freely, leaves <b>Editing</b> only with an edited video,
+      and leaves <b>Your check</b> only with the title, description and hashtags.</p></div>
     <div class="sec"><div class="sec-h"><h3>Content Process</h3>
       <span class="hint">${BC.length} card${BC.length===1?"":"s"} · ${ro?"click a card to open it":"drag cards between columns, or click one to open it"}</span>
       ${ro?"":`<button class="btn pri" id="newCard" style="margin-left:auto">+ New card</button>`}</div>
@@ -2642,44 +2641,19 @@ function openCard(id,showGate){
       <div class="fld"><label for="c-sched">Goes live on</label><input id="c-sched" type="date" value="${c.scheduled||""}"></div>
       <div class="fld"><label for="c-time">at</label><input id="c-time" type="time" value="${esc(c.time||slotPlan(c.platform).time)}"></div></div>
 
-    <div class="block" data-gate="pre" style="border-color:${rOk&&cOk?"color-mix(in srgb,var(--good) 40%,var(--line))":"color-mix(in srgb,var(--crit) 35%,var(--line))"}">
-      <div class="block-h"><h4>Pre-production</h4>
-        ${missing.length?`<span class="pre-miss">Missing: ${esc(missing.join(", "))}</span>`:`<span class="badge good">✓ ready</span>`}</div>
+    <div class="block">
+      <div class="block-h"><h4>Draft copy</h4>
+        <span class="hint">${window.PIPE?"Claude polishes this at the final check":"Title, description and hashtags"}</span></div>
       ${srcIdea?`<p class="hint" style="margin:-3px 0 11px;padding:8px 10px;background:var(--surface-2);border-radius:var(--r-s)">
         Copied from the idea when it was accepted. Edit freely here — the original idea is left untouched.
         <button class="btn sm" id="repull" style="margin-left:6px" data-w="1">Re-pull from idea</button></p>`:""}
-
-      <div class="pre-step">
-        <div class="pre-h"><span class="pre-n ${rOk?"ok":""}">${rOk?"✓":"1"}</span><b>Research</b>
-          ${!isNew&&window.PIPE?`<button class="btn sm ${kwList.some(k=>k.kw)?"":"pri"}" data-research data-w="1" ${rBusy?"disabled":""}>${rBusy?"Asking vidIQ…":kwList.some(k=>k.kw)?"🔎 Refresh with vidIQ":"🔎 Fill with vidIQ"}</button>`:""}</div>
-        ${rBusy?`<p class="hint pre-note"><span class="rs-spin"></span>vidIQ is researching this idea — keywords, volumes and titles land in the table below by themselves.</p>`
-          :rFail?`<p class="hint pre-note" style="color:var(--crit)">vidIQ research didn't work: ${esc(rjob.error||"")}</p>`
-          :rData?`<p class="hint pre-note">Filled by vidIQ on ${esc(dmy((rData.at||"").slice(0,10)))}${rData.why?" — "+esc(rData.why):""}. Edit anything.</p>`:""}
-        <div class="fld" style="margin-bottom:10px">${kwEditor(kwList,"c-")}</div>
-        <details class="srcd" ${c.pre.source&&c.pre.tool?"":"open"}><summary>Source: <b>${esc(regLabel("source",c.pre.source)||"not set")}</b> · Tool: <b>${esc(regLabel("tool",c.pre.tool)||"not set")}</b> <span class="srcd-ch">change</span></summary>
-          <div class="grid2" style="margin-top:8px">
-            <div class="fld ${c.pre.source?"":"bad"}"><label for="r-source">Idea source</label>
-              ${regSelect("source","r-source",c.pre.source,"e.g. college WhatsApp group")}</div>
-            <div class="fld ${c.pre.tool?"":"bad"}"><label for="r-tool">Research tool</label>
-              ${regSelect("tool","r-tool",c.pre.tool,"e.g. Semrush, TubeBuddy")}</div></div></details>
-        <div class="fld ${c.pre.why?"":"bad"}" style="margin:10px 0 0"><label for="r-why">Why this idea</label>
-          <textarea id="r-why" placeholder="One line: why students will watch this now.">${esc(c.pre.why)}</textarea></div>
-      </div>
-
-      <div class="pre-step">
-        <div class="pre-h"><span class="pre-n ${cOk?"ok":""}">${cOk?"✓":"2"}</span><b>Draft copy</b>
-          <span class="hint">${window.PIPE?"Claude polishes this at the final check":"Title, description and hashtags"}</span></div>
-        <div class="fld ${c.pre.title?"":"bad"}"><label for="r-title">Title</label>
-          <input id="r-title" value="${esc(c.pre.title)}">
-          ${rData&&(rData.titles||[]).length?`<div class="ttl-ideas"><span class="hint">vidIQ ideas:</span>
-            ${rData.titles.map(t=>`<button class="ttl-chip ${t.title===c.pre.title?"on":""}" data-rs-title="${esc(t.title)}" data-w="1">${esc(t.title)}${t.score!=null?` <b>${Math.round(t.score)}</b>`:""}</button>`).join("")}</div>`:""}</div>
-        <div class="fld ${c.pre.desc?"":"bad"}"><label for="r-desc">Description</label>
-          <textarea id="r-desc">${esc(c.pre.desc)}</textarea></div>
-        <div class="fld ${c.pre.hashtags?"":"bad"}" style="margin-bottom:0"><label for="r-hashtags">Hashtags</label>
-          <input id="r-hashtags" value="${esc(c.pre.hashtags)}" placeholder="#cuet #du"></div>
-      </div>
-      ${c.override?`<p class="hint" style="margin:12px 0 0;padding:9px;background:var(--crit-soft);border-radius:var(--r-s);color:var(--crit)">
-        <b>Research gate overridden</b> by ${esc(c.override.by)} on ${dmy(c.override.on)} — ${esc(c.override.reason)}</p>`:""}</div>
+      <div class="fld"><label for="r-title">Title</label>
+        <input id="r-title" value="${esc(c.pre.title)}"></div>
+      <div class="fld"><label for="r-desc">Description</label>
+        <textarea id="r-desc">${esc(c.pre.desc)}</textarea></div>
+      <div class="fld" style="margin-bottom:0"><label for="r-hashtags">Hashtags</label>
+        <input id="r-hashtags" value="${esc(c.pre.hashtags)}" placeholder="#cuet #du"></div>
+    </div>
 
     ${F.video?`<div class="block">
       <div class="block-h"><h4>Shoot</h4>
@@ -2783,8 +2757,7 @@ function openCard(id,showGate){
       c.vtype=readReg("vtype","c-vtype",c.vtype)||"short";
       if(both(c) && c.vtype==="reel") c.vtype="short";   // one vertical video for both
       c.scheduled=$("#c-sched").value||null; c.time=$("#c-time").value||null;
-      c.pre.source=readReg("source","r-source"); c.pre.tool=readReg("tool","r-tool"); c.pre.keywords=readKw("c-");
-      c.pre.why=$("#r-why").value.trim(); c.pre.title=$("#r-title").value.trim();
+      c.pre.title=$("#r-title").value.trim();   // research fields are off the card for now: what's stored stays
       c.pre.desc=$("#r-desc").value.trim(); c.pre.hashtags=$("#r-hashtags").value.trim();
       $("#drawer").querySelectorAll("[data-plink]").forEach(e=>{ c.post.links[e.dataset.plink]=e.value.trim(); });
       c.post.postUrl=c.post.links[c.platform]||Object.values(c.post.links).find(Boolean)||"";
