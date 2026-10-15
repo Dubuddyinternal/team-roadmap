@@ -23,14 +23,14 @@ api/pipeline/callback ◀──(pipe.py)── Claude Code routine (cloud comput
 Run `supabase/stage17a_edit_jobs.sql` (SQL Editor → paste → Run), or let Claude apply it.
 
 ## 3. The routine on claude.ai
-1. A **private GitHub repo** `dubuddy-pipeline` holding: this `routine/` folder, `skills/dubuddy-short/` (the skill),
+1. The routine runs from this repo, **team-roadmap**. At its root it needs, next to `routine/`: `skills/dubuddy-short/` (the skill),
    `video-use/`, and `sfx/` (the SFX library). Claude can prepare it.
 2. claude.ai → Code → **Environments → New**:
    - Setup script: the contents of `routine/setup.sh`
    - Network: *Custom*. Allow `*.r2.cloudflarestorage.com`, `tools.dubuddy.in`, `api.elevenlabs.io`, `api.pexels.com`,
      `*.pexels.com`, `api.openverse.org`, `*.wikimedia.org`, `dubuddy.in`, plus the package registries
    - Secret: `ELEVENLABS_API_KEY`
-3. claude.ai → Code → **Routines → New** → repo `dubuddy-pipeline`, that environment, prompt = `routine/ROUTINE_PROMPT.md`.
+3. claude.ai → Code → **Routines → New** → repo `team-roadmap`, that environment, prompt = `routine/ROUTINE_PROMPT.md`.
    Trigger: **API**. Copy the **routine ID** and the **token**.
 4. Make sure **vidIQ** is connected on this same claude.ai account (Settings → Connectors).
 

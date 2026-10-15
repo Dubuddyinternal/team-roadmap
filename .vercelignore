@@ -1,0 +1,7 @@
+# Files the Claude routine uses (it runs from this repo) but the website must never publish:
+# the editing skill, video-use and the SFX library, plus the routine's own instructions and helper.
+skills/
+video-use/
+sfx/
+routine/
+local/
