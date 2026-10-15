@@ -32,6 +32,7 @@ if not os.path.isdir(LIB):
     print(f"{n} sfx from {os.path.realpath(REPO_SFX)} → {out}" + (f" · missing (house set used): {', '.join(missing)}" if missing else ""))
     sys.exit(0)
 for name, src, L in M:
+    if not os.path.exists(LIB + src): print(f"missing in the library, house sound used: {src}"); continue
     fo = min(.25, L * .3); tmp = f"{out}/{name}.wav"
     subprocess.run(["ffmpeg","-v","error","-y","-i",LIB+src,"-af",f"silenceremove=start_periods=1:start_threshold=-45dB,atrim=0:{L},afade=t=out:st={L-fo:.3f}:d={fo:.3f},aformat=channel_layouts=stereo:sample_rates=48000",tmp],check=True)
     mx = float(re.search(r"max_volume: (-?[\d.]+)", subprocess.run(["ffmpeg","-i",tmp,"-af","volumedetect","-f","null","-"],capture_output=True,text=True).stderr).group(1))
