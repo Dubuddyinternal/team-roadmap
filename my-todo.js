@@ -1023,7 +1023,7 @@ function todoLearnPartBox(P, today) {
   var val = todoLearnPart(today, P.key), editing = !val || todoLearnEdit[P.key];
   // one line until opened: title, status, a peek at what's saved, ✍️ Write / Open
   if (!todoLearnOpen[P.key] && !todoLearnEdit[P.key]) {
-    var m = todoEl("div", "td-lp mini" + (val ? " ok" : ""));
+    var m = todoEl("div", "td-lp td-lp-mini" + (val ? " ok" : ""));
     var mh = todoEl("div", "td-lp-h");
     mh.appendChild(todoEl("b", "", (P.icon ? P.icon + " " : "") + P.label));
     mh.appendChild(todoEl("span", "td-lp-st", val ? "✓ Saved" : "To do"));
@@ -1551,12 +1551,12 @@ function renderContentTodo() {
   var learnLater = onDay("learn") || (todoMode === "today" && todoLearnParts().some(todoLearnPartTimed));
   var dayBoxes = [];
   var allPartsTimed = todoMode === "today" && todoLearnParts().every(todoLearnPartTimed);
-  if (onDay("learn")) dayBoxes.push("learn"); else if (!allPartsTimed) wrap.appendChild(todoLearnBox());
+  if (onDay("learn")) dayBoxes.push("learn"); var learnLast = !onDay("learn") && !allPartsTimed;   // the untimed New learning card goes at the end, after the day's timeline
   if (onDay("deep")) dayBoxes.push("deep"); else wrap.appendChild(todoDeepBox());   // always usable, even before today's learning is written
   if (onDay("reason")) dayBoxes.push("reason"); else wrap.appendChild(todoReasonBox());
   if (!todoLearnedToday() && !learnLater) {
     var fz = todoEl("div", "td-frozen"); fz.setAttribute("aria-disabled", "true"); fz.inert = true;
-    var lock = todoEl("div", "td-frozen-msg", "🔒 Frozen until you write today's learnings above");
+    var lock = todoEl("div", "td-frozen-msg", "🔒 Frozen until you write today's learnings — New learning is at the bottom ↓");
     wrap.appendChild(lock);
     wrap.appendChild(fz);
     wrap = fz;
@@ -1574,6 +1574,7 @@ function renderContentTodo() {
   if (todoMode === "all") wrap.appendChild(todoAllOpen(assigned));
   else if (todoMode === "upcoming") wrap.appendChild(todoUpcoming(assigned));
   else wrap.appendChild(todoDayPlan(assigned, dayBoxes));
+  if (learnLast) page.appendChild(todoLearnBox());   // outside the freeze, so it can always be written
   page.appendChild(todoBookend("sleep"));   // 🌙 last thing of the day
 }
 /* after sign-in, load once even if the sidebar isn't on screen (e.g. reloaded on OKRs),
