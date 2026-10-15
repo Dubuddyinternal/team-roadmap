@@ -1201,6 +1201,40 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .td-learn-day{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
 .td-learn-item{display:flex;flex-direction:column}
 .td-learn-k{font-size:11px;font-weight:600;color:var(--muted)}
+.td-learn-h .td-more,.td-deepcard .td-more{margin-left:0;flex:none;background:var(--card)}
+.td-setdlg{max-width:540px}
+.td-setlist{display:flex;flex-direction:column;gap:6px;margin:10px 0 8px}
+.td-setrow{display:flex;gap:6px;align-items:center}
+.td-setrow input{border:1px solid var(--line);border-radius:8px;padding:7px 9px;font:inherit;font-size:14px;background:var(--paper)}
+.td-set-ic{width:46px;text-align:center}.td-set-nm{flex:1;min-width:0}
+.td-setmins{display:flex;gap:6px}.td-setmins input{width:80px;border:1px solid var(--line);border-radius:8px;padding:7px 9px;font:inherit}
+.td-sum{margin-top:18px;display:flex;flex-direction:column;gap:16px}
+.td-sum-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.td-sum-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.td-sum-t{font-size:12.5px;color:var(--muted);font-weight:600}
+.td-sum-big{font-size:24px;font-weight:700;margin:4px 0 2px}
+.td-sum-sub{font-size:12px;color:var(--muted)}
+.td-sum-bar{display:block;height:6px;background:var(--paper);border-radius:99px;overflow:hidden;margin-top:8px}
+.td-sum-bar i{display:block;height:100%;background:var(--done);border-radius:99px}
+.td-sum-bar.low i{background:#F59E0B}
+.td-sum-sec{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;overflow-x:auto}
+.td-sum-sec h3{font-size:15px;margin:0 0 10px}
+.td-heat{display:flex;gap:3px}
+.td-heat-col{display:flex;flex-direction:column;gap:3px}
+.td-heat-lab span{height:13px;font-size:9.5px;line-height:13px;color:var(--muted);padding-right:4px;font-family:var(--mono)}
+.td-heat-c{width:13px;height:13px;border-radius:3px;background:#EEF0F4}
+.td-heat-c.l1{background:#C7EBD3}.td-heat-c.l2{background:#86D3A2}.td-heat-c.l3{background:#3FB06C}.td-heat-c.l4{background:#1F7A4D}
+.td-heat-c.future{background:transparent;border:1px dashed var(--line)}
+.td-sum-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.td-sum-tbl th{text-align:left;font-weight:600;color:var(--muted);font-size:12px;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.td-sum-tbl td{padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.td-mb{display:inline-block;width:60px;height:6px;background:var(--paper);border-radius:99px;overflow:hidden;margin-right:6px;vertical-align:middle}
+.td-mb i{display:block;height:100%;border-radius:99px}.td-mb.deep i{background:#6366F1}.td-mb.reason i{background:#F59E0B}
+.td-dim{color:var(--muted);font-size:11.5px}
+.td-sum-fx{display:grid;grid-template-columns:minmax(120px,240px) 1fr auto;gap:12px;align-items:center;padding:5px 0}
+.td-sum-fx .td-sum-bar{margin-top:0}
+.td-sum-fx-n{font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.td-sum-fx-p{font-family:var(--mono);font-size:12px;color:var(--muted)}
 .td-learn-log{border-top:1px dashed var(--line);margin-top:12px;padding-top:10px;display:flex;flex-direction:column;gap:8px;max-height:320px;overflow:auto}
 .td-learn-row{display:flex;gap:12px}
 .td-learn-d{font-family:var(--mono);font-size:11px;color:var(--muted);flex:none;width:96px;padding-top:2px}
@@ -7259,6 +7293,7 @@ function renderHeader(){
     stats.append(mkStat(c.done,"Done"), mkStat(c.progress,"In progress"), mkStat(c.planned,"Planned"), mkStat(c.blocked,"Blocked"));
     updated = DATA.updated || "—";
   }
+  if(typeof todoRenderSummary==="function") todoRenderSummary($("pane-summary"), view==="todo");   // My To-do history (my-todo.js); removed on other views
   const ov = document.createElement("div");
   ov.className = "overall";
   ov.innerHTML = `<label>${view==="okr"?"Cycle score":"Overall completion"} — <b>${pct}%</b></label>
