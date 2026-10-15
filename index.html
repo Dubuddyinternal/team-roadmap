@@ -1135,6 +1135,45 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .td-act:hover{border-color:var(--indigo);color:var(--indigo)}
 .td-act.danger:hover{border-color:var(--blocked);color:var(--blocked)}
 .td-note{background:#FFF2DE;color:#9A6A1B;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:12px}
+.td-modes{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+.td-mode{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:6px 14px;font:inherit;font-size:13px;cursor:pointer;color:var(--muted)}
+.td-mode.on{background:var(--indigo);border-color:var(--indigo);color:#fff}
+.td-hat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px 16px;margin-bottom:16px}
+.td-hat-h{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.td-hat-h h2{font-size:17px;margin:0}
+.td-hat-n{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.td-more{margin-left:auto;border:1px solid var(--line);background:none;border-radius:8px;width:32px;height:28px;font-size:16px;line-height:1;cursor:pointer;color:var(--muted)}
+.td-more:hover{border-color:var(--indigo);color:var(--indigo)}
+.td-fxrow-today{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 10px;background:var(--paper);border-radius:10px;margin-bottom:12px}
+.td-lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-right:4px}
+.td-fx{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--card);border-radius:99px;padding:4px 12px 4px 6px;font:inherit;font-size:13px;cursor:pointer}
+.td-fx-box{width:17px;height:17px;border-radius:5px;border:1.5px solid var(--muted);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff}
+.td-fx.done{background:var(--done-bg);border-color:transparent;color:var(--done)}
+.td-fx.done .td-fx-box{background:var(--done);border-color:var(--done)}
+.td-fx.done .td-fx-t{text-decoration:line-through}
+.td-fx-hint{border:1px dashed var(--line);background:none;border-radius:99px;padding:4px 12px;font:inherit;font-size:12.5px;color:var(--muted);cursor:pointer}
+.td-due.today{color:var(--indigo);font-weight:600}
+.td-empty{color:var(--muted);font-size:13px;padding:4px 0}
+.td-fxdlg{max-width:520px}
+.td-fxlist{display:flex;flex-direction:column;gap:6px;margin:10px 0 14px}
+.td-fxrow{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.td-fxrow-t{flex:1;min-width:0;display:flex;flex-direction:column}
+.td-fxrow-t span{font-size:12px;color:var(--muted)}
+.td-fxform{border-top:1px solid var(--line);padding-top:12px}
+.td-fxform-h{font-weight:600;margin-bottom:8px}
+.td-fxdays{display:flex;flex-wrap:wrap;gap:4px}
+.td-day{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:4px 9px;font:inherit;font-size:12.5px;cursor:pointer}
+.td-day.on{background:var(--indigo);border-color:var(--indigo);color:#fff}
+.td-up{display:flex;flex-direction:column;gap:12px}
+.td-upday{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.td-upday h3{font-size:14px;margin:0 0 8px}
+.td-upday.late{border-color:var(--blocked)}
+.td-upday.late h3{color:var(--blocked)}
+.td-upfx{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.td-uprow{display:flex;align-items:flex-start;gap:10px;width:100%;text-align:left;border:none;background:none;padding:6px 4px;border-radius:8px;font:inherit;cursor:pointer}
+.td-uprow:hover{background:var(--paper)}
+.td-uptx{display:flex;flex-direction:column;min-width:0}
+.td-uptx span{font-size:12px;color:var(--muted)}
 .ws-item.td-side{display:flex;align-items:center;justify-content:space-between;font-weight:600}
 .td-side-n{font-family:var(--mono);font-size:11px;background:var(--indigo-soft);color:var(--indigo);border-radius:99px;padding:1px 8px}
 @media(max-width:1100px){.kanban{grid-template-columns:repeat(2,1fr)}}
@@ -7031,7 +7070,7 @@ function renderHeader(){
   const _rm = view==="rmap" ? RMAPS.maps.find(m=>m.id===activeRmap) : null;
   $("rm-title").textContent = view==="todo" ? "My To-do" : view==="admin" ? "Administration" : view==="okr" ? "Team OKRs" : view==="content" ? "Educational Content Roadmap" : view==="ideas" ? "Team Ideas" : view==="dev" ? "Development Board" : view==="bugs" ? "Bugs & Issues" : view==="cbugs" ? ((CSPACES.list.find(x=>x.id===activeCspace)||{}).name || "Bugs board") : view==="disc" ? (((currentDisc()||{}).name) || "Product roadmap") : view==="social" ? (((currentSocial()||{}).name) || "Social Media") : view==="campaign" ? (((currentCampaign()||{}).name) || "Campaign") : view==="watch" ? (((currentWatch()||{}).name) || "Keep an Eye") : view==="horizon" ? (((currentHorizon()||{}).name) || "Widen our Horizon") : view==="pdt" ? (((currentPdt()||{}).name) || "Product All in One") : view==="rmap" ? ((_rm && _rm.name) || "Roadmap") : (DATA.title || "Product Roadmap");
   $("rm-subtitle").textContent = view==="todo"
-    ? "Everything assigned to you on every board, plus your own to-dos. Only you see this."
+    ? "Personal, CEO and Product Head work in one place: fixed routines, your own to-dos, and everything assigned to you. Only you see this."
     : view==="okr"
     ? "Objectives for this cycle and the measurable key results that tell us if we're getting there."
     : view==="content"
