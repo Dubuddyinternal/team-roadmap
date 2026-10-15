@@ -13,7 +13,7 @@ written by one step are where the next step expects them:
     <W>/in/                 other inputs (final_yt.mp4, final_ig.mp4 for posting)
     <W>/out/                step results: plan_result.json, render_result.json, seo.json, post_result.json
 """
-import json, os, shutil, subprocess, sys, tarfile, time, urllib.request
+import json, os, shutil, subprocess, sys, tarfile, time, urllib.request, zipfile
 
 W = os.environ.get("PIPE_WORK", "/tmp/dubuddy/job")
 P = os.path.join(W, "payload.json")
@@ -62,6 +62,37 @@ def report(event, message="", result=None, uploaded=None):
         return json.loads(r.read() or b"{}")
 
 
+# the skill reads the SFX library where OneDrive keeps it on the Mac, so put it at the same path here
+SFX_LIB = os.path.expanduser("~/Library/CloudStorage/OneDrive-Personal/Assests/Sound Effects")
+
+
+def sfx_library(url):
+    if os.path.isdir(SFX_LIB) and os.listdir(SFX_LIB):
+        return "already there"
+    z = os.path.join(W, "in", "sound-effects.zip")
+    try:
+        download(url, z)
+    except RuntimeError:
+        return "not uploaded yet (house sounds only)"
+    tmp = SFX_LIB + ".unzip"
+    shutil.rmtree(tmp, ignore_errors=True)
+    with zipfile.ZipFile(z) as zf:
+        zf.extractall(tmp, [m for m in zf.namelist() if "__MACOSX" not in m and ".." not in m])
+    os.remove(z)
+    root = tmp   # the folder that holds "Editing SFX", else the zip's single top folder
+    for d, subs, _ in os.walk(tmp):
+        if "Editing SFX" in subs: root = d; break
+    else:
+        top = [x for x in os.listdir(tmp) if not x.startswith(".")]
+        if len(top) == 1 and os.path.isdir(os.path.join(tmp, top[0])): root = os.path.join(tmp, top[0])
+    os.makedirs(os.path.dirname(SFX_LIB), exist_ok=True)
+    shutil.rmtree(SFX_LIB, ignore_errors=True)
+    shutil.move(root, SFX_LIB)
+    shutil.rmtree(tmp, ignore_errors=True)
+    n = sum(len(f) for _, _, f in os.walk(SFX_LIB))
+    return f"{n} files at {SFX_LIB}"
+
+
 def ed():
     return os.path.join(W, "raw", "edit", "raw")
 
@@ -77,7 +108,11 @@ def start(src):
     got = []
     if p["step"] == "plan" and "edit" not in (p.get("inputs") or {}):
         shutil.rmtree(os.path.join(W, "raw"), ignore_errors=True)   # a fresh edit: nothing left over from an earlier clip
+    notes = {}
     for name, url in (p.get("inputs") or {}).items():
+        if name == "sfx_library":
+            notes["sfx_library"] = sfx_library(url)
+            continue
         if name == "raw":
             dest = os.path.join(W, "raw", os.path.basename(p.get("raw_name") or "raw.mp4"))   # raw.mp4 / raw.mov
             download(url, dest)
@@ -93,7 +128,7 @@ def start(src):
     os.makedirs(os.path.join(W, "out"), exist_ok=True)
     report("progress", f"{p['step']}: inputs ready")
     print(json.dumps({"step": p["step"], "work": W, "edit_folder": ed(), "raw": os.path.join(W, "raw"),
-                      "inputs": got, "out": os.path.join(W, "out")}, indent=1))
+                      "inputs": got, "out": os.path.join(W, "out"), **notes}, indent=1))
 
 
 def first(*paths):
