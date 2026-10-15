@@ -603,7 +603,7 @@ function todoHatBlock(H, assigned) {
 /* ---------- All to be done: every open thing, hat by hat ---------- */
 function todoAllOpen(assigned) {
   var wrap = todoEl("div", "td-up");
-  var today = todoToday(), any = false;
+  var today = todoToday();
   // the days to drop cards on
   var strip = todoEl("div", "td-plan-strip");
   strip.appendChild(todoEl("span", "td-lbl", "Drag onto a day"));
@@ -629,8 +629,7 @@ function todoAllOpen(assigned) {
     var cards = TODO.items.filter(function (x) { return x.hat === H.key && x.col !== "done"; }).map(function (x) { return { r: rank("own:" + x.id, x), el: function () { return todoCard(null, x); } }; })
       .concat(assigned.filter(function (e) { return e.hat === H.key && e.col !== "done"; }).map(function (e) { return { r: rank(e.key, e), el: function () { return todoCard(e); } }; }))
       .sort(function (a, b) { return a.r.localeCompare(b.r); });
-    if (!fx.length && !cards.length) return;
-    any = true;
+    // every hat shows here, empty or not, so I can write things into it and plan them later
     var sec = todoEl("div", "td-upday");
     var hd = todoEl("div", "td-all-h");
     hd.appendChild(todoEl("h3", "", H.icon + " " + H.label));
@@ -647,9 +646,11 @@ function todoAllOpen(assigned) {
       cards.forEach(function (c) { grid.appendChild(c.el()); });
       sec.appendChild(grid);
     }
+    var add = todoEl("button", "addline k-add td-all-add", "＋ Add to-do — " + H.label);
+    add.onclick = function () { todoEdit(null, "todo", H.key); };   // no day yet: it waits here until I pick one
+    sec.appendChild(add);
     wrap.appendChild(sec);
   });
-  if (!any) wrap.appendChild(todoEl("div", "td-empty", "Nothing left to do. Everything is ticked or done."));
   return wrap;
 }
 
