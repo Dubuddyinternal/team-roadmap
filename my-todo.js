@@ -69,6 +69,7 @@ var TODO_TIMERS = {
     done: "Time's up. What did you solve — and where did you get stuck?" },
 };
 var todoLearnEdit = {};        // which of today's four learning boxes are being edited again
+var todoLearnOpen = {};        // which learning boxes are opened from their one-line view
 var todoLearnLog = false;      // the past-learnings list is open
 var TODO_COLS = [
   { key: "todo", label: "To do" },
@@ -501,15 +502,18 @@ function todoHatTimeAsk(H) {
   });
 }
 // the 🕘 handle on New learning / Deep thinking / Reasoning: drag it onto the day, or click to type a time
-function todoBoxTimeBtn(k) {
-  var t = TODO.times.at["box:" + k];
-  var b = todoEl("button", "td-act td-timebtn", t ? "🕘 " + todoFmtHM(t) : "🕘 Give a time");
+function todoBoxTimeBtn(k) { return todoTimeHandle("box:" + k, "🕘 Give a time"); }
+function todoTimeHandle(key, emptyLabel) {
+  var t = TODO.times.at[key];
+  var b = todoEl("button", "td-act td-timebtn", t ? "🕘 " + todoFmtHM(t) : emptyLabel);
   b.title = "Drag onto a gap in Today to place it there, or click to type a time";
   b.draggable = true;
-  b.addEventListener("dragstart", function (ev) { try { ev.dataTransfer.setData("text/plain", "box:" + k); } catch (_) { } ev.dataTransfer.effectAllowed = "move"; });
-  b.onclick = function () { todoTimeAsk("🕘 When will you do it?", t, "box:" + k); };
+  b.addEventListener("dragstart", function (ev) { try { ev.dataTransfer.setData("text/plain", key); } catch (_) { } ev.dataTransfer.effectAllowed = "move"; });
+  b.onclick = function () { todoTimeAsk("🕘 When will you do it?", t, key); };
   return b;
 }
+// on Today, a New learning box with its own time ("learn:<part>") leaves the big box and sits on the day
+function todoLearnPartTimed(P) { return todoMode === "today" && !!TODO.times.at["learn:" + P.key]; }
 // Today: timed blocks and things in clock order, gaps between them to drop onto, untimed blocks after
 function todoDayPlan(assigned, boxes) {
   var wrap = todoEl("div", "td-dayplan");
@@ -517,6 +521,10 @@ function todoDayPlan(assigned, boxes) {
   var slotted = {}, timed = [], untimed = [];
   var BOX = { learn: todoLearnBox, deep: todoDeepBox, reason: todoReasonBox };
   boxes.forEach(function (k) { timed.push({ t: at["box:" + k], key: "box:" + k, H: todoHat("personal"), el: BOX[k] }); });
+  todoLearnParts().forEach(function (P) {
+    var k = "learn:" + P.key;
+    if (at[k]) timed.push({ t: at[k], key: k, H: todoHat("personal"), part: P, el: function () { var b = todoLearnPartBox(P, today); b.classList.add("td-lp-solo"); return b; } });
+  });
   TODO_HATS.forEach(function (H) {
     var r = TODO.times.hats[H.key];
     if (r && r.from) timed.push({ t: r.from, end: r.to || todoM2HM(todoHM2m(r.from) + 60), hat: H });
@@ -566,9 +574,9 @@ function todoDayPlan(assigned, boxes) {
         rail(todoFmtHM(e.t), "to " + todoFmtHM(e.end), function () { todoHatTimeAsk(H); }), todoHatBlock(H, assigned, slotted));
     } else {
       var body = todoEl("div", "td-row-item"); body.appendChild(e.el());
-      if (e.H.key !== "personal" || e.key.indexOf("box:") !== 0) body.appendChild(todoEl("span", "td-row-hat", e.H.icon + " " + e.H.label));
-      var late = e.key === "box:learn" && now > e.t && !todoLearnedToday();
-      row("itemrow" + (e.key.indexOf("box:") === 0 ? " boxrow" : "") + (late ? " late" : ""), rail(todoFmtHM(e.t), "", function () { todoTimeAsk("🕘 When?", e.t, e.key); }, function () { todoTimeSet(e.key, ""); }), body);
+      if (e.H.key !== "personal" || (e.key.indexOf("box:") !== 0 && !e.part)) body.appendChild(todoEl("span", "td-row-hat", e.H.icon + " " + e.H.label));
+      var late = now > e.t && (e.key === "box:learn" ? !todoLearnedToday() : e.part ? !todoLearnPart(today, e.part.key) : false);
+      row("itemrow" + (e.key.indexOf("box:") === 0 || e.part ? " boxrow" : "") + (late ? " late" : ""), rail(todoFmtHM(e.t), "", function () { todoTimeAsk("🕘 When?", e.t, e.key); }, function () { todoTimeSet(e.key, ""); }), body);
     }
     gap(e, timed[i + 1] || null);
   });
@@ -988,10 +996,29 @@ function todoLearnText(s) {   // saved learnings may carry richtext.js markdown 
 }
 function todoLearnPartBox(P, today) {
   var val = todoLearnPart(today, P.key), editing = !val || todoLearnEdit[P.key];
+  // one line until opened: title, status, a peek at what's saved, ✍️ Write / Open
+  if (!todoLearnOpen[P.key] && !todoLearnEdit[P.key]) {
+    var m = todoEl("div", "td-lp mini" + (val ? " ok" : ""));
+    var mh = todoEl("div", "td-lp-h");
+    mh.appendChild(todoEl("b", "", (P.icon ? P.icon + " " : "") + P.label));
+    mh.appendChild(todoEl("span", "td-lp-st", val ? "✓ Saved" : "To do"));
+    if (val) mh.appendChild(todoEl("span", "td-lp-peek", String(val).replace(/\s+/g, " ")));
+    else mh.appendChild(todoEl("span", "td-lp-peek"));
+    mh.appendChild(todoTimeHandle("learn:" + P.key, "🕘"));
+    var go = todoEl("button", val ? "td-act" : "btn save td-lp-go", val ? "Open" : "✍️ Write");
+    go.onclick = function () { todoLearnOpen[P.key] = true; renderAll(); };
+    mh.appendChild(go);
+    m.appendChild(mh);
+    return m;
+  }
   var b = todoEl("div", "td-lp" + (val ? " ok" : ""));
   var h = todoEl("div", "td-lp-h");
   h.appendChild(todoEl("b", "", (P.icon ? P.icon + " " : "") + P.label));
   h.appendChild(todoEl("span", "td-lp-st", val ? "✓ Saved" : "To do"));
+  h.appendChild(todoTimeHandle("learn:" + P.key, "🕘"));
+  var cl = todoEl("button", "td-act td-lp-close", "▴"); cl.title = "Fold it back to one line";
+  cl.onclick = function () { delete todoLearnOpen[P.key]; delete todoLearnEdit[P.key]; renderAll(); };
+  h.appendChild(cl);
   b.appendChild(h);
   var fd = todoFeedBlock(P); if (fd) b.appendChild(fd);   // 📡 what the agent found for this box
   if (!editing) {
@@ -1012,7 +1039,7 @@ function todoLearnPartBox(P, today) {
     var wasOpen = todoLearnedToday();
     var day = todoLearnDay(today); if (day._old) day = {};   // today is always in parts
     day[P.key] = v; TODO.learn[today] = day;
-    delete todoLearnEdit[P.key];
+    delete todoLearnEdit[P.key]; delete todoLearnOpen[P.key];
     todoSave();
     if (!wasOpen && todoLearnedToday()) toast("🔓 Unlocked — keep the streak going.");
     else toast("✓ Saved — " + todoLearnCount(today) + " of " + todoLearnParts().length + " done");
@@ -1036,10 +1063,12 @@ function todoLearnBox() {
   head.appendChild(todoBoxTimeBtn("learn"));
   head.appendChild(todoMoreBtn("Settings — boxes and how many unlock", todoLearnSettings));
   box.appendChild(head);
-  if (!open) box.appendChild(todoEl("div", "td-learn-q", "🔒 Write " + (need === parts.length ? "all " + need : need + " of " + parts.length) + " for today to unlock the rest of your to-dos."));
+  var planned = todoMode === "today" && (!!TODO.times.at["box:learn"] || parts.some(todoLearnPartTimed));
+  if (!open && !planned) box.appendChild(todoEl("div", "td-learn-q", "🔒 Write " + (need === parts.length ? "all " + need : need + " of " + parts.length) + " for today to unlock the rest of your to-dos."));
   var grid = todoEl("div", "td-lp-grid");
-  parts.forEach(function (P) { grid.appendChild(todoLearnPartBox(P, today)); });
-  box.appendChild(grid);
+  parts.forEach(function (P) { if (!todoLearnPartTimed(P)) grid.appendChild(todoLearnPartBox(P, today)); });
+  if (grid.children.length) box.appendChild(grid);
+  else box.appendChild(todoEl("div", "td-empty", "Each box has its own time on Today below."));
   if (todoLearnLog) {
     var log = todoEl("div", "td-learn-log");
     var days = Object.keys(TODO.learn).filter(function (d) { return d !== today && Object.keys(todoLearnDay(d)).length; }).sort().reverse();
@@ -1494,9 +1523,10 @@ function renderContentTodo() {
   // unless I gave it a time: then it's planned on the day like everything else and nothing freezes.
   // On Today, a box with a time sits on the day at that time instead of up here.
   var at = TODO.times.at, onDay = function (k) { return todoMode === "today" && !!at["box:" + k]; };
-  var learnLater = onDay("learn");
+  var learnLater = onDay("learn") || (todoMode === "today" && todoLearnParts().some(todoLearnPartTimed));
   var dayBoxes = [];
-  if (learnLater) dayBoxes.push("learn"); else wrap.appendChild(todoLearnBox());
+  var allPartsTimed = todoMode === "today" && todoLearnParts().every(todoLearnPartTimed);
+  if (onDay("learn")) dayBoxes.push("learn"); else if (!allPartsTimed) wrap.appendChild(todoLearnBox());
   if (onDay("deep")) dayBoxes.push("deep"); else wrap.appendChild(todoDeepBox());   // always usable, even before today's learning is written
   if (onDay("reason")) dayBoxes.push("reason"); else wrap.appendChild(todoReasonBox());
   if (!todoLearnedToday() && !learnLater) {
