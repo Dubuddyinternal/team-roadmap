@@ -36,6 +36,7 @@
 <script src="monthly-feedback.js"></script>
 <script src="hr.js"></script><!-- HR files: My HR file + Administration → Employees (HR) -->
 <script src="accounts.js"></script><!-- Accounts: payment requests, payroll, My payments -->
+<script src="wiki-docs.js"></script><!-- Our Wiki: write documents in the app -->
 <script src="my-todo.js"></script><!-- My To-do: everything assigned to me + my own to-dos -->
 <script>
 /* ============================================================
@@ -1190,6 +1191,22 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .td-learn-log{border-top:1px dashed var(--line);margin-top:12px;padding-top:10px;display:flex;flex-direction:column;gap:8px;max-height:320px;overflow:auto}
 .td-learn-row{display:flex;gap:12px}
 .td-learn-d{font-family:var(--mono);font-size:11px;color:var(--muted);flex:none;width:96px;padding-top:2px}
+.td-deepcard{display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#EEF2FF,#F0FDF4);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:14px}
+.td-deep-tx{flex:1;min-width:0}.td-deep-tx h2{font-size:17px;margin:0 0 4px}
+.td-deep-sub{font-size:13px;color:var(--muted)}
+.td-deep-go{flex:none;white-space:nowrap}
+.td-deep{position:fixed;inset:0;z-index:100000;background:radial-gradient(circle at 50% 35%,#1E293B,#0B1220);color:#E2E8F0;display:flex;align-items:center;justify-content:center;padding:24px}
+.td-deep-in{text-align:center;max-width:520px;width:100%}
+.td-deep-ic{font-size:56px;margin-bottom:6px}
+.td-deep-h{font-size:15px;letter-spacing:.2em;text-transform:uppercase;color:#94A3B8}
+.td-deep-line{font-size:20px;margin:14px 0 26px;color:#F1F5F9}
+.td-deep-clock{font-family:var(--mono);font-size:min(16vw,92px);font-weight:600;letter-spacing:.02em;color:#fff}
+.td-deep-bar{height:6px;background:rgba(255,255,255,.12);border-radius:99px;overflow:hidden;margin:22px auto 10px;max-width:420px}
+.td-deep-bar i{display:block;height:100%;background:#34D399;border-radius:99px;transition:width 1s linear}
+.td-deep-until{font-size:13px;color:#94A3B8;margin-bottom:34px}
+.td-deep-end{background:none;border:1px solid rgba(255,255,255,.18);color:#64748B;border-radius:99px;padding:6px 14px;font:inherit;font-size:12px;cursor:pointer}
+.td-deep-end:hover{color:#CBD5E1}
+.td-deep-back{background:#34D399;border:none;color:#052E1A;border-radius:99px;padding:10px 22px;font:inherit;font-weight:600;cursor:pointer}
 .td-frozen-msg{text-align:center;font-weight:600;color:#92400E;background:#FEF3C7;border-radius:10px;padding:10px;margin-bottom:12px}
 .td-frozen{opacity:.4;filter:grayscale(1);pointer-events:none;user-select:none}
 .ws-item.td-side{display:flex;align-items:center;justify-content:space-between;font-weight:600}
@@ -3512,11 +3529,12 @@ body{margin:0}
   </div>
 </div>
 
-<div class="overlay" id="dl-overlay" style="z-index:430">
+<div class="overlay" id="dl-overlay" style="z-index:470"><!-- above the wiki document editor (wiki-docs.js, 450) -->
   <div class="dialog" role="dialog" aria-modal="true" style="max-width:600px">
     <h3 id="dl-dlg-h">Add to the wiki</h3>
     <div class="dlg-body">
-      <div class="field"><label for="dl-f-url">Link</label><input id="dl-f-url" placeholder="Google Doc, Sheet, Drive, Loom, YouTube (unlisted), Notion…" autocomplete="off"></div>
+      <div class="field" id="dl-f-urlwrap"><label for="dl-f-url">Link</label><input id="dl-f-url" placeholder="Google Doc, Sheet, Drive, Loom, YouTube (unlisted), Notion…" autocomplete="off"></div>
+      <div class="field" id="dl-f-tplwrap" style="display:none"><label for="dl-f-tpl">Start from</label><select id="dl-f-tpl"></select></div>
       <div class="field"><label for="dl-f-title">Title</label><input id="dl-f-title" placeholder="e.g. How we handle a refund request" autocomplete="off"></div>
       <div class="dl-row2">
         <div class="field"><label for="dl-f-sec">Section</label><select id="dl-f-sec"></select></div>
@@ -3534,7 +3552,7 @@ body{margin:0}
           <label><input type="radio" name="dl-acc" value="me"> 🔒 Only me</label>
         </div>
         <div class="pp" id="dlpp" style="display:none;margin-top:10px"></div>
-        <div class="dl-warn">This decides who sees it <b>here</b>. It does not change who can open the document itself — set that in the document’s own Share settings. For YouTube use <b>Unlisted</b>, not Private.</div>
+        <div class="dl-warn" id="dl-f-warn">This decides who sees it <b>here</b>. It does not change who can open the document itself — set that in the document’s own Share settings. For YouTube use <b>Unlisted</b>, not Private.</div>
       </div>
     </div>
     <div class="dlg-actions" style="display:flex;justify-content:flex-end;gap:10px;padding:14px 22px 20px">
@@ -16743,15 +16761,16 @@ var dlFilter = "all", dlView = { kind:"sec", id:"start" }, dlEditId = null, dlSh
 function dlSec(id){ for(var i=0;i<DL_SECTIONS.length;i++){ if(DL_SECTIONS[i][0]===id) return DL_SECTIONS[i]; } return DL_SECTIONS[DL_SECTIONS.length-1]; }
 function normalizeDoclib(d){
   d = (d && typeof d==="object") ? d : {};
-  d.links = Array.isArray(d.links) ? d.links.filter(function(l){ return l && l.url; }) : [];
+  d.links = Array.isArray(d.links) ? d.links.filter(function(l){ return l && (l.url || l.kind==="page"); }) : [];   /* kind:"page" = a document written in the wiki (wiki-docs.js) */
   d.read = (d.read && typeof d.read==="object") ? d.read : {};
   var secIds = DL_SECTIONS.map(function(x){ return x[0]; });
   d.links.forEach(function(l, i){
     if(!l.id) l.id = "dl-"+Math.random().toString(36).slice(2,9);
     if(["all","people","me"].indexOf(l.access)<0) l.access = "all";
     l.people = Array.isArray(l.people) ? l.people : [];
-    l.title = (l.title||"").trim() || dlGuessTitle(l.url);
-    if(secIds.indexOf(l.section)<0) l.section = dlIsVideo(l.url) ? "video" : "more";
+    if(l.kind==="page"){ l.url=""; l.html = typeof l.html==="string" ? l.html : ""; }
+    l.title = (l.title||"").trim() || (l.kind==="page" ? "Untitled document" : dlGuessTitle(l.url));
+    if(secIds.indexOf(l.section)<0) l.section = l.kind==="page" ? "more" : (dlIsVideo(l.url) ? "video" : "more");
     if(!l.why && l.note){ l.why = l.note; delete l.note; }          /* older links: the note becomes the reason */
     l.official = !!l.official;
     if(!l.owner) l.owner = l.by || "";
@@ -16847,7 +16866,7 @@ function dlVisible(){
   if(q){
     return rows.filter(function(l){
       var u=dlUnit(l.unit);
-      return ((l.title||"")+" "+(l.why||"")+" "+(l.cat||"")+" "+(u?u.path:"")+" "+dlSec(l.section)[2]+" "+(l.url||"")).toLowerCase().indexOf(q)>=0;
+      return ((l.title||"")+" "+(l.why||"")+" "+(l.cat||"")+" "+(u?u.path:"")+" "+dlSec(l.section)[2]+" "+(l.url||"")+" "+(l.text||"")).toLowerCase().indexOf(q)>=0;
     }).sort(dlSortDefault);
   }
   if(dlView.kind==="sec"){
@@ -16971,7 +16990,8 @@ function dlRenderList(){
   rows.forEach(function(l, idx){ list.appendChild(dlRow(l, idx, rows, inStart)); });
 }
 function dlRow(l, idx, rows, inStart){
-  var k=dlKind(l.url), emb=dlEmbedUrl(l.url), u=dlUnit(l.unit), me=dlMe();
+  var isPage = l.kind==="page";
+  var k=isPage ? ["Doc","#E8622B"] : dlKind(l.url), emb=isPage ? "" : dlEmbedUrl(l.url), u=dlUnit(l.unit), me=dlMe();
   var r=document.createElement("div"); r.className="dl-row"+(l.official?" official":""); r.dataset.id=l.id;
   var lead = inStart ? '<div class="dl-num'+(dlHasRead(l)?' done':'')+'">'+(dlHasRead(l)?'✓':(idx+1))+'</div>' : '';
   r.innerHTML = lead + '<div class="dl-ico" style="background:'+k[1]+'">'+mtEsc(k[0])+'</div>'
@@ -16989,19 +17009,22 @@ function dlRow(l, idx, rows, inStart){
     + '</div></div><div class="dl-acts"></div>';
   var slot=r.querySelector(".dl-tslot");
   var t;
-  if(emb){ t=document.createElement("button"); t.className="dl-title"; t.onclick=function(){ dlPlay(l); }; }
+  if(isPage){ t=document.createElement("button"); t.className="dl-title"; t.onclick=function(){ if(window.WD) WD.open(l.id); }; }
+  else if(emb){ t=document.createElement("button"); t.className="dl-title"; t.onclick=function(){ dlPlay(l); }; }
   else { t=document.createElement("a"); t.className="dl-title"; t.href=l.url; t.target="_blank"; t.rel="noopener noreferrer"; }
   t.textContent=l.title; slot.appendChild(t);
   if(l.why) r.querySelector(".dl-whyt").textContent=l.why;
   var acts=r.querySelector(".dl-acts");
   function btn(txt, cls, title, fn){ var b=document.createElement("button"); b.className="dl-btn"+(cls?" "+cls:""); b.textContent=txt; if(title) b.title=title; b.onclick=fn; acts.appendChild(b); return b; }
-  if(emb) btn("▶ Play", "play", "Play it here", function(){ dlPlay(l); });
+  if(isPage) btn(dlCanEdit(l) ? "✎ Open & edit" : "Open", "play", "Open the document", function(){ if(window.WD) WD.open(l.id); });
+  else if(emb) btn("▶ Play", "play", "Play it here", function(){ dlPlay(l); });
   else btn("Open ↗", "", "Opens in a new tab", function(){ window.open(l.url, "_blank", "noopener"); });
   if(inStart && me){
     var read=dlHasRead(l);
     btn(read ? "✓ Read" : "Mark as read", read ? "" : "go", read ? "Click to undo" : "Tick it off once you have read it", function(){ dlToggleRead(l); });
   }
-  btn("Copy link", "", "Copy the link", function(){ try{ navigator.clipboard.writeText(l.url); toast("Link copied"); }catch(e){ window.prompt("Copy this link:", l.url); } });
+  var _cl = isPage && window.WD ? WD.link(l.id) : l.url;
+  btn("Copy link", "", "Copy the link", function(){ try{ navigator.clipboard.writeText(_cl); toast("Link copied"); }catch(e){ window.prompt("Copy this link:", _cl); } });
   if(dlCanEdit(l)){
     if(dlIsStale(l) || dlView.kind==="review") btn("Mark reviewed", "go", "It is still correct — reset the review clock", function(){ l.reviewed=dlToday(); l.reviewedBy=me; dlSave(); renderDocLib(); toast("Marked as reviewed"); });
     if(inStart && dlIsAdmin()){
@@ -17010,7 +17033,7 @@ function dlRow(l, idx, rows, inStart){
     }
     btn("✎", "", "Edit", function(){ dlOpenDialog(l.id); });
     btn("×", "del", "Remove from the wiki", function(){
-      if(window.confirm('Remove “'+l.title+'” from the wiki? The document itself is not touched.')){
+      if(window.confirm(isPage ? 'Delete the document “'+l.title+'”? Its content is deleted too — this can’t be undone.' : 'Remove “'+l.title+'” from the wiki? The document itself is not touched.')){
         DOCLIB.links=DOCLIB.links.filter(function(x){ return x.id!==l.id; }); dlSave(); renderDocLib(); toast("Removed");
       }
     });
@@ -17056,12 +17079,23 @@ function dlFillSelects(l){
   if(cur && !mem.some(function(m){ return m.email===cur; })) opts.unshift('<option value="'+mtEsc(cur)+'">'+mtEsc(ppMemName(cur))+'</option>');
   $("dl-f-owner").innerHTML = opts.join("");
 }
-function dlOpenDialog(id){
+var dlDlgPage = false;   /* the dialog is for a wiki document (no link; wiki-docs.js), not a link */
+function dlOpenDialog(id, asPage){
   if(!dlMe()){ toast("Sign in to add to the library"); return; }
   var l = id ? DOCLIB.links.find(function(x){ return x.id===id; }) : null;
   dlEditId = l ? l.id : null;
+  dlDlgPage = l ? l.kind==="page" : !!asPage;
   dlFillSelects(l);
-  $("dl-dlg-h").textContent = l ? "Edit" : "Add to the wiki";
+  $("dl-f-urlwrap").style.display = dlDlgPage ? "none" : "";
+  $("dl-f-warn").style.display = dlDlgPage ? "none" : "";
+  $("dl-f-tplwrap").style.display = (dlDlgPage && !l && window.WD) ? "" : "none";
+  if(dlDlgPage && !l && window.WD){
+    $("dl-f-tpl").innerHTML = WD.templates.map(function(t){ return '<option value="'+t.id+'">'+mtEsc(t.name)+'</option>'; }).join("");
+    var _sec0 = dlView.kind==="sec" ? dlView.id : "how";
+    $("dl-f-tpl").value = WD.sectionTemplate[_sec0] || "blank";
+  }
+  $("dl-f-title").placeholder = dlDlgPage ? "e.g. How we onboard a new teammate" : "e.g. How we handle a refund request";
+  $("dl-dlg-h").textContent = l ? (dlDlgPage ? "Document details & sharing" : "Edit") : (dlDlgPage ? "New document" : "Add a link to the wiki");
   $("dl-f-url").value   = l ? l.url : "";
   $("dl-f-title").value = l ? l.title : "";
   $("dl-f-why").value   = l ? (l.why||"") : "";
@@ -17073,12 +17107,14 @@ function dlOpenDialog(id){
   ppInit("dlpp", l ? l.people : []); ppRender("dlpp");
   dlAccSet(l ? l.access : "all");
   $("dl-overlay").classList.add("show");
-  setTimeout(function(){ $("dl-f-url").focus(); }, 30);
+  setTimeout(function(){ (dlDlgPage ? $("dl-f-title") : $("dl-f-url")).focus(); }, 30);
 }
 function dlCloseDialog(){ $("dl-overlay").classList.remove("show"); dlEditId=null; }
 function dlSaveDialog(){
-  var url=dlCleanUrl($("dl-f-url").value);
-  if(!url){ toast("Paste a link first"); $("dl-f-url").focus(); return; }
+  var isPage = dlDlgPage;
+  var url = isPage ? "" : dlCleanUrl($("dl-f-url").value);
+  if(!isPage && !url){ toast("Paste a link first"); $("dl-f-url").focus(); return; }
+  if(isPage && !$("dl-f-title").value.trim()){ toast("Give the document a title"); $("dl-f-title").focus(); return; }
   var why=$("dl-f-why").value.trim();
   if(!why){ toast("Add one line on why this exists"); $("dl-f-why").focus(); return; }
   var acc=(document.querySelector('input[name="dl-acc"]:checked')||{}).value||"all";
@@ -17086,15 +17122,21 @@ function dlSaveDialog(){
   if(acc==="people" && !people.length){ toast("Pick at least one person, or choose Everyone"); return; }
   var rec = dlEditId ? DOCLIB.links.find(function(x){ return x.id===dlEditId; }) : null;
   var sec=$("dl-f-sec").value || "more";
+  var isNew = !rec;
   if(!rec){
     rec={ id:"dl-"+Math.random().toString(36).slice(2,9), by:dlMe(), at:dlToday() };
+    if(isPage){
+      rec.kind="page";
+      var _t = window.WD ? (WD.templates.find(function(t){ return t.id===$("dl-f-tpl").value; }) || WD.templates[0]) : null;
+      rec.html = _t ? _t.html : "<p><br></p>"; rec.text="";
+    }
     rec.order = DOCLIB.links.filter(function(x){ return x.section===sec; }).reduce(function(m,x){ return Math.max(m, x.order+1); }, 0);
     DOCLIB.links.push(rec);
   } else if(rec.section!==sec){
     rec.order = DOCLIB.links.filter(function(x){ return x.section===sec; }).reduce(function(m,x){ return Math.max(m, x.order+1); }, 0);
   }
   rec.url=url;
-  rec.title=$("dl-f-title").value.trim() || dlGuessTitle(url);
+  rec.title=$("dl-f-title").value.trim() || (isPage ? "Untitled document" : dlGuessTitle(url));
   rec.section=sec;
   var un=$("dl-f-unit").value; if(un) rec.unit=un; else delete rec.unit;
   rec.why=why;
@@ -17105,12 +17147,13 @@ function dlSaveDialog(){
   dlCloseDialog(); dlSave();
   if(!dlQuery() && dlVisible().indexOf(rec)<0) dlView={kind:"sec", id:sec};   /* not visible here? jump to where it went */
   renderDocLib(); toast("Saved");
+  if(isPage && window.WD && (isNew || document.getElementById("wd-page"))) WD.open(rec.id);   /* straight into the editor (or back to it) */
 }
 function openDocLib(){ renderDocLib(); $("dl-page").style.display="block"; if(typeof window.scrollTo==="function") window.scrollTo(0,0); }
 function closeDocLib(){ dlClosePlay(); $("dl-page").style.display="none"; }
 (function(){
   if(!$("dl-page")) return;
-  $("dl-addbtn").onclick=function(){ dlOpenDialog(null); };
+  $("dl-addbtn").onclick=function(){ if(window.WD) WD.addMenu(this); else dlOpenDialog(null); };   /* 📝 New document · 🔗 Add a link */
   $("dl-cancel").onclick=dlCloseDialog;
   $("dl-save").onclick=dlSaveDialog;
   $("dl-q").oninput=function(){ renderDocLib(); };
