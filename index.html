@@ -36,6 +36,7 @@
 <script src="monthly-feedback.js"></script>
 <script src="hr.js"></script><!-- HR files: My HR file + Administration → Employees (HR) -->
 <script src="accounts.js"></script><!-- Accounts: payment requests, payroll, My payments -->
+<script src="my-todo.js"></script><!-- My To-do: everything assigned to me + my own to-dos -->
 <script>
 /* ============================================================
    ONE-TIME SETUP with JSONBin (~3 minutes)
@@ -1118,6 +1119,24 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 /* kanban (Development + Bugs) */
 .kanban{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
 .kanban.cols-wide{overflow-x:auto;padding-bottom:8px}
+/* My To-do (my-todo.js) */
+.kanban.td-board{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:900px){.kanban.td-board{grid-template-columns:1fr}}
+.td-col.tc-progress{background:#FFF7ED}
+.td-col.tc-done{background:#F0FDF4}
+.td-card.td-done .kt{color:var(--muted);text-decoration:line-through}
+.td-src{font-size:11px;border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:99px;padding:2px 8px;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+.td-src.own{cursor:default;background:#ECFDF5;color:#047857;border-color:transparent}
+.td-due{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.td-due.late{color:var(--blocked);font-weight:600}
+.td-acts{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;opacity:.75}
+.td-card:hover .td-acts{opacity:1}
+.td-act{font-size:11px;border:1px solid var(--line);background:none;border-radius:6px;padding:2px 7px;cursor:pointer;color:var(--muted)}
+.td-act:hover{border-color:var(--indigo);color:var(--indigo)}
+.td-act.danger:hover{border-color:var(--blocked);color:var(--blocked)}
+.td-note{background:#FFF2DE;color:#9A6A1B;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:12px}
+.ws-item.td-side{display:flex;align-items:center;justify-content:space-between;font-weight:600}
+.td-side-n{font-family:var(--mono);font-size:11px;background:var(--indigo-soft);color:var(--indigo);border-radius:99px;padding:1px 8px}
 @media(max-width:1100px){.kanban{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:600px){.kanban{grid-template-columns:1fr}}
 .kcol{background:#EEF0F4;border-radius:12px;padding:10px;min-height:120px}
@@ -4226,6 +4245,7 @@ const PERMS = [
   {key:"manage_hr",        label:"HR: manage employee files", hint:"Everything in “see employee files”, plus approve documents, send files back, answer ✏️ change requests, and send offer letters"},
   {key:"manage_policies",  label:"HR: edit company policies", hint:"Add and edit policies in Administration → HR → Policies, and ask everyone to sign a new version"},
   {key:"accounts",         label:"Accounts: payments & payroll", hint:"See and approve everyone's payment requests, mark them paid, run payroll and download bank files (Administration → Accounts). Includes people's bank details"},
+  {key:"my_todo",          label:"My To-do",              hint:"See a private ✅ My To-do board at the top of Spaces: everything assigned to you across the boards, plus your own to-dos"},
   {key:"hr_settings",      label:"HR: company details & offer letter", hint:"Change the company details and the offer letter wording in Administration → HR → Company and offer letter"},
 ];
 // what the 5 old role names meant, for anyone not yet on a custom role
@@ -7009,8 +7029,10 @@ function renderTabs(){
 }
 function renderHeader(){
   const _rm = view==="rmap" ? RMAPS.maps.find(m=>m.id===activeRmap) : null;
-  $("rm-title").textContent = view==="admin" ? "Administration" : view==="okr" ? "Team OKRs" : view==="content" ? "Educational Content Roadmap" : view==="ideas" ? "Team Ideas" : view==="dev" ? "Development Board" : view==="bugs" ? "Bugs & Issues" : view==="cbugs" ? ((CSPACES.list.find(x=>x.id===activeCspace)||{}).name || "Bugs board") : view==="disc" ? (((currentDisc()||{}).name) || "Product roadmap") : view==="social" ? (((currentSocial()||{}).name) || "Social Media") : view==="campaign" ? (((currentCampaign()||{}).name) || "Campaign") : view==="watch" ? (((currentWatch()||{}).name) || "Keep an Eye") : view==="horizon" ? (((currentHorizon()||{}).name) || "Widen our Horizon") : view==="pdt" ? (((currentPdt()||{}).name) || "Product All in One") : view==="rmap" ? ((_rm && _rm.name) || "Roadmap") : (DATA.title || "Product Roadmap");
-  $("rm-subtitle").textContent = view==="okr"
+  $("rm-title").textContent = view==="todo" ? "My To-do" : view==="admin" ? "Administration" : view==="okr" ? "Team OKRs" : view==="content" ? "Educational Content Roadmap" : view==="ideas" ? "Team Ideas" : view==="dev" ? "Development Board" : view==="bugs" ? "Bugs & Issues" : view==="cbugs" ? ((CSPACES.list.find(x=>x.id===activeCspace)||{}).name || "Bugs board") : view==="disc" ? (((currentDisc()||{}).name) || "Product roadmap") : view==="social" ? (((currentSocial()||{}).name) || "Social Media") : view==="campaign" ? (((currentCampaign()||{}).name) || "Campaign") : view==="watch" ? (((currentWatch()||{}).name) || "Keep an Eye") : view==="horizon" ? (((currentHorizon()||{}).name) || "Widen our Horizon") : view==="pdt" ? (((currentPdt()||{}).name) || "Product All in One") : view==="rmap" ? ((_rm && _rm.name) || "Roadmap") : (DATA.title || "Product Roadmap");
+  $("rm-subtitle").textContent = view==="todo"
+    ? "Everything assigned to you on every board, plus your own to-dos. Only you see this."
+    : view==="okr"
     ? "Objectives for this cycle and the measurable key results that tell us if we're getting there."
     : view==="content"
     ? "Content work by exam — what's being made, who owns it, and when it's due."
@@ -7126,6 +7148,12 @@ function renderHeader(){
       mkStat(contributors,"Contributors"),
     );
     updated = TIDEAS.updated || "\u2014";
+  } else if(view==="todo"){
+    const _tc = (typeof todoCounts==="function" && TODO.loaded) ? todoCounts() : {todo:0,progress:0,done:0};
+    const _tt = _tc.todo + _tc.progress + _tc.done;
+    pct = _tt ? Math.round(_tc.done/_tt*100) : 0;
+    stats.append(mkStat(_tc.todo,"To do"), mkStat(_tc.progress,"In progress"), mkStat(_tc.done,"Done"));
+    updated = "\u2014";
   } else if(view==="content"){
     const tasks = CONTENT.sections.flatMap(s=>s.tasks.flatMap(leavesOf));
     const c = counts(tasks);
@@ -13847,6 +13875,8 @@ function renderAll(){
   const ws = $("ws-switch");
   ws.innerHTML = "";
   if(view!=="okr"){
+    /* ---- My To-do (private, for people with the "My To-do" permission) ---- */
+    if(typeof todoCan==="function" && todoCan()) ws.appendChild(todoSideItem());
     /* ---- the CEO's pinned strategy sits above everything ---- */
     const _strat = docStrategyChip();
     if(_strat) ws.appendChild(_strat);
@@ -14200,6 +14230,12 @@ function renderAll(){
     $("side-title").style.display = "none";
     $("mods").innerHTML = "";
     renderContentCsnode();
+  }
+  else if(view==="todo"){
+    $("side-title").style.display = "none";
+    $("mods").innerHTML = "";
+    if(typeof todoCan!=="function" || !todoCan()){ view = "roadmap"; defaultView(); renderAll(); return; }
+    renderContentTodo();
   }
 
   else {

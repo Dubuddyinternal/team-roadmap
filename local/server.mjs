@@ -59,7 +59,8 @@ setInterval(() => runDue().catch(e => console.error("[tick]", e.message)), 60000
 
 // primary keys, used by upsert when the app doesn't name one
 const KEYS = { team_data: ["team_slug", "section"], teams: ["slug"], profiles: ["id"],
-  memberships: ["team_slug", "user_id"], team_roles: ["team_slug", "key"] };
+  memberships: ["team_slug", "user_id"], team_roles: ["team_slug", "key"],
+  my_todos: ["user_id", "team_slug"] };
 
 const matches = (row, [kind, col, val]) => {
   const v = row[col];
