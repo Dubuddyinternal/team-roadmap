@@ -28,7 +28,7 @@ const team = () => (typeof TEAM!=="undefined" && TEAM) || new URLSearchParams(lo
 const LABEL = {
   planning:["Claude is planning the edit","warn","🧠"], brief_ready:["Brief ready — your check","accent","✋"],
   rendering:["Rendering YT + IG","warn","🎬"], seo_running:["vidIQ SEO running","warn","🔎"],
-  final_review:["Final check — your turn","accent","✋"], scheduled:["Scheduled","good","🗓"], posting:["Posting","warn","🚀"], posted:["Posted","good","✅"],
+  final_review:["Videos ready","good","🎬"], scheduled:["Scheduled","good","🗓"], posting:["Posting","warn","🚀"], posted:["Posted","good","✅"],
   post_failed:["Posting needs a look","crit","⚠️"], failed:["Stopped — needs a look","crit","⚠️"], cancelled:["Cancelled","mute","⏹"],
 };
 const BUSY = ["planning","rendering","seo_running","posting","researching","scripting"];
@@ -215,7 +215,7 @@ function startView(c, canRun, m){
   const ready = readiness(c), missing = ready.filter(x=>!x[1]).map(x=>x[0].toLowerCase());
   const r = m.raw;
   return `<p class="hint" style="margin:0 0 10px">Give Claude the raw clip. It plans the edit with the <b>dubuddy-short</b> skill using this card's
-      title, description and hook, then waits for a check. Nothing renders or posts without an owner's click.</p>
+      title, description and hook, then waits for a check. Nothing renders without an owner's click.</p>
     <div class="pp-ready">${ready.map(([l,ok])=>`<span class="gchip ${ok?"ok":"no"}">${ok?"✓":"✗"} ${l}</span>`).join("")}</div>
     ${missing.length?`<p class="hint" style="margin:6px 0 12px">Claude can start without the ${esc(missing.join(", "))}, but the hook and SEO get weaker — fill ${missing.length>1?"them":"it"} in on the left first if you can.</p>`:`<div style="height:10px"></div>`}
     <div class="fld" style="margin-bottom:10px"><label>Raw video</label>
@@ -239,7 +239,7 @@ function render(){
   const [lbl,cls,ic] = st ? (LABEL[st]||[st,"mute","•"]) : ["Not started","mute","○"];
   let body = "";
 
-  if(S.mode==="off") body = `<div class="pp-note">Claude edit &amp; post isn't switched on for this site yet. An owner sets it up once (storage, the jobs table and the cloud routine — see <b>routine/SETUP.md</b>), then this panel starts working. You can still edit this card by hand.</div>`;
+  if(S.mode==="off") body = `<div class="pp-note">Claude edit isn't switched on for this site yet. An owner sets it up once (storage, the jobs table and the cloud routine — see <b>routine/SETUP.md</b>), then this panel starts working. You can still edit this card by hand.</div>`;
   else if(S.err && !S.me) body = `<div class="pp-note crit">${esc(S.err)}</div>`;
   else if(!job) body = startView(c, me.canRun, m);
   else if(BUSY.includes(st)){
@@ -261,7 +261,7 @@ function render(){
   }
 
   host.innerHTML = CSS + `<div class="block pp">
-    <div class="block-h"><h4>🤖 Claude edit &amp; post</h4><span class="badge ${cls==="accent"?"warn":cls}">${ic} ${esc(lbl)}</span>
+    <div class="block-h"><h4>🤖 Claude edit</h4><span class="badge ${cls==="accent"?"warn":cls}">${ic} ${esc(lbl)}</span>
       <span style="margin-left:auto">${modePill()}</span></div>
     ${body}
     ${job&&(job.history||[]).length?`<details style="margin-top:10px"><summary>History (${job.history.length})</summary><table>
@@ -326,44 +326,16 @@ function studioBlock(job, me){
   </details>`;
 }
 
+// after the render: both finished videos to watch and download (posting is off for now — upload them yourself)
 function finalView(job, c, me){
-  const seo = job.seo || {}, md = job.media || {}, m = S.mounted;
-  const draft = m.draft = m.draft || {
-    yt_title: (seo.yt&&seo.yt.title)||c.pre.title||"", yt_desc:(seo.yt&&seo.yt.description)||c.pre.desc||"",
-    yt_tags: ((seo.yt&&seo.yt.tags)||[]).join(", "), ig_caption:(seo.ig&&seo.ig.caption)||"",
-    // ticked by default: the platforms chosen on the card that have a rendered version
-    targets: (pl => ({ yt: !!md.yt && pl.includes("yt"), ig: !!md.ig && pl.includes("ig") }))(c.platforms&&c.platforms.length?c.platforms:[c.platform]) };
-  const sc = v => v==null ? "—" : Math.round(v);
-  const titles = [...(seo.original_title&&seo.original_title.title?[{...seo.original_title, why:"The card's original title"}]:[]), ...(seo.titles||[])];
-  return `<div class="pp-note"><b>✋ Check 2 — final check before posting.</b> Watch both versions, pick or edit the copy, choose where to post. Nothing goes live until Post is pressed.</div>
-    <div class="pp-vids">
-      ${md.yt?`<div><div class="lbl">YouTube Short</div><video controls preload="metadata" src="${esc(md.yt)}"></video></div>`:""}
-      ${md.ig?`<div><div class="lbl">Instagram Reel</div><video controls preload="metadata" src="${esc(md.ig)}"></video></div>`:""}</div>
+  const md = job.media || {};
+  const vid = (k, label, file) => md[k] ? `<div><div class="lbl">${label}</div><video controls preload="metadata" src="${esc(md[k])}"></video>
+      <a class="pp-link" href="${esc(md[k])}" target="_blank" rel="noopener" download="${file}">⬇ Download</a></div>` : "";
+  return `<div class="pp-note"><b>🎬 Both videos are ready.</b> Watch them, download them and post them yourself. Not happy? Say what to change and Claude redoes the edit.</div>
+    <div class="pp-vids">${vid("yt", "YouTube Short", "final_yt.mp4")}${vid("ig", "Instagram Reel", "final_ig.mp4")}</div>
     ${job.outputs&&job.outputs.qc?`<p class="hint" style="margin:-4px 0 10px">QC: ${esc(job.outputs.qc)}</p>`:""}
-    ${(seo.keywords||[]).length?`<details open><summary>Keywords (vidIQ)</summary><table><tr><th>Keyword</th><th>Volume</th><th>Competition</th><th>Score</th></tr>
-      ${seo.keywords.map(k=>`<tr><td>${esc(k.keyword)}</td><td>${esc(k.volume??"—")}</td><td>${esc(k.competition??"—")}</td><td>${esc(k.score??"—")}</td></tr>`).join("")}</table></details>`:""}
-    ${titles.length?`<div class="lbl" style="margin-top:6px">Title options — click one to use it</div>
-      ${titles.map(t=>`<div class="pp-title ${t.title===draft.yt_title?"on":""}" data-pp-pick="${esc(t.title)}">
-        <div><div>${esc(t.title)}</div>${t.why?`<div class="hint" style="font-size:11px">${esc(t.why)}</div>`:""}</div>
-        <span class="pp-score" title="vidIQ title score">${sc(t.score)}</span></div>`).join("")}`:""}
-    ${seo.notes?`<div class="pp-note">${esc(seo.notes)}</div>`:""}
-    <div class="fld" style="margin-top:10px"><label>YouTube title <span class="pp-count ${draft.yt_title.length>100?"over":""}" data-pp-cnt>${draft.yt_title.length}/100</span></label>
-      <input data-pp-f="yt_title" value="${esc(draft.yt_title)}"></div>
-    <div class="fld"><label>YouTube description</label><textarea data-pp-f="yt_desc" rows="6">${esc(draft.yt_desc)}</textarea></div>
-    <div class="fld"><label>YouTube tags (comma separated)</label><input data-pp-f="yt_tags" value="${esc(draft.yt_tags)}"></div>
-    <div class="fld"><label>Instagram caption</label><textarea data-pp-f="ig_caption" rows="6">${esc(draft.ig_caption)}</textarea></div>
-    <div class="fld"><label>Post to</label><div class="pp-row">
-      <label><input type="checkbox" data-pp-t="yt" ${draft.targets.yt?"checked":""} ${md.yt?"":"disabled"}> YouTube</label>
-      <label><input type="checkbox" data-pp-t="ig" ${draft.targets.ig?"checked":""} ${md.ig?"":"disabled"}> Instagram</label></div></div>
-    ${(()=>{ const sl = S.mounted.h.slot && S.mounted.h.slot(), future = sl && sl.at > new Date(Date.now()+5*60000);
-      return `<div class="pp-row">
-        ${future?`<button class="btn pri" data-pp="schedule" ${me.canApprove?"":"disabled"}>🗓 Post at slot · ${esc(sl.label)}</button>`:""}
-        <button class="btn ${future?"":"pri"}" data-pp="post" ${me.canApprove?"":"disabled"}>🚀 Post now</button>
-        ${me.canApprove?"":`<span class="hint">Only an owner or admin can post.</span>`}</div>
-      ${!future?`<p class="hint" style="margin:6px 0 0">${sl?"The card's slot has passed —":"No posting slot on this card —"} set the scheduled date on the card to post at a slot instead.</p>`:""}`; })()}
-    <div class="fld" style="margin-top:14px"><label>Not happy? Say what to change</label><textarea data-pp-notes placeholder="e.g. Title should mention CUET 2026 · or · cut the last 3 seconds"></textarea></div>
-    <div class="pp-row"><button class="btn" data-pp="redo_seo" ${me.canRun?"":"disabled"}>🔁 Redo SEO</button>
-      <button class="btn" data-pp="back_to_edit" ${me.canRun?"":"disabled"}>↩ Back to edit</button>
+    <div class="fld" style="margin-top:14px"><label>Not happy? Say what to change</label><textarea data-pp-notes placeholder="e.g. cut the last 3 seconds · bigger captions · swap the second scene"></textarea></div>
+    <div class="pp-row"><button class="btn" data-pp="back_to_edit" ${me.canRun?"":"disabled"}>↩ Back to edit</button>
       ${me.canRun?`<button class="btn sm" data-pp="cancel" style="margin-left:auto">Cancel job</button>`:""}</div>`;
 }
 

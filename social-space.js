@@ -2482,7 +2482,6 @@ function syncPipelineStages(jobs){
         if(title) c.pre.title=title; if(desc) c.pre.desc=desc; if(tags) c.pre.hashtags=tags; moved++; } }
     let t=PIPE_STAGE[j.status];
     const at=s=>STAGES.findIndex(x=>x.id===s);
-    if(t && at(t)>at("draft") && at(c.stage)<=at("draft") && !gatePass(c,"prep")) t="draft";   // held in To shoot until research + copy are in
     if(t && at(t) > at(c.stage)){ c.stage=t; moved++; }
   });
   // ideas: vidIQ research results go into the idea itself
@@ -2665,7 +2664,7 @@ function openCard(id,showGate){
         ${claudeDone?`<div class="pp-mini">
             ${jobM.yt?`<div><div class="lbl">YouTube</div><video controls preload="metadata" src="${esc(jobM.yt)}"></video></div>`:""}
             ${jobM.ig?`<div><div class="lbl">Instagram</div><video controls preload="metadata" src="${esc(jobM.ig)}"></video></div>`:""}</div>`
-          :!c.post.reel?`<p class="hint pre-note">${useClaude?`Not edited yet. Add the raw video at the top of this column, then start <b>🤖 Claude edit &amp; post</b>${!isNew?(reviewing?" above":" (top of this column)"):""} — or add your own edit below.`
+          :!c.post.reel?`<p class="hint pre-note">${useClaude?`Not edited yet. Add the raw video at the top of this column, then start <b>🤖 Claude edit</b>${!isNew?(reviewing?" above":" (top of this column)"):""} — or add your own edit below.`
               :F.video?"Not edited yet — add the finished video below once it's edited.":"Not designed yet — add the finished image or slides below."}</p>`:""}
         <details class="manual" ${c.post.reel||!useClaude?"open":""}><summary>${claudeDone?"Use my own edit instead":c.post.reel?(F.video?"Your own edit":"The design"):useClaude?"I edited it myself":F.video?"The finished video":"The finished design"}</summary>
           ${fileSlot("reel", !F.video?"Image / slides":c.vtype==="long"?"Edited video":"Edited reel", F.video?"video/*":"image/*,application/pdf",
