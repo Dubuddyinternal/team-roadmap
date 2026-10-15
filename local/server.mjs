@@ -49,6 +49,7 @@ const API = {
   "/api/pipeline/action": (await import("../api/pipeline/action.js")).default,
   "/api/pipeline/upload-url": (await import("../api/pipeline/upload-url.js")).default,
   "/api/pipeline/callback": (await import("../api/pipeline/callback.js")).default,
+  "/api/pipeline/preview": (await import("../api/pipeline/preview.js")).default,
   "/api/transcribe": (await import("../api/transcribe.js")).default,   // 🎤 dictation (ElevenLabs Scribe)
   "/api/transcribe-token": (await import("../api/transcribe-token.js")).default,   // 🎤 live dictation token
 };
@@ -155,6 +156,8 @@ http.createServer(async (req, res) => {
     res.write(": ok\n\n"); clients.add(res); req.on("close", () => clients.delete(res)); return;
   }
   if (API[p]) return API[p](req, res);
+  const pv = /^\/pv\/([^/]+)\/(.+)$/.exec(p);   // same rewrite as vercel.json
+  if (pv) { req.url = `/api/pipeline/preview?token=${encodeURIComponent(pv[1])}&path=${encodeURIComponent(pv[2])}`; return API["/api/pipeline/preview"](req, res); }
   if (p === "/api/pipeline/local-file") return serveLocalFile(req, res, url);
   if (req.method === "POST" && p === "/api/db") {
     try { return json(res, runQuery(await readBody(req))); } catch (e) { return json(res, { error: e.message }); }

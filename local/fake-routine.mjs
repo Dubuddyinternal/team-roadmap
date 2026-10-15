@@ -18,7 +18,25 @@ const p = JSON.parse(fs.readFileSync(fire, "utf8"));
 const W = path.join(process.env.PIPE_DIR || path.join(os.homedir(), "Dubuddy Pipeline"), "work", p.team, p.job);
 const env = { ...process.env, PIPE_WORK: W };
 const pipe = (...a) => execFileSync("python3", [PIPE, ...a], { env, encoding: "utf8" });
-const ff = a => execFileSync("/opt/homebrew/bin/ffmpeg", ["-v", "error", "-y", ...a]);
+const FFMPEG = fs.existsSync("/opt/homebrew/bin/ffmpeg") ? "/opt/homebrew/bin/ffmpeg" : "ffmpeg";
+const ff = a => execFileSync(FFMPEG, ["-v", "error", "-y", ...a]);
+// a tiny HyperFrames-style composition (same shape build.py writes), so the ▶ live player has something to play
+function demoComposition(dir, label) {
+  fs.mkdirSync(path.join(dir, "assets"), { recursive: true });
+  ff(["-f", "lavfi", "-i", "testsrc2=s=540x960:d=6:r=30", "-f", "lavfi", "-i", "sine=f=440:d=6", "-shortest", "-pix_fmt", "yuv420p", path.join(dir, "assets/cut.mp4")]);
+  fs.writeFileSync(path.join(dir, "index.html"), `<!doctype html><html><head><meta charset="UTF-8"/>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>body{margin:0}#root{position:relative;width:1080px;height:1920px;overflow:hidden;background:#111}
+video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.card{position:absolute;left:140px;top:700px;width:800px;padding:40px;border-radius:30px;background:#fff;font:900 90px system-ui;text-align:center}</style></head>
+<body><div id="root" data-composition-id="main" data-start="0" data-width="1080" data-height="1920" data-duration="6">
+<video id="aroll" src="assets/cut.mp4" data-start="0" data-duration="6" muted playsinline></video>
+<div class="card clip" id="hook" data-start="0.5" data-duration="3">${label} hook</div>
+<audio id="aroll-audio" src="assets/cut.mp4" data-start="0" data-duration="6" data-volume="1"></audio>
+</div><script>window.__timelines = window.__timelines || {}; const tl = gsap.timeline({ paused: true });
+tl.fromTo("#hook", { scale: .5, rotation: -8 }, { scale: 1, rotation: 0, duration: .6, ease: "back.out(2)" }, 0.5);
+window.__timelines["main"] = tl;</script></body></html>`);
+}
 const sleep = s => execFileSync("sleep", [String(s)]);
 const json = (f, o) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, JSON.stringify(o, null, 1)); };
 
@@ -32,6 +50,7 @@ try {
     ff(["-f", "lavfi", "-i", "testsrc2=s=1200x400:d=1", "-frames:v", "1", path.join(ED, "brief/sheet.jpg")]);
     fs.writeFileSync(path.join(ED, "brief/brief.md"), "# Brief (fake run)\n");
     fs.writeFileSync(path.join(ED, "plan.json"), JSON.stringify({ fake: true, notes: p.notes }));
+    demoComposition(path.join(ED, "hf_yt"), "YouTube"); demoComposition(path.join(ED, "hf_ig"), "Instagram");
     json(path.join(OUT, "plan_result.json"), { summary: (p.notes ? `[changed: ${p.notes}] ` : "") + "Fake brief for “" + (p.card.title || p.card.idea || "card") + "” — 32s, hook on the key number, 3 graphics.",
       hook: "SRCC cutoff *gira*?", storyboard: [{ at: "0:00", said: "SRCC ka cutoff…", scene: "Hook card, falling arrow", display: "float" }, { at: "0:08", said: "2025 me 98.7 tha", scene: "Stat count-up", display: "split" }],
       cuts: "Removed 2 false starts.", graphics: [{ at: "0:08", display: "split", text: "98.7", source: "HyperFrames" }],

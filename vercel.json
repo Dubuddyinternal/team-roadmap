@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/pv/:token/:path*", "destination": "/api/pipeline/preview?token=:token&path=:path*" }
+  ]
+}

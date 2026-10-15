@@ -135,6 +135,29 @@ def first(*paths):
     return next((x for x in paths if x and os.path.isfile(x)), None)
 
 
+def upload_preview(E):
+    """▶ live player on the card: hf_yt/ and hf_ig/ go up file by file (the card plays index.html itself)."""
+    skip = ("node_modules", "renders", ".cache", ".built_sha", ".DS_Store")
+    names = []
+    for hf in ("hf_yt", "hf_ig"):
+        base = os.path.join(E, hf)
+        for d, subs, fs in os.walk(base):
+            subs[:] = [x for x in subs if x not in skip]
+            names += [os.path.relpath(os.path.join(d, f), E) for f in fs if f not in skip]
+    if not names:
+        return False
+    p = load()
+    body = json.dumps({"event": "links", "names": names}).encode()
+    with http("POST", p["callback"], data=body, headers={"content-type": "application/json"}) as r:
+        links = (json.loads(r.read() or b"{}").get("data") or {}).get("links") or {}
+    if "hf_yt/index.html" not in links:
+        return False
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(6) as ex:
+        list(ex.map(lambda n: upload(links[n], os.path.join(E, n)), [n for n in names if n in links]))
+    return True
+
+
 def finish():
     p = load(); step = p["step"]; outs = p.get("outputs") or {}; E = ed(); O = os.path.join(W, "out")
     files = {
@@ -156,6 +179,12 @@ def finish():
             tf.add(os.path.join(W, "raw", "edit"), arcname="edit", filter=lambda i: None if any(s in i.name for s in skip) else i)
         files["edit"] = t
     uploaded = []
+    if step == "plan":
+        try:
+            report("progress", "uploading the live preview…")
+            if upload_preview(E): uploaded.append("preview")
+        except Exception as e:  # the brief still counts without the player
+            print("live preview upload skipped:", e)
     for name, path in files.items():
         if path and name in outs:
             report("progress", f"uploading {name}…") if name in ("yt", "ig", "edit") else None
