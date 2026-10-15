@@ -42,7 +42,7 @@
    Uses index.html globals (SUPA, TEAM, DEV, BUGS, CSPACES, OKRS, DATA,
    CONTENT, view, renderAll, openDialog, openChoice, toast, fmtD, todayISO …).
    ===================================================================== */
-var TODO = { team: null, loaded: false, loading: false, local: false, items: [], over: {}, fixed: [], fixedDone: {}, learn: {}, deep: null, deepLog: {}, reasonLog: {}, settings: null };
+var TODO = { team: null, loaded: false, loading: false, local: false, items: [], over: {}, fixed: [], fixedDone: {}, learn: {}, deep: null, deepLog: {}, reasonLog: {}, settings: null, feeds: [], feedItems: {}, feedSeen: {}, feedAt: 0 };
 // the two full-screen timers in Personal
 var TODO_TIMERS = {
   deep: { icon: "🧘", title: "Deep thinking", line: "Talk to yourself. Walk. Don't do anything.",
@@ -96,6 +96,10 @@ function todoApply(d) {
   TODO.fixedDone = d.fixedDone && typeof d.fixedDone === "object" ? d.fixedDone : {};
   TODO.learn = d.learn && typeof d.learn === "object" ? d.learn : {};   // { "YYYY-MM-DD": { ai, world, social, edtech } } (older days: a string), kept forever
   TODO.settings = todoSettingsNorm(d.settings);   // ⋯ settings on the Personal cards
+  TODO.feeds = Array.isArray(d.feeds) ? d.feeds.filter(function (s) { return s && s.id && s.url; }) : [];   // 📡 what the feed agent follows
+  TODO.feedItems = d.feedItems && typeof d.feedItems === "object" ? d.feedItems : {};
+  TODO.feedSeen = d.feedSeen && typeof d.feedSeen === "object" ? d.feedSeen : {};
+  TODO.feedAt = Number(d.feedAt) || 0;
   TODO.deepLog = d.deepLog && typeof d.deepLog === "object" ? d.deepLog : {};       // deep thinking { "YYYY-MM-DD": minutes }
   TODO.reasonLog = d.reasonLog && typeof d.reasonLog === "object" ? d.reasonLog : {}; // reasoning (chess, maths, puzzles)
   // { start, end, kind:"deep"|"reason" } (ms) while a timer runs
@@ -126,13 +130,15 @@ async function todoLoad() {
   TODO.local = local; TODO.team = TEAM; TODO.loaded = true; TODO.loading = false;
   renderAll();   // the board and the sidebar count
   if (TODO.deep) todoDeepShow();   // a deep-thinking block is still running: back behind the curtain
+  todoFeedRun(false);              // the feed agent, if it hasn't run in the last 30 minutes
 }
 var _todoSaveT = null;
 function todoSave() {
   // tick marks older than ~13 months are dropped so the row stays small (the Summary looks back 6 months)
   var cut = todoAddDays(todoToday(), -400);
   Object.keys(TODO.fixedDone).forEach(function (k) { if (k.split("|")[1] < cut) delete TODO.fixedDone[k]; });
-  var data = { items: TODO.items, over: TODO.over, fixed: TODO.fixed, fixedDone: TODO.fixedDone, learn: TODO.learn, deep: TODO.deep, deepLog: TODO.deepLog, reasonLog: TODO.reasonLog, settings: TODO.settings };
+  var data = { items: TODO.items, over: TODO.over, fixed: TODO.fixed, fixedDone: TODO.fixedDone, learn: TODO.learn, deep: TODO.deep, deepLog: TODO.deepLog, reasonLog: TODO.reasonLog, settings: TODO.settings,
+    feeds: TODO.feeds, feedItems: TODO.feedItems, feedSeen: TODO.feedSeen, feedAt: TODO.feedAt };
   clearTimeout(_todoSaveT);
   _todoSaveT = setTimeout(async function () {
     if (!TODO.local && SUPA) {
@@ -713,6 +719,7 @@ function todoLearnPartBox(P, today) {
   h.appendChild(todoEl("b", "", (P.icon ? P.icon + " " : "") + P.label));
   h.appendChild(todoEl("span", "td-lp-st", val ? "✓ Saved" : "To do"));
   b.appendChild(h);
+  var fd = todoFeedBlock(P); if (fd) b.appendChild(fd);   // 📡 what the agent found for this box
   if (!editing) {
     b.appendChild(todoLearnText(val));
     var ed = todoEl("button", "td-act", "Edit"); ed.onclick = function () { todoLearnEdit[P.key] = true; renderAll(); };
@@ -750,6 +757,8 @@ function todoLearnBox() {
   var logB = todoEl("button", "td-act", todoLearnLog ? "Hide past learnings" : "Past learnings");
   logB.onclick = function () { todoLearnLog = !todoLearnLog; renderAll(); };
   head.appendChild(logB);
+  var fb = todoEl("button", "td-act", "📡 Feeds" + (TODO.feeds.length ? " · " + TODO.feeds.length : "")); fb.title = "What the agent follows for these boxes"; fb.onclick = todoFeedsPanel;
+  head.appendChild(fb);
   head.appendChild(todoMoreBtn("Settings — boxes and how many unlock", todoLearnSettings));
   box.appendChild(head);
   if (!open) box.appendChild(todoEl("div", "td-learn-q", "🔒 Write " + (need === parts.length ? "all " + need : need + " of " + parts.length) + " for today to unlock the rest of your to-dos."));
@@ -876,6 +885,177 @@ function todoDeepShow() {
   };
   tick();
   clearInterval(_todoDeepT); _todoDeepT = setInterval(tick, 1000);
+}
+
+/* ---------- 📡 Feeds: the agent that follows links for me (supabase/functions/feed-fetch) ----------
+   TODO.feeds      [{ id, url, box (learning part key), name, kind, feedUrl (RSS link for X / LinkedIn, or
+                     what the agent found), status, title, error, checked }]
+   TODO.feedItems  { sourceId: [{ id, title, link, date, author }] } — latest 10 per source
+   TODO.feedSeen   { "<sourceId>|<itemId>": "YYYY-MM-DD" } — what I've ticked off (kept ~60 days)
+   TODO.feedAt     last time the agent ran (ms); it runs on open if older than 30 min, or on "Check now". */
+var TODO_FEED_EVERY = 30 * 60 * 1000;
+var todoFeedBusy = false, todoFeedOpen = {};   // box key -> show all new items
+function todoFeedKind(url) {
+  var h = ""; try { h = new URL(url).hostname.toLowerCase().replace(/^www\.|^m\./, ""); } catch (_) { return "bad"; }
+  if (/(^|\.)youtube\.com$|^youtu\.be$/.test(h)) return "youtube";
+  if (/(^|\.)(x|twitter)\.com$/.test(h)) return "x";
+  if (/(^|\.)linkedin\.com$/.test(h)) return "linkedin";
+  return "web";
+}
+var TODO_FEED_KINDS = { youtube: "▶️ YouTube", x: "𝕏 Twitter / X", linkedin: "in LinkedIn", web: "🌐 Website" };
+function todoFeedName(s) { return s.name || s.title || (function () { try { var u = new URL(s.url); return u.hostname.replace(/^www\./, "") + (u.pathname.length > 1 ? u.pathname.replace(/\/$/, "") : ""); } catch (_) { return s.url; } })(); }
+function todoFeedNew(boxKey) {
+  var out = [];
+  TODO.feeds.forEach(function (s) {
+    if (s.box !== boxKey) return;
+    (TODO.feedItems[s.id] || []).forEach(function (it) {
+      if (TODO.feedSeen[s.id + "|" + it.id]) return;
+      out.push({ src: s, it: it });
+    });
+  });
+  return out.sort(function (a, b) { return String(b.it.date || "").localeCompare(String(a.it.date || "")); });
+}
+function todoFeedSeen(list) { var t = todoToday(); list.forEach(function (x) { TODO.feedSeen[x.src.id + "|" + x.it.id] = t; }); todoSave(); }
+function todoAgo(iso) {
+  var t = Date.parse(iso); if (isNaN(t)) return "";
+  var m = Math.round((Date.now() - t) / 60000);
+  return m < 60 ? Math.max(1, m) + " min ago" : m < 1440 ? Math.round(m / 60) + " h ago" : Math.round(m / 1440) + " d ago";
+}
+async function todoFeedRun(force) {
+  if (todoFeedBusy || !SUPA || !TODO.feeds.length) return;
+  if (!force && Date.now() - (TODO.feedAt || 0) < TODO_FEED_EVERY) return;
+  todoFeedBusy = true; if (force) renderAll();
+  try {
+    var r = await SUPA.functions.invoke("feed-fetch", { body: { sources: TODO.feeds.map(function (s) { return { id: s.id, url: s.url, feedUrl: s.feedUrl || "" }; }) } });
+    var res = r && r.data && r.data.results;
+    if (!res) throw new Error((r && r.error && r.error.message) || "no answer");
+    var first = {};
+    TODO.feeds.forEach(function (s) {
+      var x = res[s.id]; if (!x) return;
+      s.status = x.status; s.error = x.error || ""; s.checked = Date.now();
+      if (x.feedUrl && s.kind !== "x" && s.kind !== "linkedin") s.feedUrl = x.feedUrl;
+      if (x.title && !s.title) s.title = x.title;
+      if (x.status === "ok") {
+        var had = !!TODO.feedItems[s.id];
+        TODO.feedItems[s.id] = (x.items || []).slice(0, 10);
+        // the first time a source is checked, everything older than 3 days counts as already seen
+        if (!had) { var cut = Date.now() - 3 * 86400000; TODO.feedItems[s.id].forEach(function (it) { if (!it.date || Date.parse(it.date) < cut) first[s.id + "|" + it.id] = todoToday(); }); }
+      }
+    });
+    Object.keys(first).forEach(function (k) { TODO.feedSeen[k] = first[k]; });
+    TODO.feedAt = Date.now();
+    var cutSeen = todoAddDays(todoToday(), -60);
+    Object.keys(TODO.feedSeen).forEach(function (k) { if (TODO.feedSeen[k] < cutSeen) delete TODO.feedSeen[k]; });
+    if (force) toast("📡 Feeds checked");
+  } catch (e) {
+    if (force) toast("Couldn't check the feeds: " + e.message);
+  } finally {
+    todoFeedBusy = false; todoSave();
+  }
+}
+/* "🆕 New for you" inside a learning box */
+function todoFeedBlock(P) {
+  var list = todoFeedNew(P.key), mine = TODO.feeds.filter(function (s) { return s.box === P.key; });
+  if (!mine.length) return null;
+  var wrap = todoEl("div", "td-fd");
+  var h = todoEl("div", "td-fd-h");
+  h.appendChild(todoEl("span", "td-fd-t", list.length ? "🆕 New for you · " + list.length : "✓ Nothing new from your " + mine.length + " source" + (mine.length === 1 ? "" : "s")));
+  if (list.length) { var all = todoEl("button", "td-act", "✓ Mark all seen"); all.onclick = function () { todoFeedSeen(list); }; h.appendChild(all); }
+  wrap.appendChild(h);
+  var show = todoFeedOpen[P.key] ? list : list.slice(0, 4);
+  show.forEach(function (x) {
+    var r = todoEl("div", "td-fd-row");
+    var a = todoEl("a", "td-fd-a", x.it.title); a.href = x.it.link || x.src.url; a.target = "_blank"; a.rel = "noopener noreferrer";
+    a.onclick = function () { setTimeout(function () { todoFeedSeen([x]); }, 300); };   // opening it counts as seen
+    var meta = todoEl("span", "td-fd-m", (TODO_FEED_KINDS[x.src.kind] || "").split(" ")[0] + " " + todoFeedName(x.src) + (x.it.date ? " · " + todoAgo(x.it.date) : ""));
+    var ok = todoEl("button", "td-fd-ok", "✓"); ok.title = "Seen"; ok.onclick = function () { todoFeedSeen([x]); };
+    var tx = todoEl("div", "td-fd-tx"); tx.append(a, meta);
+    r.append(tx, ok); wrap.appendChild(r);
+  });
+  if (list.length > 4) { var more = todoEl("button", "td-act", todoFeedOpen[P.key] ? "Show fewer" : "Show all " + list.length); more.onclick = function () { todoFeedOpen[P.key] = !todoFeedOpen[P.key]; renderAll(); }; wrap.appendChild(more); }
+  return wrap;
+}
+/* the Feeds panel: what the agent follows, and where each one shows up */
+function todoFeedsPanel() {
+  var ov = todoEl("div", "overlay show"), dg = todoEl("div", "dialog td-fdpanel");
+  dg.setAttribute("role", "dialog"); dg.setAttribute("aria-modal", "true"); ov.appendChild(dg);
+  var close = function () { if (ov.parentNode) ov.parentNode.removeChild(ov); renderAll(); };
+  ov.onclick = function (e) { if (e.target === ov) close(); };
+  var parts = todoLearnParts();
+  var boxSel = function (cur) { var s = todoEl("select"); parts.forEach(function (p) { var o = todoEl("option", "", p.icon + " " + p.label); o.value = p.key; s.appendChild(o); }); s.value = cur || parts[0].key; return s; };
+  var draw = function () {
+    dg.innerHTML = "";
+    dg.appendChild(todoEl("h3", "", "📡 Feeds — what your agent follows"));
+    var body = todoEl("div", "dlg-body");
+    body.appendChild(todoEl("div", "hint", "Paste links — YouTube channels, websites and blogs, Twitter / X or LinkedIn accounts — and pick which learning box they show up in. The agent checks them every 30 minutes while My To-do is open and puts anything new under that box."));
+    // add
+    var add = todoEl("div", "td-fd-add");
+    var ta = todoEl("textarea"); ta.rows = 3; ta.placeholder = "One link per line, e.g.\nhttps://www.youtube.com/@AndrejKarpathy\nhttps://simonwillison.net\nhttps://x.com/karpathy";
+    ta.setAttribute("data-plain", "");   // plain box (no rich-text editor)
+    var row = todoEl("div", "td-fd-addrow"), sel = boxSel(), b = todoEl("button", "btn save", "＋ Add");
+    row.append(todoEl("span", "td-dim", "Show in"), sel, b);
+    add.append(ta, row); body.appendChild(add);
+    var err = todoEl("div", "hint err"); err.style.color = "var(--blocked)"; body.appendChild(err);
+    b.onclick = function () {
+      var urls = ta.value.split(/[\s,]+/).map(function (u) { u = u.trim(); if (u && !/^https?:\/\//i.test(u)) u = "https://" + u; return u; }).filter(Boolean);
+      var bad = urls.filter(function (u) { return todoFeedKind(u) === "bad"; });
+      if (!urls.length) { err.textContent = "Paste at least one link."; return; }
+      if (bad.length) { err.textContent = "Not a web link: " + bad[0]; return; }
+      if (TODO.feeds.length + urls.length > 40) { err.textContent = "Up to 40 sources."; return; }
+      urls.forEach(function (u) {
+        if (TODO.feeds.some(function (s) { return s.url === u; })) return;
+        TODO.feeds.push({ id: "f" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), url: u, box: sel.value, kind: todoFeedKind(u), status: "new" });
+      });
+      todoSave(); draw(); todoFeedRun(true).then(draw);
+    };
+    // list, grouped by box
+    var any = false;
+    parts.forEach(function (p) {
+      var mine = TODO.feeds.filter(function (s) { return s.box === p.key; });
+      if (!mine.length) return; any = true;
+      var g = todoEl("div", "td-fd-grp"); g.appendChild(todoEl("div", "td-fd-gh", p.icon + " " + p.label + " · " + mine.length));
+      mine.forEach(function (s) { g.appendChild(sourceRow(s)); });
+      body.appendChild(g);
+    });
+    var orphan = TODO.feeds.filter(function (s) { return !parts.some(function (p) { return p.key === s.box; }); });
+    if (orphan.length) { any = true; var og = todoEl("div", "td-fd-grp"); og.appendChild(todoEl("div", "td-fd-gh", "⚠️ Box removed — pick a new one")); orphan.forEach(function (s) { og.appendChild(sourceRow(s)); }); body.appendChild(og); }
+    if (!any) body.appendChild(todoEl("div", "td-empty", "Nothing followed yet."));
+    dg.appendChild(body);
+    var btns = todoEl("div", "btns");
+    var ck = todoEl("button", "btn", todoFeedBusy ? "Checking…" : "↻ Check now"); ck.disabled = todoFeedBusy || !TODO.feeds.length;
+    ck.onclick = function () { todoFeedRun(true).then(draw); draw(); };
+    var cl = todoEl("button", "btn save", "Done"); cl.onclick = close;
+    btns.append(ck, cl); dg.appendChild(btns);
+  };
+  var sourceRow = function (s) {
+    var r = todoEl("div", "td-fd-src");
+    var top = todoEl("div", "td-fd-srctop");
+    top.appendChild(todoEl("span", "td-fd-kind", TODO_FEED_KINDS[s.kind] || "🌐"));
+    var nm = todoEl("input", "td-fd-nm"); nm.value = s.name || ""; nm.placeholder = todoFeedName(s); nm.title = "A short name (optional)";
+    nm.onchange = function () { s.name = nm.value.trim(); todoSave(); };
+    var sel = boxSel(s.box); sel.onchange = function () { s.box = sel.value; todoSave(); draw(); };
+    var rm = todoEl("button", "td-act danger", "Remove");
+    rm.onclick = function () { TODO.feeds.splice(TODO.feeds.indexOf(s), 1); delete TODO.feedItems[s.id]; todoSave(); draw(); };
+    top.append(nm, sel, rm); r.appendChild(top);
+    var link = todoEl("a", "td-fd-url", s.url); link.href = s.url; link.target = "_blank"; link.rel = "noopener noreferrer"; r.appendChild(link);
+    var st = s.status, n = (TODO.feedItems[s.id] || []).length;
+    var msg = st === "ok" ? "✅ Following · " + n + " recent post" + (n === 1 ? "" : "s") + (s.checked ? " · checked " + todoAgo(new Date(s.checked).toISOString()) : "")
+      : st === "needs_bridge" ? "🔗 " + (s.kind === "x" ? "Twitter / X" : "LinkedIn") + " doesn't let apps read posts for free. Make a free RSS link for this account (rss.app or RSSHub) and paste it below."
+      : st === "no_feed" ? "⚠️ No feed found on this site. If it has an RSS link, paste it below."
+      : st === "error" ? "❌ " + (s.error || "Couldn't read it")
+      : "⏳ Not checked yet";
+    r.appendChild(todoEl("div", "td-fd-st " + (st || "new"), msg));
+    if (st === "needs_bridge" || st === "no_feed" || s.kind === "x" || s.kind === "linkedin" || (st === "error" && s.feedUrl)) {
+      var fr = todoEl("div", "td-fd-bridge");
+      var fi = todoEl("input"); fi.placeholder = "RSS link, e.g. https://rss.app/feeds/…xml"; fi.value = s.kind === "x" || s.kind === "linkedin" || st === "no_feed" ? (s.feedUrl || "") : "";
+      var fs = todoEl("button", "td-act", "Use this feed");
+      fs.onclick = function () { var v = fi.value.trim(); if (v && !/^https?:\/\//i.test(v)) v = "https://" + v; s.feedUrl = v; s.status = "new"; todoSave(); todoFeedRun(true).then(draw); draw(); };
+      fr.append(fi, fs); r.appendChild(fr);
+    }
+    return r;
+  };
+  draw();
+  document.body.appendChild(ov);
 }
 
 /* ---------- Summary tab: how I've been doing, week by week ---------- */
@@ -1044,6 +1224,7 @@ function todoSideItem() {
     menu.onclick = function (e) {
       e.stopPropagation();
       openRowMenu(menu, [
+        { label: "📡 Feeds — what the agent follows", onClick: todoFeedsPanel },
         { label: "📚 New learning — boxes & unlock", onClick: todoLearnSettings },
         { label: "🧘 Deep thinking — how long", onClick: todoDeepSettings },
         { label: "♟️ Reasoning time — durations", onClick: todoReasonSettings },
