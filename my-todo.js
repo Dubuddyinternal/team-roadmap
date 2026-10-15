@@ -1,6 +1,6 @@
 /* =====================================================================
-   MY TO-DO — one private board per person, split into three hats:
-     👤 Personal · 🧭 As CEO · 🧩 As Product Head
+   MY TO-DO — one private board per person, split into four hats:
+     👤 Personal · 🧭 As CEO · 🧩 As Product Head · ▶️ Sumit YouTube
    Each hat has
      * fixed things — repeat every day / on chosen weekdays / on a day of
        the month, or a one-off meeting on a date (set up from the hat's ⋯
@@ -13,6 +13,7 @@
         ideas, roadmap module tasks, Product All in One items
      🧭 CEO          — Educational Content tasks, Campaign pieces, Keep an
         Eye studies, Widen our Horizon topics
+     ▶️ Sumit YouTube — nothing pulled in; only what I add myself
    OKRs are not pulled in (they stay on the OKRs page).
    A card's column follows its board (done there = Done here). Moving a dev
    card, bug or roadmap / content task here moves it on its board too (if I
@@ -61,6 +62,7 @@ var TODO_HATS = [
   { key: "personal", icon: "👤", label: "Personal" },
   { key: "ceo", icon: "🧭", label: "As CEO" },
   { key: "product", icon: "🧩", label: "As Product Head" },
+  { key: "youtube", icon: "▶️", label: "Sumit YouTube" },
 ];
 var TODO_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 var TODO_DONE_SHOW = 6;          // each hat's Done column shows the latest few; "Show all" opens the rest
