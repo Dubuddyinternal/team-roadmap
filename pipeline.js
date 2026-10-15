@@ -418,7 +418,7 @@ function wire(){
     try{
       const { data } = await call("/api/pipeline/action", { team: team(), job: c.id, action: "studio" });
       const qq = v => "'" + String(v).replace(/'/g, "'\\''") + "'";
-      m.studioCmd = { job: c.id, cmd: `bash <(curl -fsSL ${location.origin}/studio/dubuddy-studio.sh) ${qq(c.id)} ${qq(data.get)} ${qq(data.put)} ${qq(data.done)}` };
+      m.studioCmd = { job: c.id, cmd: `bash <(curl -fsSL ${/\.vercel\.app$/.test(location.hostname) ? "https://tools.dubuddy.in" : location.origin}/studio/dubuddy-studio.sh) ${qq(c.id)} ${qq(data.get)} ${qq(data.put)} ${qq(data.done)}` };
       render();
     }catch(e){ sb.disabled = false; sb.textContent = "🎬 Open in Studio"; toast(e.message); }
   };
