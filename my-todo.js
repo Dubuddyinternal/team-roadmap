@@ -46,7 +46,8 @@
    its own time by dragging it onto a gap between blocks (or its 🕘 button).
    A timed thing leaves its block and sits on the day at its time; ✕ puts it
    back. Times are kept (TODO.times) so Running at 18:00 stays there every
-   day. If New learning is timed for later, nothing freezes until that time.
+   day. If New learning has a time, it sits on the day too and nothing freezes
+   (its dot turns red once the time has passed and it isn't written yet).
 
    "Upcoming" lists tomorrow / the next 5 / the next 7 days: fixed things on
    each day plus every to-do and assigned card due that day, and overdue ones.
@@ -566,7 +567,8 @@ function todoDayPlan(assigned, boxes) {
     } else {
       var body = todoEl("div", "td-row-item"); body.appendChild(e.el());
       if (e.H.key !== "personal" || e.key.indexOf("box:") !== 0) body.appendChild(todoEl("span", "td-row-hat", e.H.icon + " " + e.H.label));
-      row("itemrow" + (e.key.indexOf("box:") === 0 ? " boxrow" : ""), rail(todoFmtHM(e.t), "", function () { todoTimeAsk("🕘 When?", e.t, e.key); }, function () { todoTimeSet(e.key, ""); }), body);
+      var late = e.key === "box:learn" && now > e.t && !todoLearnedToday();
+      row("itemrow" + (e.key.indexOf("box:") === 0 ? " boxrow" : "") + (late ? " late" : ""), rail(todoFmtHM(e.t), "", function () { todoTimeAsk("🕘 When?", e.t, e.key); }, function () { todoTimeSet(e.key, ""); }), body);
     }
     gap(e, timed[i + 1] || null);
   });
@@ -1489,10 +1491,10 @@ function renderContentTodo() {
   var page = wrap;                   // the 🌙 Sleep row goes at the very end, outside any freeze
   wrap.appendChild(todoBookend("wake"));   // ⏰ first thing of the day
   // daily new learning next; until today's is written, the rest is frozen —
-  // unless it has a time later today: then it waits on the day and nothing freezes yet.
+  // unless I gave it a time: then it's planned on the day like everything else and nothing freezes.
   // On Today, a box with a time sits on the day at that time instead of up here.
   var at = TODO.times.at, onDay = function (k) { return todoMode === "today" && !!at["box:" + k]; };
-  var learnLater = onDay("learn") && (todoLearnedToday() || todoNowHM() < at["box:learn"]);
+  var learnLater = onDay("learn");
   var dayBoxes = [];
   if (learnLater) dayBoxes.push("learn"); else wrap.appendChild(todoLearnBox());
   if (onDay("deep")) dayBoxes.push("deep"); else wrap.appendChild(todoDeepBox());   // always usable, even before today's learning is written
