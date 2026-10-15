@@ -5084,21 +5084,21 @@ const DISC_STAGES = [
   {key:"later", label:"Later"},
   {key:"wont",  label:"Won't do"},
 ];
-// Product Roadmap (discovery) spaces walk an idea from Backlog through primary research, a
-// Now / Next / Later call, implementation research, Ready to implement, engineering, and Done.
+// Product Roadmap (discovery) spaces walk an idea from Backlog through primary research to a
+// Will do / Won't do call, then implementation research, Ready to implement, engineering, and Done.
 // Every new idea lands in Backlog. Other idea boards (product dev / social) keep Now / Next / Later.
 const PIPE_STAGES = [
   {key:"backlog", label:"Backlog"},
   {key:"primary", label:"Primary research / discussion"},
-  {key:"now",     label:"Now"},
-  {key:"next",    label:"Next"},
-  {key:"later",   label:"Later"},
+  {key:"now",     label:"Will do"},   // was "Now"; key kept so those ideas stay put
+  {key:"wont",    label:"Won't do"},
   {key:"implres", label:"Implementation research / discussion"},
   {key:"ready",   label:"Ready to implement"},
   {key:"building",label:"Under implementation by engineering"},
-  {key:"wont",    label:"Won't do"},
   {key:"done",    label:"Done"},
 ];
+// Next / Later are gone from Product Roadmaps: Next ideas were already a "yes", Later ones go back to Backlog
+const PIPE_FROM_OLD = { next:"now", later:"backlog" };
 function discStages(cs){ return cs && cs.type==="discovery" ? PIPE_STAGES : DISC_STAGES; }
 function discDefaultStage(cs){ return discStages(cs)[0].key==="backlog" ? "backlog" : "later"; }
 const DISC_STATES = ["Pending","On track","At risk","Off track"];
@@ -5169,6 +5169,7 @@ function normalizeCspaces(c){
       x.ideas.forEach(i=>{
         if(!i.id) i.id = "idea-" + Math.random().toString(36).slice(2,8);
         const _stg = discStages(x);
+        if(x.type==="discovery" && PIPE_FROM_OLD[i.stage]) i.stage = PIPE_FROM_OLD[i.stage];
         if(!_stg.some(st=>st.key===i.stage)) i.stage = discDefaultStage(x);
         if(!DISC_STATES.includes(i.state)) i.state = "Pending";
         i.status = discStatusOf(i.state);
@@ -5232,7 +5233,7 @@ function openMarketingTemplates(parent){
     { id:"social",     emo:"🎯", name:"Social media",        meta:"Ideation · Process · Schedule", desc:"Every post has a reason before it is made and a verdict after it ships — research, hook, CTA, then a board and a calendar." },
     { id:"content",    emo:"📚", name:"Educational content", meta:"Tasks · Budget · Kanban",       desc:"A content section with tasks, deadlines, budgets and the List / Board views — like your exam sections." },
     { id:"competitor", emo:"⚔️", name:"Competitor analysis", meta:"Product-level · Feature-level", desc:"Compare against competitors — product-level feature grids and feature-level deep dives, side by side." },
-    { id:"discovery",  emo:"🚀", name:"Product roadmap",     meta:"All ideas · Roadmap · Timeline", desc:"Collect ideas, sort them into Now / Next / Later, and see them on a timeline." },
+    { id:"discovery",  emo:"🚀", name:"Product roadmap",     meta:"All ideas · Roadmap · Timeline", desc:"Collect ideas, research them, decide Will do / Won't do, and track them through to Done." },
     { id:null, emo:"🔔", name:"Push automations",    meta:"Coming soon", desc:"Rules that fire on their own — someone signs up, the right notification goes out, and every attempt is written down." },
     { id:null, emo:"🤝", name:"Influencer pipeline", meta:"Coming soon", desc:"Track creators from first message to published video, with rates, deliverables and whether payment went out." }
   ];
@@ -6858,7 +6859,7 @@ function renderHeader(){
     : view==="admin"
     ? "Manage who can access this team and what each role can do."
     : view==="disc"
-    ? "Collect ideas, research them, decide Now / Next / Later, then take them through to Ready to implement, engineering and Done."
+    ? "Collect ideas, research them, decide Will do / Won\u2019t do, then take them through to Ready to implement, engineering and Done."
     : view==="social"
     ? "Every post has a reason before it is made and a verdict after it ships. Two people, one record."
     : view==="campaign"
