@@ -1902,7 +1902,7 @@ function ideaResearchCell(i){
 // Ideation: a short table per section (To decide · Accepted · Parked · Rejected). Everything else about an
 // idea lives in its window, so Accept / Park / Reject sit right in the row without scrolling sideways.
 const IDEA_SECTIONS=[
-  { key:"open",     title:"To decide", hint:"new and under review — research, then accept, park or reject", test:i=>i.status==="new"||i.status==="under_review", open:true },
+  { key:"open",     title:"To decide", hint:"new and under review — accept, park or reject", test:i=>i.status==="new"||i.status==="under_review", open:true },
   { key:"accepted", title:"Accepted",  hint:"on the Content Process board", test:i=>i.status==="accepted" },
   { key:"parked",   title:"Parked",    hint:"good ideas kept for a better moment", test:i=>i.status==="parked" },
   { key:"rejected", title:"Rejected",  hint:"with the reason, so rejections stay countable", test:i=>i.status==="rejected" },
@@ -1977,7 +1977,6 @@ function renderIdeation(){
       <td class="td-idea">${fmtIcon(i)} ${esc(i.idea)}${i.title?`<div class="sub">${esc(i.title)}</div>`:""}</td>
       <td>${who(i.by)}<div class="sub vol">${dmy(i.created)}</div></td>
       <td>${ptags(i)} ${vtagFor(i)}</td>
-      <td class="td-kw">${kwShort(i)}${window.PIPE?ideaResearchCell(i):""}</td>
       <td>${decide}${sec==="open"&&i.status==="under_review"?`<div class="sub">under review</div>`:""}</td>
       <td><button class="cbtn ${i.comments.length?"has":""}" data-cmt="${i.id}">💬 ${i.comments.length||""}</button></td></tr>`; };
 
@@ -1992,7 +1991,7 @@ function renderIdeation(){
     if(!list.length && S2.key!=="open") return "";
     return `<details class="isec" data-isec="${S2.key}" ${open?"open":""}>
       <summary><h3>${S2.title}</h3><span class="count">${list.length}</span><span class="hint">${S2.hint}</span></summary>
-      ${list.length?`<div class="tw"><table class="ideas"><thead><tr><th>Idea</th><th>By</th><th>Platform</th><th>Research</th><th>${S2.key==="open"?"Decide":"Status"}</th><th>💬</th></tr></thead>
+      ${list.length?`<div class="tw"><table class="ideas"><thead><tr><th>Idea</th><th>By</th><th>Platform</th><th>${S2.key==="open"?"Decide":"Status"}</th><th>💬</th></tr></thead>
         <tbody>${list.map(i=>row(i,S2.key)).join("")}</tbody></table></div>`
       :`<p class="hint" style="margin:6px 0 0">Nothing waiting.${ro?"":" Press <b>+ New idea</b> to log one."}</p>`}</details>`; }).join("");
 
@@ -2284,12 +2283,11 @@ function openIdea(id,focusComments,fmtKey){
     const missing=[!(prim&&prim.kw)&&"a primary keyword",prim&&prim.kw&&prim.vol==null&&`volume for “${prim.kw}”`,!i.why&&"why this idea",
       !i.title&&"title",!i.desc&&"description",!i.hashtags&&"hashtags"].filter(Boolean);
     const cpOk=!!(i.title&&i.desc&&i.hashtags);
-    const steps=[["Logged",!isNew],["Researched",researched],[decided?STATUS_UI[i.status].label:"Decided",decided]];
+    const steps=[["Logged",!isNew],[decided?STATUS_UI[i.status].label:"Decided",decided]];
     const next = isNew ? "Write the idea in one line, then Log idea."
       : card&&i.status==="accepted" ? `It's on the board in <b>${esc(STAGES.find(x=>x.id===card.stage).label)}</b>${card.scheduled?` — goes live ${esc(dow(card.scheduled).slice(0,3))} ${esc(dmy(card.scheduled))}`:""}. Open the card to carry on.`
       : i.status==="rejected" ? `Rejected${i.rejectReason?" — "+esc(i.rejectReason):""}. Accept it later if things change.`
       : i.status==="parked" ? "Parked for a better moment. Accept it when it's time."
-      : !researched ? "Next: <b>🔎 Fill with vidIQ</b> (or type the keyword and volume), then decide."
       : `Next: decide. <b>Accept</b> books the next free slot${slotNext?` (${esc(dow(slotNext).slice(0,3))} ${esc(dmy(slotNext))})`:""}.`;
 
     openDrawer(`
@@ -2332,7 +2330,7 @@ function openIdea(id,focusComments,fmtKey){
     </div><div class="dr-col">
 
     ${isNew?`<p class="hint" style="margin:0 0 14px;padding:11px 13px;background:var(--surface-2);border-radius:var(--r)">
-      A new idea is logged with no status. Research it, then the head accepts, parks or rejects it.</p>`
+      A new idea is logged with no status. Then the head accepts, parks or rejects it.</p>`
     :`<div class="block decide">
       <div class="block-h"><h4>Decision</h4><span class="badge ${STATUS_UI[i.status].cls||"mute"}">${STATUS_UI[i.status].label}</span></div>
       ${i.status==="rejected"&&i.rejectReason?`<p class="hint" style="margin:0 0 10px"><b style="color:var(--crit)">${esc(i.rejectReason)}</b> — ${esc(i.rejectNote||"")}</p>`:""}
@@ -2348,40 +2346,20 @@ function openIdea(id,focusComments,fmtKey){
         <div class="pp-row" style="margin-top:8px" data-w="1">
           ${i.status!=="under_review"?`<button class="btn sm" data-st="under_review">Mark as under review</button>`:""}
           ${["parked","rejected"].includes(i.status)?`<button class="btn sm" data-st="new">Back to To decide</button>`:""}</div>
-        ${!researched?`<p class="hint" style="margin:8px 0 0">Tip: research it first so the decision has numbers behind it.</p>`:""}`}
+`}
       </div>`}
 
-    <div class="block" data-gate="pre" style="border-color:${researched&&cpOk?"color-mix(in srgb,var(--good) 40%,var(--line))":"var(--line)"}">
-      <div class="block-h"><h4>Pre-production</h4>
-        ${missing.length?`<span class="pre-miss">Missing: ${esc(missing.join(", "))}</span>`:`<span class="badge good">✓ ready</span>`}</div>
-      <p class="hint" style="margin:-4px 0 10px">Written once here — the card copies all of it when the idea is accepted.</p>
-      <div class="pre-step">
-        <div class="pre-h"><span class="pre-n ${researched?"ok":""}">${researched?"✓":"1"}</span><b>Research</b>
-          ${!isNew&&window.PIPE?`<button class="btn sm ${kwList.some(k=>k.kw)?"":"pri"}" data-research data-w="1" ${rBusy?"disabled":""}>${rBusy?"Asking vidIQ…":kwList.some(k=>k.kw)?"🔎 Refresh with vidIQ":"🔎 Fill with vidIQ"}</button>`:""}</div>
-        ${isNew&&window.PIPE?`<p class="hint pre-note">Log the idea first, then 🔎 Fill with vidIQ appears here.</p>`:""}
-        ${rBusy?`<p class="hint pre-note"><span class="rs-spin"></span>vidIQ is researching this idea — keywords, volumes and titles land below by themselves.</p>`
-          :rFail?`<p class="hint pre-note" style="color:var(--crit)">vidIQ research didn't work: ${esc(rjob.error||"")}</p>`
-          :rData?`<p class="hint pre-note">Filled by vidIQ on ${esc(dmy((rData.at||"").slice(0,10)))}${i.researchScore!=null?` · score <b>${Math.round(i.researchScore)}</b>`:""}${rData.why?" — "+esc(rData.why):""}.</p>`:""}
-        <div class="fld" style="margin-bottom:10px">${kwEditor(kwList,"i-")}</div>
-        <details class="srcd" ${i.source&&i.tool?"":"open"}><summary>Source: <b>${esc(regLabel("source",i.source)||"not set")}</b> · Tool: <b>${esc(regLabel("tool",i.tool)||"not set")}</b> <span class="srcd-ch">change</span></summary>
-          <div class="grid2" style="margin-top:8px">
-            <div class="fld"><label for="i-source">Idea source</label>${regSelect("source","i-source",i.source,"e.g. college WhatsApp group, a parent's email")}</div>
-            <div class="fld"><label for="i-tool">Research tool</label>${regSelect("tool","i-tool",i.tool,"e.g. Semrush, TubeBuddy, Meta Insights")}</div></div></details>
-        <div class="fld ${i.why?"":"bad"}" style="margin:10px 0 0"><label for="i-why">Why this idea</label>
-          <textarea id="i-why" placeholder="One line. What does this win us?">${esc(i.why)}</textarea></div>
-      </div>
-      <div class="pre-step">
-        <div class="pre-h"><span class="pre-n ${cpOk?"ok":""}">${cpOk?"✓":"2"}</span><b>Draft copy</b>
-          <span class="hint">${window.PIPE?"Claude polishes this at the final check":"The card inherits it"}</span></div>
+    <div class="block">
+      <div class="block-h"><h4>Draft copy</h4>
+        <span class="hint">${window.PIPE?"Claude polishes this at the final check":"The card inherits it"}</span></div>
+      <p class="hint" style="margin:-4px 0 10px">Written once here — the card copies it when the idea is accepted.</p>
         <div class="fld"><label for="i-title">Title</label>
-          <input id="i-title" value="${esc(i.title)}" placeholder="The title as it will appear">
-          ${rData&&(rData.titles||[]).length?`<div class="ttl-ideas"><span class="hint">vidIQ ideas:</span>
-            ${rData.titles.map(t=>`<button class="ttl-chip ${t.title===i.title?"on":""}" data-rs-title="${esc(t.title)}" data-w="1">${esc(t.title)}${t.score!=null?` <b>${Math.round(t.score)}</b>`:""}</button>`).join("")}</div>`:""}</div>
+          <input id="i-title" value="${esc(i.title)}" placeholder="The title as it will appear"></div>
         <div class="fld"><label for="i-desc">Description</label>
           <textarea id="i-desc" placeholder="The description / caption as it will be posted">${esc(i.desc)}</textarea></div>
         <div class="fld" style="margin-bottom:0"><label for="i-hashtags">Hashtags</label>
           <input id="i-hashtags" value="${esc(i.hashtags)}" placeholder="#delhiuniversity #csas …"></div>
-      </div></div>
+    </div>
     </div></div>
 
     <div class="row dr-foot">
@@ -2394,9 +2372,8 @@ function openIdea(id,focusComments,fmtKey){
       i.idea=$("#i-idea").value.trim(); i.studentWhy=$("#i-studentwhy").value.trim(); i.by=$("#i-by").value.trim(); i.created=$("#i-created").value||today();
       i.platforms=readPlats("i-platform",plats(i)); i.platform=i.platforms[0]; i.vtype=readReg("vtype","i-vtype",i.vtype)||(fmtOf(i).vtypes||[])[0]||i.format;
       i.hook=$("#i-hook").value.trim(); i.cta=$("#i-cta").value.trim();
-      i.source=readReg("source","i-source"); i.tool=readReg("tool","i-tool"); i.keywords=readKw("i-");
-      i.title=$("#i-title").value.trim(); i.desc=$("#i-desc").value.trim();
-      i.hashtags=$("#i-hashtags").value.trim(); i.why=$("#i-why").value.trim();
+      i.title=$("#i-title").value.trim(); i.desc=$("#i-desc").value.trim();   // research fields are off the form for now: what's stored stays
+      i.hashtags=$("#i-hashtags").value.trim();
       i.extra=readOwn();
     };
     const exists=()=>!!IDEAS.find(x=>x.id===i.id);
