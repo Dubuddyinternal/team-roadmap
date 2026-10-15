@@ -638,9 +638,11 @@ tr.in-mvp .an-rowhead{border-left:3px solid var(--indigo)}
 .disc-chip.stage.st-building{background:#DBEAFE;color:#1D4ED8;border-color:transparent}
 .disc-chip.stage.st-ready{background:var(--done-bg);color:var(--done);border-color:transparent}
 .disc-chip.stage.st-wont{background:#E5E7EB;color:#4B5563;border-color:transparent}
+.disc-chip.owner.has{background:#ECFDF5;color:#047857;border-color:transparent}
 .disc-chip.dates{cursor:default}
 .disc-chip.dates.click{cursor:pointer}
 .disc-chip.dates.missing{background:#FFF2DE;color:#9A6A1B;border-color:transparent;cursor:pointer}
+.disc-chip.dates.ph-primary{background:#FEF3C7;color:#92400E;border-color:transparent}
 .disc-chip.dates.overdue{background:var(--blocked-bg);color:var(--blocked);border-color:transparent}
 .disc-meta{flex-wrap:wrap}
 
@@ -909,6 +911,17 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .tl-bar.st-planned{background:var(--indigo-soft);color:var(--indigo)}
 .tl-bar.st-blocked{background:var(--blocked-bg);color:var(--blocked)}
 .tl-bar:hover{filter:brightness(.97);box-shadow:0 3px 10px rgba(23,35,58,.18)}
+.tl-bar.ph-primary{background:#FEF3C7;color:#92400E}
+.tl-bar.ph-implres{background:#EDE9FE;color:#6D28D9}
+.tl-bar.ph-building{background:#DBEAFE;color:#1D4ED8}
+.tl-bar.overdue{box-shadow:inset 0 0 0 2px var(--blocked)}
+.tl-legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.tl-lg{font-size:12px;padding:3px 10px;border-radius:99px}
+.tl-lg.ph-primary{background:#FEF3C7;color:#92400E}
+.tl-lg.ph-implres{background:#EDE9FE;color:#6D28D9}
+.tl-out{position:absolute;top:14px;font-size:12px;color:var(--muted);white-space:nowrap;pointer-events:none}
+.tl-out b{color:var(--ink,#17233A);font-weight:600}
+.tl-lg.ph-building{background:#DBEAFE;color:#1D4ED8}
 .tl-today{position:absolute;top:0;bottom:0;width:2px;background:var(--blocked);z-index:2;pointer-events:none}
 .tl-today span{position:absolute;top:-2px;left:5px;font-family:var(--mono);font-size:9px;background:var(--blocked);color:#fff;border-radius:4px;padding:2px 6px}
 @media(max-width:600px){.tl-bar .tl-dates{display:none}}
@@ -5104,37 +5117,67 @@ const PIPE_STAGES = [
 const PIPE_FROM_OLD = { next:"now", later:"backlog" };
 function discStages(cs){ return cs && cs.type==="discovery" ? PIPE_STAGES : DISC_STAGES; }
 function discDefaultStage(cs){ return discStages(cs)[0].key==="backlog" ? "backlog" : "later"; }
-// from Implementation research on, a Product Roadmap idea needs a start and end date (its timeline slot)
-const PIPE_DATED = ["implres","ready","building"];
+// Product Roadmap ideas carry one timeline slot per phase (tl item .phase):
+//   primary  — set automatically: 7 days to decide Will do / Won't do from the day it enters Primary research
+//   implres  — asked for when it enters Implementation research
+//   building — asked for when it enters Under implementation by engineering
+// Will do / Won't do / Ready to implement / Done have no deadline.
+const PIPE_PHASES = [
+  {key:"primary",  label:"Primary research", short:"PRIMARY",     endLabel:"Decide by"},
+  {key:"implres",  label:"Implementation research", short:"IMPL. RESEARCH", endLabel:"Deadline"},
+  {key:"building", label:"Engineering", short:"ENGINEERING", endLabel:"Engineering done by"},
+];
+const PRIMARY_DAYS = 7;
+const PIPE_DATED = ["implres","building"];   // phases whose dates are asked for
+function discPhase(k){ return PIPE_PHASES.find(p=>p.key===k) || null; }
 function discNeedsDates(cs, stage){ return !!cs && cs.type==="discovery" && PIPE_DATED.includes(stage); }
-function discTlItem(cs, idea, make){
+function discTlItem(cs, idea, make, phase){
   cs.tl = cs.tl || { id:"rmtl-"+cs.id, items:[], markers:[] };
   cs.tl.items = cs.tl.items || [];
-  let it = cs.tl.items.find(t=>t.tid===idea.id);
-  if(!it && make){ it = { rid:"ri-"+Math.random().toString(36).slice(2,7), tid:idea.id }; cs.tl.items.push(it); }
+  phase = phase || null;
+  let it = cs.tl.items.find(t=>t.tid===idea.id && (t.phase||null)===phase);
+  if(!it && make){ it = { rid:"ri-"+Math.random().toString(36).slice(2,7), tid:idea.id }; if(phase) it.phase = phase; cs.tl.items.push(it); }
   return it || null;
 }
-function discHasDates(cs, idea){ const it = discTlItem(cs, idea, false); return !!(it && it.start && it.end); }
-// move an idea to a stage; entering Implementation research (or later) without dates asks for them
+function discHasDates(cs, idea, phase){ const it = discTlItem(cs, idea, false, phase); return !!(it && it.start && it.end); }
+function addDaysISO(iso, n){ const d = new Date(iso+"T00:00:00Z"); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); }
+// run the stage's date rule after an idea lands in it
+function discOnEnter(cs, idea, was){
+  if(!cs || cs.type!=="discovery" || idea.stage===was) return;
+  if(idea.stage==="primary"){
+    const it = discTlItem(cs, idea, true, "primary");
+    it.start = todayISO(); it.end = addDaysISO(it.start, PRIMARY_DAYS);
+    saveDisc();
+    toast("\u23F3 " + PRIMARY_DAYS + " days to decide: Will do or Won\u2019t do by " + fmtD(it.end));
+  } else if(discNeedsDates(cs, idea.stage) && !discHasDates(cs, idea, idea.stage)){
+    openIdeaDates(cs, idea, idea.stage);
+  }
+}
+// move an idea to a stage from the picker
 function discSetStage(cs, idea, stage){
   const was = idea.stage;
   idea.stage = stage;
   saveDisc();
-  if(stage!==was && discNeedsDates(cs, stage) && !discHasDates(cs, idea)) openIdeaDates(cs, idea);
+  discOnEnter(cs, idea, was);
 }
-function openIdeaDates(cs, idea){
-  const it0 = discTlItem(cs, idea, false) || {};
+function openIdeaDates(cs, idea, phase){
+  const ph = discPhase(phase) || PIPE_PHASES[1];
+  const it0 = discTlItem(cs, idea, false, ph.key) || {};
   const ov = document.createElement("div");
   ov.className = "overlay show";
   ov.innerHTML = '<div class="dialog" role="dialog" aria-modal="true" style="max-width:420px">'
-    + '<h3>Timeline</h3><div class="dlg-body">'
+    + '<h3></h3><div class="dlg-body">'
     + '<div class="hint" style="margin-bottom:12px"></div>'
     + '<div class="field-row">'
     + '<div class="field"><label for="idt-start">Start date</label><input id="idt-start" type="date"></div>'
-    + '<div class="field"><label for="idt-end">End date (deadline)</label><input id="idt-end" type="date"></div>'
+    + '<div class="field"><label for="idt-end"></label><input id="idt-end" type="date"></div>'
     + '</div><div class="hint err" style="color:var(--blocked);min-height:16px"></div></div>'
     + '<div class="btns"><button class="btn" data-k="later">Later</button><button class="btn save" data-k="save">Save dates</button></div></div>';
-  ov.querySelector(".hint").textContent = "When will work on \u201C" + idea.title + "\u201D start and end? It shows on the card and the Timeline.";
+  ov.querySelector("h3").textContent = ph.label + " \u2014 timeline";
+  ov.querySelector('label[for="idt-end"]').textContent = ph.endLabel;
+  ov.querySelector(".hint").textContent = (ph.key==="building" ? "When does engineering start on \u201C" + idea.title + "\u201D, and by when will it be done?"
+    : ph.key==="primary" ? "Primary research window for \u201C" + idea.title + "\u201D \u2014 decide Will do / Won\u2019t do by the end date."
+    : "When will implementation research on \u201C" + idea.title + "\u201D start and end?") + " It shows on the card and the Timeline.";
   const sIn = ov.querySelector("#idt-start"), eIn = ov.querySelector("#idt-end"), err = ov.querySelector(".err");
   sIn.value = it0.start || todayISO();
   eIn.value = it0.end || "";
@@ -5145,7 +5188,7 @@ function openIdeaDates(cs, idea){
     const a = sIn.value, b = eIn.value;
     if(!a || !b){ err.textContent = "Pick both a start and an end date."; return; }
     if(b < a){ err.textContent = "The end date is before the start date."; return; }
-    const it = discTlItem(cs, idea, true);
+    const it = discTlItem(cs, idea, true, ph.key);
     it.start = a; it.end = b;
     close(); saveDisc();
   };
@@ -5235,6 +5278,16 @@ function normalizeCspaces(c){
       });
       const ideaIds = new Set(x.ideas.map(i=>i.id));
       x.tl.items = x.tl.items.filter(it=> ideaIds.has(it.tid));
+      if(x.type==="discovery"){
+        // dates set before phases existed belong to the implementation phase the idea was in
+        const byId = {}; x.ideas.forEach(i=> byId[i.id] = i);
+        x.tl.items.forEach(it=>{
+          if(it.phase || !it.start || !it.end) return;
+          const st = byId[it.tid].stage;
+          const ph = st==="building" || st==="done" ? "building" : st==="implres" || st==="ready" ? "implres" : null;
+          if(ph && !x.tl.items.some(o=>o!==it && o.tid===it.tid && o.phase===ph)) it.phase = ph;
+        });
+      }
     }
   });
   return c;
@@ -11712,6 +11765,13 @@ function renderContentRmap(extMap, extOpts){
     row.querySelector(".acts").style.opacity = 1;
   }
   head.appendChild(row);
+  if(tlDiscMode && m.items.some(it=>it.phase)){
+    const lg = document.createElement("div"); lg.className = "tl-legend";
+    [["primary","Primary research \u2014 decide Will do / Won\u2019t do"],["implres","Implementation research"],["building","Engineering \u2014 implementation"]].forEach(([k,t])=>{
+      const s1 = document.createElement("span"); s1.className = "tl-lg ph-" + k; s1.textContent = t; lg.appendChild(s1);
+    });
+    head.appendChild(lg);
+  }
   wrap.appendChild(head);
 
   PXD = tlZoom[m.id] !== undefined ? TL_ZOOMS[tlZoom[m.id]] : (tlZoom[m.id] = 2, TL_ZOOMS[2]);
@@ -11844,7 +11904,12 @@ function renderContentRmap(extMap, extOpts){
     });
   }
 
-  inRange.slice().sort((x,y)=> dNum(x.start) - dNum(y.start)).forEach(it=>{
+  const _phOrd = {primary:0, implres:1, building:2};
+  const _first = {};
+  inRange.forEach(it=>{ const n = dNum(it.start); if(_first[it.tid]===undefined || n < _first[it.tid]) _first[it.tid] = n; });
+  inRange.slice().sort((x,y)=> tlDiscMode
+      ? (_first[x.tid] - _first[y.tid]) || String(x.tid).localeCompare(String(y.tid)) || ((_phOrd[x.phase]??-1) - (_phOrd[y.phase]??-1))
+      : dNum(x.start) - dNum(y.start)).forEach(it=>{
     const entry = byTid[it.tid];
     const st = effStatus(entry.task);
     const r = document.createElement("div");
@@ -11854,14 +11919,17 @@ function renderContentRmap(extMap, extOpts){
     const bx = ctx.x(it.start);
     bar.style.left = bx + "px";
     bar.style.width = Math.max(30, ctx.x(it.end) + ctx.pxdAt(it.end) - bx - 4) + "px";
-    const src = entry.kind==="dev" ? "DEV" : entry.kind==="bug" ? "BUG" : entry.kind==="content" ? "EDU" : entry.kind==="idea" ? "IDEA" : "PROD";
+    const _ph = it.phase && typeof discPhase==="function" ? discPhase(it.phase) : null;
+    if(_ph) bar.classList.add("ph-" + _ph.key);
+    if(_ph && it.end < todayISO() && entry.task.stage===_ph.key) bar.classList.add("overdue");   // still in that phase past its end
+    const src = _ph ? _ph.short : entry.kind==="dev" ? "DEV" : entry.kind==="bug" ? "BUG" : entry.kind==="content" ? "EDU" : entry.kind==="idea" ? "IDEA" : "PROD";
     bar.innerHTML = (editMode ? '<span class="tl-h l" title="Drag to change the start date"></span>' : '')
       + '<span class="tl-src"></span><span class="tl-t"></span><span class="tl-dates"></span>'
       + (editMode ? '<span class="tl-h r" title="Drag to change the end date"></span>' : '');
     bar.querySelector(".tl-src").textContent = src;
     bar.querySelector(".tl-t").textContent = entry.task.title || "(untitled)";
     bar.querySelector(".tl-dates").textContent = fmtD(it.start) + " \u2192 " + fmtD(it.end);
-    bar.title = (entry.task.title||"") + "\n" + entry.path + "\n" + fmtD(it.start) + " \u2192 " + fmtD(it.end)
+    bar.title = (entry.task.title||"") + "\n" + (_ph ? _ph.label : entry.path) + "\n" + fmtD(it.start) + " \u2192 " + fmtD(it.end)
       + (editMode ? "\nDrag to move \u00b7 drag the edges to stretch \u00b7 click for exact dates" : "");
     if(editMode){
       bar.addEventListener("mousedown", e=> startBarDrag(e, m, it, entry, "move", bar));
@@ -11869,6 +11937,16 @@ function renderContentRmap(extMap, extOpts){
       bar.querySelector(".tl-h.r").addEventListener("mousedown", e=>{ e.stopPropagation(); startBarDrag(e, m, it, entry, "end", bar); });
     }
     r.appendChild(bar);
+    if(_ph){
+      // phase bars are often short: name the idea and phase just past the bar's end
+      const out = document.createElement("div"); out.className = "tl-out";
+      out.style.left = (parseFloat(bar.style.left) + parseFloat(bar.style.width) + 14) + "px";
+      out.innerHTML = "<b></b> \u00b7 <span></span>";
+      out.querySelector("b").textContent = entry.task.title || "(untitled)";
+      out.querySelector("span").textContent = _ph.label + " \u00b7 " + fmtD(it.start) + " \u2192 " + fmtD(it.end)
+        + (entry.task.assignee ? " \u00b7 \uD83D\uDC64 " + discOwnerName(entry.task.assignee) : "");
+      r.appendChild(out);
+    }
     rows.appendChild(r);
   });
   if(!inRange.length){
@@ -11920,7 +11998,8 @@ function rmListRow(m, it, entry, dateTxt){
   r.className = "ct-row";
   const body = document.createElement("div"); body.className = "body";
   const t = document.createElement("div"); t.className = "title"; t.textContent = entry.task.title || "(untitled)";
-  const n = document.createElement("div"); n.className = "note"; n.textContent = entry.path + (dateTxt ? " \u00b7 " + dateTxt : "");
+  const _ph = it.phase && typeof discPhase==="function" ? discPhase(it.phase) : null;
+  const n = document.createElement("div"); n.className = "note"; n.textContent = (_ph ? _ph.label : entry.path) + (dateTxt ? " \u00b7 " + dateTxt : "");
   body.append(t, n);
   const meta = document.createElement("div"); meta.className = "meta";
   const pill = document.createElement("span");
@@ -12279,6 +12358,25 @@ function discStateChip(idea){
   };
   return c;
 }
+// Product Roadmap: the one person responsible for an idea (idea.assignee = their email)
+function discOwnerName(email){ if(!email) return ""; const m = assigneeMembers().find(u=>u.email===email); return m ? userDisplayName(m) : email; }
+function discOwnerChip(cs, idea){
+  const c = document.createElement("button");
+  c.className = "disc-chip owner" + (idea.assignee ? " has" : "");
+  c.textContent = idea.assignee ? "\uD83D\uDC64 " + discOwnerName(idea.assignee) : "\uD83D\uDC64 Tag owner";
+  c.title = idea.assignee ? "Responsible: " + discOwnerName(idea.assignee) + (editMode ? " (click to change)" : "") : "Tag the person responsible";
+  c.onclick = e=>{
+    e.stopPropagation();
+    if(!editMode) return;
+    openDiscPick(c, {
+      search: true, allowClear: !!idea.assignee,
+      current: idea.assignee || null,
+      options: assigneeMembers().map(u=>({key:u.email, label:userDisplayName(u), cls:"owner"})),
+      onPick: k=>{ if(k) idea.assignee = k; else delete idea.assignee; saveDisc(); },
+    });
+  };
+  return c;
+}
 function discStageChip(idea, cs){
   const stages = discStages(cs);
   const st = stages.find(x=>x.key===idea.stage);
@@ -12314,19 +12412,22 @@ function openConvertModule(mod){
   );
 }
 function openIdeaDialog(cs, idea, presetStage){
+  const _own = cs && cs.type==="discovery";
   openDialog(idea ? "Edit idea" : "New idea", idea || {}, v=>{
-    if(idea){ idea.title = v.title; idea.note = v.note || ""; if(v.photos && v.photos.length) idea.photos = v.photos; else delete idea.photos; }
+    if(idea){ idea.title = v.title; idea.note = v.note || ""; if(v.photos && v.photos.length) idea.photos = v.photos; else delete idea.photos;
+      if(_own){ if(v.assignee) idea.assignee = v.assignee; else delete idea.assignee; } }
     else{
       var _ni={ id:"idea-"+Date.now().toString(36), title:v.title, note:v.note||"",
         stage: presetStage || discDefaultStage(cs), state:"Pending" };
       if(v.photos && v.photos.length) _ni.photos = v.photos;
+      if(_own && v.assignee) _ni.assignee = v.assignee;
       cs.ideas.push(_ni);
       saveDisc();
-      if(discNeedsDates(cs, _ni.stage)) openIdeaDates(cs, _ni);
+      discOnEnter(cs, _ni, null);
       return;
     }
     saveDisc();
-  }, {photos:true});
+  }, _own ? {photos:true, assignee:true} : {photos:true});
 }
 function discIdeaActs(cs, idea){
   const acts = document.createElement("div");
@@ -13340,7 +13441,8 @@ function discIdeasPane(cs){
     cSum.appendChild(t);
     if(idea.note){ const n = document.createElement("div"); n.className = "dt-note"; n.textContent = idea.note; cSum.appendChild(n); }
     const _ips = photoStrip(idea.photos); if(_ips) cSum.appendChild(_ips);
-    if(typeof sidBadge === "function"){ const _sb = sidBadge(idea); if(_sb) cSum.appendChild(_sb); }   // 🎓 student ▲ votes / 💡 pitched by
+    if(typeof sidBadge === "function"){ const _sb = sidBadge(idea); if(_sb) cSum.appendChild(_sb); }
+    if(cs.type==="discovery" && (idea.assignee || editMode)){ const _ow = document.createElement("div"); _ow.style.marginTop = "6px"; _ow.appendChild(discOwnerChip(cs, idea)); cSum.appendChild(_ow); }   // 🎓 student ▲ votes / 💡 pitched by
     const cCmt = document.createElement("div");
     cCmt.className = "dt-cell dt-c";
     cCmt.appendChild(commentChip(idea, saveDisc));
@@ -13417,22 +13519,34 @@ function discRoadmapPane(cs){
       if(idea.note && cs.type==="social") card.title = idea.note;   // keep it available on hover
       const _kps = photoStrip(idea.photos); if(_kps) card.appendChild(_kps);
       const meta = document.createElement("div"); meta.className = "kcard-meta disc-meta";
+      if(cs.type==="discovery" && (idea.assignee || editMode)) meta.appendChild(discOwnerChip(cs, idea));
       meta.appendChild(discThemeChip(idea, cs));
       if(cs.type!=="social") meta.appendChild(discStateChip(idea));
-      const tlIt = (cs.tl && cs.tl.items || []).find(t=>t.tid===idea.id);
-      const _dated = cs.type==="discovery";
-      if(tlIt && tlIt.start && tlIt.end){
-        const d = document.createElement(_dated ? "button" : "span"); d.className = "disc-chip dates";
-        d.textContent = "\uD83D\uDCC5 " + fmtD(tlIt.start) + " \u2192 " + fmtD(tlIt.end);
-        if(_dated && tlIt.end < todayISO() && idea.stage!=="done" && idea.stage!=="wont"){ d.classList.add("overdue"); d.title = "Past the end date"; }
-        if(_dated && editMode){ d.classList.add("click"); d.onclick = e=>{ e.stopPropagation(); openIdeaDates(cs, idea); }; }
-        meta.appendChild(d);
-      } else if(discNeedsDates(cs, idea.stage)){
-        const d = document.createElement("button"); d.className = "disc-chip dates missing";
-        d.textContent = "\uD83D\uDCC5 Set start & end";
-        d.title = "This idea is in implementation \u2014 give it a start and end date";
-        d.onclick = e=>{ e.stopPropagation(); if(editMode) openIdeaDates(cs, idea); };
-        meta.appendChild(d);
+      if(cs.type==="discovery"){
+        // Product Roadmap: the dates of the phase the idea is in now (primary / implres / building)
+        const ph = discPhase(idea.stage);
+        const tlIt = ph ? discTlItem(cs, idea, false, ph.key) : null;
+        if(tlIt && tlIt.start && tlIt.end){
+          const d = document.createElement("button"); d.className = "disc-chip dates ph-" + ph.key;
+          d.textContent = ph.key==="primary" ? "\u23F3 Decide by " + fmtD(tlIt.end) : "\uD83D\uDCC5 " + fmtD(tlIt.start) + " \u2192 " + fmtD(tlIt.end);
+          d.title = ph.label + ": " + fmtD(tlIt.start) + " \u2192 " + fmtD(tlIt.end) + (editMode ? " (click to change)" : "");
+          if(tlIt.end < todayISO()){ d.classList.add("overdue"); d.title += " \u2014 past the deadline"; }
+          if(editMode){ d.classList.add("click"); d.onclick = e=>{ e.stopPropagation(); openIdeaDates(cs, idea, ph.key); }; }
+          meta.appendChild(d);
+        } else if(ph){
+          const d = document.createElement("button"); d.className = "disc-chip dates missing";
+          d.textContent = "\uD83D\uDCC5 Set start & end";
+          d.title = ph.label + " needs a start and end date";
+          d.onclick = e=>{ e.stopPropagation(); if(editMode) openIdeaDates(cs, idea, ph.key); };
+          meta.appendChild(d);
+        }
+      } else {
+        const tlIt = (cs.tl && cs.tl.items || []).find(t=>t.tid===idea.id);
+        if(tlIt && tlIt.start && tlIt.end){
+          const d = document.createElement("span"); d.className = "disc-chip dates";
+          d.textContent = fmtD(tlIt.start) + " \u2192 " + fmtD(tlIt.end);
+          meta.appendChild(d);
+        }
       }
       meta.appendChild(commentChip(idea, saveDisc));
       if(cs.type==="social" && editMode){
@@ -13454,7 +13568,7 @@ function discRoadmapPane(cs){
         actRow.appendChild(discIdeaActs(cs, idea));
         card.appendChild(actRow);
         makeCardDraggable(card, idea.id, st.key, (id, toStage, refId, after)=>{ const was = idea.stage; placeByDrop(cs.ideas, idea, toStage, refId, after, x=>x.stage, (x,c)=>x.stage=c, x=>x.id); saveDisc();
-          if(idea.stage!==was && discNeedsDates(cs, idea.stage) && !discHasDates(cs, idea)) openIdeaDates(cs, idea); });
+          discOnEnter(cs, idea, was); });
       }
       col.appendChild(card);
     });
@@ -13475,9 +13589,15 @@ function discTimelinePane(cs){
   cs.tl = cs.tl || { id:"rmtl-"+cs.id, items:[], markers:[] };
   cs.tl.items = cs.tl.items || [];
   cs.tl.markers = cs.tl.markers || [];
-  // every idea automatically has a slot on the timeline; deleted ideas drop off
-  const have = new Set(cs.tl.items.map(it=>it.tid));
-  cs.ideas.forEach(i=>{ if(!have.has(i.id)) cs.tl.items.push({ rid:"ri-"+Math.random().toString(36).slice(2,7), tid:i.id }); });
+  // every idea automatically has a slot on the timeline; deleted ideas drop off.
+  // Product Roadmaps instead get one slot per phase (primary / implres / building), added as the idea gets there.
+  if(cs.type==="discovery"){
+    cs.tl.items = cs.tl.items.filter(it=> it.phase || (it.start && it.end));
+    cs.ideas.forEach(i=>{ if(discNeedsDates(cs, i.stage)) discTlItem(cs, i, true, i.stage); });
+  } else {
+    const have = new Set(cs.tl.items.map(it=>it.tid));
+    cs.ideas.forEach(i=>{ if(!have.has(i.id)) cs.tl.items.push({ rid:"ri-"+Math.random().toString(36).slice(2,7), tid:i.id }); });
+  }
   const ideaIds = new Set(cs.ideas.map(i=>i.id));
   cs.tl.items = cs.tl.items.filter(it=> ideaIds.has(it.tid));
   renderContentRmap(cs.tl, {disc:true});
