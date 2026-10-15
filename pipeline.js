@@ -195,6 +195,10 @@ const CSS = `<style>
 .pp .pp-score{margin-left:auto;font-family:var(--mono);font-weight:600;white-space:nowrap}
 .pp .pp-count{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);float:right}
 .pp .pp-count.over{color:var(--crit)}
+.pp .pp-live{margin:10px 0}
+.pp .pp-seg{display:inline-flex;gap:4px}.pp .pp-seg .btn.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.pp .pp-frame{width:100%;max-width:340px;aspect-ratio:9/16;border-radius:12px;overflow:hidden;background:#000;margin:0 auto}
+.pp .pp-frame iframe{width:100%;height:100%;border:0;display:block}
 .pp .pp-studio{margin:10px 0;padding:8px 12px;border:1px solid var(--line);border-radius:var(--r-s)}
 .pp .pp-studio summary{cursor:pointer;font-size:13px;font-weight:600}
 .pp .pp-link{font-size:12px;color:var(--accent-ink)}
@@ -271,6 +275,7 @@ function briefView(job, me){
   const b = job.brief || {}, md = job.media || {};
   const list = a => (a&&a.length)?`<ul>${a.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:"";
   return `<div class="pp-note"><b>✋ Check 1 — the edit plan.</b> Nothing is rendered yet. Approve it, or say what to change and Claude redoes the brief.</div>
+    ${livePlayer(md)}
     ${md.brief_sheet?`<a href="${esc(md.brief_sheet)}" target="_blank"><img class="pp-sheet" src="${esc(md.brief_sheet)}" alt="Preview stills of every graphic"></a>`:""}
     ${b.summary?`<p style="margin:0 0 8px;font-size:13px">${esc(b.summary)}</p>`:""}
     ${b.hook?`<p style="margin:0 0 8px;font-size:13px"><b>Hook:</b> ${hookHtml(b.hook)}</p>`:""}
@@ -291,6 +296,19 @@ function briefView(job, me){
       <button class="btn" data-pp="request_changes" ${me.canRun?"":"disabled"}>✏️ Request changes</button>
       ${me.canRun?`<button class="btn sm" data-pp="cancel" style="margin-left:auto">Cancel job</button>`:""}</div>
     ${me.canApprove?"":`<p class="hint" style="margin:8px 0 0">Only an owner or admin can approve.</p>`}`;
+}
+
+// ▶ live player: the edit itself, played in the browser (phone too) — no render, no Studio
+function livePlayer(md){
+  if(!md.preview_yt) return "";
+  const m = S.mounted || {}, v = m.pv === "ig" && md.preview_ig ? "ig" : "yt", src = v === "ig" ? md.preview_ig : md.preview_yt;
+  return `<div class="pp-live">
+    <div class="pp-row" style="margin:0 0 8px"><b style="font-size:13px">▶ Watch the edit</b>
+      <span class="pp-seg"><button class="btn sm${v==="yt"?" on":""}" data-pp-pv="yt">YouTube</button><button class="btn sm${v==="ig"?" on":""}" data-pp-pv="ig">Instagram</button></span>
+      <a class="pp-link" href="${esc(src)}" target="_blank" rel="noopener" style="margin-left:auto">Full screen ↗</a></div>
+    <div class="pp-frame"><iframe src="${esc(src)}" title="Live preview" allow="autoplay; fullscreen" loading="lazy"></iframe></div>
+    <p class="hint" style="margin:6px 0 0">Tap to play. This is the real edit running live, not a render — heavy scenes can stutter on a phone.</p>
+  </div>`;
 }
 
 // 🎬 HyperFrames Studio on the Mac: one Terminal line downloads this edit, opens both versions in Studio,
@@ -393,6 +411,7 @@ function wire(){
     catch(e){ b.disabled = false; b.textContent = label; toast(e.message); }
   };
 
+  host.querySelectorAll("[data-pp-pv]").forEach(b=>b.onclick=()=>{ m.pv = b.dataset.ppPv; render(); });
   const sb = q("[data-pp-studio]");
   if(sb) sb.onclick = async () => {
     sb.disabled = true; sb.textContent = "…";
@@ -496,7 +515,7 @@ window.PIPE = {
     // a raw video already uploaded in the card's Raw video box is the one Claude edits
     const cr = helpers && helpers.raw && helpers.raw();
     const raw = keep.raw || (cr && cr.kind === "file" && cr.file ? { file: cr.file, name: cr.name, size: cr.size } : undefined);
-    S.mounted = { host, card, h: helpers||{}, raw, draft: keep.draft, rsig: keep.rsig, studioCmd: keep.studioCmd };
+    S.mounted = { host, card, h: helpers||{}, raw, draft: keep.draft, rsig: keep.rsig, studioCmd: keep.studioCmd, pv: keep.pv };
     ensurePolling(); render(); poll();     // fresh status as soon as a card opens
   },
 };
