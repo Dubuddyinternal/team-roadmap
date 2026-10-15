@@ -1186,21 +1186,38 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .td-plan.now{color:var(--indigo);font-weight:600}
 .td-dayplan{display:flex;flex-direction:column}
 .td-dayplan .td-hat{margin-bottom:0}
-.td-hat.td-now{border-color:var(--indigo);box-shadow:0 0 0 2px var(--indigo-soft)}
 .td-timebtn{white-space:nowrap}
 .td-timebtn.on{color:var(--indigo);border-color:var(--indigo)}
-.td-gap{display:flex;align-items:center;justify-content:center;min-height:16px;margin:4px 0;border:1px dashed transparent;border-radius:10px;font-size:12px;color:transparent;transition:min-height .15s}
-.td-gap:hover,.td-gap.kover,.td-gap.first{min-height:40px;border-color:var(--line);color:var(--muted);background:var(--paper)}
+/* Today by the clock: a time rail on the left, the thing on the right */
+.td-row{display:grid;grid-template-columns:96px minmax(0,1fr);column-gap:14px}
+.td-row>:last-child{min-width:0;padding-block:6px}
+.td-rail{position:relative;padding:14px 0 10px 24px;display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+.td-rail::before{content:"";position:absolute;left:8px;top:0;bottom:0;width:2px;background:var(--line)}
+.td-dayplan>.td-row:first-child .td-rail::before{top:20px}
+.td-dayplan>.td-row:last-child .td-rail::before{bottom:auto;height:24px}
+.td-rail-t{position:relative;border:0;background:none;padding:0;font:600 13.5px var(--mono);color:var(--ink);cursor:pointer;white-space:nowrap}
+.td-rail-t::before{content:"";position:absolute;left:-21px;top:3px;width:10px;height:10px;border-radius:50%;background:var(--card);border:2px solid var(--indigo)}
+.td-rail-t:hover{color:var(--indigo)}
+.td-rail-sub{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.td-rail-x{border:0;background:none;padding:2px 0;font-size:11px;color:var(--muted);cursor:pointer;opacity:0;transition:opacity .15s}
+.td-row:hover .td-rail-x,.td-rail-x:focus-visible{opacity:1}
+.td-rail-x:hover{color:var(--blocked)}
+.td-row.now .td-rail-t{color:var(--indigo)}
+.td-row.now .td-rail-t::before{background:var(--indigo);box-shadow:0 0 0 4px var(--indigo-soft)}
+.td-row.now .td-hat{border-color:var(--indigo)}
+.td-row.anytime .td-rail-t{color:var(--muted);font-weight:500}
+.td-row.anytime .td-rail-t::before{border-color:var(--line)}
+.td-row .td-hat-h .td-timebtn,.td-row.itemrow .td-timebtn{display:none}
+.td-row-item{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px}
+.td-row-item>.kcard{flex:0 1 520px;margin:0}
+.td-row.boxrow .td-row-item>*{flex:1 1 100%;margin-bottom:0}
+.td-row-hat{font-size:12px;color:var(--muted)}
+.td-row.gaprow .td-rail{padding:0}
+.td-row.gaprow>:last-child{padding-block:0}
+.td-gap{display:flex;align-items:center;justify-content:center;min-height:12px;border:1px dashed transparent;border-radius:10px;font-size:12px;color:transparent;transition:min-height .15s}
+.td-gap:hover,.td-gap.kover,.td-gap.first{min-height:38px;border-color:var(--line);color:var(--muted);background:var(--paper)}
 .td-gap.kover{border-color:var(--indigo);color:var(--indigo)}
-.td-slot{display:flex;gap:12px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--indigo);border-radius:12px;padding:10px 12px}
-.td-slot-side{display:flex;flex-direction:column;gap:6px;flex:none;width:130px}
-.td-slot-t{font:inherit;font-size:14px;font-weight:600;padding:4px 6px;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink)}
-.td-slot-hat{font-size:12px;color:var(--muted)}
-.td-slot-side .td-act{align-self:flex-start}
-.td-slot-body{flex:1;min-width:0}
-.td-slot-body>.td-learn,.td-slot-body>.td-deepcard{margin-bottom:0}
-.td-anytime{margin:14px 0 8px}
-@media (max-width:640px){.td-slot{flex-direction:column}.td-slot-side{width:auto;flex-direction:row;align-items:center}}
+@media (max-width:640px){.td-row{grid-template-columns:72px minmax(0,1fr);column-gap:8px}.td-rail-t{font-size:12px}}
 .td-all-add{margin-top:8px;width:100%}
 .td-all-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;align-items:start}
 .td-learn{background:var(--card);border:2px solid #F59E0B;border-radius:14px;padding:14px 16px;margin-bottom:14px}

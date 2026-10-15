@@ -534,40 +534,45 @@ function todoDayPlan(assigned, boxes) {
   });
   timed.sort(function (a, b) { return a.t.localeCompare(b.t) || (a.hat ? -1 : 0) - (b.hat ? -1 : 0); });
   var endOf = function (e) { return e.end || todoM2HM(todoHM2m(e.t) + 30); };
+  // each row: a time rail on the left (dot on a line, click the time to change it) and the thing itself
+  var row = function (cls, rail, body) {
+    var r = todoEl("div", "td-row " + cls);
+    r.append(rail, body); wrap.appendChild(r); return r;
+  };
   var gap = function (prev, next) {
     var t = prev ? endOf(prev) : next ? todoM2HM(todoHM2m(next.t) - 30) : "09:00";
     if (next && t > next.t) t = next.t;
     var g = todoEl("div", "td-gap" + (prev || next ? "" : " first"));
-    g.appendChild(todoEl("span", "", prev || next ? "Drop here · " + todoFmtHM(t) : "Drag anything here (a card, Running, New learning…) or 🕘 a block to plan your day by the clock"));
+    g.appendChild(todoEl("span", "", prev || next ? "Drop here · " + todoFmtHM(t) : "Drag anything here (a card, Running, New learning…) or set a time on a block to plan your day by the clock"));
     g.addEventListener("dragover", function (ev) { ev.preventDefault(); ev.dataTransfer.dropEffect = "move"; g.classList.add("kover"); });
     g.addEventListener("dragleave", function () { g.classList.remove("kover"); });
     g.addEventListener("drop", function (ev) { ev.preventDefault(); g.classList.remove("kover"); var k = ""; try { k = ev.dataTransfer.getData("text/plain"); } catch (_) { } if (k) todoTimeSet(k, t); });
-    wrap.appendChild(g);
+    row("gaprow", todoEl("div", "td-rail"), g);
   };
-  var slot = function (e) {
-    var s = todoEl("div", "td-slot");
-    var side = todoEl("div", "td-slot-side");
-    var tm = todoEl("input", "td-slot-t"); tm.type = "time"; tm.value = e.t; tm.title = "Change the time";
-    tm.onchange = function () { if (tm.value) todoTimeSet(e.key, tm.value); };
-    var x = todoEl("button", "td-act", "✕"); x.title = "Take the time off — back into its block";
-    x.onclick = function () { todoTimeSet(e.key, ""); };
-    side.append(tm, todoEl("span", "td-slot-hat", e.H.icon + " " + e.H.label), x);
-    var body = todoEl("div", "td-slot-body"); body.appendChild(e.el());
-    s.append(side, body);
-    return s;
+  var rail = function (label, sub, onEdit, onClear) {
+    var r = todoEl("div", "td-rail");
+    var t = todoEl("button", "td-rail-t", label); t.title = "Change the time"; t.onclick = onEdit;
+    r.appendChild(t);
+    if (sub) r.appendChild(todoEl("span", "td-rail-sub", sub));
+    if (onClear) { var x = todoEl("button", "td-rail-x", "✕ no time"); x.title = "Take the time off — back into its block"; x.onclick = onClear; r.appendChild(x); }
+    return r;
   };
   if (!timed.length) gap(null, null);
   timed.forEach(function (e, i) {
     if (i === 0) gap(null, e);
     if (e.hat) {
-      var blk = todoHatBlock(e.hat, assigned, slotted);
-      if (now >= e.t && now < e.end) blk.classList.add("td-now");
-      wrap.appendChild(blk);
-    } else wrap.appendChild(slot(e));
+      var H = e.hat, rr = row("hatrow" + (now >= e.t && now < e.end ? " now" : ""),
+        rail(todoFmtHM(e.t), "to " + todoFmtHM(e.end), function () { todoHatTimeAsk(H); }), todoHatBlock(H, assigned, slotted));
+    } else {
+      var body = todoEl("div", "td-row-item"); body.appendChild(e.el());
+      if (e.H.key !== "personal" || e.key.indexOf("box:") !== 0) body.appendChild(todoEl("span", "td-row-hat", e.H.icon + " " + e.H.label));
+      row("itemrow" + (e.key.indexOf("box:") === 0 ? " boxrow" : ""), rail(todoFmtHM(e.t), "", function () { todoTimeAsk("🕘 When?", e.t, e.key); }, function () { todoTimeSet(e.key, ""); }), body);
+    }
     gap(e, timed[i + 1] || null);
   });
-  if (timed.length && untimed.length) wrap.appendChild(todoEl("div", "td-lbl td-anytime", "No time yet"));
-  untimed.forEach(function (H) { wrap.appendChild(todoHatBlock(H, assigned, slotted)); });
+  untimed.forEach(function (H) {
+    row("hatrow anytime", rail("Any time", "set a time", function () { todoHatTimeAsk(H); }), todoHatBlock(H, assigned, slotted));
+  });
   return wrap;
 }
 function todoFixedDrag(chip, f) {
@@ -632,7 +637,7 @@ function todoCard(entry, own) {
   }
   if (col !== "done" && todoMode === "today") {
     var tt = TODO.times.at[key];
-    var tb = todoEl("button", "td-act", tt ? "🕘 " + todoFmtHM(tt) : "🕘 Time…"); tb.title = "Give it its own time on Today (or drag it onto a gap)";
+    var tb = todoEl("button", "td-act td-timebtn", tt ? "🕘 " + todoFmtHM(tt) : "🕘 Time…"); tb.title = "Give it its own time on Today (or drag it onto a gap)";
     tb.onclick = function (ev) { ev.stopPropagation(); todoTimeAsk("🕘 When will you do “" + (own ? own.title : entry.title) + "”?", tt, key); };
     acts.appendChild(tb);
   }
