@@ -6156,8 +6156,23 @@ async function fetchAll(){
   if(!r.ok) throw new Error("HTTP "+r.status);
   return r.json();
 }
+// a card / window open inside a space (Social Media, Keep an Eye, Widen our Horizon, campaigns): those live in
+// the space's own shadow root, which the page-wide redraw rebuilds — so it would close in your face
+function spaceWindowOpen(){
+  for(const el of document.querySelectorAll("div,section,main")){
+    const r = el.shadowRoot;
+    if(r && r.querySelector("#drawer.on, #scrim.on, #dlgScrim.on")) return true;
+  }
+  return false;
+}
+let _refreshRetry = null;
 async function refresh(showMsg){
   if(!db || saving || $("overlay").classList.contains("show")) return;
+  // automatic refresh while a card is open: wait until it's closed, then catch up (the manual button still asks)
+  if(!showMsg && spaceWindowOpen()){
+    clearTimeout(_refreshRetry); _refreshRetry = setTimeout(()=> refresh(false), 20000);
+    return;
+  }
   try{
     if(_pushDirty || _pushTimer){ if(showMsg) toast("Saving your changes first \u2014 try again in a few seconds"); return; }
     const got = await fetchTeamSections(TEAM);
