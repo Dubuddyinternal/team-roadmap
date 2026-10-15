@@ -21,7 +21,7 @@
 |---|---|
 | Product space → **🎓 From students** | New ideas: **Approve**, **Merge into…** an existing idea (votes move across), or **Reject** with an optional reason. Needs the **Review student ideas** permission (Owners always have it). |
 | Product space → **All ideas** | Approved ideas show 🎓 and their vote count. **✉️** in the last column writes to the student, or to the teammate who pitched it. You can email them, show the message as the team's reply on the board, and tick "shipped". |
-| Roadmap columns | Backlog / Later = In review · Primary research / Next / Implementation research = Planned · Now / Ready to implement = In progress · Done = Completed · Won't do = Not planned. Moving an idea updates the board and emails the student. |
+| Roadmap columns | Backlog / Later = In review · Primary research / Next / Implementation research = Planned · Now / Ready to implement / Under implementation by engineering = In progress · Done = Completed · Won't do = Not planned. Moving an idea updates the board and emails the student. |
 | Administration → **✉️ Idea emails** | The words of every email, for students and for teammates: thank-you, approved, each status, and the wrapper around your ✉️ messages. You can switch each one off, edit it, send yourself a test, or reset it to the default. Needs **Review student ideas**. |
 | Administration → **💡 My product ideas** | Every teammate sees the status of the ideas they pitched from Social Media → Ideation. |
 
