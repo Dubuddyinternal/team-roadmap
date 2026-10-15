@@ -1,6 +1,6 @@
 /* =====================================================================
-   MY TO-DO — one private board per person, split into three hats:
-     👤 Personal · 🧭 As CEO · 🧩 As Product Head
+   MY TO-DO — one private board per person, split into four hats:
+     👤 Personal · 🧭 As CEO · 🧩 As Product Head · ▶️ Sumit YouTube
    Each hat has
      * fixed things — repeat every day / on chosen weekdays / on a day of
        the month, or a one-off meeting on a date (set up from the hat's ⋯
@@ -13,6 +13,7 @@
         ideas, roadmap module tasks, Product All in One items
      🧭 CEO          — Educational Content tasks, Campaign pieces, Keep an
         Eye studies, Widen our Horizon topics
+     ▶️ Sumit YouTube — nothing pulled in; only what I add myself
    OKRs are not pulled in (they stay on the OKRs page).
    A card's column follows its board (done there = Done here). Moving a dev
    card, bug or roadmap / content task here moves it on its board too (if I
@@ -30,6 +31,9 @@
    countdown (talk to yourself, walk, don't do anything). It survives a
    reload (the end time is saved), can be ended early only after a
    warning, and today's minutes are logged.
+
+   "All to be done" lists everything still open, hat by hat: today's fixed
+   things not yet ticked, then in-progress and to-do cards (overdue first).
 
    "Upcoming" lists tomorrow / the next 5 / the next 7 days: fixed things on
    each day plus every to-do and assigned card due that day, and overdue ones.
@@ -61,11 +65,12 @@ var TODO_HATS = [
   { key: "personal", icon: "👤", label: "Personal" },
   { key: "ceo", icon: "🧭", label: "As CEO" },
   { key: "product", icon: "🧩", label: "As Product Head" },
+  { key: "youtube", icon: "▶️", label: "Sumit YouTube" },
 ];
 var TODO_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 var TODO_DONE_SHOW = 6;          // each hat's Done column shows the latest few; "Show all" opens the rest
 var todoShowAllDone = {};        // hat -> true
-var todoMode = "today";          // today | upcoming
+var todoMode = "today";          // all | today | upcoming
 var todoRange = 1;               // upcoming: 1 (tomorrow) | 5 | 7 days
 
 function todoCan() { try { return !!currentUser() && hasPerm("my_todo"); } catch (_) { return false; } }
@@ -542,6 +547,41 @@ function todoHatBlock(H, assigned) {
   });
   sec.appendChild(board);
   return sec;
+}
+
+/* ---------- All to be done: every open thing, hat by hat ---------- */
+function todoAllOpen(assigned) {
+  var wrap = todoEl("div", "td-up");
+  var today = todoToday(), any = false;
+  // in progress before to do, then by due date (no date last)
+  var rank = function (x) { return (x.col === "progress" ? "0" : "1") + String(x.due || "9999"); };
+  TODO_HATS.forEach(function (H) {
+    var fx = todoFixedFor(H.key, today).filter(function (f) { return !todoFixedIsDone(f, today); });
+    var cards = TODO.items.filter(function (x) { return x.hat === H.key && x.col !== "done"; }).map(function (x) { return { r: rank(x), el: function () { return todoCard(null, x); } }; })
+      .concat(assigned.filter(function (e) { return e.hat === H.key && e.col !== "done"; }).map(function (e) { return { r: rank(e), el: function () { return todoCard(e); } }; }))
+      .sort(function (a, b) { return a.r.localeCompare(b.r); });
+    if (!fx.length && !cards.length) return;
+    any = true;
+    var sec = todoEl("div", "td-upday");
+    var hd = todoEl("div", "td-all-h");
+    hd.appendChild(todoEl("h3", "", H.icon + " " + H.label));
+    hd.appendChild(todoEl("span", "td-hat-n", (fx.length + cards.length) + " to do"));
+    sec.appendChild(hd);
+    if (fx.length) {
+      var fr = todoEl("div", "td-upfx");
+      fr.appendChild(todoEl("span", "td-lbl", "Fixed today"));
+      fx.forEach(function (f) { fr.appendChild(todoFixedChip(f, today)); });
+      sec.appendChild(fr);
+    }
+    if (cards.length) {
+      var grid = todoEl("div", "td-all-grid");
+      cards.forEach(function (c) { grid.appendChild(c.el()); });
+      sec.appendChild(grid);
+    }
+    wrap.appendChild(sec);
+  });
+  if (!any) wrap.appendChild(todoEl("div", "td-empty", "Nothing left to do. Everything is ticked or done."));
+  return wrap;
 }
 
 /* ---------- Upcoming: tomorrow / next 5 / next 7 days ---------- */
@@ -1232,13 +1272,15 @@ function renderContentTodo() {
   // Today | Upcoming (Tomorrow · 5 days · 7 days)
   var bar = todoEl("div", "td-modes");
   var mk = function (label, on, fn) { var b = todoEl("button", "td-mode" + (on ? " on" : ""), label); b.onclick = fn; bar.appendChild(b); };
+  mk("All to be done", todoMode === "all", function () { todoMode = "all"; renderAll(); });
   mk("Today", todoMode === "today", function () { todoMode = "today"; renderAll(); });
   [[1, "Tomorrow"], [5, "Next 5 days"], [7, "Next 7 days"]].forEach(function (r) {
     mk(r[1], todoMode === "upcoming" && todoRange === r[0], function () { todoMode = "upcoming"; todoRange = r[0]; renderAll(); });
   });
   wrap.appendChild(bar);
   var assigned = todoAssigned();
-  if (todoMode === "upcoming") wrap.appendChild(todoUpcoming(assigned));
+  if (todoMode === "all") wrap.appendChild(todoAllOpen(assigned));
+  else if (todoMode === "upcoming") wrap.appendChild(todoUpcoming(assigned));
   else TODO_HATS.forEach(function (H) { wrap.appendChild(todoHatBlock(H, assigned)); });
   page.appendChild(todoBookend("sleep"));   // 🌙 last thing of the day
 }
