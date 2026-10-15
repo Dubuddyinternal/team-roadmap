@@ -1038,6 +1038,21 @@ function todoSideItem() {
   b.innerHTML = "<span>✅ My To-do</span>" + (c ? "<span class=\"td-side-n\"></span>" : "");
   if (c) { var open = c.todo + c.progress; b.querySelector(".td-side-n").textContent = open; b.title = open + " open · " + c.done + " done"; }
   b.onclick = function () { view = "todo"; renderAll(); };
+  // ⋯ : every My To-do setting in one place (same as the ⋯ on the cards and hats)
+  if (TODO.loaded && TODO.team === TEAM && typeof openRowMenu === "function") {
+    var menu = todoEl("span", "ws-menu-btn", "⋯"); menu.title = "My To-do settings";
+    menu.onclick = function (e) {
+      e.stopPropagation();
+      openRowMenu(menu, [
+        { label: "📚 New learning — boxes & unlock", onClick: todoLearnSettings },
+        { label: "🧘 Deep thinking — how long", onClick: todoDeepSettings },
+        { label: "♟️ Reasoning time — durations", onClick: todoReasonSettings },
+      ].concat(TODO_HATS.map(function (H) {
+        return { label: "⚙️ Fixed things — " + H.icon + " " + H.label, onClick: function () { todoFixedSetup(H.key); } };
+      })));
+    };
+    b.appendChild(menu);
+  }
   if ((!TODO.loaded || TODO.team !== TEAM) && !TODO.loading) todoLoad();
   return b;
 }
