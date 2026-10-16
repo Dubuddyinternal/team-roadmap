@@ -6531,6 +6531,8 @@ function loadTeamData(t){
   syncContentSpaces();
   syncModuleSpaces();
   loadRecent();
+  // one-time: campaign pieces sent to Content Process before types were kept all landed as Shorts / Reels
+  try{ if(campFixSentTypes() && hasPerm("edit")) setTimeout(()=> pushAll(), 1500); }catch(_){ }
 }
 // Dubuddy: "Dubuddy Marketing" is the parent space and Social Media sits inside it.
 // Done once (CSPACES.mktSeeded) — if someone deletes the Marketing space later, it stays deleted.
@@ -13926,6 +13928,61 @@ function campaignSocial(cs){
   const L = CSPACES.list || [];
   return L.find(x=>x.type==="social" && cs.parent && x.parent===cs.parent) || L.find(x=>x.type==="social") || null;
 }
+// what a campaign piece becomes in Content Process: Reels / influencer videos → Shorts / Reels,
+// long videos → Long video, anything else (Story, Notification, Community Post, Live Session, Banner,
+// WhatsApp message…) → a content type of that name, made in the Social Media space the first time it's needed
+function campPieceName(it){
+  const K = (window.CX && CX.kinds) || {};
+  const base = String(it.kind==="other" && it.kindOther ? it.kindOther : ((K[it.kind]||{}).label || "Other")).trim();
+  return base.replace(/\s*[#-]?\s*\d+$/, "").trim() || base;   // "Live Session 3" → "Live Session"
+}
+function campPieceIcon(it, name){
+  const K = (window.CX && CX.kinds) || {};
+  if(it.kind!=="other" && K[it.kind]) return K[it.kind].emo;
+  const n = name.toLowerCase();
+  return /live/.test(n) ? "🔴" : /community/.test(n) ? "📣" : /poster|banner|creative/.test(n) ? "🖼️"
+    : /story/.test(n) ? "⭕" : /mail/.test(n) ? "✉️" : /whats\s?app/.test(n) ? "💬" : /notif/.test(n) ? "🔔" : "📌";
+}
+function campPieceFormat(soc, it){
+  if(it.kind==="reel" || it.kind==="influencer") return { format:"short", vtype:"reel" };
+  if(it.kind==="longvideo") return { format:"long", vtype:"long" };
+  const sx = soc.sx; sx.formats = Array.isArray(sx.formats) ? sx.formats : [];
+  sx.reg = sx.reg && typeof sx.reg==="object" ? sx.reg : {}; sx.reg.vtype = sx.reg.vtype || {};
+  const name = campPieceName(it);
+  let f = sx.formats.find(x=> x && String(x.name||"").trim().toLowerCase()===name.toLowerCase());
+  if(!f){
+    const key = "f_" + (name.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,20) || "piece") + "_cmp";
+    f = sx.formats.find(x=> x && x.key===key);
+    if(!f){
+      const pl = (it.platforms && it.platforms.length ? it.platforms : [it.platform]);
+      f = { key, name, icon: campPieceIcon(it, name), plats:["yt","ig"], defPlats:[pl.includes("YouTube") && !pl.includes("Instagram") ? "yt" : "ig"],
+        vtypes:[key], video: /live|story|video/i.test(name), claude:false, hint:"Made from campaign pieces (" + name + ")" };
+      sx.formats.push(f);
+      sx.reg.vtype[key] = name;
+    }
+  }
+  return { format:f.key, vtype:(f.vtypes && f.vtypes[0]) || f.key };
+}
+// fix the cards sent before types were kept (they were all Shorts / Reels); runs once per team
+function campFixSentTypes(){
+  if(!CSPACES || CSPACES.campTypesFixed) return false;
+  let n = 0;
+  (CSPACES.list||[]).filter(x=>x.type==="campaign").forEach(cs=>{
+    const soc = campaignSocial(cs); if(!soc || !soc.sx || !Array.isArray(soc.sx.cards)) return;
+    (cs.items||[]).forEach(it=>{
+      if(!it.sentCardId) return;
+      const card = soc.sx.cards.find(c=>c.id===it.sentCardId);
+      if(!card || !card.fromCampaign) return;
+      if((card.format && card.format!=="short") || card.vtype!=="reel") return;   // only the old default; never undo someone's own change
+      const f = campPieceFormat(soc, it);
+      if(f.format==="short") return;
+      card.format = f.format; card.vtype = f.vtype; n++;
+    });
+  });
+  CSPACES.campTypesFixed = true;
+  if(n) console.info("Campaign cards: " + n + " given their real content type");
+  return true;   // save the flag (and any fixes) once
+}
 function renderContentCampaign(){
   const wrap = $("content"); wrap.innerHTML = "";
   const cs = currentCampaign();
@@ -13963,10 +14020,11 @@ function renderContentCampaign(){
       if(window.SX && SX.normalize) SX.normalize(soc);
       soc.sx = soc.sx || {}; soc.sx.cards = soc.sx.cards || [];
       const today = new Date().toISOString().slice(0,10);
-      const card = { id:"c"+Date.now().toString(36)+Math.random().toString(36).slice(2,5), ideaId:null, idea:it.name,
+      const ft = campPieceFormat(soc, it);   // Story stays a Story, a Notification a Notification… (not all Shorts / Reels)
+      const card = { id:"c"+Date.now().toString(36)+Math.random().toString(36).slice(2,5), ideaId:null, idea:it.name, format:ft.format,
         // a piece can be on several platforms: the first of YouTube / Instagram it's ticked for decides the board's platform
         platform: ((it.platforms && it.platforms.length ? it.platforms : [it.platform]).find(p=>p==="YouTube"||p==="Instagram")==="YouTube") ? "yt" : "ig",
-        vtype: it.kind==="longvideo" ? "long" : "reel",
+        vtype: ft.vtype,
         stage:"todo", pre:{ source:"", tool:"", keywords:[], why:it.details||"", title:it.name, desc:"", hashtags:"" },
         post:{ reel:null, thumb:null, postUrl:"" }, scheduled:it.date||null, published:null, acceptedOn:today, metrics:null, override:null,
         priority:"high", fromCampaign: c.details.name || c.name, owner: it.owner || "" };
