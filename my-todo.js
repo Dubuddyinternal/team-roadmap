@@ -66,6 +66,9 @@
    dot something my country should do and isn't doing yet. It also pops up
    the first time I open My To-do each day; ✕ closes it and that's saved
    (TODO.why.seen), so it won't come back until tomorrow. ✏️ edits the words.
+   Right after it, if today's wake-up isn't written, it asks "when did you
+   wake up today?" (I switch the laptop on around 10, so "now" is no use) and
+   matches it against the target; once a day (TODO.wakeAsked).
 
    Fixed things are normal cards too (🔁 Fixed): on each day one is due it
    waits in All to be done like any other card, and I move it onto Today /
@@ -86,7 +89,7 @@
    Uses index.html globals (SUPA, TEAM, DEV, BUGS, CSPACES, OKRS, DATA,
    CONTENT, view, renderAll, openDialog, openChoice, toast, fmtD, todayISO …).
    ===================================================================== */
-var TODO = { team: null, loaded: false, loading: false, local: false, items: [], over: {}, plan: {}, times: { hats: {}, at: {} }, fixed: [], fixedDone: {}, learn: {}, deep: null, deepLog: {}, reasonLog: {}, settings: null, feeds: [], feedItems: {}, feedSeen: {}, feedAt: 0, sleepLog: {}, why: null };
+var TODO = { team: null, loaded: false, loading: false, local: false, items: [], over: {}, plan: {}, times: { hats: {}, at: {} }, fixed: [], fixedDone: {}, learn: {}, deep: null, deepLog: {}, reasonLog: {}, settings: null, feeds: [], feedItems: {}, feedSeen: {}, feedAt: 0, sleepLog: {}, why: null, wakeAsked: "" };
 // the two full-screen timers in Personal
 var TODO_TIMERS = {
   deep: { icon: "🧘", title: "Deep thinking", line: "Talk to yourself. Walk. Don't do anything.",
@@ -167,6 +170,7 @@ function todoApply(d) {
   TODO.feedAt = Number(d.feedAt) || 0;
   TODO.sleepLog = d.sleepLog && typeof d.sleepLog === "object" ? d.sleepLog : {};   // { "YYYY-MM-DD": { wake: "HH:MM", sleep: "HH:MM" } } — when I ticked it
   TODO.why = todoWhyNorm(d.why);   // 🇮🇳 why I exist — { goal, steps:[…], from, line, seen:"YYYY-MM-DD" }
+  TODO.wakeAsked = String(d.wakeAsked || "");   // the day the wake-up question last popped up
   TODO.deepLog = d.deepLog && typeof d.deepLog === "object" ? d.deepLog : {};       // deep thinking { "YYYY-MM-DD": minutes }
   TODO.reasonLog = d.reasonLog && typeof d.reasonLog === "object" ? d.reasonLog : {}; // reasoning (chess, maths, puzzles)
   // { start, end, kind:"deep"|"reason" } (ms) while a timer runs
@@ -208,7 +212,7 @@ function todoSave() {
   var live = {}; TODO.items.forEach(function (x) { live["own:" + x.id] = 1; }); try { todoAssigned().forEach(function (e) { live[e.key] = 1; }); } catch (_) { } TODO.fixed.forEach(function (f) { live["fx:" + f.id] = 1; });
   Object.keys(TODO.plan).forEach(function (k) { if (!live[k] && TODO.plan[k] < todoAddDays(todoToday(), -30)) delete TODO.plan[k]; });
   var data = { items: TODO.items, over: TODO.over, plan: TODO.plan, times: TODO.times, fixed: TODO.fixed, fixedDone: TODO.fixedDone, learn: TODO.learn, deep: TODO.deep, deepLog: TODO.deepLog, reasonLog: TODO.reasonLog, settings: TODO.settings,
-    feeds: TODO.feeds, feedItems: TODO.feedItems, feedSeen: TODO.feedSeen, feedAt: TODO.feedAt, sleepLog: TODO.sleepLog, why: TODO.why };
+    feeds: TODO.feeds, feedItems: TODO.feedItems, feedSeen: TODO.feedSeen, feedAt: TODO.feedAt, sleepLog: TODO.sleepLog, why: TODO.why, wakeAsked: TODO.wakeAsked };
   clearTimeout(_todoSaveT);
   _todoSaveT = setTimeout(async function () {
     if (!TODO.local && SUPA) {
@@ -1637,9 +1641,11 @@ function todoBookend(kind) {
   var late = done && todoHM(done) > todoHM(S[key]) + 15;   // 15 minutes' grace
   tx.appendChild(todoEl("div", "td-bk-sub" + (late ? " late" : ""), done
     ? (wake ? "Up at " : "In bed at ") + todoFmtHM(done) + (late ? " — " + (todoHM(done) - todoHM(S[key])) + " min after " + todoFmtHM(S[key]) : " — on time ✅")
-    : (wake ? "Tick it when you're up." : "Tick it when you go to bed.")));
-  var go = todoEl("button", done ? "btn" : "btn save", done ? "↺ Undo" : (wake ? "✓ I'm up" : "✓ Going to bed"));
+    : (wake ? "Write the time you actually woke up." : "Tick it when you go to bed.")));
+  var go = todoEl("button", done ? "btn" : "btn save", done ? "↺ Undo" : (wake ? "⏰ When did I wake up?" : "✓ Going to bed"));
+  var ch = null; if (wake && done) { ch = todoEl("button", "btn", "✏️ Change"); ch.onclick = function () { todoWakeAsk(false); }; }
   go.onclick = function () {
+    if (wake && !done) { todoWakeAsk(false); return; }   // I open the laptop later: write the real time, don't take "now"
     var d = TODO.sleepLog[today] = TODO.sleepLog[today] || {};
     if (d[kind]) delete d[kind]; else d[kind] = todoNowHM();
     if (!Object.keys(d).length) delete TODO.sleepLog[today];
@@ -1648,8 +1654,29 @@ function todoBookend(kind) {
   var n = 0, x = todoToday(); if (!(TODO.sleepLog[x] || {})[kind]) x = todoAddDays(x, -1);
   while ((TODO.sleepLog[x] || {})[kind]) { n++; x = todoAddDays(x, -1); }
   if (n > 1) tx.appendChild(todoEl("span", "td-streak td-bk-streak", "🔥 " + n + " days in a row"));
-  box.append(tx, go);
+  box.append(tx); if (ch) box.appendChild(ch); box.appendChild(go);
   return box;
+}
+
+// ⏰ the time I actually woke up — asked when I open My To-do (laptop's on around 10), matched against the target
+function todoWakeAsk(auto) {
+  var today = todoToday(), S = TODO.settings, inp;
+  if (auto) {
+    if ((TODO.sleepLog[today] || {}).wake || TODO.wakeAsked === today || TODO.deep || document.querySelector(".overlay.show")) return;
+    TODO.wakeAsked = today; todoSave();   // asked once a day; Cancel = don't ask again today (the card still has the button)
+  }
+  todoDialog("⏰ Good morning — when did you wake up today?", function (body) {
+    inp = todoEl("input"); inp.type = "time"; inp.value = (TODO.sleepLog[today] || {}).wake || S.wakeAt;
+    body.appendChild(todoField("I woke up at", inp));
+    body.appendChild(todoEl("div", "hint", "Target: " + todoFmtHM(S.wakeAt) + " · within 15 minutes counts as on time."));
+    setTimeout(function () { inp.focus(); }, 0);
+  }, function () {
+    if (!/^\d{2}:\d{2}$/.test(inp.value)) return "Pick the time you woke up.";
+    var d = TODO.sleepLog[today] = TODO.sleepLog[today] || {};
+    d.wake = inp.value;
+    var diff = todoHM(inp.value) - todoHM(S.wakeAt);
+    toast(diff > 15 ? "⏰ " + diff + " min after your " + todoFmtHM(S.wakeAt) + " target" : "⏰ On time ✅");
+  });
 }
 
 /* ---------- why do I exist? ---------- */
@@ -1706,7 +1733,7 @@ function todoWhyPop() {
   var ov = todoEl("div", "overlay show"); ov.id = "td-why-pop";
   var dg = todoEl("div", "dialog td-why-dlg"); dg.setAttribute("role", "dialog"); dg.setAttribute("aria-modal", "true"); ov.appendChild(dg);
   var x = todoEl("button", "td-why-x", "✕"); x.title = "Close until tomorrow"; x.setAttribute("aria-label", "Close until tomorrow");
-  var close = function () { if (ov.parentNode) ov.parentNode.removeChild(ov); TODO.why.seen = todoToday(); todoSave(); };
+  var close = function () { if (ov.parentNode) ov.parentNode.removeChild(ov); TODO.why.seen = todoToday(); todoSave(); todoWakeAsk(true); };
   x.onclick = close;
   dg.append(x, todoEl("div", "td-why-morning", "Good morning. Before all to be done —"), todoWhyCard(true));
   var go = todoEl("button", "btn save", "Let's go"); go.onclick = close;
@@ -1773,6 +1800,7 @@ function renderContentTodo() {
   if (learnLast) page.appendChild(todoLearnBox());   // outside the freeze, so it can always be written
   page.appendChild(todoBookend("sleep"));   // 🌙 last thing of the day
   todoWhyPop();   // once a day, on the first open
+  todoWakeAsk(true);   // then: when did I wake up? (only if not written yet today)
 }
 /* after sign-in, load once even if the sidebar isn't on screen (e.g. reloaded on OKRs),
    so a running deep-thinking block comes back straight away */
