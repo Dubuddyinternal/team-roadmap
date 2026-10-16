@@ -11792,10 +11792,8 @@ function renderSidebarDev(){
   wrap.innerHTML = "";
   const spc = currentSpace();
 
+  $("side-title").style.display = "none";   // no "Modules" / "Dev spaces (teams)" headings — the team cards speak for themselves
   // --- team / dev-space switcher ---
-  const tl = document.createElement("div");
-  tl.className = "side-title"; tl.style.marginTop = "0"; tl.textContent = "Dev spaces (teams)";
-  wrap.appendChild(tl);
   DEV.spaces.forEach(space=>{
     const cards = DEV.cards.filter(c=>c.space===space.id && devWork(c));
     const doneN = cards.filter(c=>c.col==="done").length;
