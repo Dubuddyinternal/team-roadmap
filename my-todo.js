@@ -1182,26 +1182,43 @@ function todoLearnBox() {
   parts.forEach(function (P) { if (!todoLearnPartTimed(P)) grid.appendChild(todoLearnPartBox(P, today)); });
   if (grid.children.length) box.appendChild(grid);
   else box.appendChild(todoEl("div", "td-empty", "Every box sits on today's timeline at its time (CEO ones inside CEO work)."));
-  if (todoLearnLog) {
-    var log = todoEl("div", "td-learn-log");
-    var days = Object.keys(TODO.learn).filter(function (d) { return d !== today && Object.keys(todoLearnDay(d)).length; }).sort().reverse();
-    if (!days.length) log.appendChild(todoEl("div", "td-empty", "Nothing yet — your past learnings will collect here."));
-    days.forEach(function (d) {
-      var r = todoEl("div", "td-learn-row");
-      r.appendChild(todoEl("span", "td-learn-d", todoDayName(d) + " " + fmtD(d)));
-      var col = todoEl("div", "td-learn-day"), day = todoLearnDay(d);
-      if (day._old) col.appendChild(todoLearnText(day._old));
-      Object.keys(day).forEach(function (k) {   // every part written that day, even ones since removed
-        if (k === "_old" || !String(day[k] || "").trim()) return;
-        var P = parts.find(function (p) { return p.key === k; }) || { icon: "💡", label: "Other" };
-        var it = todoEl("div", "td-learn-item"); it.appendChild(todoEl("span", "td-learn-k", P.icon + " " + P.label));
-        it.appendChild(todoLearnText(day[k])); col.appendChild(it);
-      });
-      r.appendChild(col); log.appendChild(r);
-    });
-    box.appendChild(log);
-  }
+  if (todoLearnLog) box.appendChild(todoLearnLogEl());
   return box;
+}
+
+// every past day's learnings, newest first
+function todoLearnLogEl() {
+  var today = todoToday(), parts = todoLearnParts();
+  var log = todoEl("div", "td-learn-log");
+  var days = Object.keys(TODO.learn).filter(function (d) { return d !== today && Object.keys(todoLearnDay(d)).length; }).sort().reverse();
+  if (!days.length) log.appendChild(todoEl("div", "td-empty", "Nothing yet — your past learnings will collect here."));
+  days.forEach(function (d) {
+    var r = todoEl("div", "td-learn-row");
+    r.appendChild(todoEl("span", "td-learn-d", todoDayName(d) + " " + fmtD(d)));
+    var col = todoEl("div", "td-learn-day"), day = todoLearnDay(d);
+    if (day._old) col.appendChild(todoLearnText(day._old));
+    Object.keys(day).forEach(function (k) {   // every part written that day, even ones since removed
+      if (k === "_old" || !String(day[k] || "").trim()) return;
+      var P = parts.find(function (p) { return p.key === k; }) || { icon: "💡", label: "Other" };
+      var it = todoEl("div", "td-learn-item"); it.appendChild(todoEl("span", "td-learn-k", P.icon + " " + P.label));
+      it.appendChild(todoLearnText(day[k])); col.appendChild(it);
+    });
+    r.appendChild(col); log.appendChild(r);
+  });
+  return log;
+}
+// the same list in a window (from the sidebar ⋯), for when the New learning card isn't on the page
+function todoLearnLogPanel() {
+  var ov = todoEl("div", "overlay show"), dg = todoEl("div", "dialog td-setdlg");
+  dg.setAttribute("role", "dialog"); dg.setAttribute("aria-modal", "true"); ov.appendChild(dg);
+  var st = todoLearnStreak();
+  dg.appendChild(todoEl("h3", "", "📖 Past learnings" + (st ? " · 🔥 " + st + " day" + (st === 1 ? "" : "s") + " in a row" : "")));
+  var bd = todoEl("div", "dlg-body"); bd.appendChild(todoLearnLogEl()); dg.appendChild(bd);
+  var close = function () { if (ov.parentNode) ov.parentNode.removeChild(ov); };
+  ov.onclick = function (e) { if (e.target === ov) close(); };
+  var btns = todoEl("div", "btns"), cl = todoEl("button", "btn save", "Close"); cl.onclick = close;
+  btns.appendChild(cl); dg.appendChild(btns);
+  document.body.appendChild(ov); cl.focus();
 }
 
 /* ---------- Personal · full-screen timers: deep thinking, reasoning time (the whole app freezes while one runs) ---------- */
@@ -1777,7 +1794,7 @@ function renderContentTodo() {
   var at = TODO.times.at, onDay = function (k) { return todoIsDayView() && !!at["box:" + k]; };
   var learnLater = onDay("learn") || todoLearnParts().some(todoLearnPartTimed);
   var dayBoxes = [];
-  if (onDay("learn")) dayBoxes.push("learn"); var learnLast = !onDay("learn");   // kept even when every box is on the timeline: the streak, Past learnings and Feeds live here   // the untimed New learning card goes at the end, after the day's timeline
+  if (onDay("learn")) dayBoxes.push("learn"); var learnLast = !onDay("learn") && !todoLearnParts().every(todoLearnPartTimed);   // gone when every box is on the timeline (Past learnings: sidebar ⋯)   // the untimed New learning card goes at the end, after the day's timeline
   if (onDay("deep")) dayBoxes.push("deep"); else wrap.appendChild(todoDeepBox());   // always usable, even before today's learning is written
   if (onDay("reason")) dayBoxes.push("reason"); else wrap.appendChild(todoReasonBox());
   if (!todoLearnedToday() && !learnLater) {
@@ -1841,6 +1858,7 @@ function todoSideItem() {
       openRowMenu(menu, [
         { label: "📡 Feeds — what the agent follows", onClick: todoFeedsPanel },
         { label: "📚 New learning — boxes & unlock", onClick: todoLearnSettings },
+        { label: "📖 Past learnings", onClick: todoLearnLogPanel },
         { label: "🗓 Day lines — Product Head, Break, CEO…", onClick: todoDayLinesSettings },
         { label: "🧘 Deep thinking — how long & its words", onClick: todoDeepSettings },
         { label: "♟️ Reasoning time — durations & its words", onClick: todoReasonSettings },
