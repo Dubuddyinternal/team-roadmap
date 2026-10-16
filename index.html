@@ -12826,6 +12826,43 @@ function openIdeaDialog(cs, idea, presetStage){
     saveDisc();
   }, _own ? {photos:true, assignee:true, noOwner:true, assigneeLabel:"Responsible person (optional)"} : {photos:true});
 }
+/* Product Roadmap → Engineering: pick the team (dev space), then its Backlog or one of its open sprints.
+   The dev card remembers the idea (fromIdea), so the button turns into "✓ in <team> · <board>" and opens it. */
+function discToEngBtn(cs, idea){
+  const card = (DEV.cards||[]).find(c=>c.fromIdea===idea.id);
+  const b = document.createElement("button");
+  b.className = "disc-toproc"+(card?" done":"");
+  if(card){
+    const sp = (DEV.spaces||[]).find(x=>x.id===card.space), spr = (DEV.sprints||[]).find(x=>x.id===card.sprint);
+    b.textContent = "\u2713 "+(sp?sp.name:"Engineering")+" \u00B7 "+(spr?spr.name:"Backlog");
+    b.title = "Already sent to engineering \u2014 open it there";
+    b.onclick = e=>{ e.stopPropagation(); view="dev"; devSpace=card.space||null; devSprint=card.sprint||null; renderAll(); };
+    return b;
+  }
+  b.textContent = "\u2192 Engineering";
+  b.title = "Send to an engineering team\u2019s board \u2014 its backlog or a sprint";
+  b.onclick = e=>{ e.stopPropagation(); discSendToEng(cs, idea); };
+  return b;
+}
+function discSendToEng(cs, idea){
+  const spaces = DEV.spaces || [];
+  const toBoard = spaceId=>{
+    const sps = (DEV.sprints||[]).filter(x=>x.space===spaceId && !x.completed);
+    const opts = [{label:"\uD83D\uDCE5 Backlog", value:""}].concat(sps.map(x=>({label:"\uD83C\uDFC3 "+x.name+" \u2192 To Do", value:x.id})));
+    const send = sprintId=>{
+      const c = { id:"dv-"+Date.now().toString(36), title:idea.title, col:"todo", sprint:sprintId||null, space:spaceId, from:"roadmap", fromIdea:idea.id, area:cs.name };
+      if(idea.note) c.note = idea.note;
+      if(idea.photos && idea.photos.length) c.photos = idea.photos.slice();
+      DEV.cards.push(c); saveDev();
+      const sp = spaces.find(x=>x.id===spaceId), spr = sps.find(x=>x.id===sprintId);
+      toast("Sent to "+(sp?sp.name:"Engineering")+" \u00B7 "+(spr?spr.name:"Backlog"));
+    };
+    if(opts.length===1) send(""); else openChoice("Which board?", opts, send);
+  };
+  if(!spaces.length){ toast("No engineering team yet \u2014 add a dev space first"); return; }
+  if(spaces.length===1) toBoard(spaces[0].id);
+  else openChoice("Send \u201C"+idea.title+"\u201D to which team?", spaces.map(x=>({label:"\uD83D\uDEE0\uFE0F "+x.name, value:x.id})), toBoard);
+}
 function discIdeaActs(cs, idea){
   const acts = document.createElement("div");
   acts.className = "acts";
@@ -13940,6 +13977,7 @@ function discRoadmapPane(cs){
         b.onclick=(e)=>{ e.stopPropagation(); if(already){ socialView="process"; renderAll(); return; } socIdeaToProcess(cs, idea); };
         meta.appendChild(b);
       }
+      if(cs.type==="discovery" && editMode) meta.appendChild(discToEngBtn(cs, idea));
       card.appendChild(meta);
       if(cs.type==="discovery" && _phs) card.appendChild(_phs);
       // click opens the idea editor
