@@ -1949,6 +1949,10 @@ function openFormats(editKey, back){
   $("#drawer").querySelectorAll("[data-fedit]").forEach(b=>b.onclick=()=>openFormats(b.dataset.fedit, back));
   $("#f-save").onclick=()=>{
     const name=$("#f-name").value.trim(); if(!name){ toast("Give the type a name"); return; }
+    // one list with the campaigns' types: "community post", "Community Post 2", "YT Community Post" are the same
+    const tk=n=>(window.CX&&CX.typeKey)?CX.typeKey(n):String(n||"").trim().toLowerCase();
+    const dup=(S.formats||FORMATS).find(x=>x.key!==(f0&&f0.key)&&tk(x.name)===tk(name));
+    if(dup){ toast(`“${dup.name}” already exists — use that one`); return; }
     const pl=[...$("#f-plats").querySelectorAll("input:checked")].map(x=>x.value); if(!pl.length){ toast("Pick at least one platform"); return; }
     const key=f0?f0.key:("f_"+name.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,20)+"_"+Date.now().toString(36).slice(-3));
     const out=Object.assign({}, f, { key, name, icon:$("#f-icon").value.trim()||"✨", plats:pl, defPlats:f.defPlats.filter(x=>pl.includes(x)).length?f.defPlats.filter(x=>pl.includes(x)):[pl[0]],

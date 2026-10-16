@@ -6533,7 +6533,7 @@ function loadTeamData(t){
   syncModuleSpaces();
   loadRecent();
   // one-time: campaign pieces sent to Content Process before types were kept all landed as Shorts / Reels
-  try{ if(campFixSentTypes() && hasPerm("edit")) setTimeout(()=> pushAll(), 1500); }catch(_){ }
+  try{ const _f1 = campFixSentTypes(), _f2 = campMergeTypes(); if((_f1 || _f2) && hasPerm("edit")) setTimeout(()=> pushAll(), 1500); }catch(_){ }
 }
 // Dubuddy: "Dubuddy Marketing" is the parent space and Social Media sits inside it.
 // Done once (CSPACES.mktSeeded) — if someone deletes the Marketing space later, it stays deleted.
@@ -13944,25 +13944,66 @@ function campPieceIcon(it, name){
   return /live/.test(n) ? "🔴" : /community/.test(n) ? "📣" : /poster|banner|creative/.test(n) ? "🖼️"
     : /story/.test(n) ? "⭕" : /mail/.test(n) ? "✉️" : /whats\s?app/.test(n) ? "💬" : /notif/.test(n) ? "🔔" : "📌";
 }
+// one list of content types for campaigns and Social Media: "community post", "Community Post 2" and
+// "YT Community Post" are the same type (campaign-space.js typeKey)
+function campTypeKey(name){ return (window.CX && CX.typeKey) ? CX.typeKey(name) : String(name||"").trim().toLowerCase(); }
+const CAMP_BUILTIN_FMT = { short:1, long:1 };   // Reels and long videos are the campaign's own built-in kinds
+function campEnsureFormat(soc, name, icon, plats){
+  const sx = soc.sx = soc.sx || {}; sx.formats = Array.isArray(sx.formats) ? sx.formats : [];
+  sx.reg = sx.reg && typeof sx.reg==="object" ? sx.reg : {}; sx.reg.vtype = sx.reg.vtype || {};
+  const k = campTypeKey(name);
+  const all = (window.SX && SX.normalize ? (SX.normalize(soc), soc.sx.formats) : sx.formats);
+  let f = all.find(x=> x && campTypeKey(x.name)===k);
+  if(f) return f;
+  const key = "f_" + (k.replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,20) || "piece") + "_cmp";
+  f = soc.sx.formats.find(x=> x && x.key===key);
+  if(f) return f;
+  const pl = plats || [];
+  f = { key, name, icon: icon || "\uD83D\uDCCC", plats:["yt","ig"], defPlats:[pl.includes("YouTube") && !pl.includes("Instagram") ? "yt" : "ig"],
+    vtypes:[key], video: /live|story|video/i.test(name), claude:false, hint:"Made from campaign pieces (" + name + ")" };
+  soc.sx.formats.push(f);
+  soc.sx.reg = soc.sx.reg || {}; soc.sx.reg.vtype = soc.sx.reg.vtype || {}; soc.sx.reg.vtype[key] = name;
+  return f;
+}
 function campPieceFormat(soc, it){
   if(it.kind==="reel" || it.kind==="influencer") return { format:"short", vtype:"reel" };
   if(it.kind==="longvideo") return { format:"long", vtype:"long" };
-  const sx = soc.sx; sx.formats = Array.isArray(sx.formats) ? sx.formats : [];
-  sx.reg = sx.reg && typeof sx.reg==="object" ? sx.reg : {}; sx.reg.vtype = sx.reg.vtype || {};
   const name = campPieceName(it);
-  let f = sx.formats.find(x=> x && String(x.name||"").trim().toLowerCase()===name.toLowerCase());
-  if(!f){
-    const key = "f_" + (name.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,20) || "piece") + "_cmp";
-    f = sx.formats.find(x=> x && x.key===key);
-    if(!f){
-      const pl = (it.platforms && it.platforms.length ? it.platforms : [it.platform]);
-      f = { key, name, icon: campPieceIcon(it, name), plats:["yt","ig"], defPlats:[pl.includes("YouTube") && !pl.includes("Instagram") ? "yt" : "ig"],
-        vtypes:[key], video: /live|story|video/i.test(name), claude:false, hint:"Made from campaign pieces (" + name + ")" };
-      sx.formats.push(f);
-      sx.reg.vtype[key] = name;
-    }
-  }
+  const f = campEnsureFormat(soc, name, campPieceIcon(it, name), it.platforms && it.platforms.length ? it.platforms : [it.platform]);
   return { format:f.key, vtype:(f.vtypes && f.vtypes[0]) || f.key };
+}
+// one-time: merge content types that are really the same (e.g. "YT Community Post" into "Community Post"),
+// moving their ideas and cards across, and rename the campaign pieces' types to match
+function campMergeTypes(){
+  if(!CSPACES || CSPACES.campTypesMerged) return false;
+  (CSPACES.list||[]).filter(x=>x.type==="social" && x.sx && Array.isArray(x.sx.formats)).forEach(soc=>{
+    const keep = {}, moved = {};
+    const order = soc.sx.formats.slice().sort((a,b)=> (/^(yt|youtube|ig|insta|instagram)\s/i.test(a.name)?1:0) - (/^(yt|youtube|ig|insta|instagram)\s/i.test(b.name)?1:0));
+    order.forEach(f=>{ if(!f || !f.name) return; const k = campTypeKey(f.name);
+      if(!keep[k]) keep[k] = f; else if(keep[k]!==f && !CAMP_BUILTIN_FMT[f.key]) moved[f.key] = keep[k]; });
+    if(Object.keys(moved).length){
+      const fix = x=>{ const to = moved[x.format]; if(to){ x.format = to.key; x.vtype = (to.vtypes && to.vtypes[0]) || to.key; } };
+      (soc.sx.ideas||[]).forEach(fix); (soc.sx.cards||[]).forEach(fix);
+      soc.sx.formats = soc.sx.formats.filter(f=> !moved[f.key]);
+    }
+    // a type that's the only one of its kind but carries a platform in its name: "YT Community Post" → "Community Post"
+    soc.sx.formats.forEach(f=>{
+      if(!f || !f.name || CAMP_BUILTIN_FMT[f.key]) return;
+      const clean = f.name.replace(/^\s*(yt|youtube|ig|insta|instagram)\s+/i,"").trim();
+      if(clean && clean!==f.name){ f.name = clean; soc.sx.reg = soc.sx.reg || {}; soc.sx.reg.vtype = soc.sx.reg.vtype || {}; if(soc.sx.reg.vtype[f.key]) soc.sx.reg.vtype[f.key] = clean; }
+    });
+  });
+  (CSPACES.list||[]).filter(x=>x.type==="campaign").forEach(cs=>{
+    const soc = campaignSocial(cs); const fm = (soc && soc.sx && soc.sx.formats) || [];
+    (cs.items||[]).forEach(it=>{
+      if(it.kind!=="other" || !it.kindOther) return;
+      const hit = fm.find(f=> campTypeKey(f.name)===campTypeKey(it.kindOther));
+      const clean = String(it.kindOther).replace(/^\s*(yt|youtube|ig|insta|instagram)\s+/i,"").trim();
+      it.kindOther = hit ? hit.name : clean;
+    });
+  });
+  CSPACES.campTypesMerged = true;
+  return true;
 }
 // fix the cards sent before types were kept (they were all Shorts / Reels); runs once per team
 function campFixSentTypes(){
@@ -14015,6 +14056,12 @@ function renderContentCampaign(){
       }catch(e){ return { sent:false, reason:e.message }; }
     },
     socialName: c=> (campaignSocial(c)||{}).name,
+    // Social Media's content types, for the campaign's Type list (Shorts / Long video are the campaign's own Reel / Long video)
+    sharedTypes: ()=>{ const soc = campaignSocial(currentCampaign()||{}); if(!soc) return [];
+      if(window.SX && SX.normalize) SX.normalize(soc);
+      return ((soc.sx && soc.sx.formats) || []).filter(f=> f && !f.hidden && !CAMP_BUILTIN_FMT[f.key]).map(f=>({ name:f.name, icon:f.icon })); },
+    // a type typed in the campaign becomes a Social Media content type straight away
+    ensureType: name=>{ const soc = campaignSocial(currentCampaign()||{}); if(soc) campEnsureFormat(soc, name, campPieceIcon({ kind:"other" }, name)); },
     sendToProcess: (c, it)=>{
       const soc = campaignSocial(c);
       if(!soc) return { error:"There's no Social Media space to send it to — add one inside Marketing first." };
