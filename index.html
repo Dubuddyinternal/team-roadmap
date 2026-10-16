@@ -6094,7 +6094,32 @@ function syncContentSpaces(){
 }
 function saveContent(){ CONTENT.updated = todayStr(); syncContentSpaces(); renderAll(); pushAll(); }
 function saveTeamIdeas(){ TIDEAS.updated = todayStr(); renderAll(); pushAll(); }
-function saveDev(){ DEV.updated = todayStr(); syncLinkedBugs(); renderAll(); pushAll(); }
+function saveDev(){ DEV.updated = todayStr(); devAutoReviewer(); syncLinkedBugs(); renderAll(); pushAll(); }
+/* Rule: any dev card that reaches In Review gets Sumit Kumar as its reviewer (it then shows in his My To-do);
+   the reviewer is cleared when the card leaves review, so it's set again the next time it comes back. */
+const DEV_REVIEWER_NAME = "Sumit Kumar";
+function devReviewerEmail(){
+  const want = DEV_REVIEWER_NAME.toLowerCase();
+  const all = (typeof USERS !== "undefined" && USERS) || [];
+  const u = all.find(x=> String(userDisplayName(x)||"").trim().toLowerCase()===want || String(x.name||"").trim().toLowerCase()===want)
+    || all.find(x=> String(userDisplayName(x)||"").toLowerCase().indexOf("sumit")===0);
+  return u ? u.email : "";
+}
+function devAutoReviewer(){
+  let rv = null;
+  (DEV.cards||[]).forEach(c=>{
+    if(c.col==="review"){ if(!c.reviewer){ if(rv===null) rv = devReviewerEmail(); if(rv) c.reviewer = rv; } }
+    else if(c.reviewer) delete c.reviewer;
+  });
+}
+function reviewerChip(c){
+  if(c.col!=="review" || !c.reviewer) return null;
+  const m = ((typeof USERS!=="undefined" && USERS)||[]).find(u=>u.email===c.reviewer);
+  const sp = document.createElement("span"); sp.className = "src team";
+  sp.textContent = "👀 Review: "+(m ? String(userDisplayName(m)).split(" ")[0] : c.reviewer);
+  sp.title = "In review — waiting on "+(m ? userDisplayName(m) : c.reviewer);
+  return sp;
+}
 function saveRmaps(){ renderAll(); pushAll(); }
 function scStripIds(o, _seen){
   _seen = _seen || new WeakSet();
@@ -11632,7 +11657,7 @@ function renderSidebarDev(){
 function devCardOpts(sprintId){
   return {
     onMove: saveDev,
-    cardExtras: c => [originChip(c), commentChip(c, ()=>saveDev())],
+    cardExtras: c => [originChip(c), reviewerChip(c), commentChip(c, ()=>saveDev())],
     onEdit: c => openDialog("Edit card", c, v=>{
       applyFields(c, v);
       applyCardFields(c, v);
