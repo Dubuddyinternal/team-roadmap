@@ -799,6 +799,7 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .sys-bar.warn i{background:#e0a23a}.sys-bar.crit i{background:#d64545}
 .sys-sub{font-size:12px;color:var(--muted)}
 .sys-stop{border-color:#d64545;background:color-mix(in srgb,#d64545 9%,var(--card));color:#a32d2d}
+.sys-warn{border-color:#d99a1e;background:color-mix(in srgb,#d99a1e 10%,var(--card));color:#8a5d00}
 .sys-tab{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px}.sys-tab td{padding:6px 4px;border-top:1px solid var(--line)}.sys-tab td:not(:first-child){text-align:right;white-space:nowrap}
 .admin-table{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card)}
 .au-row{display:grid;grid-template-columns:1fr minmax(200px,auto) 150px;align-items:center;border-bottom:1px solid var(--line)}
@@ -20784,6 +20785,8 @@ async function renderAdminSystemStats(main){
   const sb = d.supabase || {};
   let h = '<p class="sys-note">Updated ' + new Date(d.at).toLocaleString() + (d.files !== "r2" ? ' · <b>test mode: files on this computer, not Cloudflare</b>' : '') + ' <button class="btn sm" id="sys-reload">Refresh</button></p>';
   if(d.stop) h += '<div class="sys-card sys-stop"><b>⏸ Uploads and Claude runs are stopped to stay on the free plan.</b><div class="sys-sub" style="color:inherit;margin-top:4px">' + sysEsc(d.stop.why) + ' They start again by itself ' + (/\d/.test(d.stop.resumes) ? "on " + sysEsc(d.stop.resumes) : sysEsc(d.stop.resumes)) + '. Nothing is ever charged.</div></div>';
+  const elw = d.eleven || {}, elPc = elw.limit ? elw.used / elw.limit * 100 : 0;
+  if(elPc >= 75) h += '<div class="sys-card ' + (elPc >= 90 ? 'sys-stop' : 'sys-warn') + '"><b>🎙️ ElevenLabs credits ' + (elPc >= 90 ? 'almost out' : 'running low') + ': ' + Math.max(0, elw.limit - elw.used).toLocaleString() + ' of ' + elw.limit.toLocaleString() + ' left.</b><div class="sys-sub" style="color:inherit;margin-top:4px">The 🎤 mic and Claude\'s voice/sound work use these. They refill ' + (elw.resets ? 'on ' + new Date(elw.resets).toDateString().slice(4,10) : 'at the next reset') + '.</div></div>';
   const stopPc = Math.round((d.stopAt || .9) * 100);
   h += '<h3 class="sys-t">☁️ Cloudflare R2 — videos and Claude edit files</h3>' + bar(d.r2.bytes, d.limits.r2, "Storage used", d.r2.count + " files · uploads and runs stop at " + stopPc + "%");
   const op = d.ops || {}, per = op.period ? new Date(op.period.from).toDateString().slice(4,10) + " – " + new Date(op.period.to).toDateString().slice(4,10) : "";
@@ -20805,7 +20808,7 @@ async function renderAdminSystemStats(main){
   else { const left = Math.max(0, el.limit - el.used), pc = Math.min(100, el.used / el.limit * 100), lvl = pc >= 90 ? "crit" : pc >= 75 ? "warn" : "ok";
     h += '<div class="sys-card"><div class="sys-h"><b>Credits left</b><span class="sys-big">' + left.toLocaleString() + ' <small>of ' + el.limit.toLocaleString() + '</small></span></div>'
       + '<div class="sys-bar ' + lvl + '"><i style="width:' + pc.toFixed(1) + '%"></i></div>'
-      + '<div class="sys-sub">' + el.used.toLocaleString() + ' used (' + pc.toFixed(1) + '%)' + (el.tier ? ' · ' + sysEsc(el.tier) + ' plan' : '') + (el.resets ? ' · resets ' + new Date(el.resets).toDateString().slice(4,10) : '') + '</div></div>'; }
+      + '<div class="sys-sub">' + el.used.toLocaleString() + ' used (' + pc.toFixed(1) + '%)' + (lvl !== "ok" ? ' — <b>' + (lvl === "crit" ? "almost out of credits" : "credits running low") + '</b>' : "") + (el.tier ? ' · ' + sysEsc(el.tier) + ' plan' : '') + (el.resets ? ' · resets ' + new Date(el.resets).toDateString().slice(4,10) : '') + '</div></div>'; }
   h += '<h3 class="sys-t">🗄️ Supabase — the app\'s data</h3>';
   if(sb.error || !sb.db_bytes) h += '<p class="sys-note">' + sysEsc(sb.error || "Not available in test mode") + '</p>';
   else {
