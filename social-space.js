@@ -2823,15 +2823,26 @@ function openCard(id,showGate){
         const cp=$("#drawer").querySelector("[data-rawclean-play]"), cd=$("#drawer").querySelector("[data-rawclean-dl]");
         if(l.clean && cp){ cp.src=l.clean; cp.hidden=false; } if(l.clean && cd){ cd.href=l.clean; cd.hidden=false; cd.setAttribute("download", base+" clean"+((c.raw&&c.raw.clean&&c.raw.clean.file.match(/\.\w+$/))||[".wav"])[0]); } };
       const cached=RAWLINKS[c.id]; if(cached && Date.now()-cached.at<3e6) fill(cached.data);
-      else PIPE.rawLinks(c.id).then(d=>{ RAWLINKS[c.id]={ at:Date.now(), data:d }; fill(d); }).catch(()=>{}); }
+      else PIPE.rawLinks(c.id).then(d=>{ if(!(c.raw&&c.raw.audio&&!d.audio)) RAWLINKS[c.id]={ at:Date.now(), data:d }; fill(d); }).catch(()=>{}); }
     // ✨ Adobe Podcast, one click each way: download the WAV + open Enhance Speech; upload the cleaned file back
     const adb=$("#drawer").querySelector("[data-adobe]");
     if(adb) adb.onclick=async()=>{
       if(!c.raw||!c.raw.audio){ toast("Make the audio first (Get the audio above)"); return; }
       const tab=window.open("https://podcast.adobe.com/enhance","_blank");   // opened straight away so the browser doesn't block it
       try{ adb.disabled=true; adb.textContent="Downloading the WAV…";
-        const l=(RAWLINKS[c.id]&&Date.now()-RAWLINKS[c.id].at<3e6)?RAWLINKS[c.id].data:await PIPE.rawLinks(c.id);
-        const blob=await (await fetch(l.audio)).blob(), u=URL.createObjectURL(blob), a=document.createElement("a");
+        let l=await PIPE.rawLinks(c.id);   // always fresh: an older list may not have the audio in it yet
+        if(!l.audio){   // the WAV isn't in storage (yet): make it again from the stored video, then carry on
+          if(!l.video) throw new Error("the video isn't in storage any more — upload it again");
+          adb.textContent="Making the WAV…";
+          const a=await PIPE.makeAudio(c.id, l.video, m=>{ adb.textContent=m; });
+          const card=CARDS.find(x=>x.id===c.id); if(card&&card.raw){ card.raw.audio=a; save(); }
+          l=await PIPE.rawLinks(c.id); if(!l.audio) throw new Error("the WAV still isn't in storage");
+        }
+        delete RAWLINKS[c.id];
+        const r=await fetch(l.audio); if(!r.ok) throw new Error("storage answered "+r.status);
+        const blob=await r.blob(), head=new Uint8Array(await blob.slice(0,4).arrayBuffer());
+        if(blob.size<1000 || String.fromCharCode(...head)!=="RIFF") throw new Error(`that wasn't a WAV (${blob.size} bytes) — press the button again`);
+        const u=URL.createObjectURL(blob), a=document.createElement("a");
         a.href=u; a.download=base+" audio.wav"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),60000);
         toast("WAV downloaded — drop it into Adobe Podcast, then upload the result here"); }
       catch(e){ toast("Couldn't download the WAV: "+e.message); if(tab) tab.close(); }
