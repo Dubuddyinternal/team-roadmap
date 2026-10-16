@@ -2724,6 +2724,9 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .dv-epicst{font-size:11px;font-weight:600;padding:1px 8px;border-radius:99px;background:var(--paper);color:var(--muted)}
 .dv-epicst.c-done{background:#ecfdf5;color:#047857}.dv-epicst.c-review{background:#fff4e0;color:#9a5b00}.dv-epicst.c-progress{background:#eff6ff;color:#1d4ed8}
 .dv-epicbox .acts{margin-left:auto}
+.dv-epicrev{border:1px solid #f5d9a8;background:#fff4e0;color:#9a5b00;border-radius:99px;padding:2px 10px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:var(--sans)}
+.dv-epicrev:hover{border-color:#9a5b00}
+.dv-epicbox.kdrag{cursor:grab}
 .dv-epicbox>.note{margin:6px 0 0 28px;color:var(--muted);font-size:13px}
 .dv-epickids{display:flex;flex-direction:column;gap:4px;margin:8px 0 6px 28px}
 .dv-epickid{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:5px 8px;border-radius:8px;background:var(--paper)}
@@ -6148,7 +6151,7 @@ function devReviewerEmail(){
 function devAutoReviewer(){
   let rv = null;
   (DEV.cards||[]).forEach(c=>{
-    if(devIsEpic(c)){ c.sprint = null; delete c.epic; delete c.reviewer; return; }
+    if(devIsEpic(c)){ c.sprint = null; delete c.epic; c.col = devEpicCol(c); }   // an epic is as far as its stories (and can be reviewed as a whole)
     if(c.col==="review"){ if(!c.reviewer){ if(rv===null) rv = devReviewerEmail(); if(rv) c.reviewer = rv; } }
     else if(c.reviewer) delete c.reviewer;
   });
@@ -6170,10 +6173,20 @@ function devEpicKids(e){ return (DEV.cards||[]).filter(c=>c.epic===e.id && !devI
 // an epic's state from its stories: done when every one is done, review when the rest wait in review
 function devEpicCol(e){
   const k = devEpicKids(e);
-  if(!k.length) return e.col==="done" ? "done" : "todo";
+  if(!k.length) return ["progress","review","done"].indexOf(e.col)>=0 ? e.col : "todo";
   if(k.every(x=>x.col==="done")) return "done";
   if(k.every(x=>x.col==="done"||x.col==="review")) return "review";
   return k.some(x=>x.col!=="todo") ? "progress" : "todo";
+}
+// move a whole epic: to review / done takes its unfinished stories along; back to work just moves the epic
+function devEpicSetCol(e, col){
+  const kids = devEpicKids(e);
+  if(col==="review") kids.forEach(k=>{ if(k.col!=="done") k.col = "review"; });
+  else if(col==="done") kids.forEach(k=>{ k.col = "done"; });
+  else kids.forEach(k=>{ if(k.col==="review") k.col = col; });
+  e.col = col; saveDev();
+  toast(col==="review" ? "\u26A1 "+e.title+" sent to review"+(kids.length ? " with its "+kids.filter(k=>k.col==="review").length+" open stor"+(kids.filter(k=>k.col==="review").length===1?"y":"ies") : "")
+    : "\u26A1 "+e.title+" \u2192 "+todoKLabelSafe(col));
 }
 function devTypeChip(c){
   const T = devType(c), b = document.createElement("button");
@@ -6272,6 +6285,14 @@ function devEpicsSection(spc, sp){
     const n = document.createElement("span"); n.className = "dv-epicn"; n.textContent = kids.length ? done+" of "+kids.length+" done" : "no stories yet";
     const st = document.createElement("span"); st.className = "dv-epicst c-"+devEpicCol(e); st.textContent = todoKLabelSafe(devEpicCol(e));
     top.append(tg, t, bar, n, st);
+    const ecol = devEpicCol(e);
+    if(ecol==="review"){ const rc = reviewerChip(e); if(rc) top.appendChild(rc); }
+    if(ecol!=="review" && ecol!=="done"){
+      const rv = document.createElement("button"); rv.className = "dv-epicrev"; rv.textContent = "\uD83D\uDC40 Send to review";
+      rv.title = "Send the whole epic to review \u2014 its open stories move to In review together (or drag the epic onto a column)";
+      rv.onclick = ev=>{ ev.stopPropagation(); devEpicSetCol(e, "review"); };
+      top.appendChild(rv);
+    }
     if(e.from){ const oc = originChip(e); if(oc) top.appendChild(oc); }
     if(e.assignee) top.appendChild(assigneeAvatar(e.assignee));
     top.appendChild(commentChip(e, ()=>saveDev()));
@@ -6284,6 +6305,10 @@ function devEpicsSection(spc, sp){
       top.appendChild(acts);
     }
     box.appendChild(top);
+    // drag the whole epic onto a sprint column (In review, Done …)
+    makeCardDraggable(box, e.id, ecol, (id, toCol)=>{ if(toCol && toCol!==devEpicCol(e)) devEpicSetCol(e, toCol); });
+    // other cards can't be dropped onto an epic box (it isn't a column)
+    ["dragover","drop"].forEach(ev=> box.addEventListener(ev, x=>{ if(_kDrag && _kDrag.id!==e.id){ x.stopImmediatePropagation(); } }, true));
     if(open){
       if(e.note){ const nt = document.createElement("div"); nt.className = "note"; nt.textContent = e.note; box.appendChild(nt); }
       const list = document.createElement("div"); list.className = "dv-epickids";
