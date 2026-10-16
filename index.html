@@ -4739,6 +4739,42 @@ async function saveMyProfile(){
   return true;
 }
 
+// ---- boards I've hidden from MY sidebar (only for me; synced in my profile: profile.hiddenSpaces[team] = ["cs:<id>", "rm:<id>", "b:dev"…])
+function myHiddenKeys(){ const u = currentUser(), h = (u && u.profile && u.profile.hiddenSpaces) || {}; return Array.isArray(h[TEAM]) ? h[TEAM] : []; }
+function hiddenForMe(key){ return myHiddenKeys().indexOf(key) >= 0; }
+function setHiddenForMe(key, hide, name){
+  const u = currentUser(); if(!u) return;
+  u.profile = u.profile || {}; const hs = u.profile.hiddenSpaces = u.profile.hiddenSpaces || {};
+  const list = (Array.isArray(hs[TEAM]) ? hs[TEAM] : []).filter(k=>k!==key);
+  if(hide) list.push(key);
+  hs[TEAM] = list;
+  saveMyProfile(); renderAll(); if($("admin-page") && $("admin-page").style.display==="block") renderAdminPage();
+  toast(hide ? "\u201C"+(name||"Board")+"\u201D hidden from your sidebar \u2014 bring it back in Administration \u2192 My hidden boards" : "\u201C"+(name||"Board")+"\u201D is back in your sidebar");
+}
+function hiddenKeyName(k){
+  if(k.indexOf("cs:")===0){ const cs = CSPACES.list.find(x=>"cs:"+x.id===k); return cs ? cs.name : null; }
+  if(k.indexOf("rm:")===0){ const m = RMAPS.maps.find(x=>"rm:"+x.id===k); return m ? m.name : null; }
+  if(k==="b:dev") return "Development"; if(k==="b:bugs") return "Bugs";
+  return null;
+}
+function renderAdminHidden(wrap){
+  const h2 = document.createElement("h2"); h2.textContent = "My hidden boards"; h2.style.margin = "0";
+  const sub = document.createElement("div"); sub.className = "hint"; sub.style.margin = "4px 0 16px";
+  sub.textContent = "Boards you hid with \u22EF \u2192 Hide from my sidebar. They're only hidden for you \u2014 everyone else still sees them, and nothing in them changes.";
+  wrap.append(h2, sub);
+  const keys = myHiddenKeys().filter(k=>hiddenKeyName(k));
+  if(!keys.length){ const e = document.createElement("div"); e.className = "empty"; e.textContent = "Nothing hidden \u2014 every board you can see is in your sidebar."; wrap.appendChild(e); return; }
+  const list = document.createElement("div"); list.className = "admin-table";
+  keys.forEach(k=>{
+    const r = document.createElement("div"); r.className = "au-row"; r.style.cssText = "display:flex;align-items:center;gap:12px;justify-content:space-between";
+    const n = document.createElement("b"); n.textContent = hiddenKeyName(k);
+    const btn = document.createElement("button"); btn.className = "btn save"; btn.textContent = "\uD83D\uDC41 Show again";
+    btn.onclick = ()=> setHiddenForMe(k, false, hiddenKeyName(k));
+    r.append(n, btn); list.appendChild(r);
+  });
+  wrap.appendChild(list);
+}
+
 // ---- people management: goes through the server ("manage-people" function) or
 // the database's own role functions, which check the rules before doing anything.
 async function peopleCall(body){
@@ -14524,7 +14560,7 @@ function renderAll(){
     const _strat = docStrategyChip();
     if(_strat) ws.appendChild(_strat);
     /* ---- top-level ROADMAPS first (timelines across every space) ---- */
-    const _allRm = RMAPS.maps.filter(m=>canViewSpace(rmapRef(m)));
+    const _allRm = RMAPS.maps.filter(m=>canViewSpace(rmapRef(m)) && !hiddenForMe("rm:"+m.id));
     // the ROADMAPS heading only shows when there's a roadmap to see (new ones are made in Administration → Roadmaps)
     if(_allRm.length){
       const rl = document.createElement("div");
@@ -14547,6 +14583,7 @@ function renderAll(){
         menu.onclick = e=>{ e.stopPropagation(); openRowMenu(menu, [
           {label:"Settings", onClick:()=> openSpaceSettings(rmapRef(m))},
           {label:"Set background", onClick:()=> openBgPicker(rmapRef(m))},
+          {label:"\uD83D\uDE48 Hide from my sidebar", onClick:()=> setHiddenForMe("rm:"+m.id, true, m.name)},
           hasPerm("delete_roadmaps") && {label:"Delete roadmap", danger:true, onClick:()=> deleteRoadmap(m)},
         ].filter(Boolean)); };
         b.appendChild(menu);
@@ -14569,6 +14606,7 @@ function renderAll(){
       g.items.forEach(w=>{
         if(w.key==="dev" && BUILTIN_HIDDEN.dev) return;
         if(w.key==="bugs" && BUILTIN_HIDDEN.bugs) return;
+        if(hiddenForMe("b:"+w.key)) return;
         const b = document.createElement("button");
         b.className = "ws-item"+(view===w.key?" active":"");
         b.innerHTML = '<span class="dot"></span><span></span>';
@@ -14583,6 +14621,7 @@ function renderAll(){
             {label:"Settings", onClick:()=> openSpaceSettings(ref)},
             {label:"Set background", onClick:()=> openBgPicker(ref)},
             w.key==="dev" && {label:"\uFF0B New dev team", onClick: devNewTeam},
+            {label:"\uD83D\uDE48 Hide from my sidebar", onClick:()=> setHiddenForMe("b:"+w.key, true, w.label)},
             hasPerm("delete_spaces") && {label:"Delete\u2026", danger:true, onClick:()=> { if(w.key==="bugs") deleteBuiltinBugs(); else deleteBuiltinDev(); }},
           ].filter(Boolean)); };
           b.appendChild(menu);
@@ -14591,10 +14630,11 @@ function renderAll(){
       });
       /* custom spaces created from templates */
       // spaces inside a Marketing space are drawn under it, not at the top level
-      const _allCs = CSPACES.list.filter(cs=>canViewSpace(csRef(cs)) && !mktParentOf(cs));
+      const _allCs = CSPACES.list.filter(cs=>canViewSpace(csRef(cs)) && !mktParentOf(cs) && !hiddenForMe("cs:"+cs.id));
       const _shownCs = stableSidebar(_allCs, cs=>csIsActive(cs), SIDEBAR_CAP);
       const _drawCs = (cs, _host, _nested)=>{
         if(!canViewSpace(csRef(cs))) return;   // private spaces hidden from non-members
+        if(hiddenForMe("cs:"+cs.id)) return;    // I hid it from my sidebar (Administration → My hidden boards)
         const active = csIsActive(cs);
         const b = document.createElement("button");
         b.className = "ws-item"+(active && cs.type!=="marketing"?" active":"")+(_nested?" ws-nested":"")+(cs.type==="marketing"?" ws-parent":"");
@@ -14662,6 +14702,7 @@ function renderAll(){
           ];
           if(cs.type==="pdt") _items.push({label:"Board mapping", onClick:()=>{ view="pdt"; activeCspace=cs.id; pdtView="mapping"; renderAll(); }});
           if(cs.type==="scrum") _items.push({label:"\uFF0B New dev team", onClick: devNewTeam});
+          _items.push({label:"\uD83D\uDE48 Hide from my sidebar", onClick:()=> setHiddenForMe("cs:"+cs.id, true, cs.name)});
           _items.push({label: cs.okr ? "Change linked OKR\u2026" : "Link to an OKR\u2026", onClick:()=> csOkrOpen(cs)});
           if(hasPerm("add_spaces")){   // put a space inside a Marketing space, or take it out
             const _par = mktParentOf(cs);
@@ -20259,6 +20300,8 @@ function adminSections(){
     { k:"policies",    ico:"📜", lbl:"Company policies", group:"me", show: !!me && !!SUPA && typeof renderAdminPolicies === "function", render: renderAdminPolicies },
     { k:"mypayments",  ico:"💸", lbl:"My payments", group:"me", show: !!me && !!SUPA && typeof renderAdminMyPayments === "function", render: renderAdminMyPayments },
     { k:"myaccess",    ico:"🔎", lbl:"My access",            show: !!me,                           group:"me", render: renderMyAccess },
+    { k:"myhidden",    ico:"\uD83D\uDE48", lbl:"My hidden boards" + (myHiddenKeys().filter(k=>hiddenKeyName(k)).length ? " (" + myHiddenKeys().filter(k=>hiddenKeyName(k)).length + ")" : ""), crumb:"My hidden boards",
+                                                                        show: !!me,                           group:"me", render: renderAdminHidden },
     { k:"myideas",     ico:"💡", lbl:"My product ideas",     show: !!me && !!SUPA && typeof pitchTarget === "function" && !!pitchTarget(), group:"me", render: renderAdminMyIdeas },
     { k:"myfeedback",  ico:"📝", lbl:"My monthly feedback",  show: !!me && !!SUPA && typeof renderAdminMyFeedback === "function", group:"me", render: renderAdminMyFeedback },
     { k:"notifications", ico:"📣", lbl:"Notifications",      show: hasPerm("send_notifications") && !!SUPA, group:"me", render: renderAdminNotifications },
