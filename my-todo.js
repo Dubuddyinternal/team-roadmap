@@ -9,7 +9,8 @@
 
    Everything assigned to me on the team's boards lands by itself, by a
    fixed rule:
-     🧩 Product Head — Development / scrum cards, bugs, Product Roadmap
+     🧩 Product Head — Development / scrum cards, any dev card waiting in
+        In Review (I'm its reviewer automatically), bugs, Product Roadmap
         ideas, roadmap module tasks, Product All in One items
      🧭 CEO          — Educational Content tasks, Campaign pieces, Keep an
         Eye studies, Widen our Horizon topics
@@ -382,6 +383,17 @@ function todoAssigned() {
     out.push({ key: "dev:" + c.id, hat: "product", icon: "🛠️", src: "Dev", title: c.title, where: sp ? sp.name : "Development",
       col: todoColFromKcol(c.col), due: todoISO(c.duedate),
       write: hasPerm("edit") ? function (k) { c.col = k; saveDev(); } : null,
+      open: function () { view = "dev"; devSpace = c.space || null; devSprint = c.sprint || null; renderAll(); } });
+  });
+  // dev cards waiting in In Review with me as the reviewer (set automatically when a card reaches review)
+  ((DEV && DEV.cards) || []).forEach(function (c) {
+    if (c.col !== "review" || (c.assignee || "").toLowerCase() === me.email) return;
+    var rv = c.reviewer || (typeof devReviewerEmail === "function" ? devReviewerEmail() : "");   // cards already in review before the rule: same reviewer
+    if (rv.toLowerCase() !== me.email) return;
+    var sp = (DEV.spaces || []).find(function (s) { return s.id === c.space; }), key = "devrev:" + c.id;
+    out.push({ key: key, hat: "product", icon: "👀", src: "Review", title: c.title, where: sp ? sp.name : "Development",
+      col: TODO.over[key] || "todo", boardCol: "todo", due: todoISO(c.duedate),
+      write: hasPerm("edit") ? function (k) { if (k === "done") { c.col = "done"; delete TODO.over[key]; saveDev(); } else if (k === "todo") delete TODO.over[key]; else TODO.over[key] = k; } : null,
       open: function () { view = "dev"; devSpace = c.space || null; devSprint = c.sprint || null; renderAll(); } });
   });
   // bugs
