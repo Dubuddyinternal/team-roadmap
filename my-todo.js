@@ -55,7 +55,11 @@
    there every day. Dotted day lines (TODO.settings.dayBlocks, ⋯ → Day lines)
    mark when each kind of work happens — Product Head 11–2, Break 2–2:40,
    CEO 3–4:30, Sumit YouTube 5–7 — each with how many open things wait in
-   that hat. Anything timed inside a line's hours sits inside its box (the
+   that hat. A New learning box can belong to a hat (settings.learnParts[].hat):
+   in a hat with a line — What's happening in the world, Twitter / LinkedIn and
+   EdTech are in 🧭 CEO — it sits inside that line every day, half an hour
+   apart from the line's start unless it has its own time, and doesn't freeze
+   the morning. Anything timed inside a line's hours sits inside its box (the
    box grows), each with its own time; dropping a card on a box puts it in
    the box's next free half hour. The New learning / Deep thinking / Reasoning boxes can
    get a time the same way. If New learning has a time, it sits on the day too and nothing freezes
@@ -578,7 +582,9 @@ function todoTimeHandle(key, emptyLabel) {
   return b;
 }
 // on Today, a New learning box with its own time ("learn:<part>") leaves the big box and sits on the day
-function todoLearnPartTimed(P) { return todoIsDayView() && !!TODO.times.at["learn:" + P.key]; }
+function todoLearnPartTimed(P) { return todoIsDayView() && (!!TODO.times.at["learn:" + P.key] || !!todoLearnLine(P)); }
+// the day line a learning box sits in when it's in another hat (CEO work …), if there is one
+function todoLearnLine(P) { return P.hat && P.hat !== "personal" ? TODO.settings.dayBlocks.find(function (b) { return b.hat === P.hat; }) || null : null; }
 // one dotted reminder line: its name, and how many open things wait in its hat (click → All to be done)
 function todoDayLine(b, assigned, day) {
   var box = todoEl("div", "td-dline" + (b.hat ? "" : " rest"));
@@ -633,8 +639,8 @@ function todoDayLineFill(box, L, end, now) {
       var r = todoEl("div", "td-dline-kid" + (now && now >= e.t && now < (kids[i + 1] ? kids[i + 1].t : end) ? " now" : ""));
       var rl = todoEl("div", "td-dline-t");
       var tb = todoEl("button", "td-rail-t", todoFmtHM(e.t)); tb.title = "Change the time"; tb.onclick = function () { todoTimeAsk("🕘 When?", e.t, e.key); };
-      var x = todoEl("button", "td-rail-x", "✕ no time"); x.title = "Take the time off — it waits in No time"; x.onclick = function () { todoTimeSet(e.key, ""); };
-      rl.append(tb, x);
+      rl.appendChild(tb);
+      if (!e.implied && !(e.part && todoLearnLine(e.part))) { var x = todoEl("button", "td-rail-x", "✕ no time"); x.title = "Take the time off — it waits in No time"; x.onclick = function () { todoTimeSet(e.key, ""); }; rl.appendChild(x); }
       var it = todoEl("div", "td-row-item"); it.appendChild(e.el());
       if (e.H.key !== (L.line.hat || "") && e.key.indexOf("box:") !== 0 && !e.part) it.appendChild(todoEl("span", "td-row-hat", e.H.icon + " " + e.H.label));
       r.append(rl, it); inn.appendChild(r);
@@ -661,9 +667,11 @@ function todoDayPlan(assigned, boxes, day) {
   var NAMES = { learn: "📚 New learning", deep: "🧘 " + todoBoxText("deep").title + " · " + todoFmtLen(TODO.settings.deepMin), reason: "♟️ " + todoBoxText("reason").title };
   if (!isToday) boxes = ["learn", "deep", "reason"].filter(function (k) { return at["box:" + k]; });
   boxes.forEach(function (k) { timed.push({ t: at["box:" + k], key: "box:" + k, H: todoHat("personal"), el: isToday ? BOX[k] : ghost(NAMES[k]) }); });
+  var lineSlot = {};   // learning boxes in a hat's line without their own time: one after another, half an hour each, from the line's start
   todoLearnParts().forEach(function (P) {
-    var k = "learn:" + P.key;
-    if (at[k]) timed.push({ t: at[k], key: k, H: todoHat("personal"), part: P, el: isToday ? function () { var b = todoLearnPartBox(P, today); b.classList.add("td-lp-solo"); return b; } : ghost((P.icon ? P.icon + " " : "") + P.label) });
+    var k = "learn:" + P.key, L = todoLearnLine(P), t = at[k], implied = false;
+    if (!t && L) { var n = lineSlot[L.id] || 0; lineSlot[L.id] = n + 1; t = todoM2HM(todoHM2m(L.from) + 30 * n); if (L.to && t >= L.to) t = L.from; implied = true; }
+    if (t) timed.push({ t: t, key: k, H: todoHat(P.hat || "personal"), part: P, implied: implied, el: isToday ? function () { var b = todoLearnPartBox(P, today); b.classList.add("td-lp-solo"); return b; } : ghost((P.icon ? P.icon + " " : "") + P.label) });
   });
   // the dotted reminder lines (Product Head work 11–2, Break, …): just a line, with what's waiting in that hat
   TODO.settings.dayBlocks.forEach(function (b) { timed.push({ t: b.from, end: b.to, key: "line:" + b.id, H: todoHat(b.hat || "personal"), line: b, el: function () { return todoDayLine(b, assigned, today); } }); });
@@ -955,6 +963,9 @@ function todoSettingsNorm(s) {
   });
   var parts = Array.isArray(s.learnParts) ? s.learnParts.filter(function (p) { return p && p.key && p.label; }) : [];
   s.learnParts = parts.length ? parts.slice(0, 8) : TODO_LEARN_DEFAULT.map(function (p) { return Object.assign({}, p); });
+  // each box belongs to a hat; a box in a hat with a day line (e.g. 🧭 CEO, 3:00–4:30) sits inside that line every day
+  if (!s.learnHatV1) { s.learnParts.forEach(function (p) { if (["world", "social", "edtech"].indexOf(p.key) >= 0) p.hat = "ceo"; }); s.learnHatV1 = 1; }   // once: these moved to CEO work
+  s.learnParts.forEach(function (p) { if (!TODO_HATS.some(function (h) { return h.key === p.hat; })) p.hat = "personal"; });
   s.learnNeed = typeof s.learnNeed === "number" ? Math.max(0, Math.min(s.learnParts.length, Math.round(s.learnNeed))) : s.learnParts.length;
   s.deepMin = Math.max(5, Math.min(600, Math.round(Number(s.deepMin) || 120)));
   var rm = Array.isArray(s.reasonMins) ? s.reasonMins.map(Number).filter(function (n) { return n >= 5 && n <= 600; }).map(Math.round) : [];
@@ -1001,9 +1012,12 @@ function todoLearnSettings() {
       var nm = todoEl("input", "td-set-nm"); nm.value = p.label; nm.placeholder = "What to learn about"; nm.oninput = function () { p.label = nm.value; };
       var up = todoEl("button", "td-act", "↑"); up.title = "Move up"; up.disabled = i === 0;
       up.onclick = function () { rows.splice(i - 1, 0, rows.splice(i, 1)[0]); draw(); };
+      var hs = todoEl("select"); hs.title = "Which hat — a hat with a day line (e.g. CEO 3:00–4:30) shows the box inside it";
+      TODO_HATS.forEach(function (h) { var o = todoEl("option", "", h.icon + " " + h.label); o.value = h.key; hs.appendChild(o); });
+      hs.value = p.hat || "personal"; hs.onchange = function () { p.hat = hs.value; };
       var rm = todoEl("button", "td-act danger", "Remove"); rm.disabled = rows.length <= 1;
       rm.onclick = function () { rows.splice(i, 1); draw(); };
-      r.append(ic, nm, up, rm); list.appendChild(r);
+      r.append(ic, nm, hs, up, rm); list.appendChild(r);
     });
     var cur = Number(need.value), n = rows.length;
     need.innerHTML = "";
@@ -1011,7 +1025,7 @@ function todoLearnSettings() {
     need.value = String(Math.min(isNaN(cur) ? n : cur, n));
   };
   todoDialog("📚 New learning — settings", function (body) {
-    body.appendChild(todoEl("div", "hint", "Rename, reorder, add or remove the learning boxes. Old days keep what you wrote."));
+    body.appendChild(todoEl("div", "hint", "Rename, reorder, add or remove the learning boxes, and pick each one's hat — a box in 🧭 As CEO shows every day inside the CEO work line. Old days keep what you wrote."));
     list = todoEl("div", "td-setlist"); body.appendChild(list);
     var add = todoEl("button", "td-act", "＋ Add a box");
     add.onclick = function () { if (rows.length >= 8) return; rows.push({ key: "c" + Date.now().toString(36), icon: "💡", label: "", ph: "" }); draw(); var ins = list.querySelectorAll(".td-set-nm"); ins[ins.length - 1].focus(); };
@@ -1021,7 +1035,7 @@ function todoLearnSettings() {
     body.appendChild(todoField("Unlock the rest of My To-do after", need));
     draw(); need.value = String(Math.min(S.learnNeed, rows.length));
   }, function () {
-    var clean = rows.map(function (p) { return { key: p.key, icon: (p.icon || "").trim() || "💡", label: (p.label || "").trim(), ph: p.ph || "" }; });
+    var clean = rows.map(function (p) { return { key: p.key, icon: (p.icon || "").trim() || "💡", label: (p.label || "").trim(), ph: p.ph || "", hat: p.hat || "personal" }; });
     if (clean.some(function (p) { return !p.label; })) return "Give every box a name (or remove it).";
     S.learnParts = clean; S.learnNeed = Number(need.value);
     return "";
@@ -1150,7 +1164,7 @@ function todoLearnBox() {
   var today = todoToday(), parts = todoLearnParts(), n = todoLearnCount(today), need = todoLearnNeed(), open = todoLearnedToday();
   var box = todoEl("section", "td-learn" + (open ? " ok" : ""));
   var head = todoEl("div", "td-learn-h");
-  head.appendChild(todoEl("h2", "", "👤 Personal · 📚 New learning"));
+  head.appendChild(todoEl("h2", "", "📚 New learning"));
   head.appendChild(todoEl("span", "td-lp-count" + (n >= parts.length ? " ok" : ""), n + " / " + parts.length));
   var st = todoLearnStreak();
   if (st) head.appendChild(todoEl("span", "td-streak", "🔥 " + st + " day" + (st === 1 ? "" : "s") + " in a row"));
@@ -1167,7 +1181,7 @@ function todoLearnBox() {
   var grid = todoEl("div", "td-lp-grid");
   parts.forEach(function (P) { if (!todoLearnPartTimed(P)) grid.appendChild(todoLearnPartBox(P, today)); });
   if (grid.children.length) box.appendChild(grid);
-  else box.appendChild(todoEl("div", "td-empty", "Each box has its own time on Today below."));
+  else box.appendChild(todoEl("div", "td-empty", "Every box sits on today's timeline at its time (CEO ones inside CEO work)."));
   if (todoLearnLog) {
     var log = todoEl("div", "td-learn-log");
     var days = Object.keys(TODO.learn).filter(function (d) { return d !== today && Object.keys(todoLearnDay(d)).length; }).sort().reverse();
@@ -1763,8 +1777,7 @@ function renderContentTodo() {
   var at = TODO.times.at, onDay = function (k) { return todoIsDayView() && !!at["box:" + k]; };
   var learnLater = onDay("learn") || todoLearnParts().some(todoLearnPartTimed);
   var dayBoxes = [];
-  var allPartsTimed = todoLearnParts().every(todoLearnPartTimed);
-  if (onDay("learn")) dayBoxes.push("learn"); var learnLast = !onDay("learn") && !allPartsTimed;   // the untimed New learning card goes at the end, after the day's timeline
+  if (onDay("learn")) dayBoxes.push("learn"); var learnLast = !onDay("learn");   // kept even when every box is on the timeline: the streak, Past learnings and Feeds live here   // the untimed New learning card goes at the end, after the day's timeline
   if (onDay("deep")) dayBoxes.push("deep"); else wrap.appendChild(todoDeepBox());   // always usable, even before today's learning is written
   if (onDay("reason")) dayBoxes.push("reason"); else wrap.appendChild(todoReasonBox());
   if (!todoLearnedToday() && !learnLater) {
