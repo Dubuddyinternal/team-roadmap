@@ -2699,6 +2699,38 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .soc-bkbtn.primary{background:var(--indigo);border-color:var(--indigo);color:#fff;font-weight:600}
 .soc-bkbtn.primary:hover{filter:brightness(1.07);color:#fff}
 /* ===== send-to buttons ===== */
+.dv-type{border:1px solid var(--line);background:var(--card);border-radius:6px;padding:1px 7px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--sans);white-space:nowrap}
+.dv-type.t-epic{background:#f3e8ff;border-color:#d8b4fe;color:#6b21a8}
+.dv-type.t-story{background:#ecfdf5;border-color:#a7f3d0;color:#047857}
+.dv-type.t-task{background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8}
+.dv-type.t-bug{background:#fef2f2;border-color:#fecaca;color:#b91c1c}
+.dv-epic{border:1px solid #d8b4fe;background:#faf5ff;color:#6b21a8;border-radius:99px;padding:1px 8px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--sans);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dv-epic.add,.dv-sub.add{border-style:dashed;background:none;color:var(--muted);font-weight:500}
+.dv-sub{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:99px;padding:1px 8px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--mono)}
+.dv-sub.ok{border-color:var(--done);color:var(--done)}
+.dv-sublist{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.dv-subrow{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;cursor:pointer}
+.dv-subrow.done span{text-decoration:line-through;color:var(--muted)}
+.dv-subrow span{flex:1}
+.dv-subrm{border:0;background:none;color:var(--muted);cursor:pointer}
+.dv-subadd{display:flex;gap:8px}.dv-subadd input{flex:1}
+.dv-epicbox{border:1px solid #e9d5ff;border-left:4px solid #a855f7;border-radius:12px;padding:10px 12px;margin-bottom:8px;background:var(--card)}
+.dv-epictop{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dv-epictg{border:0;background:none;cursor:pointer;color:var(--muted);font-size:13px;width:18px}
+.dv-epict{cursor:pointer;font-size:15px}
+.dv-epicbar{display:inline-block;width:120px;height:7px;border-radius:99px;background:var(--line);overflow:hidden}
+.dv-epicbar i{display:block;height:100%;background:#a855f7}
+.dv-epicn{font-size:12px;color:var(--muted);font-family:var(--mono)}
+.dv-epicst{font-size:11px;font-weight:600;padding:1px 8px;border-radius:99px;background:var(--paper);color:var(--muted)}
+.dv-epicst.c-done{background:#ecfdf5;color:#047857}.dv-epicst.c-review{background:#fff4e0;color:#9a5b00}.dv-epicst.c-progress{background:#eff6ff;color:#1d4ed8}
+.dv-epicbox .acts{margin-left:auto}
+.dv-epicbox>.note{margin:6px 0 0 28px;color:var(--muted);font-size:13px}
+.dv-epickids{display:flex;flex-direction:column;gap:4px;margin:8px 0 6px 28px}
+.dv-epickid{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:5px 8px;border-radius:8px;background:var(--paper)}
+.dv-epickid.done .dv-kidt{text-decoration:line-through;color:var(--muted)}
+.dv-kidt{flex:1;min-width:140px;font-size:13.5px}
+.dv-kidwhere{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.dv-epicbox .addline{margin-left:28px;width:calc(100% - 28px)}
 .disc-chip.owner.eng{background:#eef2ff;border-color:#c7d2fe;color:#3730a3}
 .disc-toproc{border:1px solid var(--line-strong);background:var(--card);border-radius:99px;padding:3px 10px;font-size:10.5px;font-weight:600;color:var(--muted);cursor:pointer;font-family:var(--sans)}
 .disc-toproc:hover{border-color:var(--indigo);color:var(--indigo)}
@@ -6116,10 +6148,183 @@ function devReviewerEmail(){
 function devAutoReviewer(){
   let rv = null;
   (DEV.cards||[]).forEach(c=>{
+    if(devIsEpic(c)){ c.sprint = null; delete c.epic; delete c.reviewer; return; }
     if(c.col==="review"){ if(!c.reviewer){ if(rv===null) rv = devReviewerEmail(); if(rv) c.reviewer = rv; } }
     else if(c.reviewer) delete c.reviewer;
   });
 }
+/* ===== Jira-style card types: ⚡ Epic › 📗 Story / ☑️ Task / 🐞 Bug › sub-tasks =====
+   c.type: "epic" | "story" (default) | "task" | "bug"; c.epic: the epic's id (for non-epics);
+   c.subtasks: [{id, title, done}]. Epics never sit in a sprint — their stories do. */
+const DEV_TYPES = [
+  {key:"epic",  icon:"\u26A1",           label:"Epic",  hint:"A big piece of work, made of many stories"},
+  {key:"story", icon:"\uD83D\uDCD7",     label:"Story", hint:"One feature from the user's side"},
+  {key:"task",  icon:"\u2611\uFE0F",     label:"Task",  hint:"Technical work that isn't a user feature"},
+  {key:"bug",   icon:"\uD83D\uDC1E",     label:"Bug",   hint:"Something that's broken"},
+];
+function devType(c){ return DEV_TYPES.find(t=>t.key===c.type) || DEV_TYPES[1]; }
+function devIsEpic(c){ return c && c.type==="epic"; }
+function devWork(c){ return !devIsEpic(c); }   // what sits on boards / backlog / counts
+function devEpicsOf(spaceId){ return (DEV.cards||[]).filter(c=>devIsEpic(c) && c.space===spaceId); }
+function devEpicKids(e){ return (DEV.cards||[]).filter(c=>c.epic===e.id && !devIsEpic(c)); }
+// an epic's state from its stories: done when every one is done, review when the rest wait in review
+function devEpicCol(e){
+  const k = devEpicKids(e);
+  if(!k.length) return e.col==="done" ? "done" : "todo";
+  if(k.every(x=>x.col==="done")) return "done";
+  if(k.every(x=>x.col==="done"||x.col==="review")) return "review";
+  return k.some(x=>x.col!=="todo") ? "progress" : "todo";
+}
+function devTypeChip(c){
+  const T = devType(c), b = document.createElement("button");
+  b.className = "dv-type t-"+T.key; b.textContent = T.icon+" "+T.label;
+  b.title = T.hint + (editMode ? " \u2014 click to change" : "");
+  b.onclick = e=>{ e.stopPropagation(); if(!editMode) return;
+    openChoice("What kind of card is \u201C"+c.title+"\u201D?", DEV_TYPES.map(t=>({label:t.icon+" "+t.label+" \u2014 "+t.hint, value:t.key})), k=>{
+      if(k==="epic"){ c.type = "epic"; c.sprint = null; delete c.epic; devEpicOpen.add(c.id); }
+      else { c.type = k; }
+      saveDev();
+    }); };
+  return b;
+}
+function devEpicChip(c){
+  if(devIsEpic(c)) return null;
+  const e = c.epic ? (DEV.cards||[]).find(x=>x.id===c.epic) : null;
+  const epics = devEpicsOf(c.space);
+  if(!e && !(editMode && epics.length)) return null;
+  const b = document.createElement("button");
+  b.className = "dv-epic"+(e?"":" add"); b.textContent = e ? "\u26A1 "+e.title : "\uFF0B epic";
+  b.title = e ? "Part of the epic \u201C"+e.title+"\u201D" + (editMode ? " \u2014 click to change" : "") : "Put it in an epic";
+  b.onclick = ev=>{ ev.stopPropagation(); if(!editMode) return;
+    openChoice("Which epic is \u201C"+c.title+"\u201D part of?", [{label:"\u2014 No epic", value:""}].concat(epics.map(x=>({label:"\u26A1 "+x.title, value:x.id}))), id=>{
+      if(id) c.epic = id; else delete c.epic; saveDev(); }); };
+  return b;
+}
+function devSubChip(c){
+  if(devIsEpic(c)) return null;
+  const st = c.subtasks || [];
+  if(!st.length && !editMode) return null;
+  const b = document.createElement("button");
+  const d = st.filter(x=>x.done).length;
+  b.className = "dv-sub"+(st.length && d===st.length ? " ok" : "")+(st.length?"":" add");
+  b.textContent = st.length ? "\u2611 "+d+"/"+st.length : "\uFF0B sub-task";
+  b.title = st.length ? "Sub-tasks \u2014 "+d+" of "+st.length+" done" : "Break it into small steps";
+  b.onclick = e=>{ e.stopPropagation(); devSubtasksDialog(c); };
+  return b;
+}
+// the sub-task checklist of one card (anyone can tick; adding / removing needs Edit mode)
+function devSubtasksDialog(c){
+  const ov = document.createElement("div"); ov.className = "overlay show";
+  const dg = document.createElement("div"); dg.className = "dialog"; dg.style.maxWidth = "520px";
+  dg.setAttribute("role","dialog"); dg.setAttribute("aria-modal","true"); ov.appendChild(dg);
+  const h = document.createElement("h3"); h.textContent = "\u2611 Sub-tasks \u2014 "+c.title; dg.appendChild(h);
+  const body = document.createElement("div"); body.className = "dlg-body"; dg.appendChild(body);
+  const list = document.createElement("div"); list.className = "dv-sublist"; body.appendChild(list);
+  const draw = ()=>{
+    list.innerHTML = "";
+    (c.subtasks||[]).forEach((x,i)=>{
+      const r = document.createElement("label"); r.className = "dv-subrow"+(x.done?" done":"");
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!x.done;
+      cb.onchange = ()=>{ x.done = cb.checked; saveDev(); draw(); };
+      const t = document.createElement("span"); t.textContent = x.title;
+      r.append(cb, t);
+      if(editMode){ const rm = document.createElement("button"); rm.className = "dv-subrm"; rm.textContent = "\u2715"; rm.title = "Remove";
+        rm.onclick = e=>{ e.preventDefault(); c.subtasks.splice(i,1); if(!c.subtasks.length) delete c.subtasks; saveDev(); draw(); }; r.appendChild(rm); }
+      list.appendChild(r);
+    });
+    if(!(c.subtasks||[]).length){ const e = document.createElement("div"); e.className = "empty"; e.textContent = "No sub-tasks yet."; list.appendChild(e); }
+  };
+  draw();
+  if(editMode){
+    const row = document.createElement("div"); row.className = "dv-subadd";
+    const inp = document.createElement("input"); inp.placeholder = "A small step, e.g. Design the screen"; inp.dataset.plain = "1";
+    const add = document.createElement("button"); add.className = "btn"; add.textContent = "\uFF0B Add";
+    const go = ()=>{ const v = inp.value.trim(); if(!v) return; (c.subtasks = c.subtasks || []).push({id:"st-"+Date.now().toString(36), title:v, done:false}); inp.value = ""; saveDev(); draw(); inp.focus(); };
+    add.onclick = go; inp.onkeydown = e=>{ if(e.key==="Enter"){ e.preventDefault(); go(); } };
+    row.append(inp, add); body.appendChild(row);
+    setTimeout(()=>inp.focus(), 0);
+  }
+  const btns = document.createElement("div"); btns.className = "btns";
+  const cl = document.createElement("button"); cl.className = "btn save"; cl.textContent = "Done";
+  const close = ()=>{ if(ov.parentNode) ov.parentNode.removeChild(ov); };
+  cl.onclick = close; ov.onclick = e=>{ if(e.target===ov) close(); };
+  btns.appendChild(cl); dg.appendChild(btns);
+  document.body.appendChild(ov);
+}
+const devEpicOpen = new Set();   // epics opened on the board (the rest show one line)
+function devEpicsSection(spc, sp){
+  const epics = devEpicsOf(spc);
+  const block = document.createElement("section");
+  block.className = "module-block dv-epics"; block.style.marginTop = "16px";
+  const bh = document.createElement("div"); bh.className = "module-head";
+  const h2 = document.createElement("h2"); h2.textContent = "\u26A1 Epics";
+  const pc = document.createElement("span"); pc.className = "pct"; pc.textContent = epics.length+" epic(s) \u00B7 big pieces of work, each made of stories";
+  bh.append(h2, pc); block.appendChild(bh);
+  epics.forEach(e=>{
+    const kids = devEpicKids(e), done = kids.filter(k=>k.col==="done").length, open = devEpicOpen.has(e.id);
+    const box = document.createElement("div"); box.className = "dv-epicbox"+(open?" open":"");
+    const top = document.createElement("div"); top.className = "dv-epictop";
+    const tg = document.createElement("button"); tg.className = "dv-epictg"; tg.textContent = open ? "\u25BE" : "\u25B8"; tg.title = open ? "Fold" : "Show its stories";
+    tg.onclick = ()=>{ if(open) devEpicOpen.delete(e.id); else devEpicOpen.add(e.id); renderAll(); };
+    const t = document.createElement("b"); t.className = "dv-epict"; t.textContent = "\u26A1 "+e.title; t.onclick = tg.onclick;
+    const bar = document.createElement("span"); bar.className = "dv-epicbar"; bar.title = done+" of "+kids.length+" done";
+    bar.innerHTML = "<i></i>"; bar.querySelector("i").style.width = (kids.length ? Math.round(done/kids.length*100) : 0)+"%";
+    const n = document.createElement("span"); n.className = "dv-epicn"; n.textContent = kids.length ? done+" of "+kids.length+" done" : "no stories yet";
+    const st = document.createElement("span"); st.className = "dv-epicst c-"+devEpicCol(e); st.textContent = todoKLabelSafe(devEpicCol(e));
+    top.append(tg, t, bar, n, st);
+    if(e.from){ const oc = originChip(e); if(oc) top.appendChild(oc); }
+    if(e.assignee) top.appendChild(assigneeAvatar(e.assignee));
+    top.appendChild(commentChip(e, ()=>saveDev()));
+    if(editMode){
+      const acts = document.createElement("div"); acts.className = "acts";
+      acts.appendChild(actBtn("pencil","Edit epic",false, ()=> openDialog("Edit epic", e, v=>{ applyFields(e, v); applyCardFields(e, v); if(v.photos && v.photos.length) e.photos = v.photos; else delete e.photos; saveDev(); }, {photos:true, assignee:true, duedate:true, priority:true, labels:true})));
+      acts.appendChild(actBtn("trash","Delete epic",true, ()=>{
+        if(confirm("Delete the epic \u201C"+e.title+"\u201D? Its "+kids.length+" stor"+(kids.length===1?"y stays":"ies stay")+" on the board, just without an epic.")){
+          kids.forEach(k=>delete k.epic); DEV.cards.splice(DEV.cards.indexOf(e),1); saveDev(); toast("Epic deleted"); } }));
+      top.appendChild(acts);
+    }
+    box.appendChild(top);
+    if(open){
+      if(e.note){ const nt = document.createElement("div"); nt.className = "note"; nt.textContent = e.note; box.appendChild(nt); }
+      const list = document.createElement("div"); list.className = "dv-epickids";
+      kids.forEach(k=>{
+        const r = document.createElement("div"); r.className = "dv-epickid"+(k.col==="done"?" done":"");
+        const spr = k.sprint ? (DEV.sprints||[]).find(x=>x.id===k.sprint) : null;
+        const where = document.createElement("span"); where.className = "dv-kidwhere"; where.textContent = (spr ? spr.name : "Backlog")+" \u00B7 "+todoKLabelSafe(k.col);
+        const kt = document.createElement("span"); kt.className = "dv-kidt"; kt.textContent = k.title;
+        r.append(devTypeChip(k), kt, where);
+        const sc = devSubChip(k); if(sc) r.appendChild(sc);
+        if(k.assignee) r.appendChild(assigneeAvatar(k.assignee));
+        if(!k.sprint && sp && !sp.completed && editMode){ const mv = document.createElement("button"); mv.className = "upd"; mv.textContent = "\u2192 "+sp.name; mv.title = "Pull into the current sprint"; mv.onclick = ()=>{ k.sprint = sp.id; k.col = "todo"; saveDev(); toast("Pulled into "+sp.name); }; r.appendChild(mv); }
+        list.appendChild(r);
+      });
+      if(!kids.length){ const em = document.createElement("div"); em.className = "empty"; em.textContent = "No stories in this epic yet."; list.appendChild(em); }
+      box.appendChild(list);
+      if(editMode){
+        const add = document.createElement("button"); add.className = "addline"; add.textContent = "\uFF0B Add a story to this epic";
+        add.onclick = ()=> openDialog("New story in \u201C"+e.title+"\u201D", {}, v=>{
+          const c = { id:"dv-"+Date.now().toString(36), title:v.title, col:"todo", sprint:null, space:e.space, type:"story", epic:e.id };
+          if(v.note) c.note = v.note; applyCardFields(c, v); if(v.photos && v.photos.length) c.photos = v.photos;
+          DEV.cards.push(c); saveDev(); toast("Story added to the backlog, in "+e.title);
+        }, {photos:true, assignee:true, duedate:true, priority:true, labels:true});
+        box.appendChild(add);
+      }
+    }
+    block.appendChild(box);
+  });
+  if(!epics.length){ const em = document.createElement("div"); em.className = "empty"; em.textContent = "No epics yet. An epic is a big piece of work (e.g. CRM + Analytics) \u2014 its stories go into sprints."; block.appendChild(em); }
+  if(editMode){
+    const add = document.createElement("button"); add.className = "addline"; add.textContent = "\uFF0B New epic";
+    add.onclick = ()=> openDialog("New epic", {}, v=>{
+      const c = { id:"dv-"+Date.now().toString(36), title:v.title, col:"todo", sprint:null, space:spc, type:"epic" };
+      if(v.note) c.note = v.note; applyCardFields(c, v); if(v.photos && v.photos.length) c.photos = v.photos;
+      DEV.cards.push(c); devEpicOpen.add(c.id); saveDev(); toast("Epic created \u2014 add its stories");
+    }, {photos:true, assignee:true, duedate:true, priority:true, labels:true});
+    block.appendChild(add);
+  }
+  return block;
+}
+function todoKLabelSafe(k){ const c = KCOLS.find(x=>x.key===k); return c ? (k==="review" ? "In review by "+DEV_REVIEWER_NAME.split(" ")[0] : c.label) : k; }
 function reviewerChip(c){
   if(c.col!=="review" || !c.reviewer) return null;
   const m = ((typeof USERS!=="undefined" && USERS)||[]).find(u=>u.email===c.reviewer);
@@ -7424,7 +7629,7 @@ function renderHeader(){
     const doneN = inSp.filter(c=>c.col==="done").length;
     pct = inSp.length ? Math.round(doneN/inSp.length*100) : 0;
     stats.append(
-      mkStat(DEV.cards.filter(c=>!c.sprint && c.space===spc).length,"Backlog"),
+      mkStat(DEV.cards.filter(c=>!c.sprint && c.space===spc && devWork(c)).length,"Backlog"),
       mkStat(inSp.length,"In sprint"),
       mkStat(inSp.filter(c=>c.col==="progress"||c.col==="review").length,"In flight"),
       mkStat(doneN,"Done"),
@@ -11559,7 +11764,7 @@ function renderSidebarDev(){
   tl.className = "side-title"; tl.style.marginTop = "0"; tl.textContent = "Dev spaces (teams)";
   wrap.appendChild(tl);
   DEV.spaces.forEach(space=>{
-    const cards = DEV.cards.filter(c=>c.space===space.id);
+    const cards = DEV.cards.filter(c=>c.space===space.id && devWork(c));
     const doneN = cards.filter(c=>c.col==="done").length;
     const b = mkSideCard(space.id===spc, ()=>{ devSpace = space.id; devSprint = null; renderAll(); });
     b.innerHTML = '<span class="name"></span><span class="pct"></span>';
@@ -11612,8 +11817,8 @@ function renderSidebarDev(){
   wrap.appendChild(st);
   const cur = currentSprint();
   DEV.sprints.filter(sp=>sp.space===spc).forEach(sp=>{
-    const n = DEV.cards.filter(c=>c.sprint===sp.id).length;
-    const doneN = DEV.cards.filter(c=>c.sprint===sp.id && c.col==="done").length;
+    const n = DEV.cards.filter(c=>c.sprint===sp.id && devWork(c)).length;
+    const doneN = DEV.cards.filter(c=>c.sprint===sp.id && devWork(c) && c.col==="done").length;
     const b = mkSideCard(cur && cur.id===sp.id, ()=>{ devSprint = sp.id; renderAll(); });
     b.innerHTML = '<span class="name"></span><span class="pct"></span>';
     b.querySelector(".name").textContent = (sp.completed ? "\u2713 " : "") + sp.name;
@@ -11655,7 +11860,7 @@ function renderSidebarDev(){
     }, {hideExtras:true, dates:true});
     wrap.appendChild(add);
   }
-  const backlogN = DEV.cards.filter(c=>!c.sprint && c.space===spc).length;
+  const backlogN = DEV.cards.filter(c=>!c.sprint && c.space===spc && devWork(c)).length;
   const note = document.createElement("div");
   note.className = "lb-note";
   note.textContent = backlogN+" item(s) in the backlog below the board. Anyone can move cards; adding, sprints and editing need Edit mode.";
@@ -11666,7 +11871,7 @@ function devCardOpts(sprintId){
   return {
     onMove: saveDev,
     colLabels: { review: "In review by "+DEV_REVIEWER_NAME.split(" ")[0] },   // everything in review waits on Sumit (devAutoReviewer)
-    cardExtras: c => [originChip(c), reviewerChip(c), commentChip(c, ()=>saveDev())],
+    cardExtras: c => [devTypeChip(c), devEpicChip(c), devSubChip(c), originChip(c), reviewerChip(c), commentChip(c, ()=>saveDev())],
     onEdit: c => openDialog("Edit card", c, v=>{
       applyFields(c, v);
       applyCardFields(c, v);
@@ -11705,7 +11910,7 @@ function renderContentDev(){
       d.textContent = (sp.start||"?") + " \u2192 " + (sp.end||"?");
       row.appendChild(d);
     }
-    const spCards = DEV.cards.filter(c=>c.sprint===sp.id);
+    const spCards = DEV.cards.filter(c=>c.sprint===sp.id && devWork(c));
     const cnt = document.createElement("span"); cnt.className = "pct";
     cnt.textContent = spCards.filter(c=>c.col==="done").length + "/" + spCards.length + " done";
     row.appendChild(cnt);
@@ -11738,7 +11943,8 @@ function renderContentDev(){
   }
 
   const spc = currentSpace();
-  const backlog = DEV.cards.filter(c=>!c.sprint && c.space===spc);
+  wrap.appendChild(devEpicsSection(spc, sp));   // ⚡ Epics, each with its stories and progress
+  const backlog = DEV.cards.filter(c=>!c.sprint && c.space===spc && devWork(c));
   const block = document.createElement("section");
   block.className = "module-block";
   block.style.marginTop = "16px";
@@ -11852,6 +12058,7 @@ function renderContentDev(){
     if(ps) body.appendChild(ps);
     const meta = document.createElement("div");
     meta.className = "meta";
+    [devTypeChip(c), devEpicChip(c), devSubChip(c)].forEach(x=>x && meta.appendChild(x));
     const oc = originChip(c);
     if(oc) meta.appendChild(oc);
     if(c.owner){ const o = document.createElement("span"); o.className = "owner"; o.textContent = c.owner; meta.appendChild(o); }
@@ -12782,9 +12989,10 @@ function discEngCards(idea){
 function discWithEng(cs, idea){
   if(!cs || cs.type!=="discovery") return null;
   const cards = discEngCards(idea);
-  const card = cards.find(c=>c.col!=="done");
+  const colOf = c=> devIsEpic(c) ? devEpicCol(c) : c.col;   // an epic is as far as its stories
+  const card = cards.find(c=>colOf(c)!=="done");
   if(card){
-    if(card.col==="review") return { state:"review", email: card.reviewer || devReviewerEmail(), name: DEV_REVIEWER_NAME, card };
+    if(colOf(card)==="review") return { state:"review", email: card.reviewer || devReviewerEmail(), name: DEV_REVIEWER_NAME, card };
     return { state:"eng", email: card.assignee || devLeadEmail(), name: DEV_LEAD_NAME, card };
   }
   if(idea.stage==="building" && !cards.length) return { state:"eng", email: devLeadEmail(), name: DEV_LEAD_NAME };
@@ -12877,7 +13085,7 @@ function discToEngBtn(cs, idea){
   b.className = "disc-toproc"+(card?" done":"");
   if(card){
     const sp = (DEV.spaces||[]).find(x=>x.id===card.space), spr = (DEV.sprints||[]).find(x=>x.id===card.sprint);
-    b.textContent = "\u2713 "+(sp?sp.name:"Engineering")+" \u00B7 "+(spr?spr.name:"Backlog");
+    b.textContent = "\u2713 "+(sp?sp.name:"Engineering")+" \u00B7 "+(devIsEpic(card) ? "\u26A1 Epic" : (spr?spr.name:"Backlog"));
     b.title = "Already sent to engineering \u2014 open it there";
     b.onclick = e=>{ e.stopPropagation(); view="dev"; devSpace=card.space||null; devSprint=card.sprint||null; renderAll(); };
     return b;
@@ -12889,22 +13097,37 @@ function discToEngBtn(cs, idea){
 }
 function discSendToEng(cs, idea){
   const spaces = DEV.spaces || [];
-  const toBoard = spaceId=>{
+  const base = spaceId=>{ const c = { id:"dv-"+Date.now().toString(36), title:idea.title, col:"todo", sprint:null, space:spaceId, from:"roadmap", fromIdea:idea.id, area:cs.name };
+    if(idea.note) c.note = idea.note; if(idea.photos && idea.photos.length) c.photos = idea.photos.slice(); return c; };
+  const spName = id=>{ const x = spaces.find(y=>y.id===id); return x ? x.name : "Engineering"; };
+  // 3) which board: Backlog or an open sprint of that team
+  const toBoard = (spaceId, type, epicId)=>{
     const sps = (DEV.sprints||[]).filter(x=>x.space===spaceId && !x.completed);
-    const opts = [{label:"\uD83D\uDCE5 Backlog", value:""}].concat(sps.map(x=>({label:"\uD83C\uDFC3 "+x.name+" \u2192 To Do", value:x.id})));
     const send = sprintId=>{
-      const c = { id:"dv-"+Date.now().toString(36), title:idea.title, col:"todo", sprint:sprintId||null, space:spaceId, from:"roadmap", fromIdea:idea.id, area:cs.name };
-      if(idea.note) c.note = idea.note;
-      if(idea.photos && idea.photos.length) c.photos = idea.photos.slice();
+      const c = base(spaceId); c.type = type; c.sprint = sprintId||null; if(epicId) c.epic = epicId;
       DEV.cards.push(c); saveDev();
-      const sp = spaces.find(x=>x.id===spaceId), spr = sps.find(x=>x.id===sprintId);
-      toast("Sent to "+(sp?sp.name:"Engineering")+" \u00B7 "+(spr?spr.name:"Backlog"));
+      const spr = sps.find(x=>x.id===sprintId);
+      toast("Sent to "+spName(spaceId)+" \u00B7 "+(spr?spr.name:"Backlog")+" as a "+devType(c).label.toLowerCase());
     };
+    const opts = [{label:"\uD83D\uDCE5 Backlog", value:""}].concat(sps.map(x=>({label:"\uD83C\uDFC3 "+x.name+" \u2192 To Do", value:x.id})));
     if(opts.length===1) send(""); else openChoice("Which board?", opts, send);
   };
+  // 2) what is it — an epic (big, many stories) or one story / task / bug
+  const askType = spaceId=>{
+    openChoice("What is \u201C"+idea.title+"\u201D for engineering?", DEV_TYPES.map(t=>({label:t.icon+" "+t.label+" \u2014 "+t.hint, value:t.key})), type=>{
+      if(type==="epic"){
+        const c = base(spaceId); c.type = "epic"; DEV.cards.push(c); devEpicOpen.add(c.id); saveDev();
+        toast("Epic created in "+spName(spaceId)+" \u2014 add its stories under \u26A1 Epics"); return;
+      }
+      const epics = devEpicsOf(spaceId);
+      if(!epics.length){ toBoard(spaceId, type, ""); return; }
+      openChoice("Is it part of an epic?", [{label:"\u2014 No epic", value:""}].concat(epics.map(x=>({label:"\u26A1 "+x.title, value:x.id}))), eid=> toBoard(spaceId, type, eid));
+    });
+  };
+  // 1) which team
   if(!spaces.length){ toast("No engineering team yet \u2014 add a dev space first"); return; }
-  if(spaces.length===1) toBoard(spaces[0].id);
-  else openChoice("Send \u201C"+idea.title+"\u201D to which team?", spaces.map(x=>({label:"\uD83D\uDEE0\uFE0F "+x.name, value:x.id})), toBoard);
+  if(spaces.length===1) askType(spaces[0].id);
+  else openChoice("Send \u201C"+idea.title+"\u201D to which team?", spaces.map(x=>({label:"\uD83D\uDEE0\uFE0F "+x.name, value:x.id})), askType);
 }
 function discIdeaActs(cs, idea){
   const acts = document.createElement("div");
@@ -16524,10 +16747,11 @@ function scBoards(){
   try{
     if(typeof DEV!=="undefined" && DEV && ((DEV.cards&&DEV.cards.length) || (DEV.spaces&&DEV.spaces.length))){
       var allc={}; KCOLS.forEach(function(c){allc[c.key]=0;});
-      (DEV.cards||[]).forEach(function(c){ if(allc[c.col]!==undefined) allc[c.col]++; });
-      out.push({id:"dev", label:"Development", cols:KC, counts:allc, total:(DEV.cards||[]).length});
+      var work=(DEV.cards||[]).filter(function(c){ return c.type!=="epic"; });
+      work.forEach(function(c){ if(allc[c.col]!==undefined) allc[c.col]++; });
+      out.push({id:"dev", label:"Development", cols:KC, counts:allc, total:work.length});
       cspaces().filter(function(x){return x.type==="scrum" && x.devId;}).forEach(function(cs){
-        var cards=(DEV.cards||[]).filter(function(c){ return c.space===cs.devId; });
+        var cards=(DEV.cards||[]).filter(function(c){ return c.space===cs.devId && c.type!=="epic"; });
         var dc={}; KCOLS.forEach(function(c){dc[c.key]=0;});
         cards.forEach(function(c){ if(dc[c.col]!==undefined) dc[c.col]++; });
         out.push({id:"dev:"+cs.devId, label:cs.name, cols:KC, counts:dc, total:cards.length});
