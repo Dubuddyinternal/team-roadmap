@@ -389,6 +389,7 @@ details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var
 .drop img{width:62px;height:35px;object-fit:cover;border-radius:5px;flex-shrink:0;border:1px solid var(--line)}
 .drop input[type=file]{display:none}
 .rawaudio{margin-top:8px;padding:9px 11px;border:1px solid var(--line);border-radius:var(--r-s);background:var(--surface)}
+.rawclean{margin-top:10px;padding-top:9px;border-top:1px dashed var(--line)}
 .rawaudio-h{display:flex;align-items:center;gap:8px;font-size:12.5px;flex-wrap:wrap}
 .rawseg{display:inline-flex;margin:2px 0 9px}
 .rawseg button{padding:5px 12px;font-size:11.5px}
@@ -2208,7 +2209,7 @@ const RAWMODE={};   // card id → "link" | "file": which Raw video option is sh
 let OPEN=null;   // what the window shows ({kind:"card"|"idea", id}), so a refresh can reopen it
 let CLOSE_GUARD=null;   // the open card's "discard unsaved changes?" check
 // raw video audio: a job in progress per card ("Pulling out the audio…"), and short-lived play/download links
-const AUDIOJOB={}, RAWLINKS={};
+const AUDIOJOB={}, RAWLINKS={}, CLEANJOB={};
 // a deleted card: remove its raw video, audio, Claude edit files and finished videos from storage
 function freeCardFiles(id, after){
   if(!window.PIPE || PIPE.mode()==="off") return;
@@ -2592,7 +2593,20 @@ function openCard(id,showGate){
             <div class="rawaudio">
               ${r.audio?`<div class="rawaudio-h">🎵 <b>Audio (WAV)</b> <span class="hint">${mb(r.audio.size)}${r.audio.seconds?" · "+Math.floor(r.audio.seconds/60)+":"+String(r.audio.seconds%60).padStart(2,"0"):""}</span>
                   <a class="hint" data-rawaudio-dl style="margin-left:auto" hidden>⬇ Download</a></div>
-                <audio controls preload="none" data-rawaudio-play style="width:100%;height:34px;margin-top:6px" hidden></audio>`
+                <audio controls preload="none" data-rawaudio-play style="width:100%;height:34px;margin-top:6px" hidden></audio>
+                <div class="rawclean">
+                  ${r.clean?`<div class="rawaudio-h">✨ <b>Cleaned audio</b> <span class="hint">${esc(r.clean.name)} · ${mb(r.clean.size)}${CLEANJOB[c.id]?" · "+esc(CLEANJOB[c.id]):""}</span>
+                      <a class="hint" data-rawclean-dl style="margin-left:auto" hidden>⬇ Download</a>
+                      <label class="btn sm" data-w="1" style="cursor:pointer">Replace<input type="file" accept="audio/*,.wav,.mp3,.m4a,.flac" data-rawcleanfile hidden></label>
+                      <button type="button" class="btn sm danger" data-rawcleandel data-w="1">Delete</button></div>
+                    <audio controls preload="none" data-rawclean-play style="width:100%;height:34px;margin-top:6px" hidden></audio>
+                    <p class="hint" style="margin:4px 0 0">🤖 Claude edit uses this clean voice instead of the camera sound (press Request changes if the edit was made before).</p>`
+                  :`<div class="rawaudio-h">✨ <b>Clean the voice</b> <span class="hint">${CLEANJOB[c.id]?esc(CLEANJOB[c.id]):"optional — Adobe Podcast removes background noise"}</span></div>
+                    <div class="pp-row" style="margin-top:6px;gap:6px;display:flex;flex-wrap:wrap">
+                      <button type="button" class="btn sm" data-adobe data-w="1">1 · Clean in Adobe Podcast ↗</button>
+                      <label class="btn sm" data-w="1" style="cursor:pointer">2 · Upload cleaned audio<input type="file" accept="audio/*,.wav,.mp3,.m4a,.flac" data-rawcleanfile hidden></label></div>
+                    <p class="hint" style="margin:6px 0 0">Step 1 downloads the WAV and opens Enhance Speech: drop the WAV in, then download Adobe's result. Step 2: upload that file here — Claude's edit then uses the clean voice.</p>`}
+                </div>`
               :`<div class="rawaudio-h">🎵 <b>Audio (WAV)</b> <span class="hint">${AUDIOJOB[c.id]?esc(AUDIOJOB[c.id]):"not made yet"}</span>
                   ${AUDIOJOB[c.id]?"":`<button type="button" class="btn sm" data-getaudio data-w="1" style="margin-left:auto">Get the audio</button>`}</div>`}
             </div>
@@ -2802,10 +2816,43 @@ function openCard(id,showGate){
     const ga=$("#drawer").querySelector("[data-getaudio]"); if(ga) ga.onclick=()=>getAudio(null);
     // play / download links for the stored audio (short-lived, fetched when the card opens)
     const ap=$("#drawer").querySelector("[data-rawaudio-play]");
-    if(ap && window.PIPE){ const fill=l=>{ if(!l||!l.audio) return; ap.src=l.audio; ap.hidden=false;
-        const dl=$("#drawer").querySelector("[data-rawaudio-dl]"); if(dl){ dl.href=l.audio; dl.hidden=false; dl.setAttribute("download", (c.pre.title||c.idea||"raw").replace(/[^\w\- ]+/g,"").trim().slice(0,60)+" audio.wav"); } };
+    const base=(c.pre.title||c.idea||"raw").replace(/[^\w\- ]+/g,"").trim().slice(0,60)||"raw";
+    if(ap && window.PIPE){ const fill=l=>{ if(!l) return;
+        if(l.audio){ ap.src=l.audio; ap.hidden=false;
+          const dl=$("#drawer").querySelector("[data-rawaudio-dl]"); if(dl){ dl.href=l.audio; dl.hidden=false; dl.setAttribute("download", base+" audio.wav"); } }
+        const cp=$("#drawer").querySelector("[data-rawclean-play]"), cd=$("#drawer").querySelector("[data-rawclean-dl]");
+        if(l.clean && cp){ cp.src=l.clean; cp.hidden=false; } if(l.clean && cd){ cd.href=l.clean; cd.hidden=false; cd.setAttribute("download", base+" clean"+((c.raw&&c.raw.clean&&c.raw.clean.file.match(/\.\w+$/))||[".wav"])[0]); } };
       const cached=RAWLINKS[c.id]; if(cached && Date.now()-cached.at<3e6) fill(cached.data);
       else PIPE.rawLinks(c.id).then(d=>{ RAWLINKS[c.id]={ at:Date.now(), data:d }; fill(d); }).catch(()=>{}); }
+    // ✨ Adobe Podcast, one click each way: download the WAV + open Enhance Speech; upload the cleaned file back
+    const adb=$("#drawer").querySelector("[data-adobe]");
+    if(adb) adb.onclick=async()=>{
+      if(!c.raw||!c.raw.audio){ toast("Make the audio first (Get the audio above)"); return; }
+      const tab=window.open("https://podcast.adobe.com/enhance","_blank");   // opened straight away so the browser doesn't block it
+      try{ adb.disabled=true; adb.textContent="Downloading the WAV…";
+        const l=(RAWLINKS[c.id]&&Date.now()-RAWLINKS[c.id].at<3e6)?RAWLINKS[c.id].data:await PIPE.rawLinks(c.id);
+        const blob=await (await fetch(l.audio)).blob(), u=URL.createObjectURL(blob), a=document.createElement("a");
+        a.href=u; a.download=base+" audio.wav"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),60000);
+        toast("WAV downloaded — drop it into Adobe Podcast, then upload the result here"); }
+      catch(e){ toast("Couldn't download the WAV: "+e.message); if(tab) tab.close(); }
+      adb.disabled=false; adb.textContent="1 · Clean in Adobe Podcast ↗"; };
+    $("#drawer").querySelectorAll("[data-rawcleanfile]").forEach(inp=>inp.onchange=async()=>{
+      const f=inp.files[0]; if(!f) return; const id=c.id;
+      if(!(/^audio\//.test(f.type)||/\.(wav|mp3|m4a|aac|flac|ogg)$/i.test(f.name))){ toast("Pick an audio file (.wav / .mp3 / .m4a)"); return; }
+      const step=m=>{ CLEANJOB[id]=m; const el=$("#drawer").querySelector(".rawclean .hint"); if(el&&OPEN&&OPEN.id===id) el.textContent=m; };
+      try{ step("Uploading…"); const up=await PIPE.uploadClean(id, f, pc=>step("Uploading… "+pc+"%"));
+        const card=CARDS.find(x=>x.id===id); if(card&&card.raw){ card.raw.clean=Object.assign(up,{ at:today(), by:meName() }); save(); }
+        delete RAWLINKS[id]; toast("Cleaned audio saved — Claude's edit will use it"); }
+      catch(e){ toast("Upload didn't work: "+e.message); }
+      delete CLEANJOB[id]; if(OPEN&&OPEN.id===id){ if(dirty) read(); draw(c.pre.keywords); } });
+    const cdel=$("#drawer").querySelector("[data-rawcleandel]");
+    if(cdel) cdel.onclick=async()=>{
+      if(!confirm("Delete the cleaned audio from storage? Claude's edit goes back to the camera sound.")) return;
+      try{ const r=await PIPE.deleteClean(c.id);
+        if(r.still_there&&r.still_there.length){ toast("Storage still has: "+r.still_there.join(", ")+" — try again"); return; }
+        read(); delete c.raw.clean; delete RAWLINKS[c.id]; if(save()){ dirty=false; opened=snap(); }
+        toast("Cleaned audio deleted from storage (checked)"); draw(c.pre.keywords); }
+      catch(e){ toast("Couldn't delete: "+e.message); } };
     // delete the raw video + its audio from storage (checked: the answer says what's really gone)
     const rdel=$("#drawer").querySelector("[data-rawdel]");
     if(rdel) rdel.onclick=async()=>{

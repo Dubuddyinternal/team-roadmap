@@ -513,7 +513,15 @@ window.PIPE = {
   uploadRaw(cardId, file, onProgress){ return uploadRaw(cardId, file, onProgress); },
   // 🎵 WAV of the raw video's sound (src: the picked File, or the stored video's link)
   makeAudio(cardId, src, onStep){ return makeAudio(cardId, src, onStep); },
-  // play / download links for the card's raw video and audio: { video?, audio? }
+  // ✨ the cleaned audio back from Adobe Podcast → raw-clean.<ext> next to the video (Claude's edit uses it)
+  async uploadClean(cardId, f, onProgress){
+    const { data } = await call("/api/pipeline/upload-url", { team: team(), job: cardId, kind: "clean", name: f.name });
+    await call("/api/pipeline/storage", { team: team(), job: cardId, op: "delete_clean" }).catch(() => {});   // an older one, maybe another type
+    await putFile(data.url, f, onProgress);
+    return { file: data.file, name: f.name, size: f.size };
+  },
+  async deleteClean(cardId){ return (await call("/api/pipeline/storage", { team: team(), job: cardId, op: "delete_clean" })).data; },
+  // play / download links for the card's raw video and audio: { video?, audio?, clean? }
   async rawLinks(cardId){ return (await call("/api/pipeline/storage?team=" + encodeURIComponent(team()) + "&job=" + encodeURIComponent(cardId))).data; },
   // delete the raw video + audio from storage; the answer says what is gone and what (if anything) is still there
   async deleteRaw(cardId){ return (await call("/api/pipeline/storage", { team: team(), job: cardId, op: "delete_raw" })).data; },

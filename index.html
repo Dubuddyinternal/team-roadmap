@@ -20731,7 +20731,7 @@ async function renderAdminSystemStats(main){
     return '<div class="sys-card"><div class="sys-h"><b>' + label + '</b><span class="sys-big">' + sysBytes(used) + ' <small>of ' + sysBytes(limit) + '</small></span></div>'
       + '<div class="sys-bar ' + lvl + '"><i style="width:' + pc.toFixed(1) + '%"></i></div>'
       + '<div class="sys-sub">' + pc.toFixed(1) + '% used' + (lvl !== "ok" ? ' — <b>' + (lvl === "crit" ? "almost full" : "getting full") + '</b>, free some space below' : "") + (sub ? " · " + sub : "") + '</div></div>'; };
-  const KIND = { raw:"🎞️ Raw videos", audio:"🎵 Raw audio (WAV)", edit:"🧠 Claude edit folders", preview:"▶ Live player files", final:"🎬 Finished videos", library:"🔊 Sound library", other:"Other" };
+  const KIND = { raw:"🎞️ Raw videos", audio:"🎵 Raw audio (WAV)", clean:"✨ Cleaned audio", edit:"🧠 Claude edit folders", preview:"▶ Live player files", final:"🎬 Finished videos", library:"🔊 Sound library", other:"Other" };
   const kinds = Object.entries(d.r2.byKind || {}).sort((a,b)=> b[1]-a[1]);
   const sb = d.supabase || {};
   let h = '<p class="sys-note">Updated ' + new Date(d.at).toLocaleString() + (d.files !== "r2" ? ' · <b>test mode: files on this computer, not Cloudflare</b>' : '') + ' <button class="btn sm" id="sys-reload">Refresh</button></p>';
