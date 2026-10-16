@@ -29,7 +29,7 @@ const LABEL = {
   planning:["Claude is planning the edit","warn","🧠"], brief_ready:["Brief ready — your check","accent","✋"],
   rendering:["Rendering YT + IG","warn","🎬"], seo_running:["vidIQ SEO running","warn","🔎"],
   final_review:["Videos ready","good","🎬"], scheduled:["Scheduled","good","🗓"], posting:["Posting","warn","🚀"], posted:["Posted","good","✅"],
-  post_failed:["Posting needs a look","crit","⚠️"], failed:["Stopped — needs a look","crit","⚠️"], cancelled:["Cancelled","mute","⏹"],
+  paused:["Paused — free limit reached","warn","⏸"], post_failed:["Posting needs a look","crit","⚠️"], failed:["Stopped — needs a look","crit","⚠️"], cancelled:["Cancelled","mute","⏹"],
 };
 const BUSY = ["planning","rendering","seo_running","posting","researching","scripting"];
 const MODE = { fire:["☁️ Cloud routine","good"], local:["💻 This Mac","warn"], fake:["🧪 Test mode (nothing real)","mute"], off:["Not set up yet","mute"] };
@@ -288,6 +288,10 @@ function render(){
   }
   else if(st==="brief_ready") body = briefView(job, me);
   else if(st==="final_review") body = finalView(job, c, me);
+  else if(st==="paused"){ const pz = job.paused || {};   // stopped so the free plan is never exceeded; starts again by itself
+    body = `<div class="pp-note crit"><b>⏸ Paused to stay on the free plan.</b> ${esc(pz.why||"")}</div>
+      <p class="hint" style="margin:0 0 10px">The ${esc(pz.step||"edit")} step starts again by itself ${pz.resumes && /\d/.test(pz.resumes) ? "on " + esc(pz.resumes) + " (checked every 5 minutes)" : esc(pz.resumes||"when there's room") + " (checked every 5 minutes)"}. Nothing is charged meanwhile.</p>
+      <div class="pp-row">${me.canRun?`<button class="btn sm" data-pp="retry">Check again now</button><button class="btn sm" data-pp="cancel" style="margin-left:auto">Cancel job</button>`:""}</div>`; }
   else if(st==="scheduled") body = scheduledView(job, me);
   else if(st==="posted") body = postedView(job);
   else if(st==="post_failed") body = postFailedView(job, c, me);
