@@ -52,10 +52,12 @@
    (🕘 Time… or drag it onto a gap). ✕ no time takes a time off. Cards on the
    timeline still move → In progress / → Done; done ones stay on the day,
    struck through. Times are kept (TODO.times.at) so Running at 18:00 stays
-   there every day. Dashed day lines (TODO.settings.dayBlocks, ⋯ → Day lines)
+   there every day. Dotted day lines (TODO.settings.dayBlocks, ⋯ → Day lines)
    mark when each kind of work happens — Product Head 11–2, Break 2–2:40,
    CEO 3–4:30, Sumit YouTube 5–7 — each with how many open things wait in
-   that hat; they're only reminders, not containers. The New learning / Deep thinking / Reasoning boxes can
+   that hat. Anything timed inside a line's hours sits inside its box (the
+   box grows), each with its own time; dropping a card on a box puts it in
+   the box's next free half hour. The New learning / Deep thinking / Reasoning boxes can
    get a time the same way. If New learning has a time, it sits on the day too and nothing freezes
    (its dot turns red once the time has passed and it isn't written yet).
 
@@ -573,14 +575,16 @@ function todoTimeHandle(key, emptyLabel) {
 }
 // on Today, a New learning box with its own time ("learn:<part>") leaves the big box and sits on the day
 function todoLearnPartTimed(P) { return todoIsDayView() && !!TODO.times.at["learn:" + P.key]; }
-// one dashed reminder line: its name, and how many open things wait in its hat (click → All to be done)
+// one dotted reminder line: its name, and how many open things wait in its hat (click → All to be done)
 function todoDayLine(b, assigned, day) {
   var box = todoEl("div", "td-dline" + (b.hat ? "" : " rest"));
   var H = b.hat ? todoHat(b.hat) : null;
   box.appendChild(todoEl("b", "", (H ? H.icon : "☕") + " " + b.label));
   if (H) {
-    var n = TODO.items.filter(function (x) { return x.hat === b.hat && x.col !== "done"; }).length
-      + assigned.filter(function (e) { return e.hat === b.hat && e.col !== "done"; }).length;
+    // open in this hat and not yet planned for the day (the planned ones are on the timeline already)
+    var waits = function (k, hat, col) { var p = todoPlanned(k); return hat === b.hat && col !== "done" && !(p && p <= day); };
+    var n = TODO.items.filter(function (x) { return waits("own:" + x.id, x.hat, x.col); }).length
+      + assigned.filter(function (e) { return waits(e.key, e.hat, e.col); }).length;
     var w = todoEl("button", "td-dline-n" + (n ? "" : " none"), n ? n + " waiting in All to be done" : "Nothing waiting");
     w.title = "See them in All to be done"; w.onclick = function () { todoMode = "all"; renderAll(); };
     box.appendChild(w);
@@ -607,7 +611,7 @@ function todoDayLinesSettings() {
     list.appendChild(add);
   };
   todoDialog("🗓 Day lines on the timeline", function (body) {
-    body.appendChild(todoEl("div", "hint", "Dashed lines on Today and Tomorrow so you remember when each kind of work happens. They're only reminders — give your cards their own times."));
+    body.appendChild(todoEl("div", "hint", "Dotted lines on Today and Tomorrow so you remember when each kind of work happens. They're only reminders — give your cards their own times."));
     list = todoEl("div", "td-setlist"); body.appendChild(list); draw();
   }, function () {
     var ok = rows.filter(function (b) { return b.from && b.label.trim(); });
@@ -615,6 +619,30 @@ function todoDayLinesSettings() {
     TODO.settings.dayBlocks = ok.map(function (b) { return { id: b.id, from: b.from, to: b.to || "", label: b.label.trim(), hat: b.hat }; });
     return "";
   });
+}
+// what's timed inside a day line, each with its own time; dropping a card on the box puts it in the next free slot
+function todoDayLineFill(box, L, end, now) {
+  var kids = L.kids || [];
+  if (kids.length) {
+    var inn = todoEl("div", "td-dline-in");
+    kids.forEach(function (e, i) {
+      var r = todoEl("div", "td-dline-kid" + (now && now >= e.t && now < (kids[i + 1] ? kids[i + 1].t : end) ? " now" : ""));
+      var rl = todoEl("div", "td-dline-t");
+      var tb = todoEl("button", "td-rail-t", todoFmtHM(e.t)); tb.title = "Change the time"; tb.onclick = function () { todoTimeAsk("🕘 When?", e.t, e.key); };
+      var x = todoEl("button", "td-rail-x", "✕ no time"); x.title = "Take the time off — it waits in No time"; x.onclick = function () { todoTimeSet(e.key, ""); };
+      rl.append(tb, x);
+      var it = todoEl("div", "td-row-item"); it.appendChild(e.el());
+      if (e.H.key !== (L.line.hat || "") && e.key.indexOf("box:") !== 0 && !e.part) it.appendChild(todoEl("span", "td-row-hat", e.H.icon + " " + e.H.label));
+      r.append(rl, it); inn.appendChild(r);
+    });
+    box.appendChild(inn);
+  }
+  var next = kids.length ? todoM2HM(todoHM2m(kids[kids.length - 1].t) + 30) : L.t;
+  if (next >= end) next = kids.length ? kids[kids.length - 1].t : L.t;
+  box.title = "Drop a card here to do it at " + todoFmtHM(next);
+  box.addEventListener("dragover", function (ev) { ev.preventDefault(); ev.dataTransfer.dropEffect = "move"; box.classList.add("kover"); });
+  box.addEventListener("dragleave", function (ev) { if (ev.target === box) box.classList.remove("kover"); });
+  box.addEventListener("drop", function (ev) { ev.preventDefault(); box.classList.remove("kover"); var k = ""; try { k = ev.dataTransfer.getData("text/plain"); } catch (_) { } if (k) todoTimeSet(k, next); });
 }
 // Today / Tomorrow: only the timeline — every thing planned for the day sits at its time (no hat boxes, no
 // To do · In progress · Done columns here; those stay in All to be done). Things without a time wait in
@@ -633,7 +661,7 @@ function todoDayPlan(assigned, boxes, day) {
     var k = "learn:" + P.key;
     if (at[k]) timed.push({ t: at[k], key: k, H: todoHat("personal"), part: P, el: isToday ? function () { var b = todoLearnPartBox(P, today); b.classList.add("td-lp-solo"); return b; } : ghost((P.icon ? P.icon + " " : "") + P.label) });
   });
-  // the dashed reminder lines (Product Head work 11–2, Break, …): just a line, with what's waiting in that hat
+  // the dotted reminder lines (Product Head work 11–2, Break, …): just a line, with what's waiting in that hat
   TODO.settings.dayBlocks.forEach(function (b) { timed.push({ t: b.from, end: b.to, key: "line:" + b.id, H: todoHat(b.hat || "personal"), line: b, el: function () { return todoDayLine(b, assigned, today); } }); });
   // done ones stay on the day they were done (struck through), not every day after
   var put = function (k, hat, el) { var x = { t: at[k], key: k, H: todoHat(hat), el: el }; if (at[k]) timed.push(x); else untimed.push(x); };
@@ -648,6 +676,14 @@ function todoDayPlan(assigned, boxes, day) {
   });
   timed.sort(function (a, b) { return a.t.localeCompare(b.t) || (b.line ? 1 : 0) - (a.line ? 1 : 0); });
   var endOf = function (e) { return e.end || todoM2HM(todoHM2m(e.t) + 30); };
+  // a thing whose time falls inside a day line (e.g. 4:00 inside CEO work 3:00–4:30) sits inside that box
+  var lines = timed.filter(function (e) { return e.line; });
+  timed = timed.filter(function (e) {
+    if (e.line) return true;
+    var L = lines.find(function (l) { return e.t >= l.t && e.t < endOf(l); });
+    if (!L) return true;
+    (L.kids = L.kids || []).push(e); return false;
+  });
   // each row: a time rail on the left (dot on a line, click the time to change it) and the thing itself
   var row = function (cls, rail, body) {
     var r = todoEl("div", "td-row " + cls);
@@ -674,7 +710,8 @@ function todoDayPlan(assigned, boxes, day) {
   if (!timed.length) gap(null, null);
   timed.forEach(function (e, i) {
     if (i === 0) gap(null, e);
-    var body = todoEl("div", "td-row-item"); body.appendChild(e.el());
+    var body = todoEl("div", "td-row-item"), el = e.el(); body.appendChild(el);
+    if (e.line) todoDayLineFill(el, e, endOf(e), isToday ? now : "");
     if (!e.line && (e.H.key !== "personal" || (e.key.indexOf("box:") !== 0 && !e.part))) body.appendChild(todoEl("span", "td-row-hat", e.H.icon + " " + e.H.label));
     var late = isToday && now > e.t && (e.key === "box:learn" ? !todoLearnedToday() : e.part ? !todoLearnPart(today, e.part.key) : false);
     var cur = isToday && now >= e.t && now < (e.line ? endOf(e) : timed[i + 1] ? timed[i + 1].t : endOf(e));
@@ -920,7 +957,7 @@ function todoSettingsNorm(s) {
   s.reasonMins = rm.length ? rm.slice(0, 4) : [30, 60, 120];
   s.wakeAt = /^\d{2}:\d{2}$/.test(s.wakeAt || "") ? s.wakeAt : "06:00";    // ⏰ first thing in My To-do
   s.sleepAt = /^\d{2}:\d{2}$/.test(s.sleepAt || "") ? s.sleepAt : "21:00";  // 🌙 last thing
-  // dashed reminder lines on the timeline: [{ id, from, to, label, hat ("" = none, e.g. a break) }]
+  // dotted reminder lines on the timeline: [{ id, from, to, label, hat ("" = none, e.g. a break) }]
   var hm = function (v) { return /^\d{2}:\d{2}$/.test(v || ""); };
   var bl = Array.isArray(s.dayBlocks) ? s.dayBlocks.filter(function (b) { return b && hm(b.from) && b.label; }) : null;
   s.dayBlocks = (bl || TODO_DAY_LINES).map(function (b) { return { id: b.id || todoId(), from: b.from, to: hm(b.to) ? b.to : "", label: String(b.label).slice(0, 60), hat: TODO_HATS.some(function (h) { return h.key === b.hat; }) ? b.hat : "" }; });
