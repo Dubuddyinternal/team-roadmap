@@ -828,6 +828,45 @@ const ITEM_KINDS = {
 const PLATFORMS = ["Instagram","YouTube","App","Website","WhatsApp","Email","Other"];
 const kindOf = it => ITEM_KINDS[it.kind] || ITEM_KINDS.other;
 const kindName = it => it.kind==="other" && it.kindOther ? it.kindOther : kindOf(it).label;
+/* Types are shared with the Social Media space's content types (OPT.sharedTypes / OPT.ensureType), so a
+   type made on either side shows up on the other, and near-duplicates collapse into one:
+   "community post", "Community Post 2" and "YT Community Post" are all the same type. */
+function typeKey(name){
+  return String(name||"").toLowerCase().replace(/[^a-z0-9 ]+/g," ").replace(/\s+\d+\s*$/,"")
+    .replace(/^\s*(yt|youtube|ig|insta|instagram)\s+/,"").replace(/\s+/g," ").trim();
+}
+// the Social Media types that aren't already one of the built-in kinds above
+function sharedTypes(){
+  const builtin = new Set(Object.values(ITEM_KINDS).map(v=>typeKey(v.label)));
+  const seen = new Set();
+  return (OPT.sharedTypes ? OPT.sharedTypes() : []).filter(t=>{
+    const k = typeKey(t.name); if(!k || builtin.has(k) || seen.has(k)) return false; seen.add(k); return true; });
+}
+// the Type dropdown: built-in kinds, then shared types ("t:<name>"), then Other
+function kindChoices(){
+  return Object.entries(ITEM_KINDS).filter(([k])=>k!=="other").map(([k,v])=>[k, v.emo+" "+v.label])
+    .concat(sharedTypes().map(t=>["t:"+t.name, (t.icon||"📌")+" "+t.name]))
+    .concat([["other", ITEM_KINDS.other.emo+" Other (a new type)"]]);
+}
+// what's picked / typed → { kind, kindOther }; a typed name snaps to an existing type, else becomes a new shared one
+function resolveKind(val, typed){
+  if(String(val).startsWith("t:")) return { kind:"other", kindOther:String(val).slice(2) };
+  if(val!=="other") return { kind:val, kindOther:"" };
+  const k = typeKey(typed);
+  const built = Object.entries(ITEM_KINDS).find(([kk,v])=>kk!=="other" && typeKey(v.label)===k);
+  if(built) return { kind:built[0], kindOther:"" };
+  const hit = sharedTypes().find(t=>typeKey(t.name)===k);
+  if(hit) return { kind:"other", kindOther:hit.name };
+  const name = String(typed||"").trim().replace(/\s+\d+\s*$/,"").replace(/^\s*(yt|youtube|ig|insta|instagram)\s+/i,"").trim() || String(typed||"").trim();
+  if(OPT.ensureType) OPT.ensureType(name);   // a brand-new type: make it in Social Media now
+  return { kind:"other", kindOther:name };
+}
+// the dropdown value for an existing piece
+function kindValue(it){
+  if(it.kind!=="other") return it.kind;
+  const hit = sharedTypes().find(t=>typeKey(t.name)===typeKey(it.kindOther));
+  return hit ? "t:"+hit.name : "other";
+}
 
 /* what the Action button does, by item type */
 const STRAPI_URL = "https://strapi.dubuddy.in/admin";
@@ -1545,12 +1584,13 @@ function bulkDialog(c){
   if(!canEdit()) return;
   const sel = pickDay(c);
   const day0 = sel && sel!=="none" ? sel : (c.details.start || TODAY);
-  const kindOpts = Object.entries(ITEM_KINDS).map(([k,v])=>`<option value="${k}">${v.emo} ${esc(v.label)}</option>`).join("");
+  const kindOpts = kindChoices().map(([k,l])=>`<option value="${esc(k)}">${esc(l)}</option>`).join("");
+  const typeList = `<datalist id="ctypes">${sharedTypes().map(t=>`<option value="${esc(t.name)}">`).join("")}</datalist>`;
   const rowHTML = () => `<div class="brow">
       <select class="bkind">${kindOpts}</select>
       <input class="bqty" type="number" min="1" max="50" value="1" inputmode="numeric" title="How many">
       <button class="bx" type="button" title="Remove this row">✕</button>
-      <input class="bother" placeholder="What is it? e.g. YT Community Post, Press release" hidden>
+      <input class="bother" list="ctypes" placeholder="A new type, e.g. Press release (pick from the list if it's already there)" hidden>
     </div>`;
   $("#dlgTitle").textContent = "Create content pieces";
   $("#dlgSub").textContent = "Pick the day, then how many of each type go out on it. Each piece gets a card you can fill in afterwards.";
@@ -1561,7 +1601,7 @@ function bulkDialog(c){
       <label for="b-day">Which day these go out on</label><input id="b-day" type="date" value="${esc(day0)}">
     </div>
     <div class="bhead"><span>Content type</span><span>How many</span><span></span></div>
-    <div id="brows">${rowHTML()}</div>
+    <div id="brows">${rowHTML()}</div>${typeList}
     <button class="addfield" type="button" id="baddrow" style="min-height:0;margin-top:8px">＋ Add another type</button>`;
   const rows = $("#brows");
   const wireRow = r=>{
@@ -1592,6 +1632,8 @@ function bulkDialog(c){
       want.push({ kind, n, other });
     }
     if(!want.length){ toast("Add at least one piece"); return; }
+    // shared types and typed names → the one type they belong to (and new types made in Social Media)
+    want.forEach(w=>{ const rk = resolveKind(w.kind, w.other); w.kind = rk.kind; w.other = rk.kindOther; });
     let made = 0;
     want.forEach(w=>{
       const base = w.kind==="other" ? w.other : ITEM_KINDS[w.kind].label;
@@ -1633,8 +1675,8 @@ function itemDialog(c, idx, pre){
     sub:"Anything that goes out as part of this campaign.",
     fields:[
       { k:"name", label:"Name of the item", ph:"Launch reel", value:it.name },
-      { k:"kind", label:"Type", type:"select", value:it.kind, opts:Object.entries(ITEM_KINDS).map(([k,v])=>[k,v.emo+" "+v.label]) },
-      { k:"kindOther", label:"If other, what is it?", ph:"Podcast clip, press release…", value:it.kindOther, showIf:{ field:"kind", equals:"other" } },
+      { k:"kind", label:"Type (shared with Social Media's content types)", type:"select", value:kindValue(it), opts:kindChoices() },
+      { k:"kindOther", label:"A new type — what is it?", ph:"Podcast clip, press release…", value:kindValue(it)==="other" ? it.kindOther : "", showIf:{ field:"kind", equals:"other" } },
       { k:"date", label:"Day", type:"date", value:it.date },
       { k:"platforms", label:"Platform / Category — tick every one it goes out on", type:"multi", value:platsOf(it),
         /* the usual ones, then any the team has typed in under "Other" on this campaign, then Other */
@@ -1649,6 +1691,8 @@ function itemDialog(c, idx, pre){
     ],
     onSave:(v)=>{
       if(!v.name){ toast("The item needs a name"); return false; }
+      if(v.kind==="other" && !String(v.kindOther||"").trim()){ toast("Say what the new type is"); return false; }
+      { const rk = resolveKind(v.kind, v.kindOther); v.kind = rk.kind; v.kindOther = rk.kindOther; }
       if(v.actionUrl && !safeUrl(v.actionUrl)){ toast("The URL has to be a web link (https://…)"); return false; }
       if(v.actionUrl) v.actionUrl = safeUrl(v.actionUrl);
       /* what's typed under Other becomes a platform of its own (and a tick box next time) */
@@ -2071,6 +2115,7 @@ window.CX = {
   tabs: [["details","Fill in Details"],["assign","Assignment & distribution of work"],["calendar","Calendar"],["dash","Dashboard"]],
   normalize: normalize,
   kinds: ITEM_KINDS,
+  typeKey: typeKey,
   /* opt: { tab, canEdit() (admin: everything), canPlan() (Team Manager: calendar + assignment), canDelete(), people() → [{id,name,role}], save(space), saveQuiet(space),
             onHeader(space), remove(space), notify(space,item) → Promise<{sent,belled,reason}>,
             sendToProcess(space,item) → {cardId}|{error}, cardExists(space,cardId), goProcess(space),
