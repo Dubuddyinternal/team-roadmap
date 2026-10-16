@@ -1453,6 +1453,13 @@ html,body{height:100%}
 body{margin:0}
 .shell{display:grid;grid-template-columns:276px 1fr;grid-template-rows:minmax(0,1fr);height:100vh;overflow:hidden}
 .rail{background:var(--card);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;position:static;top:auto;align-self:stretch}
+/* « hides the side menu, ☰ in the top bar brings it back (remembered in this browser) */
+.rail-min-btn{margin-left:auto;flex:none;width:28px;height:28px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--muted);font-size:16px;line-height:1;cursor:pointer}
+.rail-min-btn:hover{color:var(--ink);border-color:var(--muted)}
+.rail-open-btn{display:none;margin-right:auto;width:34px;height:34px;border:1px solid var(--line);border-radius:10px;background:var(--card);font-size:16px;cursor:pointer}
+body.rail-hidden .shell{grid-template-columns:minmax(0,1fr)}
+body.rail-hidden .rail{display:none}
+body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-content:center}
 .rail-brand{padding:10px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;min-height:57px;box-sizing:border-box}
 .brand-dot{width:28px;height:28px;border-radius:8px;background:var(--indigo);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-weight:700;font-size:15px;flex:none}
 .brand-logo{height:34px;width:auto;max-width:180px;object-fit:contain;display:block}
@@ -3959,6 +3966,7 @@ body{margin:0}
         <div class="brand-eyebrow">Internal · Team Workspace</div>
         <div class="brand-name" id="rail-teamname">Team</div>
       </div>
+      <button class="rail-min-btn" id="rail-min" title="Hide the side menu" aria-label="Hide the side menu">«</button>
     </div>
     <div class="rail-scroll">
       <div id="ws-switch"></div>
@@ -3979,6 +3987,7 @@ body{margin:0}
   </aside>
   <main class="pane">
     <div class="pane-topbar">
+      <button class="rail-open-btn" id="rail-open" title="Show the side menu" aria-label="Show the side menu">☰</button>
       <div class="corner-nav-wrap">
       <button class="corner-nav ghost" id="nav-a">Workspace</button>
       <button class="corner-nav" id="nav-b">OKRs</button>
@@ -21976,6 +21985,16 @@ document.getElementById("cul-close").onclick = closeCulture;
 var _ag = document.getElementById("cul-again");
 if(_ag) _ag.onclick = function(){ try{ sessionStorage.setItem("culReopen","1"); }catch(e){} location.reload(); };
 try{ if(sessionStorage.getItem("culReopen")){ sessionStorage.removeItem("culReopen"); setTimeout(function(){ openCulture(); }, 400); } }catch(e){}
+})();
+</script>
+<script>
+/* side menu: « hides it, ☰ brings it back; remembered per browser */
+(function(){
+  var KEY = "cf-rail-hidden", set = function(on){ document.body.classList.toggle("rail-hidden", on); try { localStorage.setItem(KEY, on ? "1" : ""); } catch (_) {} };
+  try { if (localStorage.getItem(KEY) === "1") document.body.classList.add("rail-hidden"); } catch (_) {}
+  var a = document.getElementById("rail-min"), b = document.getElementById("rail-open");
+  if (a) a.onclick = function(){ set(true); };
+  if (b) b.onclick = function(){ set(false); };
 })();
 </script>
 </body>
