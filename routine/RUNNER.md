@@ -53,6 +53,9 @@ owner approves the storyboard and brief on the website after you finish. Never r
     `cta.comment=false`), with the Subscribe/Follow card at the end. Run `sfx_lib.py` first.
   - Do the Animation QA (6–10 snapshots per scene) and fix what it finds before brief.py.
   - In `storyboard`, describe each scene concretely (what's drawn, how it moves), so the owner can judge it on the card.
+- If `pipe.py start` prints `clean_audio: swapped in…`, the owner cleaned the voice in Adobe Podcast and the raw video
+  now carries that clean audio. Edit from it as usual, and on a re-plan re-run cut.py and every build step so the cut
+  video picks up the new sound. If it prints `NOT used…`, carry on with the camera audio and put that line in `warnings`.
 - `pipe.py start` puts the owner's whole SFX library where it lives on the Mac (`sfx_library` in its output says how
   many files). Run `sfx_lib.py` as the skill says; for a sound the house set lacks, pick one from that library
   (`ls -R`), trim and level it like `sfx_lib.py` does into `ED/sfx/<name>.mp3`, and use it by that name.

@@ -50,6 +50,8 @@ calls `/api/pipeline/tick` every 5 minutes and posts whatever is due. On the Mac
 | `PIPELINE_SECRET` | any long random string |
 | `PUBLIC_BASE_URL` | `https://tools.dubuddy.in` |
 | `ELEVENLABS_API_KEY` | for the 🎤 mic in every text box (speech → text with ElevenLabs Scribe) |
+| `CF_API_TOKEN` | Cloudflare token with **Account Analytics: Read** only — lets the site read this month's R2 Class A / B operations and stop uploads + runs at 90% of the free tier (storage is checked without it) |
+| `R2_CYCLE_DAY` | optional: the day of the month your Cloudflare period starts (default 15) |
 
 Redeploy. The card panel then shows **☁️ Cloud routine**.
 

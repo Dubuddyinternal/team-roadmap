@@ -798,6 +798,7 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .sys-bar{height:10px;border-radius:6px;background:var(--surface-2,#eee);overflow:hidden;margin:8px 0 6px}.sys-bar i{display:block;height:100%;background:#2e9d63}
 .sys-bar.warn i{background:#e0a23a}.sys-bar.crit i{background:#d64545}
 .sys-sub{font-size:12px;color:var(--muted)}
+.sys-stop{border-color:#d64545;background:color-mix(in srgb,#d64545 9%,var(--card));color:#a32d2d}
 .sys-tab{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px}.sys-tab td{padding:6px 4px;border-top:1px solid var(--line)}.sys-tab td:not(:first-child){text-align:right;white-space:nowrap}
 .admin-table{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card)}
 .au-row{display:grid;grid-template-columns:1fr minmax(200px,auto) 150px;align-items:center;border-bottom:1px solid var(--line)}
@@ -20778,11 +20779,21 @@ async function renderAdminSystemStats(main){
     return '<div class="sys-card"><div class="sys-h"><b>' + label + '</b><span class="sys-big">' + sysBytes(used) + ' <small>of ' + sysBytes(limit) + '</small></span></div>'
       + '<div class="sys-bar ' + lvl + '"><i style="width:' + pc.toFixed(1) + '%"></i></div>'
       + '<div class="sys-sub">' + pc.toFixed(1) + '% used' + (lvl !== "ok" ? ' — <b>' + (lvl === "crit" ? "almost full" : "getting full") + '</b>, free some space below' : "") + (sub ? " · " + sub : "") + '</div></div>'; };
-  const KIND = { raw:"🎞️ Raw videos", audio:"🎵 Raw audio (WAV)", edit:"🧠 Claude edit folders", preview:"▶ Live player files", final:"🎬 Finished videos", library:"🔊 Sound library", other:"Other" };
+  const KIND = { raw:"🎞️ Raw videos", audio:"🎵 Raw audio (WAV)", clean:"✨ Cleaned audio", edit:"🧠 Claude edit folders", preview:"▶ Live player files", final:"🎬 Finished videos", library:"🔊 Sound library", other:"Other" };
   const kinds = Object.entries(d.r2.byKind || {}).sort((a,b)=> b[1]-a[1]);
   const sb = d.supabase || {};
   let h = '<p class="sys-note">Updated ' + new Date(d.at).toLocaleString() + (d.files !== "r2" ? ' · <b>test mode: files on this computer, not Cloudflare</b>' : '') + ' <button class="btn sm" id="sys-reload">Refresh</button></p>';
-  h += '<h3 class="sys-t">☁️ Cloudflare R2 — videos and Claude edit files</h3>' + bar(d.r2.bytes, d.limits.r2, "Storage used", d.r2.count + " files");
+  if(d.stop) h += '<div class="sys-card sys-stop"><b>⏸ Uploads and Claude runs are stopped to stay on the free plan.</b><div class="sys-sub" style="color:inherit;margin-top:4px">' + sysEsc(d.stop.why) + ' They start again by itself ' + (/\d/.test(d.stop.resumes) ? "on " + sysEsc(d.stop.resumes) : sysEsc(d.stop.resumes)) + '. Nothing is ever charged.</div></div>';
+  const stopPc = Math.round((d.stopAt || .9) * 100);
+  h += '<h3 class="sys-t">☁️ Cloudflare R2 — videos and Claude edit files</h3>' + bar(d.r2.bytes, d.limits.r2, "Storage used", d.r2.count + " files · uploads and runs stop at " + stopPc + "%");
+  const op = d.ops || {}, per = op.period ? new Date(op.period.from).toDateString().slice(4,10) + " – " + new Date(op.period.to).toDateString().slice(4,10) : "";
+  if(op.checked){
+    const cnt = (used, lim, label, what) => { const pc = Math.min(100, used / lim * 100), lvl = pc >= 90 ? "crit" : pc >= 75 ? "warn" : "ok";
+      return '<div class="sys-card"><div class="sys-h"><b>' + label + '</b><span class="sys-big">' + used.toLocaleString() + ' <small>of ' + lim.toLocaleString() + '</small></span></div>'
+        + '<div class="sys-bar ' + lvl + '"><i style="width:' + pc.toFixed(2) + '%"></i></div><div class="sys-sub">' + pc.toFixed(2) + '% used this month (' + per + ') · ' + what + ' · stops at ' + stopPc + '%</div></div>'; };
+    h += cnt(op.classA, d.free.classA, "Class A operations", "uploads and file listings");
+    h += cnt(op.classB, d.free.classB, "Class B operations", "downloads and reads");
+  } else h += '<div class="sys-card"><b>Class A / Class B operations</b><div class="sys-sub" style="margin-top:4px">' + (op.error ? "Couldn't read Cloudflare's usage: " + sysEsc(op.error) : "Not checked yet — add the read-only <b>CF_API_TOKEN</b> in Vercel so uploads and runs also stop before these free limits.") + '</div></div>';
   h += '<div class="sys-card"><b>What takes the space</b><table class="sys-tab">' + (kinds.map(([k,v])=> '<tr><td>' + (KIND[k]||k) + '</td><td>' + sysBytes(v) + '</td><td>' + (d.r2.bytes ? Math.round(v/d.r2.bytes*100) : 0) + '%</td></tr>').join("") || '<tr><td>Nothing stored yet</td></tr>') + '</table></div>';
   const cards = (d.cards || []).map(c => Object.assign({ name: c.team === TEAM ? sysCardName(c.card) : undefined }, c));
   h += '<div class="sys-card"><b>Biggest cards</b> <span class="sys-sub">files a card keeps in storage — a deleted card\'s leftovers can be removed here</span><table class="sys-tab">'

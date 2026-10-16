@@ -124,11 +124,34 @@ def start(src):
             download(url, os.path.join(W, "out", "plan_result.json"))
         elif name in ("yt", "ig"):
             download(url, os.path.join(W, "in", f"final_{name}.mp4"))
+        elif name == "clean_audio":
+            download(url, os.path.join(W, "in", os.path.basename(p.get("clean_name") or "raw-clean.wav")))
         got.append(name)
+    if "clean_audio" in got and "raw" in got:
+        notes["clean_audio"] = use_clean_audio(p)
     os.makedirs(os.path.join(W, "out"), exist_ok=True)
     report("progress", f"{p['step']}: inputs ready")
     print(json.dumps({"step": p["step"], "work": W, "edit_folder": ed(), "raw": os.path.join(W, "raw"),
                       "inputs": got, "out": os.path.join(W, "out"), **notes}, indent=1))
+
+
+def use_clean_audio(p):
+    """The owner's cleaned audio (Adobe Podcast) replaces the camera sound in the raw video, picture untouched, so
+    every later step — transcript, cuts, captions, render — hears the clean voice."""
+    raw = os.path.join(W, "raw", os.path.basename(p.get("raw_name") or "raw.mp4"))
+    clean = os.path.join(W, "in", os.path.basename(p.get("clean_name") or "raw-clean.wav"))
+    dur = lambda f: float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", f],
+                                         capture_output=True, text=True).stdout.strip() or 0)
+    dv, da = dur(raw), dur(clean)
+    if abs(dv - da) > 1.5:   # a different recording, or trimmed in Adobe: the words would drift out of sync
+        return f"NOT used: the cleaned audio is {da:.1f}s but the video is {dv:.1f}s — upload the cleaned version of this clip's audio"
+    tmp = raw + ".clean" + os.path.splitext(raw)[1]
+    r = subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", raw, "-i", clean, "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy",
+                        "-c:a", "aac", "-b:a", "256k", "-ar", "48000", "-t", f"{dv:.3f}", tmp], capture_output=True, text=True)
+    if r.returncode != 0:
+        return "NOT used: couldn't put the cleaned audio into the video — " + r.stderr.strip()[-200:]
+    os.replace(raw, raw + ".camera-audio" + os.path.splitext(raw)[1]); os.replace(tmp, raw)
+    return f"swapped in: the raw video now has the cleaned audio ({da:.1f}s)"
 
 
 def first(*paths):
