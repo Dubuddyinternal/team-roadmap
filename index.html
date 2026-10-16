@@ -4149,6 +4149,7 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
       <button class="acct-item" id="acct-profile">👤 My profile</button>
       <button class="acct-item" id="acct-hr">🗂️ My HR file</button>
       <button class="acct-item" id="acct-doclib">📚 Our Wiki</button>
+      <button class="acct-item" id="acct-addspace" style="display:none">＋ Add a space</button>
       <button class="acct-item" id="acct-admin" style="display:none">⚙️ Administration</button>
       <button class="acct-item danger" id="acct-logout">→] Sign out</button>
     </div>
@@ -14839,16 +14840,8 @@ function renderAll(){
         _moreCs.onclick = ()=> openAllList("spaces");
         ws.appendChild(_moreCs);
       }
-      // top-level "＋ Add space": a new space of its own (a Marketing space is a parent that holds others);
-      // the "＋ Add space" inside a Marketing space adds to that parent instead
-      if(hasPerm("add_spaces")){
-        const _addTop = document.createElement("button");
-        _addTop.className = "ws-item ws-add";
-        _addTop.textContent = "\uFF0B Add parent space";
-        _addTop.title = "Add a new space to the sidebar";
-        _addTop.onclick = ()=>{ window._pendingParent = null; $("tpl-overlay").classList.add("show"); };
-        ws.appendChild(_addTop);
-      }
+      // new top-level spaces are added from the profile menu (＋ Add a space) or Administration → Spaces,
+      // for roles given "Add spaces" — not from the sidebar. "＋ Add space" inside a Marketing space still adds to it.
     });
   }
   // Educational Content sections now live as content-type spaces under SPACES.
@@ -20160,6 +20153,7 @@ function openAccount(){
   if(u.profile && u.profile.photo){ av.style.backgroundImage = "url("+u.profile.photo+")"; av.textContent = ""; }
   else { av.style.backgroundImage = "none"; av.style.background = userAvatarColor(u); av.textContent = (userDisplayName(u)||"?").charAt(0).toUpperCase(); }
   $("acct-admin").style.display = roleOf(currentUser(), TEAM) ? "" : "none";   // everyone in the team; sections follow their role
+  if($("acct-addspace")) $("acct-addspace").style.display = hasPerm("add_spaces") ? "" : "none";   // only roles given "Add spaces"
   $("account-overlay").classList.add("show");
 }
 $("acct-teams") && ($("acct-teams").onclick = ()=>{ $("account-overlay").classList.remove("show"); location.href = location.pathname; });
@@ -20167,6 +20161,7 @@ $("acct-profile") && ($("acct-profile").onclick = ()=>{ $("account-overlay").cla
 $("acct-hr") && ($("acct-hr").onclick = ()=>{ $("account-overlay").classList.remove("show"); if(typeof openMyHrFile === "function") openMyHrFile(); });
 $("acct-doclib") && ($("acct-doclib").onclick = ()=>{ $("account-overlay").classList.remove("show"); openDocLib(); });
 $("acct-admin") && ($("acct-admin").onclick = ()=>{ $("account-overlay").classList.remove("show"); openAdmin(); });
+$("acct-addspace") && ($("acct-addspace").onclick = ()=>{ $("account-overlay").classList.remove("show"); window._pendingParent = null; $("tpl-overlay").classList.add("show"); });
 $("acct-logout") && ($("acct-logout").onclick = ()=> logout());
 $("account-overlay") && $("account-overlay").addEventListener("click", e=>{ if(e.target===$("account-overlay")) $("account-overlay").classList.remove("show"); });
 
