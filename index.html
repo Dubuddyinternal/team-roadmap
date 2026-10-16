@@ -791,6 +791,14 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .admin-search .login-input{margin:0;flex:1;max-width:340px}
 .admin-reset{background:none;border:none;color:var(--muted);font-family:var(--mono);font-size:12.5px;cursor:pointer}
 .admin-reset:hover{color:var(--indigo)}
+.sys{max-width:820px}.sys-note{color:var(--muted);font-size:13px;margin:4px 0 12px}
+.sys-t{font-size:15px;margin:18px 0 8px}
+.sys-card{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:14px 16px;margin:0 0 10px}
+.sys-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px}.sys-big{font-size:20px;font-weight:700}.sys-big small{font-size:12px;font-weight:500;color:var(--muted)}
+.sys-bar{height:10px;border-radius:6px;background:var(--surface-2,#eee);overflow:hidden;margin:8px 0 6px}.sys-bar i{display:block;height:100%;background:#2e9d63}
+.sys-bar.warn i{background:#e0a23a}.sys-bar.crit i{background:#d64545}
+.sys-sub{font-size:12px;color:var(--muted)}
+.sys-tab{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px}.sys-tab td{padding:6px 4px;border-top:1px solid var(--line)}.sys-tab td:not(:first-child){text-align:right;white-space:nowrap}
 .admin-table{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card)}
 .au-row{display:grid;grid-template-columns:1fr minmax(200px,auto) 150px;align-items:center;border-bottom:1px solid var(--line)}
 .admin-table .au-row:last-child{border-bottom:none}
@@ -20492,6 +20500,7 @@ function adminSections(){
     { k:"request",     ico:"➕",       lbl:"Request a teammate",   show: hasPerm("request_members"),     group:"it", render: renderRequestTeammate },
     { k:"roadmaps",    ico:"🗺️", lbl:"Roadmaps",             show: hasPerm("add_roadmaps"),        group:"it", render: renderAdminRoadmaps },
     { k:"spaces",      ico:"🗂️", lbl:"Spaces",               show: hasPerm("add_spaces"),          group:"it", render: renderAdminSpaces },
+    { k:"systemstats", ico:"📊", lbl:"System stats",         show: sup || ["owner","admin"].includes(roleOf(me, TEAM)), group:"it", render: renderAdminSystemStats },
     { k:"reviewgames", ico:"\uD83D\uDD79\uFE0F", lbl:"Review games" + (gamesWaiting() ? " (" + gamesWaiting() + ")" : ""), crumb:"Review games",
                                                                         show: sup,                            group:"it", render: renderReviewGames },
     // HR: one dropdown in the sidebar (My HR file lives in the profile menu)
@@ -20645,6 +20654,50 @@ function renderAdminPage(){
   crumb.textContent = "⚙️ Administration › " + (cur.group ? ADMIN_GROUPS[cur.group].lbl + " › " : "") + (cur.crumb || cur.lbl);
   main.appendChild(crumb);
   cur.render(main);
+}
+/* ---------- 📊 System stats: how full the free storage is (Cloudflare R2 for videos, Supabase for data) ---------- */
+function sysEsc(t){ return String(t==null?"":t).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function sysBytes(n){ n = +n || 0; return n >= 1e9 ? (n/1e9).toFixed(2) + " GB" : n >= 1e6 ? (n/1e6).toFixed(1) + " MB" : n >= 1e3 ? Math.round(n/1e3) + " KB" : n + " B"; }
+// a Claude-edit card id → its title and space (null when the card was deleted)
+function sysCardName(id){
+  for(const sp of (CSPACES.list||[])){ const cs = sp.sx && sp.sx.cards; const c = cs && cs.find(x=> x.id === id);
+    if(c) return { title: (c.pre && c.pre.title) || c.idea || id, space: sp.name }; }
+  return null;
+}
+async function renderAdminSystemStats(main){
+  const wrap = document.createElement("div"); wrap.className = "sys"; main.appendChild(wrap);
+  wrap.innerHTML = '<p class="sys-note">Checking storage…</p>';
+  if(!window.PIPE){ wrap.innerHTML = '<p class="sys-note">The video storage isn\'t set up on this site.</p>'; return; }
+  let d; try{ d = await PIPE.storageStats(); }catch(e){ wrap.innerHTML = '<p class="sys-note">Couldn\'t read storage: ' + sysEsc(e.message) + '</p>'; return; }
+  const bar = (used, limit, label, sub) => { const pc = Math.min(100, used / limit * 100), lvl = pc >= 90 ? "crit" : pc >= 75 ? "warn" : "ok";
+    return '<div class="sys-card"><div class="sys-h"><b>' + label + '</b><span class="sys-big">' + sysBytes(used) + ' <small>of ' + sysBytes(limit) + '</small></span></div>'
+      + '<div class="sys-bar ' + lvl + '"><i style="width:' + pc.toFixed(1) + '%"></i></div>'
+      + '<div class="sys-sub">' + pc.toFixed(1) + '% used' + (lvl !== "ok" ? ' — <b>' + (lvl === "crit" ? "almost full" : "getting full") + '</b>, free some space below' : "") + (sub ? " · " + sub : "") + '</div></div>'; };
+  const KIND = { raw:"🎞️ Raw videos", audio:"🎵 Raw audio (WAV)", edit:"🧠 Claude edit folders", preview:"▶ Live player files", final:"🎬 Finished videos", library:"🔊 Sound library", other:"Other" };
+  const kinds = Object.entries(d.r2.byKind || {}).sort((a,b)=> b[1]-a[1]);
+  const sb = d.supabase || {};
+  let h = '<p class="sys-note">Updated ' + new Date(d.at).toLocaleString() + (d.files !== "r2" ? ' · <b>test mode: files on this computer, not Cloudflare</b>' : '') + ' <button class="btn sm" id="sys-reload">Refresh</button></p>';
+  h += '<h3 class="sys-t">☁️ Cloudflare R2 — videos and Claude edit files</h3>' + bar(d.r2.bytes, d.limits.r2, "Storage used", d.r2.count + " files");
+  h += '<div class="sys-card"><b>What takes the space</b><table class="sys-tab">' + (kinds.map(([k,v])=> '<tr><td>' + (KIND[k]||k) + '</td><td>' + sysBytes(v) + '</td><td>' + (d.r2.bytes ? Math.round(v/d.r2.bytes*100) : 0) + '%</td></tr>').join("") || '<tr><td>Nothing stored yet</td></tr>') + '</table></div>';
+  const cards = (d.cards || []).map(c => Object.assign({ name: c.team === TEAM ? sysCardName(c.card) : undefined }, c));
+  h += '<div class="sys-card"><b>Biggest cards</b> <span class="sys-sub">files a card keeps in storage — a deleted card\'s leftovers can be removed here</span><table class="sys-tab">'
+    + (cards.map(c => '<tr><td>' + (c.name ? sysEsc(c.name.title) + ' <span class="sys-sub">' + sysEsc(c.name.space) + '</span>' : c.name === null ? '<span style="color:var(--crit)">Deleted card</span> <span class="sys-sub">' + sysEsc(c.card) + '</span>' : '<span class="sys-sub">' + sysEsc(c.team + " / " + c.card) + '</span>')
+      + '</td><td>' + c.files + ' files</td><td>' + sysBytes(c.bytes) + '</td><td>' + (c.name === null ? '<button class="btn sm danger" data-sys-purge="' + sysEsc(c.card) + '">Delete leftovers</button>' : '') + '</td></tr>').join("") || '<tr><td>No card files yet</td></tr>') + '</table></div>';
+  h += '<h3 class="sys-t">🗄️ Supabase — the app\'s data</h3>';
+  if(sb.error || !sb.db_bytes) h += '<p class="sys-note">' + sysEsc(sb.error || "Not available in test mode") + '</p>';
+  else {
+    h += bar(sb.db_bytes, d.limits.db, "Database", "free plan limit");
+    h += bar(sb.storage_bytes, d.limits.files, "File storage", sb.storage_files + " files");
+    h += '<div class="sys-card"><b>Biggest tables</b><table class="sys-tab">' + (sb.tables||[]).map(t=> '<tr><td>' + sysEsc(t.name) + '</td><td>' + sysBytes(t.bytes) + '</td></tr>').join("") + '</table></div>';
+  }
+  h += '<p class="sys-note">Deleting a card, or a raw video on a card, removes its files from Cloudflare right away and checks they\'re gone.</p>';
+  wrap.innerHTML = h;
+  wrap.querySelector("#sys-reload").onclick = ()=> renderAdminPage();
+  wrap.querySelectorAll("[data-sys-purge]").forEach(b=> b.onclick = async ()=>{
+    if(!confirm("Delete every file this deleted card left in storage? This can't be undone.")) return;
+    b.disabled = true; b.textContent = "Deleting…";
+    try{ const r = await PIPE.purge(b.dataset.sysPurge); toast("Freed " + sysBytes(r.bytes) + (r.still_there ? " — " + r.still_there + " files still there, try again" : "")); renderAdminPage(); }
+    catch(e){ toast("Couldn't delete: " + e.message); b.disabled = false; b.textContent = "Delete leftovers"; } });
 }
 // departments = the first tier of Administration -> Org structure
 function teamDepartments(){ try{ return (okrOrgUnits(1) || []).map(d=> ({ id:d.id, name:d.name })); }catch(_){ return []; } }

@@ -50,6 +50,7 @@ const API = {
   "/api/pipeline/upload-url": (await import("../api/pipeline/upload-url.js")).default,
   "/api/pipeline/callback": (await import("../api/pipeline/callback.js")).default,
   "/api/pipeline/preview": (await import("../api/pipeline/preview.js")).default,
+  "/api/pipeline/storage": (await import("../api/pipeline/storage.js")).default,
   "/api/transcribe": (await import("../api/transcribe.js")).default,   // 🎤 dictation (ElevenLabs Scribe)
   "/api/transcribe-token": (await import("../api/transcribe-token.js")).default,   // 🎤 live dictation token
 };

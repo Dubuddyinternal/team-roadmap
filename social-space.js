@@ -388,6 +388,8 @@ details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var
 .drop .lbl{margin-bottom:5px}
 .drop img{width:62px;height:35px;object-fit:cover;border-radius:5px;flex-shrink:0;border:1px solid var(--line)}
 .drop input[type=file]{display:none}
+.rawaudio{margin-top:8px;padding:9px 11px;border:1px solid var(--line);border-radius:var(--r-s);background:var(--surface)}
+.rawaudio-h{display:flex;align-items:center;gap:8px;font-size:12.5px;flex-wrap:wrap}
 .rawseg{display:inline-flex;margin:2px 0 9px}
 .rawseg button{padding:5px 12px;font-size:11.5px}
 .rawbox .pp-bar{height:6px;background:var(--surface-2);border-radius:999px;overflow:hidden;margin-top:8px}
@@ -563,7 +565,7 @@ const $ = s => R.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmt = n => n==null ? "—" : Number(n).toLocaleString("en-IN");
 const kfmt = n => n==null ? "—" : n>=1000 ? (n/1000).toFixed(n>=10000?0:1)+"k" : String(n);
-const mb = b => b==null ? "" : b>=1e9 ? (b/1e9).toFixed(1)+" GB" : (b/1e6).toFixed(0)+" MB";
+const mb = b => b==null ? "" : b>=1e9 ? (b/1e9).toFixed(1)+" GB" : b>=1e6 ? (b/1e6).toFixed(b>=1e8?0:1)+" MB" : Math.max(1,Math.round(b/1e3))+" KB";
 const dmy = s => s ? new Date(s+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"}) : "—";
 const dow = s => s ? new Date(s+"T00:00:00").toLocaleDateString("en-GB",{weekday:"long"}) : "";
 
@@ -2205,6 +2207,13 @@ function renderSchedule(){
 const RAWMODE={};   // card id → "link" | "file": which Raw video option is showing
 let OPEN=null;   // what the window shows ({kind:"card"|"idea", id}), so a refresh can reopen it
 let CLOSE_GUARD=null;   // the open card's "discard unsaved changes?" check
+// raw video audio: a job in progress per card ("Pulling out the audio…"), and short-lived play/download links
+const AUDIOJOB={}, RAWLINKS={};
+// a deleted card: remove its raw video, audio, Claude edit files and finished videos from storage
+function freeCardFiles(id, after){
+  if(!window.PIPE || PIPE.mode()==="off") return;
+  Promise.resolve(after).then(()=>PIPE.purge(id)).then(r=>{ if(r && r.deleted) toast(`Freed ${(r.bytes/1e6).toFixed(r.bytes>1e8?0:1)} MB of storage (${r.deleted} file${r.deleted===1?"":"s"})`); })
+    .catch(e=>toast("The card's files are still in storage: "+e.message+" — see Administration → System stats")); }
 function closeDrawer(force){
   if(force!==true && CLOSE_GUARD && !CLOSE_GUARD()) return;
   CLOSE_GUARD=null; OPEN=null; $("#drawer").classList.remove("on"); $("#scrim").classList.remove("on"); }
@@ -2423,7 +2432,7 @@ function openIdea(id,focusComments,fmtKey){
       if(window.PIPE && PIPE.busy(i.id+"__r")) PIPE.cancel(i.id+"__r").catch(()=>{});
       if(running) [card.id, card.id+"__r", card.id+"__s"].forEach(k=>{ if(PIPE.busy(k)) PIPE.cancel(k).catch(()=>{}); });
       const k=IDEAS.findIndex(x=>x.id===i.id); if(k>=0) IDEAS.splice(k,1);
-      if(card){ const ci=CARDS.indexOf(card); if(ci>=0) CARDS.splice(ci,1); }
+      if(card){ const ci=CARDS.indexOf(card); if(ci>=0) CARDS.splice(ci,1); freeCardFiles(card.id); }
       if(save()){ dirty=false; closeDrawer(true); toast(card?"Idea and its card deleted":"Idea deleted"); } };
     const oc=$("#drawer").querySelector("[data-opencard]");
     if(oc) oc.onclick=()=>{ if(CLOSE_GUARD && !CLOSE_GUARD()) return; openCard(oc.dataset.opencard); };
@@ -2578,7 +2587,15 @@ function openCard(id,showGate){
         :r&&r.kind==="file"?`<div class="drop has"><span style="font-size:22px">🎞️</span>
             <div style="flex:1;min-width:0"><div class="lbl" style="margin:0 0 2px">Raw video · uploaded</div>
               <div class="nm">${esc(r.name)}</div><div class="sz">${mb(r.size)}${r.by?" · by "+esc(r.by):""}${r.at?" · "+esc(dmy(r.at)):""}</div></div>
-            <label class="btn sm" data-w="1" style="cursor:pointer">Replace<input type="file" accept="video/*" data-rawfile hidden></label></div>
+            <label class="btn sm" data-w="1" style="cursor:pointer">Replace<input type="file" accept="video/*" data-rawfile hidden></label>
+            <button type="button" class="btn sm danger" data-rawdel data-w="1">Delete</button></div>
+            <div class="rawaudio">
+              ${r.audio?`<div class="rawaudio-h">🎵 <b>Audio (WAV)</b> <span class="hint">${mb(r.audio.size)}${r.audio.seconds?" · "+Math.floor(r.audio.seconds/60)+":"+String(r.audio.seconds%60).padStart(2,"0"):""}</span>
+                  <a class="hint" data-rawaudio-dl style="margin-left:auto" hidden>⬇ Download</a></div>
+                <audio controls preload="none" data-rawaudio-play style="width:100%;height:34px;margin-top:6px" hidden></audio>`
+              :`<div class="rawaudio-h">🎵 <b>Audio (WAV)</b> <span class="hint">${AUDIOJOB[c.id]?esc(AUDIOJOB[c.id]):"not made yet"}</span>
+                  ${AUDIOJOB[c.id]?"":`<button type="button" class="btn sm" data-getaudio data-w="1" style="margin-left:auto">Get the audio</button>`}</div>`}
+            </div>
             ${useClaude?`<p class="hint" style="margin:6px 0 0">🤖 Claude edit uses this file.</p>`:""}`
         :isNew?`<p class="hint pre-note">Create the card first, then upload the raw video here.</p>`
         :off?`<p class="hint pre-note">Uploading needs the video storage switched on (an owner sets it up once — <b>routine/SETUP.md</b>). Paste a link for now.</p>`
@@ -2771,13 +2788,41 @@ function openCard(id,showGate){
     $("#drawer").querySelectorAll("[data-rawmode]").forEach(b=>b.onclick=()=>{ read(); RAWMODE[c.id]=b.dataset.rawmode; draw(c.pre.keywords); });
     const keepRaw=up=>{ read(); persist(); c.raw=Object.assign({ kind:"file" }, up, { at:today(), by:meName() }); RAWMODE[c.id]="file";
       if(save()){ dirty=false; opened=snap(); } draw(c.pre.keywords); toast("Raw video uploaded"); };
+    // 🎵 the raw video's sound as a WAV, kept next to it (from the picked file, or the stored video)
+    const getAudio=async src=>{
+      if(AUDIOJOB[c.id]) return; const id=c.id;
+      const step=m=>{ AUDIOJOB[id]=m; const el=$("#drawer").querySelector(".rawaudio .hint"); if(el && OPEN && OPEN.id===id) el.textContent=m; };
+      try{ step("Starting…");
+        if(!src){ const l=await PIPE.rawLinks(id); if(!l.video) throw new Error("The video isn't in storage any more"); src=l.video; }
+        const a=await PIPE.makeAudio(id, src, step);
+        const card=CARDS.find(x=>x.id===id); if(card&&card.raw){ card.raw.audio=a; save(); }
+        delete RAWLINKS[id]; delete AUDIOJOB[id]; toast("Audio ready (WAV)"); }
+      catch(e){ delete AUDIOJOB[id]; toast("Audio: "+e.message); }
+      if(OPEN && OPEN.id===id){ if(dirty) read(); draw(c.pre.keywords); } };
+    const ga=$("#drawer").querySelector("[data-getaudio]"); if(ga) ga.onclick=()=>getAudio(null);
+    // play / download links for the stored audio (short-lived, fetched when the card opens)
+    const ap=$("#drawer").querySelector("[data-rawaudio-play]");
+    if(ap && window.PIPE){ const fill=l=>{ if(!l||!l.audio) return; ap.src=l.audio; ap.hidden=false;
+        const dl=$("#drawer").querySelector("[data-rawaudio-dl]"); if(dl){ dl.href=l.audio; dl.hidden=false; dl.setAttribute("download", (c.pre.title||c.idea||"raw").replace(/[^\w\- ]+/g,"").trim().slice(0,60)+" audio.wav"); } };
+      const cached=RAWLINKS[c.id]; if(cached && Date.now()-cached.at<3e6) fill(cached.data);
+      else PIPE.rawLinks(c.id).then(d=>{ RAWLINKS[c.id]={ at:Date.now(), data:d }; fill(d); }).catch(()=>{}); }
+    // delete the raw video + its audio from storage (checked: the answer says what's really gone)
+    const rdel=$("#drawer").querySelector("[data-rawdel]");
+    if(rdel) rdel.onclick=async()=>{
+      if(!confirm("Delete the raw video"+(c.raw&&c.raw.audio?" and its audio":"")+" from storage? This can't be undone.")) return;
+      rdel.disabled=true; rdel.textContent="Deleting…";
+      try{ const r=await PIPE.deleteRaw(c.id);
+        if(r.still_there&&r.still_there.length){ toast("Storage still has: "+r.still_there.join(", ")+" — try again"); rdel.disabled=false; rdel.textContent="Delete"; return; }
+        read(); c.raw=null; RAWMODE[c.id]="file"; delete RAWLINKS[c.id]; if(save()){ dirty=false; opened=snap(); }
+        toast(r.deleted.length?`Deleted from storage: ${r.deleted.join(", ")} (checked, it's gone)`:"Nothing was in storage — removed from the card"); draw(c.pre.keywords); }
+      catch(e){ toast("Couldn't delete: "+e.message); rdel.disabled=false; rdel.textContent="Delete"; } };
     const rawUpload=async f=>{
       if(!window.PIPE || PIPE.mode()==="off"){ toast("Uploading needs the video storage set up first — paste a link for now"); return; }
       if(!(/^video\//.test(f.type) || /\.(mp4|mov|m4v|mkv)$/i.test(f.name))){ toast("Pick a video file (.mp4 / .mov)"); return; }
       const st=$("#drawer").querySelector("[data-rawup]"), bar=$("#drawer").querySelector("[data-rawbar]");
       if(bar) bar.hidden=false; if(st) st.textContent="Getting an upload link…";
       try{ const up=await PIPE.uploadRaw(c.id, f, pc=>{ if(bar) bar.firstChild.style.width=pc+"%"; if(st) st.textContent=`Uploading ${f.name}… ${pc}%`; });
-        keepRaw(up); }
+        delete RAWLINKS[c.id]; keepRaw(up); getAudio(f); }
       catch(e){ if(st) st.textContent=e.message; if(bar) bar.hidden=true; toast("Upload didn't work: "+e.message); } };
     $("#drawer").querySelectorAll("[data-rawfile]").forEach(inp=>inp.onchange=()=>{ if(inp.files[0]) rawUpload(inp.files[0]); });
     const rd=$("#drawer").querySelector("[data-rawdrop]");
@@ -2785,7 +2830,7 @@ function openCard(id,showGate){
       rd.ondrop=e=>{ e.preventDefault(); rd.style.borderColor=""; const f=(e.dataTransfer.files||[])[0]; if(f) rawUpload(f); }; }
     // Claude pipeline (pipeline.js): raw video → edit → your checks → post
     if(window.PIPE && $("#pipePanel")) PIPE.mount($("#pipePanel"), c, {
-      raw: ()=>c.raw, onRaw: up=>keepRaw(up),
+      raw: ()=>c.raw, onRaw: (up,f)=>{ delete RAWLINKS[c.id]; keepRaw(up); getAudio(f); },
       canEdit, toast, idea: x=>x.ideaId?IDEAS.find(i=>i.id===x.ideaId):null,
       beforeStart: ()=>{ read(); persist(); if(save()){ dirty=false; opened=snap(); } },
       slot: ()=>slotOf(c),
@@ -2835,8 +2880,8 @@ function openCard(id,showGate){
       const running=window.PIPE && (PIPE.busy(c.id) || PIPE.busy(c.id+"__r"));   // a Claude job working on this card gets stopped first
       if(!confirm(running?"Claude is working on this card right now. Deleting it stops that job (files already made are kept). Delete the card?"
         :"Delete this card? The idea it came from stays in Ideation.")) return;
-      if(running){ if(PIPE.busy(c.id)) PIPE.cancel(c.id).catch(()=>{}); if(PIPE.busy(c.id+"__r")) PIPE.cancel(c.id+"__r").catch(()=>{}); }
-      const k=CARDS.findIndex(x=>x.id===c.id); if(k>=0) CARDS.splice(k,1); if(save()){ closeDrawer(true); toast("Card deleted"); } };
+      const stop=running?Promise.all([PIPE.busy(c.id)&&PIPE.cancel(c.id), PIPE.busy(c.id+"__r")&&PIPE.cancel(c.id+"__r")].map(p=>p&&p.catch(()=>{}))):Promise.resolve();
+      const k=CARDS.findIndex(x=>x.id===c.id); if(k>=0) CARDS.splice(k,1); if(save()){ closeDrawer(true); toast("Card deleted"); freeCardFiles(c.id, stop); } };
     const ov=$("#override"); if(ov) ov.onclick=()=>{ read(); persist(); openOverride(c); };
     $("#drawer").querySelectorAll("[data-move]").forEach(b=>b.onclick=()=>{
       read(); if(!c.idea&&!c.pre.title){toast("A card needs an idea or a title");return;}

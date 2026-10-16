@@ -61,7 +61,45 @@ async function uploadRaw(cardId, f, onProgress){
     x.onerror = () => bad(new Error("Upload failed — check the connection"));
     x.send(f);
   });
+  // a replacement with another file type (raw.mov → raw.mp4) must not leave the old one behind in storage
+  await call("/api/pipeline/storage", { team: team(), job: cardId, op: "delete_raw", keep: data.file }).catch(() => {});
   return { file: data.file, name: f.name, size: f.size };
+}
+function putFile(url, blob, onProgress){
+  return new Promise((ok, bad) => {
+    const x = new XMLHttpRequest(); x.open("PUT", url);
+    x.upload.onprogress = e => { if(e.lengthComputable && onProgress) onProgress(Math.round(e.loaded/e.total*100)); };
+    x.onload = () => x.status < 300 ? ok() : bad(new Error("Upload refused (" + x.status + ")"));
+    x.onerror = () => bad(new Error("Upload failed — check the connection"));
+    x.send(blob);
+  });
+}
+// 🎵 the raw video's sound as a WAV (16-bit PCM, 48 kHz, original channels), made in the browser — no server work
+async function videoToWav(src){
+  const buf = src instanceof Blob ? await src.arrayBuffer() : src;
+  const ctx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, 48000);
+  const a = await new Promise((ok, bad) => { const p = ctx.decodeAudioData(buf, ok, bad); if(p && p.then) p.then(ok, bad); });
+  const ch = a.numberOfChannels, n = a.length, data = [...Array(ch)].map((_, i) => a.getChannelData(i));
+  const out = new DataView(new ArrayBuffer(44 + n * ch * 2)), str = (o, t) => { for(let i=0;i<t.length;i++) out.setUint8(o+i, t.charCodeAt(i)); };
+  str(0,"RIFF"); out.setUint32(4, 36 + n*ch*2, true); str(8,"WAVE"); str(12,"fmt "); out.setUint32(16,16,true); out.setUint16(20,1,true);
+  out.setUint16(22,ch,true); out.setUint32(24,a.sampleRate,true); out.setUint32(28,a.sampleRate*ch*2,true); out.setUint16(32,ch*2,true);
+  out.setUint16(34,16,true); str(36,"data"); out.setUint32(40, n*ch*2, true);
+  for(let i=0, o=44; i<n; i++) for(let c=0; c<ch; c++, o+=2){ const v = Math.max(-1, Math.min(1, data[c][i])); out.setInt16(o, v < 0 ? v*0x8000 : v*0x7fff, true); }
+  return { blob: new Blob([out], { type: "audio/wav" }), seconds: a.duration };
+}
+// pull the audio out of the video (the file just picked, or the one already in storage) and store it next to it
+async function makeAudio(cardId, src, onStep){
+  if(src instanceof Blob && src.size > 700e6) throw new Error("This video is too big to pull the audio in the browser (over 700 MB)");
+  if(!(src instanceof Blob)){   // the stored video: download it first
+    onStep && onStep("Downloading the video…");
+    const r = await fetch(src); if(!r.ok) throw new Error("Couldn't download the video (" + r.status + ")");
+    src = await r.blob();
+  }
+  onStep && onStep("Pulling out the audio…");
+  let w; try{ w = await videoToWav(src); }catch(_){ throw new Error("This browser couldn't read the video's sound — try Chrome or Safari on a computer"); }
+  const { data } = await call("/api/pipeline/upload-url", { team: team(), job: cardId, kind: "audio" });
+  await putFile(data.url, w.blob, pc => onStep && onStep("Uploading the audio… " + pc + "%"));
+  return { file: data.file, size: w.blob.size, seconds: Math.round(w.seconds) };
 }
 // first frame + length of a local video file, for the upload preview (best effort)
 function preview(f){
@@ -415,7 +453,7 @@ function wire(){
     try{
       const up = await uploadRaw(c.id, f, pc => { bar.firstChild.style.width = pc+"%"; st.textContent = `Uploading ${f.name}… ${pc}%`; });
       m.raw = Object.assign(up, await meta);
-      if(h.onRaw) h.onRaw(up);            // the card keeps it too (its Raw video box)
+      if(h.onRaw) h.onRaw(up, f);            // the card keeps it too (its Raw video box)
       render();
     }catch(e){ st.textContent = e.message; bar.hidden = true; }
   }
@@ -473,6 +511,15 @@ window.PIPE = {
   cancel(cardId){ return action(cardId, "cancel"); },
   mode(){ return S.mode; },                                    // "off" until the pipeline is set up on this site
   uploadRaw(cardId, file, onProgress){ return uploadRaw(cardId, file, onProgress); },
+  // 🎵 WAV of the raw video's sound (src: the picked File, or the stored video's link)
+  makeAudio(cardId, src, onStep){ return makeAudio(cardId, src, onStep); },
+  // play / download links for the card's raw video and audio: { video?, audio? }
+  async rawLinks(cardId){ return (await call("/api/pipeline/storage?team=" + encodeURIComponent(team()) + "&job=" + encodeURIComponent(cardId))).data; },
+  // delete the raw video + audio from storage; the answer says what is gone and what (if anything) is still there
+  async deleteRaw(cardId){ return (await call("/api/pipeline/storage", { team: team(), job: cardId, op: "delete_raw" })).data; },
+  // a deleted card: all its files and Claude jobs
+  async purge(cardId){ return (await call("/api/pipeline/storage", { team: team(), job: cardId, op: "purge" })).data; },
+  async storageStats(){ return (await call("/api/pipeline/storage?stats=1&team=" + encodeURIComponent(team()))).data; },
   // a scheduled post follows its card to a new day / time (iso = the new posting moment)
   reschedule(cardId, iso){ return action(cardId, "reschedule", { post_at: iso }); },
   // "✍️ Draft hook & talking points": a helper job of its own (<card>__s)
