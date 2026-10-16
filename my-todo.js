@@ -718,6 +718,14 @@ function todoDayLineFill(box, L, end, now) {
   box.addEventListener("dragleave", function (ev) { if (ev.target === box) box.classList.remove("kover"); });
   box.addEventListener("drop", function (ev) { ev.preventDefault(); box.classList.remove("kover"); var k = ""; try { k = ev.dataTransfer.getData("text/plain"); } catch (_) { } if (k) todoTimeSet(k, next); });
 }
+function todoReminderEdit() {
+  var R = TODO.settings.reminder, t, a;
+  todoDialog("💡 Reminder on the timeline", function (body) {
+    t = todoEl("input"); t.value = R.text; t.placeholder = "e.g. Remember: avoid multitasking — less is more.";
+    a = todoEl("input"); a.type = "time"; a.value = R.at;
+    body.append(todoField("Words (leave empty to remove it)", t), todoField("Show it right after the first thing at or after", a));
+  }, function () { R.text = t.value.trim(); if (/^\d{2}:\d{2}$/.test(a.value)) R.at = a.value; });
+}
 // Today / Tomorrow: only the timeline — every thing planned for the day sits at its time (no hat boxes, no
 // To do · In progress · Done columns here; those stay in All to be done). Things without a time wait in
 // "No time yet" at the end until I give them one.
@@ -784,6 +792,13 @@ function todoDayPlan(assigned, boxes, day) {
     return r;
   };
   if (!timed.length) gap(null, null);
+  var rem = TODO.settings.reminder, remDone = !rem || !rem.text;
+  var remRow = function () {   // 💡 Remember: avoid multitasking — less is more (click to change)
+    remDone = true;
+    var b = todoEl("button", "td-remind", "💡 " + rem.text); b.title = "Click to change the reminder (empty removes it)";
+    b.onclick = todoReminderEdit;
+    row("remindrow", todoEl("div", "td-rail"), b);
+  };
   timed.forEach(function (e, i) {
     if (i === 0) gap(null, e);
     var body = todoEl("div", "td-row-item"), el = e.el(); body.appendChild(el);
@@ -794,8 +809,10 @@ function todoDayPlan(assigned, boxes, day) {
     var rl = e.line ? rail(todoFmtHM(e.t), e.end ? "to " + todoFmtHM(e.end) : "", todoDayLinesSettings)
       : rail(todoFmtHM(e.t), "", function () { todoTimeAsk("🕘 When?", e.t, e.key); }, function () { todoTimeSet(e.key, ""); });
     row("itemrow" + (e.key.indexOf("box:") === 0 || e.part || e.line ? " boxrow" : "") + (e.line ? " linerow" : "") + (late ? " late" : "") + (cur ? " now" : ""), rl, body);
+    if (!remDone && e.t >= rem.at) remRow();
     gap(e, timed[i + 1] || null);
   });
+  if (!remDone) remRow();
   // planned for the day but no time yet: give each one a time (🕘 Time… or drag it onto a gap)
   var nb = todoEl("div", "td-notime");
   if (untimed.length) {
@@ -1044,6 +1061,9 @@ function todoSettingsNorm(s) {
   var rm = Array.isArray(s.reasonMins) ? s.reasonMins.map(Number).filter(function (n) { return n >= 5 && n <= 600; }).map(Math.round) : [];
   s.reasonMins = rm.length ? rm.slice(0, 4) : [30, 60, 120];
   s.wakeAt = /^\d{2}:\d{2}$/.test(s.wakeAt || "") ? s.wakeAt : "06:00";    // ⏰ first thing in My To-do
+  // a small reminder line on the timeline, right after the first thing at / after its time
+  var rm = s.reminder && typeof s.reminder === "object" ? s.reminder : { at: "06:00", text: "Remember: avoid multitasking — less is more." };
+  s.reminder = { at: /^\d{2}:\d{2}$/.test(rm.at || "") ? rm.at : "06:00", text: String(rm.text == null ? "" : rm.text).slice(0, 160) };
   s.sleepAt = /^\d{2}:\d{2}$/.test(s.sleepAt || "") ? s.sleepAt : "21:00";  // 🌙 last thing
   // dotted reminder lines on the timeline: [{ id, from, to, label, hat ("" = none, e.g. a break) }]
   var hm = function (v) { return /^\d{2}:\d{2}$/.test(v || ""); };
@@ -1939,6 +1959,7 @@ function todoSideItem() {
         { label: "📡 Feeds — what the agent follows", onClick: todoFeedsPanel },
         { label: "📚 New learning — boxes & unlock", onClick: todoLearnSettings },
         { label: "📖 Past learnings", onClick: todoLearnLogPanel },
+        { label: "💡 Timeline reminder", onClick: todoReminderEdit },
         { label: "🗓 Day lines — Product Head, Break, CEO…", onClick: todoDayLinesSettings },
         { label: "🧘 Deep thinking — how long & its words", onClick: todoDeepSettings },
         { label: "♟️ Reasoning time — durations & its words", onClick: todoReasonSettings },
