@@ -2699,6 +2699,7 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .soc-bkbtn.primary{background:var(--indigo);border-color:var(--indigo);color:#fff;font-weight:600}
 .soc-bkbtn.primary:hover{filter:brightness(1.07);color:#fff}
 /* ===== send-to buttons ===== */
+.disc-chip.owner.eng{background:#eef2ff;border-color:#c7d2fe;color:#3730a3}
 .disc-toproc{border:1px solid var(--line-strong);background:var(--card);border-radius:99px;padding:3px 10px;font-size:10.5px;font-weight:600;color:var(--muted);cursor:pointer;font-family:var(--sans)}
 .disc-toproc:hover{border-color:var(--indigo);color:var(--indigo)}
 .disc-toproc.done{border-color:var(--done);color:var(--done)}
@@ -12764,8 +12765,43 @@ function discStateChip(idea){
 }
 // Product Roadmap: the one person responsible for an idea (idea.assignee = their email)
 function discOwnerName(email){ if(!email) return ""; const m = assigneeMembers().find(u=>u.email===email); return m ? userDisplayName(m) : email; }
+/* Who holds an idea once it's with engineering: Pancham (or the dev card's assignee) while it's being built,
+   Sumit once the dev card is In review; back to the idea's own owner when the dev card is done. */
+const DEV_LEAD_NAME = "Pancham";
+function devUserByName(name){
+  const want = String(name||"").toLowerCase(), all = (typeof USERS!=="undefined" && USERS) || [];
+  return all.find(u=> String(userDisplayName(u)||"").trim().toLowerCase()===want)
+    || all.find(u=> String(userDisplayName(u)||"").trim().toLowerCase().indexOf(want)===0) || null;
+}
+function devLeadEmail(){ const u = devUserByName(DEV_LEAD_NAME); return u ? u.email : ""; }
+// the dev cards for an idea: sent with → Engineering (fromIdea), or made by hand with the same title
+function discEngCards(idea){
+  const t = String(idea.title||"").trim().toLowerCase();
+  return (DEV.cards||[]).filter(c=> c.fromIdea===idea.id || (!c.fromIdea && t && String(c.title||"").trim().toLowerCase()===t));
+}
+function discWithEng(cs, idea){
+  if(!cs || cs.type!=="discovery") return null;
+  const cards = discEngCards(idea);
+  const card = cards.find(c=>c.col!=="done");
+  if(card){
+    if(card.col==="review") return { state:"review", email: card.reviewer || devReviewerEmail(), name: DEV_REVIEWER_NAME, card };
+    return { state:"eng", email: card.assignee || devLeadEmail(), name: DEV_LEAD_NAME, card };
+  }
+  if(idea.stage==="building" && !cards.length) return { state:"eng", email: devLeadEmail(), name: DEV_LEAD_NAME };
+  return null;
+}
 function discOwnerChip(cs, idea){
   const c = document.createElement("button");
+  const hand = discWithEng(cs, idea);
+  if(hand){
+    const nm = hand.email ? discOwnerName(hand.email) : hand.name;
+    c.className = "disc-chip owner has eng";
+    c.textContent = (hand.state==="review" ? "\uD83D\uDC40 " : "\uD83D\uDEE0\uFE0F ") + nm + (hand.state==="review" ? " \u00B7 review" : " \u00B7 engineering");
+    c.title = hand.state==="review" ? "Engineering moved it to In review \u2014 waiting on " + nm
+      : "With engineering \u2014 " + nm + " has it until it's moved to In review" + (idea.assignee ? " (owner: " + discOwnerName(idea.assignee) + ")" : "");
+    c.onclick = e=>{ e.stopPropagation(); if(hand.card){ view="dev"; devSpace=hand.card.space||null; devSprint=hand.card.sprint||null; renderAll(); } };
+    return c;
+  }
   c.className = "disc-chip owner" + (idea.assignee ? " has" : "");
   c.textContent = idea.assignee ? "\uD83D\uDC64 " + discOwnerName(idea.assignee) : "\uD83D\uDC64 Tag owner";
   c.title = idea.assignee ? "Responsible: " + discOwnerName(idea.assignee) + (editMode ? " (click to change)" : "") : "Tag the person responsible";
@@ -12836,7 +12872,7 @@ function openIdeaDialog(cs, idea, presetStage){
 /* Product Roadmap → Engineering: pick the team (dev space), then its Backlog or one of its open sprints.
    The dev card remembers the idea (fromIdea), so the button turns into "✓ in <team> · <board>" and opens it. */
 function discToEngBtn(cs, idea){
-  const card = (DEV.cards||[]).find(c=>c.fromIdea===idea.id);
+  const card = discEngCards(idea)[0];
   const b = document.createElement("button");
   b.className = "disc-toproc"+(card?" done":"");
   if(card){
@@ -13960,7 +13996,7 @@ function discRoadmapPane(cs){
       if(idea.note && cs.type==="social") card.title = idea.note;   // keep it available on hover
       const _kps = photoStrip(idea.photos); if(_kps) card.appendChild(_kps);
       const meta = document.createElement("div"); meta.className = "kcard-meta disc-meta";
-      if(cs.type==="discovery" && (idea.assignee || editMode)) meta.appendChild(discOwnerChip(cs, idea));
+      if(cs.type==="discovery" && (idea.assignee || editMode || discWithEng(cs, idea))) meta.appendChild(discOwnerChip(cs, idea));
       meta.appendChild(discThemeChip(idea, cs));
       if(cs.type!=="social") meta.appendChild(discStateChip(idea));
       if(cs.type==="discovery"){

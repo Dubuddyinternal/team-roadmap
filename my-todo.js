@@ -421,6 +421,9 @@ function todoAssigned() {
     // Product Roadmap ideas — due = the end date of the phase it's in
     if (cs.type === "discovery") (cs.ideas || []).forEach(function (i) {
       if ((i.assignee || "").toLowerCase() !== me.email) return;
+      var hand = typeof discWithEng === "function" ? discWithEng(cs, i) : null;
+      // with engineering: off my list; in review it comes back as the 👀 dev review card (so only hide it when that card is mine)
+      if (hand && (hand.state === "eng" || (hand.card && (hand.email || "").toLowerCase() === me.email))) return;
       var st = (typeof discStages === "function" ? discStages(cs) : []).find(function (x) { return x.key === i.stage; });
       var ph = (cs.tl && cs.tl.items || []).find(function (t) { return t.tid === i.id && t.phase === i.stage && !t.done; });
       out.push({ key: "idea:" + i.id, hat: "product", icon: "💡", src: "Product Roadmap", title: i.title, where: cs.name + (st ? " · " + st.label : ""),
