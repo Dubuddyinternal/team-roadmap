@@ -20799,6 +20799,13 @@ async function renderAdminSystemStats(main){
   h += '<div class="sys-card"><b>Biggest cards</b> <span class="sys-sub">files a card keeps in storage — a deleted card\'s leftovers can be removed here</span><table class="sys-tab">'
     + (cards.map(c => '<tr><td>' + (c.name ? sysEsc(c.name.title) + ' <span class="sys-sub">' + sysEsc(c.name.space) + '</span>' : c.name === null ? '<span style="color:var(--crit)">Deleted card</span> <span class="sys-sub">' + sysEsc(c.card) + '</span>' : '<span class="sys-sub">' + sysEsc(c.team + " / " + c.card) + '</span>')
       + '</td><td>' + c.files + ' files</td><td>' + sysBytes(c.bytes) + '</td><td>' + (c.name === null ? '<button class="btn sm danger" data-sys-purge="' + sysEsc(c.card) + '">Delete leftovers</button>' : '') + '</td></tr>').join("") || '<tr><td>No card files yet</td></tr>') + '</table></div>';
+  const el = d.eleven || {};
+  h += '<h3 class="sys-t">🎙️ ElevenLabs — credits</h3>';
+  if(el.error || !el.limit) h += '<p class="sys-note">' + sysEsc(el.error || "Not available") + '</p>';
+  else { const left = Math.max(0, el.limit - el.used), pc = Math.min(100, el.used / el.limit * 100), lvl = pc >= 90 ? "crit" : pc >= 75 ? "warn" : "ok";
+    h += '<div class="sys-card"><div class="sys-h"><b>Credits left</b><span class="sys-big">' + left.toLocaleString() + ' <small>of ' + el.limit.toLocaleString() + '</small></span></div>'
+      + '<div class="sys-bar ' + lvl + '"><i style="width:' + pc.toFixed(1) + '%"></i></div>'
+      + '<div class="sys-sub">' + el.used.toLocaleString() + ' used (' + pc.toFixed(1) + '%)' + (el.tier ? ' · ' + sysEsc(el.tier) + ' plan' : '') + (el.resets ? ' · resets ' + new Date(el.resets).toDateString().slice(4,10) : '') + '</div></div>'; }
   h += '<h3 class="sys-t">🗄️ Supabase — the app\'s data</h3>';
   if(sb.error || !sb.db_bytes) h += '<p class="sys-note">' + sysEsc(sb.error || "Not available in test mode") + '</p>';
   else {
