@@ -57,6 +57,12 @@
    day. If New learning has a time, it sits on the day too and nothing freezes
    (its dot turns red once the time has passed and it isn't written yet).
 
+   🇮🇳 Why do I exist? — my purpose sits above everything in All to be done:
+   a ladder of dots from me (Dubuddy + Sumit) up to Self-reliant India, each
+   dot something my country should do and isn't doing yet. It also pops up
+   the first time I open My To-do each day; ✕ closes it and that's saved
+   (TODO.why.seen), so it won't come back until tomorrow. ✏️ edits the words.
+
    "Upcoming" lists tomorrow / the next 5 / the next 7 days: fixed things on
    each day plus every to-do and assigned card due that day, and overdue ones.
 
@@ -68,7 +74,7 @@
    Uses index.html globals (SUPA, TEAM, DEV, BUGS, CSPACES, OKRS, DATA,
    CONTENT, view, renderAll, openDialog, openChoice, toast, fmtD, todayISO …).
    ===================================================================== */
-var TODO = { team: null, loaded: false, loading: false, local: false, items: [], over: {}, plan: {}, times: { hats: {}, at: {} }, fixed: [], fixedDone: {}, learn: {}, deep: null, deepLog: {}, reasonLog: {}, settings: null, feeds: [], feedItems: {}, feedSeen: {}, feedAt: 0, sleepLog: {} };
+var TODO = { team: null, loaded: false, loading: false, local: false, items: [], over: {}, plan: {}, times: { hats: {}, at: {} }, fixed: [], fixedDone: {}, learn: {}, deep: null, deepLog: {}, reasonLog: {}, settings: null, feeds: [], feedItems: {}, feedSeen: {}, feedAt: 0, sleepLog: {}, why: null };
 // the two full-screen timers in Personal
 var TODO_TIMERS = {
   deep: { icon: "🧘", title: "Deep thinking", line: "Talk to yourself. Walk. Don't do anything.",
@@ -148,6 +154,7 @@ function todoApply(d) {
   TODO.feedSeen = d.feedSeen && typeof d.feedSeen === "object" ? d.feedSeen : {};
   TODO.feedAt = Number(d.feedAt) || 0;
   TODO.sleepLog = d.sleepLog && typeof d.sleepLog === "object" ? d.sleepLog : {};   // { "YYYY-MM-DD": { wake: "HH:MM", sleep: "HH:MM" } } — when I ticked it
+  TODO.why = todoWhyNorm(d.why);   // 🇮🇳 why I exist — { goal, steps:[…], from, line, seen:"YYYY-MM-DD" }
   TODO.deepLog = d.deepLog && typeof d.deepLog === "object" ? d.deepLog : {};       // deep thinking { "YYYY-MM-DD": minutes }
   TODO.reasonLog = d.reasonLog && typeof d.reasonLog === "object" ? d.reasonLog : {}; // reasoning (chess, maths, puzzles)
   // { start, end, kind:"deep"|"reason" } (ms) while a timer runs
@@ -189,7 +196,7 @@ function todoSave() {
   var live = {}; TODO.items.forEach(function (x) { live["own:" + x.id] = 1; }); try { todoAssigned().forEach(function (e) { live[e.key] = 1; }); } catch (_) { }
   Object.keys(TODO.plan).forEach(function (k) { if (!live[k] && TODO.plan[k] < todoAddDays(todoToday(), -30)) delete TODO.plan[k]; });
   var data = { items: TODO.items, over: TODO.over, plan: TODO.plan, times: TODO.times, fixed: TODO.fixed, fixedDone: TODO.fixedDone, learn: TODO.learn, deep: TODO.deep, deepLog: TODO.deepLog, reasonLog: TODO.reasonLog, settings: TODO.settings,
-    feeds: TODO.feeds, feedItems: TODO.feedItems, feedSeen: TODO.feedSeen, feedAt: TODO.feedAt, sleepLog: TODO.sleepLog };
+    feeds: TODO.feeds, feedItems: TODO.feedItems, feedSeen: TODO.feedSeen, feedAt: TODO.feedAt, sleepLog: TODO.sleepLog, why: TODO.why };
   clearTimeout(_todoSaveT);
   _todoSaveT = setTimeout(async function () {
     if (!TODO.local && SUPA) {
@@ -1602,6 +1609,69 @@ function todoBookend(kind) {
   return box;
 }
 
+/* ---------- why do I exist? ---------- */
+var TODO_WHY = {
+  goal: "Self-reliant India",
+  steps: ["AI", "Semiconductors", "Defence", "Phones", "Missiles", "Rockets & space", "Drones & UAVs", "Fighter planes", "Aeroplanes"],
+  from: "Dubuddy + Sumit",
+  line: "Every dot will be something my country should do and isn't doing yet.",
+};
+function todoWhyNorm(w) {
+  w = w && typeof w === "object" ? w : {};
+  return {
+    goal: String(w.goal || TODO_WHY.goal),
+    steps: Array.isArray(w.steps) ? w.steps.map(String).filter(Boolean) : TODO_WHY.steps.slice(),
+    from: String(w.from || TODO_WHY.from),
+    line: w.line != null ? String(w.line) : TODO_WHY.line,
+    seen: String(w.seen || ""),
+  };
+}
+// the ladder: goal at the top, me at the bottom, the dots in between
+function todoWhyCard(inPop) {
+  var W = TODO.why, box = todoEl("div", "td-why" + (inPop ? " pop" : ""));
+  var hd = todoEl("div", "td-why-hd");
+  hd.appendChild(todoEl("b", "", "🇮🇳 Why do I exist?"));
+  if (!inPop) { var ed = todoEl("button", "td-act", "✏️ Edit"); ed.onclick = todoWhyEdit; hd.appendChild(ed); }
+  box.appendChild(hd);
+  var lad = todoEl("ol", "td-why-lad");
+  var dot = function (txt, cls) { lad.appendChild(todoEl("li", cls || "", txt)); };
+  dot(W.goal, "top");
+  W.steps.slice().reverse().forEach(function (t) { dot(t); });
+  dot(W.from, "me");
+  box.appendChild(lad);
+  if (W.line) box.appendChild(todoEl("div", "td-why-line", W.line));
+  return box;
+}
+function todoWhyEdit() {
+  var W = TODO.why, goal, steps, from, line;
+  todoDialog("🇮🇳 Why do I exist?", function (body) {
+    goal = todoEl("input"); goal.value = W.goal;
+    steps = todoEl("textarea"); steps.rows = 9; steps.value = W.steps.join("\n"); steps.dataset.plain = "1";   // a plain list, no rich text
+    from = todoEl("input"); from.value = W.from;
+    line = todoEl("textarea"); line.rows = 2; line.value = W.line; line.dataset.plain = "1";
+    body.append(todoField("Where it leads (top dot)", goal), todoField("The dots on the way — one per line", steps),
+      todoField("Where it starts (bottom dot)", from), todoField("In my words", line));
+  }, function () {
+    if (!goal.value.trim()) return "Write where it leads.";
+    W.goal = goal.value.trim(); W.from = from.value.trim() || TODO_WHY.from; W.line = line.value.trim();
+    W.steps = steps.value.split("\n").map(function (s) { return s.trim(); }).filter(Boolean);
+  });
+}
+// first open of the day: it comes up on its own; ✕ closes it until tomorrow
+function todoWhyPop() {
+  if (!TODO.why || TODO.why.seen === todoToday() || TODO.deep || document.getElementById("td-why-pop")) return;
+  var ov = todoEl("div", "overlay show"); ov.id = "td-why-pop";
+  var dg = todoEl("div", "dialog td-why-dlg"); dg.setAttribute("role", "dialog"); dg.setAttribute("aria-modal", "true"); ov.appendChild(dg);
+  var x = todoEl("button", "td-why-x", "✕"); x.title = "Close until tomorrow"; x.setAttribute("aria-label", "Close until tomorrow");
+  var close = function () { if (ov.parentNode) ov.parentNode.removeChild(ov); TODO.why.seen = todoToday(); todoSave(); };
+  x.onclick = close;
+  dg.append(x, todoEl("div", "td-why-morning", "Good morning. Before all to be done —"), todoWhyCard(true));
+  var go = todoEl("button", "btn save", "Let's go"); go.onclick = close;
+  var btns = todoEl("div", "btns"); btns.appendChild(go); dg.appendChild(btns);
+  document.body.appendChild(ov);
+  go.focus();
+}
+
 /* ---------- the page ---------- */
 function renderContentTodo() {
   var wrap = $("content");
@@ -1614,6 +1684,7 @@ function renderContentTodo() {
   }
   if (TODO.local) wrap.appendChild(todoEl("div", "td-note", "Couldn't reach the database — your to-dos are saved in this browser for now."));
   var page = wrap;                   // the 🌙 Sleep row goes at the very end, outside any freeze
+  if (todoMode === "all") wrap.appendChild(todoWhyCard(false));   // 🇮🇳 why I exist comes before all to be done, never frozen
   wrap.appendChild(todoBookend("wake"));   // ⏰ first thing of the day
   // daily new learning next; until today's is written, the rest is frozen —
   // unless I gave it a time: then it's planned on the day like everything else and nothing freezes.
@@ -1657,6 +1728,7 @@ function renderContentTodo() {
   else wrap.appendChild(todoDayPlan(assigned, dayBoxes));
   if (learnLast) page.appendChild(todoLearnBox());   // outside the freeze, so it can always be written
   page.appendChild(todoBookend("sleep"));   // 🌙 last thing of the day
+  todoWhyPop();   // once a day, on the first open
 }
 /* after sign-in, load once even if the sidebar isn't on screen (e.g. reloaded on OKRs),
    so a running deep-thinking block comes back straight away */
