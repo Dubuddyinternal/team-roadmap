@@ -1206,7 +1206,7 @@ function todoDeepBox() {
   tx.appendChild(sub);
   var go = todoEl("button", "btn save td-deep-go", "▶ Start " + todoFmtLen(len));
   go.onclick = function () { todoTimerStart("deep", len * 60000, todoFmtLen(len)); };
-  box.append(tx, go, todoBoxTimeBtn("deep"), todoMoreBtn("Settings — how long", todoDeepSettings));
+  box.append(tx, go, todoBoxTimeBtn("deep"), todoMoreBtn("Settings — how long", todoDeepSettings), todoBoxTick("deep"));
   return box;
 }
 function todoReasonBox() {
@@ -1226,8 +1226,23 @@ function todoReasonBox() {
     b.onclick = function () { todoTimerStart("reason", m * 60000, todoFmtLen(m)); };
     bs.appendChild(b);
   });
-  box.append(tx, bs, todoBoxTimeBtn("reason"), todoMoreBtn("Settings — durations", todoReasonSettings));
+  box.append(tx, bs, todoBoxTimeBtn("reason"), todoMoreBtn("Settings — durations", todoReasonSettings), todoBoxTick("reason"));
   return box;
+}
+// the small ✓ in the corner: done it without the timer (away from the app) — counts today's time; tick again to clear it
+function todoBoxTick(kind) {
+  var log = todoTimerLog(kind), today = todoToday(), mins = log[today] || 0, name = todoBoxText(kind).title;
+  var b = todoEl("button", "td-tick" + (mins ? " on" : ""), mins ? "✓" : "");
+  b.title = mins ? "Done today (" + todoFmtMins(mins) + ") — click to clear" : "Did it without the timer? Tick it";
+  b.setAttribute("aria-label", b.title);
+  var add = function (m) { log[today] = (log[today] || 0) + m; todoSave(); toast("✅ " + name + " — " + todoFmtMins(m) + " counted for today"); };
+  b.onclick = function (e) {
+    e.stopPropagation();
+    if (mins) { if (confirm("Clear today's " + name.toLowerCase() + " (" + todoFmtMins(mins) + ")?")) { delete log[today]; todoSave(); } return; }
+    if (kind === "deep") { add(TODO.settings.deepMin); return; }
+    openChoice("How long did you do " + name.toLowerCase() + "?", TODO.settings.reasonMins.map(function (m) { return { label: todoFmtLen(m), value: String(m) }; }), function (v) { add(Number(v)); });
+  };
+  return b;
 }
 
 function todoTimerStart(kind, ms, label) {
