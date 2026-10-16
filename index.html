@@ -11833,17 +11833,7 @@ function renderSidebarDev(){
     }
     wrap.appendChild(b);
   });
-  if(editMode){
-    const addSpace = document.createElement("button");
-    addSpace.className = "mod add";
-    addSpace.textContent = "\uFF0B New dev space (team)";
-    addSpace.onclick = ()=> openDialog("New dev space", {}, v=>{
-      const sp = {id:"space-"+Date.now().toString(36), name:v.title};
-      DEV.spaces.push(sp); devSpace = sp.id; devSprint = null;
-      saveDev(); toast("Dev space created");
-    }, {hideExtras:true, titleLabel:"Team / space name (e.g. Panel Team, App Team)"});
-    wrap.appendChild(addSpace);
-  }
+  // "＋ New dev team" lives in the engineering space's ⋯ menu (Spaces list), not here
 
   const st = document.createElement("div");
   st.className = "side-title"; st.textContent = "Sprints";
@@ -11900,6 +11890,15 @@ function renderSidebarDev(){
   wrap.appendChild(note);
 }
 
+// a new engineering team (dev space) — from the engineering space's ⋯ menu
+function devNewTeam(){
+  if(!editMode){ toast("Turn on Edit mode to add a team"); return; }
+  openDialog("New dev team", {}, v=>{
+    const sp = {id:"space-"+Date.now().toString(36), name:v.title};
+    DEV.spaces.push(sp); devSpace = sp.id; devSprint = null; view = "dev";
+    saveDev(); toast("Dev team created");
+  }, {hideExtras:true, titleLabel:"Team / space name (e.g. Panel Team, App Team)"});
+}
 function devCardOpts(sprintId){
   return {
     onMove: saveDev,
@@ -14585,6 +14584,7 @@ function renderAll(){
           menu.onclick = e=>{ e.stopPropagation(); openRowMenu(menu, [
             {label:"Settings", onClick:()=> openSpaceSettings(ref)},
             {label:"Set background", onClick:()=> openBgPicker(ref)},
+            w.key==="dev" && {label:"\uFF0B New dev team", onClick: devNewTeam},
             hasPerm("delete_spaces") && {label:"Delete\u2026", danger:true, onClick:()=> { if(w.key==="bugs") deleteBuiltinBugs(); else deleteBuiltinDev(); }},
           ].filter(Boolean)); };
           b.appendChild(menu);
@@ -14663,6 +14663,7 @@ function renderAll(){
             {label:"Set background", onClick:()=> openBgPicker({key:"cs:"+cs.id, obj:cs, name:cs.name})},
           ];
           if(cs.type==="pdt") _items.push({label:"Board mapping", onClick:()=>{ view="pdt"; activeCspace=cs.id; pdtView="mapping"; renderAll(); }});
+          if(cs.type==="scrum") _items.push({label:"\uFF0B New dev team", onClick: devNewTeam});
           _items.push({label: cs.okr ? "Change linked OKR\u2026" : "Link to an OKR\u2026", onClick:()=> csOkrOpen(cs)});
           if(hasPerm("add_spaces")){   // put a space inside a Marketing space, or take it out
             const _par = mktParentOf(cs);
