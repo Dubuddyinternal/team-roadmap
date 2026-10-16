@@ -11408,7 +11408,7 @@ function kanbanBoard(items, opts){
     const head = document.createElement("div");
     head.className = "kcol-head";
     head.innerHTML = "<b></b><span class='cnt'></span>";
-    head.querySelector("b").textContent = col.label + (col.key==="done" ? " \u2713" : "");
+    head.querySelector("b").textContent = ((opts.colLabels && opts.colLabels[col.key]) || col.label) + (col.key==="done" ? " \u2713" : "");
     const inCol = items.filter(i=>i.col===col.key).sort((a,b)=>(a.ord||0)-(b.ord||0));
     head.querySelector(".cnt").textContent = inCol.length;
     kc.appendChild(head);
@@ -11657,6 +11657,7 @@ function renderSidebarDev(){
 function devCardOpts(sprintId){
   return {
     onMove: saveDev,
+    colLabels: { review: "In review by "+DEV_REVIEWER_NAME.split(" ")[0] },   // everything in review waits on Sumit (devAutoReviewer)
     cardExtras: c => [originChip(c), reviewerChip(c), commentChip(c, ()=>saveDev())],
     onEdit: c => openDialog("Edit card", c, v=>{
       applyFields(c, v);
