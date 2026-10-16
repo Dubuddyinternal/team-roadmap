@@ -1012,32 +1012,47 @@ function todoLearnSettings() {
     return "";
   });
 }
+// the card's own words, in its ⋯ settings: a title and the line under it (empty = the default)
+function todoBoxTextFields(body, kind) {
+  var T = todoBoxText(kind), D = TODO_BOX_TEXT[kind];
+  var ti = todoEl("input"); ti.value = T.title; ti.placeholder = D.title; ti.maxLength = 80;
+  var li = todoEl("textarea"); li.rows = 3; li.value = T.line; li.placeholder = D.line; li.dataset.plain = "1";
+  body.append(todoField("Title", ti), todoField("Text under it", li));
+  return function () {
+    var o = TODO.settings.boxText[kind];
+    [["title", ti.value.trim().slice(0, 80)], ["line", li.value.trim().slice(0, 400)]].forEach(function (x) {
+      if (!x[1] || x[1] === D[x[0]]) delete o[x[0]]; else o[x[0]] = x[1];
+    });
+  };
+}
 function todoDeepSettings() {
-  var S = TODO.settings, h, m;
+  var S = TODO.settings, h, m, words;
   todoDialog("🧘 Deep thinking — settings", function (body) {
     body.appendChild(todoEl("div", "hint", "How long one deep-thinking block lasts."));
     var row = todoEl("div", "field-row");
     h = todoEl("input"); h.type = "number"; h.min = 0; h.max = 10; h.value = Math.floor(S.deepMin / 60);
     m = todoEl("input"); m.type = "number"; m.min = 0; m.max = 59; m.step = 5; m.value = S.deepMin % 60;
     row.append(todoField("Hours", h), todoField("Minutes", m)); body.appendChild(row);
+    words = todoBoxTextFields(body, "deep");
   }, function () {
     var t = (Number(h.value) || 0) * 60 + (Number(m.value) || 0);
     if (t < 5 || t > 600) return "Pick between 5 minutes and 10 hours.";
-    S.deepMin = Math.round(t); return "";
+    S.deepMin = Math.round(t); words(); return "";
   });
 }
 function todoReasonSettings() {
-  var S = TODO.settings, ins = [];
+  var S = TODO.settings, ins = [], words;
   todoDialog("♟️ Reasoning time — settings", function (body) {
     body.appendChild(todoEl("div", "hint", "Up to four buttons, in minutes. Leave a box empty to drop that button."));
     var row = todoEl("div", "td-setmins");
     for (var i = 0; i < 4; i++) { var x = todoEl("input"); x.type = "number"; x.min = 5; x.max = 600; x.step = 5; x.placeholder = "min"; x.value = S.reasonMins[i] || ""; ins.push(x); row.appendChild(x); }
     body.appendChild(todoField("Durations (minutes)", row));
+    words = todoBoxTextFields(body, "reason");
   }, function () {
     var v = ins.map(function (x) { return Math.round(Number(x.value)); }).filter(function (n) { return n; });
     if (!v.length) return "Keep at least one duration.";
     if (v.some(function (n) { return n < 5 || n > 600; })) return "Each must be between 5 and 600 minutes.";
-    S.reasonMins = v; return "";
+    S.reasonMins = v; words(); return "";
   });
 }
 
@@ -1208,7 +1223,7 @@ function todoDeepBox() {
   tx.appendChild(sub);
   var go = todoEl("button", "btn save td-deep-go", "▶ Start " + todoFmtLen(len));
   go.onclick = function () { todoTimerStart("deep", len * 60000, todoFmtLen(len)); };
-  box.append(tx, go, todoBoxTimeBtn("deep"), todoMoreBtn("Settings — how long", todoDeepSettings), todoBoxTick("deep"));
+  box.append(tx, go, todoBoxTimeBtn("deep"), todoMoreBtn("Settings — how long, title and text", todoDeepSettings), todoBoxTick("deep"));
   return box;
 }
 function todoReasonBox() {
@@ -1228,7 +1243,7 @@ function todoReasonBox() {
     b.onclick = function () { todoTimerStart("reason", m * 60000, todoFmtLen(m)); };
     bs.appendChild(b);
   });
-  box.append(tx, bs, todoBoxTimeBtn("reason"), todoMoreBtn("Settings — durations", todoReasonSettings), todoBoxTick("reason"));
+  box.append(tx, bs, todoBoxTimeBtn("reason"), todoMoreBtn("Settings — durations, title and text", todoReasonSettings), todoBoxTick("reason"));
   return box;
 }
 // the small ✓ in the corner: done it without the timer (away from the app) — counts today's time; tick again to clear it
@@ -1774,8 +1789,8 @@ function todoSideItem() {
       openRowMenu(menu, [
         { label: "📡 Feeds — what the agent follows", onClick: todoFeedsPanel },
         { label: "📚 New learning — boxes & unlock", onClick: todoLearnSettings },
-        { label: "🧘 Deep thinking — how long", onClick: todoDeepSettings },
-        { label: "♟️ Reasoning time — durations", onClick: todoReasonSettings },
+        { label: "🧘 Deep thinking — how long & its words", onClick: todoDeepSettings },
+        { label: "♟️ Reasoning time — durations & its words", onClick: todoReasonSettings },
       ].concat(TODO_HATS.map(function (H) {
         return { label: "⚙️ Fixed things — " + H.icon + " " + H.label, onClick: function () { todoFixedSetup(H.key); } };
       })));
