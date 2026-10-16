@@ -28,7 +28,7 @@ const team = () => (typeof TEAM!=="undefined" && TEAM) || new URLSearchParams(lo
 const LABEL = {
   planning:["Claude is planning the edit","warn","🧠"], brief_ready:["Brief ready — your check","accent","✋"],
   rendering:["Rendering YT + IG","warn","🎬"], seo_running:["vidIQ SEO running","warn","🔎"],
-  final_review:["Final check — your turn","accent","✋"], scheduled:["Scheduled","good","🗓"], posting:["Posting","warn","🚀"], posted:["Posted","good","✅"],
+  final_review:["Videos ready","good","🎬"], scheduled:["Scheduled","good","🗓"], posting:["Posting","warn","🚀"], posted:["Posted","good","✅"],
   post_failed:["Posting needs a look","crit","⚠️"], failed:["Stopped — needs a look","crit","⚠️"], cancelled:["Cancelled","mute","⏹"],
 };
 const BUSY = ["planning","rendering","seo_running","posting","researching","scripting"];
@@ -61,7 +61,45 @@ async function uploadRaw(cardId, f, onProgress){
     x.onerror = () => bad(new Error("Upload failed — check the connection"));
     x.send(f);
   });
+  // a replacement with another file type (raw.mov → raw.mp4) must not leave the old one behind in storage
+  await call("/api/pipeline/storage", { team: team(), job: cardId, op: "delete_raw", keep: data.file }).catch(() => {});
   return { file: data.file, name: f.name, size: f.size };
+}
+function putFile(url, blob, onProgress){
+  return new Promise((ok, bad) => {
+    const x = new XMLHttpRequest(); x.open("PUT", url);
+    x.upload.onprogress = e => { if(e.lengthComputable && onProgress) onProgress(Math.round(e.loaded/e.total*100)); };
+    x.onload = () => x.status < 300 ? ok() : bad(new Error("Upload refused (" + x.status + ")"));
+    x.onerror = () => bad(new Error("Upload failed — check the connection"));
+    x.send(blob);
+  });
+}
+// 🎵 the raw video's sound as a WAV (16-bit PCM, 48 kHz, original channels), made in the browser — no server work
+async function videoToWav(src){
+  const buf = src instanceof Blob ? await src.arrayBuffer() : src;
+  const ctx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, 48000);
+  const a = await new Promise((ok, bad) => { const p = ctx.decodeAudioData(buf, ok, bad); if(p && p.then) p.then(ok, bad); });
+  const ch = a.numberOfChannels, n = a.length, data = [...Array(ch)].map((_, i) => a.getChannelData(i));
+  const out = new DataView(new ArrayBuffer(44 + n * ch * 2)), str = (o, t) => { for(let i=0;i<t.length;i++) out.setUint8(o+i, t.charCodeAt(i)); };
+  str(0,"RIFF"); out.setUint32(4, 36 + n*ch*2, true); str(8,"WAVE"); str(12,"fmt "); out.setUint32(16,16,true); out.setUint16(20,1,true);
+  out.setUint16(22,ch,true); out.setUint32(24,a.sampleRate,true); out.setUint32(28,a.sampleRate*ch*2,true); out.setUint16(32,ch*2,true);
+  out.setUint16(34,16,true); str(36,"data"); out.setUint32(40, n*ch*2, true);
+  for(let i=0, o=44; i<n; i++) for(let c=0; c<ch; c++, o+=2){ const v = Math.max(-1, Math.min(1, data[c][i])); out.setInt16(o, v < 0 ? v*0x8000 : v*0x7fff, true); }
+  return { blob: new Blob([out], { type: "audio/wav" }), seconds: a.duration };
+}
+// pull the audio out of the video (the file just picked, or the one already in storage) and store it next to it
+async function makeAudio(cardId, src, onStep){
+  if(src instanceof Blob && src.size > 700e6) throw new Error("This video is too big to pull the audio in the browser (over 700 MB)");
+  if(!(src instanceof Blob)){   // the stored video: download it first
+    onStep && onStep("Downloading the video…");
+    const r = await fetch(src); if(!r.ok) throw new Error("Couldn't download the video (" + r.status + ")");
+    src = await r.blob();
+  }
+  onStep && onStep("Pulling out the audio…");
+  let w; try{ w = await videoToWav(src); }catch(_){ throw new Error("This browser couldn't read the video's sound — try Chrome or Safari on a computer"); }
+  const { data } = await call("/api/pipeline/upload-url", { team: team(), job: cardId, kind: "audio" });
+  await putFile(data.url, w.blob, pc => onStep && onStep("Uploading the audio… " + pc + "%"));
+  return { file: data.file, size: w.blob.size, seconds: Math.round(w.seconds) };
 }
 // first frame + length of a local video file, for the upload preview (best effort)
 function preview(f){
@@ -208,15 +246,14 @@ const CSS = `<style>
 /* ------------------------------------------------------------ panel */
 // what Claude uses from the card, and whether it's there
 function readiness(c){
-  const k = (c.pre.keywords||[]).find(x=>x.rank==="primary") || (c.pre.keywords||[])[0];
-  return [["Title", !!c.pre.title], ["Description", !!c.pre.desc], ["Hashtags", !!c.pre.hashtags], ["Primary keyword", !!(k && k.kw)]];
+  return [["Title", !!c.pre.title], ["Description", !!c.pre.desc], ["Hashtags", !!c.pre.hashtags]];
 }
 const mmss = s => s ? Math.floor(s/60) + ":" + String(Math.round(s%60)).padStart(2,"0") : "";
 function startView(c, canRun, m){
   const ready = readiness(c), missing = ready.filter(x=>!x[1]).map(x=>x[0].toLowerCase());
   const r = m.raw;
   return `<p class="hint" style="margin:0 0 10px">Give Claude the raw clip. It plans the edit with the <b>dubuddy-short</b> skill using this card's
-      title, description, hook and keywords, then waits for a check. Nothing renders or posts without an owner's click.</p>
+      title, description and hook, then waits for a check. Nothing renders without an owner's click.</p>
     <div class="pp-ready">${ready.map(([l,ok])=>`<span class="gchip ${ok?"ok":"no"}">${ok?"✓":"✗"} ${l}</span>`).join("")}</div>
     ${missing.length?`<p class="hint" style="margin:6px 0 12px">Claude can start without the ${esc(missing.join(", "))}, but the hook and SEO get weaker — fill ${missing.length>1?"them":"it"} in on the left first if you can.</p>`:`<div style="height:10px"></div>`}
     <div class="fld" style="margin-bottom:10px"><label>Raw video</label>
@@ -240,7 +277,7 @@ function render(){
   const [lbl,cls,ic] = st ? (LABEL[st]||[st,"mute","•"]) : ["Not started","mute","○"];
   let body = "";
 
-  if(S.mode==="off") body = `<div class="pp-note">Claude edit &amp; post isn't switched on for this site yet. An owner sets it up once (storage, the jobs table and the cloud routine — see <b>routine/SETUP.md</b>), then this panel starts working. You can still edit this card by hand.</div>`;
+  if(S.mode==="off") body = `<div class="pp-note">Claude edit isn't switched on for this site yet. An owner sets it up once (storage, the jobs table and the cloud routine — see <b>routine/SETUP.md</b>), then this panel starts working. You can still edit this card by hand.</div>`;
   else if(S.err && !S.me) body = `<div class="pp-note crit">${esc(S.err)}</div>`;
   else if(!job) body = startView(c, me.canRun, m);
   else if(BUSY.includes(st)){
@@ -262,7 +299,7 @@ function render(){
   }
 
   host.innerHTML = CSS + `<div class="block pp">
-    <div class="block-h"><h4>🤖 Claude edit &amp; post</h4><span class="badge ${cls==="accent"?"warn":cls}">${ic} ${esc(lbl)}</span>
+    <div class="block-h"><h4>🤖 Claude edit</h4><span class="badge ${cls==="accent"?"warn":cls}">${ic} ${esc(lbl)}</span>
       <span style="margin-left:auto">${modePill()}</span></div>
     ${body}
     ${job&&(job.history||[]).length?`<details style="margin-top:10px"><summary>History (${job.history.length})</summary><table>
@@ -327,44 +364,16 @@ function studioBlock(job, me){
   </details>`;
 }
 
+// after the render: both finished videos to watch and download (posting is off for now — upload them yourself)
 function finalView(job, c, me){
-  const seo = job.seo || {}, md = job.media || {}, m = S.mounted;
-  const draft = m.draft = m.draft || {
-    yt_title: (seo.yt&&seo.yt.title)||c.pre.title||"", yt_desc:(seo.yt&&seo.yt.description)||c.pre.desc||"",
-    yt_tags: ((seo.yt&&seo.yt.tags)||[]).join(", "), ig_caption:(seo.ig&&seo.ig.caption)||"",
-    // ticked by default: the platforms chosen on the card that have a rendered version
-    targets: (pl => ({ yt: !!md.yt && pl.includes("yt"), ig: !!md.ig && pl.includes("ig") }))(c.platforms&&c.platforms.length?c.platforms:[c.platform]) };
-  const sc = v => v==null ? "—" : Math.round(v);
-  const titles = [...(seo.original_title&&seo.original_title.title?[{...seo.original_title, why:"The card's original title"}]:[]), ...(seo.titles||[])];
-  return `<div class="pp-note"><b>✋ Check 2 — final check before posting.</b> Watch both versions, pick or edit the copy, choose where to post. Nothing goes live until Post is pressed.</div>
-    <div class="pp-vids">
-      ${md.yt?`<div><div class="lbl">YouTube Short</div><video controls preload="metadata" src="${esc(md.yt)}"></video></div>`:""}
-      ${md.ig?`<div><div class="lbl">Instagram Reel</div><video controls preload="metadata" src="${esc(md.ig)}"></video></div>`:""}</div>
+  const md = job.media || {};
+  const vid = (k, label, file) => md[k] ? `<div><div class="lbl">${label}</div><video controls preload="metadata" src="${esc(md[k])}"></video>
+      <a class="pp-link" href="${esc(md[k])}" target="_blank" rel="noopener" download="${file}">⬇ Download</a></div>` : "";
+  return `<div class="pp-note"><b>🎬 Both videos are ready.</b> Watch them, download them and post them yourself. Not happy? Say what to change and Claude redoes the edit.</div>
+    <div class="pp-vids">${vid("yt", "YouTube Short", "final_yt.mp4")}${vid("ig", "Instagram Reel", "final_ig.mp4")}</div>
     ${job.outputs&&job.outputs.qc?`<p class="hint" style="margin:-4px 0 10px">QC: ${esc(job.outputs.qc)}</p>`:""}
-    ${(seo.keywords||[]).length?`<details open><summary>Keywords (vidIQ)</summary><table><tr><th>Keyword</th><th>Volume</th><th>Competition</th><th>Score</th></tr>
-      ${seo.keywords.map(k=>`<tr><td>${esc(k.keyword)}</td><td>${esc(k.volume??"—")}</td><td>${esc(k.competition??"—")}</td><td>${esc(k.score??"—")}</td></tr>`).join("")}</table></details>`:""}
-    ${titles.length?`<div class="lbl" style="margin-top:6px">Title options — click one to use it</div>
-      ${titles.map(t=>`<div class="pp-title ${t.title===draft.yt_title?"on":""}" data-pp-pick="${esc(t.title)}">
-        <div><div>${esc(t.title)}</div>${t.why?`<div class="hint" style="font-size:11px">${esc(t.why)}</div>`:""}</div>
-        <span class="pp-score" title="vidIQ title score">${sc(t.score)}</span></div>`).join("")}`:""}
-    ${seo.notes?`<div class="pp-note">${esc(seo.notes)}</div>`:""}
-    <div class="fld" style="margin-top:10px"><label>YouTube title <span class="pp-count ${draft.yt_title.length>100?"over":""}" data-pp-cnt>${draft.yt_title.length}/100</span></label>
-      <input data-pp-f="yt_title" value="${esc(draft.yt_title)}"></div>
-    <div class="fld"><label>YouTube description</label><textarea data-pp-f="yt_desc" rows="6">${esc(draft.yt_desc)}</textarea></div>
-    <div class="fld"><label>YouTube tags (comma separated)</label><input data-pp-f="yt_tags" value="${esc(draft.yt_tags)}"></div>
-    <div class="fld"><label>Instagram caption</label><textarea data-pp-f="ig_caption" rows="6">${esc(draft.ig_caption)}</textarea></div>
-    <div class="fld"><label>Post to</label><div class="pp-row">
-      <label><input type="checkbox" data-pp-t="yt" ${draft.targets.yt?"checked":""} ${md.yt?"":"disabled"}> YouTube</label>
-      <label><input type="checkbox" data-pp-t="ig" ${draft.targets.ig?"checked":""} ${md.ig?"":"disabled"}> Instagram</label></div></div>
-    ${(()=>{ const sl = S.mounted.h.slot && S.mounted.h.slot(), future = sl && sl.at > new Date(Date.now()+5*60000);
-      return `<div class="pp-row">
-        ${future?`<button class="btn pri" data-pp="schedule" ${me.canApprove?"":"disabled"}>🗓 Post at slot · ${esc(sl.label)}</button>`:""}
-        <button class="btn ${future?"":"pri"}" data-pp="post" ${me.canApprove?"":"disabled"}>🚀 Post now</button>
-        ${me.canApprove?"":`<span class="hint">Only an owner or admin can post.</span>`}</div>
-      ${!future?`<p class="hint" style="margin:6px 0 0">${sl?"The card's slot has passed —":"No posting slot on this card —"} set the scheduled date on the card to post at a slot instead.</p>`:""}`; })()}
-    <div class="fld" style="margin-top:14px"><label>Not happy? Say what to change</label><textarea data-pp-notes placeholder="e.g. Title should mention CUET 2026 · or · cut the last 3 seconds"></textarea></div>
-    <div class="pp-row"><button class="btn" data-pp="redo_seo" ${me.canRun?"":"disabled"}>🔁 Redo SEO</button>
-      <button class="btn" data-pp="back_to_edit" ${me.canRun?"":"disabled"}>↩ Back to edit</button>
+    <div class="fld" style="margin-top:14px"><label>Not happy? Say what to change</label><textarea data-pp-notes placeholder="e.g. cut the last 3 seconds · bigger captions · swap the second scene"></textarea></div>
+    <div class="pp-row"><button class="btn" data-pp="back_to_edit" ${me.canRun?"":"disabled"}>↩ Back to edit</button>
       ${me.canRun?`<button class="btn sm" data-pp="cancel" style="margin-left:auto">Cancel job</button>`:""}</div>`;
 }
 
@@ -444,7 +453,7 @@ function wire(){
     try{
       const up = await uploadRaw(c.id, f, pc => { bar.firstChild.style.width = pc+"%"; st.textContent = `Uploading ${f.name}… ${pc}%`; });
       m.raw = Object.assign(up, await meta);
-      if(h.onRaw) h.onRaw(up);            // the card keeps it too (its Raw video box)
+      if(h.onRaw) h.onRaw(up, f);            // the card keeps it too (its Raw video box)
       render();
     }catch(e){ st.textContent = e.message; bar.hidden = true; }
   }
@@ -502,6 +511,15 @@ window.PIPE = {
   cancel(cardId){ return action(cardId, "cancel"); },
   mode(){ return S.mode; },                                    // "off" until the pipeline is set up on this site
   uploadRaw(cardId, file, onProgress){ return uploadRaw(cardId, file, onProgress); },
+  // 🎵 WAV of the raw video's sound (src: the picked File, or the stored video's link)
+  makeAudio(cardId, src, onStep){ return makeAudio(cardId, src, onStep); },
+  // play / download links for the card's raw video and audio: { video?, audio? }
+  async rawLinks(cardId){ return (await call("/api/pipeline/storage?team=" + encodeURIComponent(team()) + "&job=" + encodeURIComponent(cardId))).data; },
+  // delete the raw video + audio from storage; the answer says what is gone and what (if anything) is still there
+  async deleteRaw(cardId){ return (await call("/api/pipeline/storage", { team: team(), job: cardId, op: "delete_raw" })).data; },
+  // a deleted card: all its files and Claude jobs
+  async purge(cardId){ return (await call("/api/pipeline/storage", { team: team(), job: cardId, op: "purge" })).data; },
+  async storageStats(){ return (await call("/api/pipeline/storage?stats=1&team=" + encodeURIComponent(team()))).data; },
   // a scheduled post follows its card to a new day / time (iso = the new posting moment)
   reschedule(cardId, iso){ return action(cardId, "reschedule", { post_at: iso }); },
   // "✍️ Draft hook & talking points": a helper job of its own (<card>__s)

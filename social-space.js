@@ -388,6 +388,8 @@ details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var
 .drop .lbl{margin-bottom:5px}
 .drop img{width:62px;height:35px;object-fit:cover;border-radius:5px;flex-shrink:0;border:1px solid var(--line)}
 .drop input[type=file]{display:none}
+.rawaudio{margin-top:8px;padding:9px 11px;border:1px solid var(--line);border-radius:var(--r-s);background:var(--surface)}
+.rawaudio-h{display:flex;align-items:center;gap:8px;font-size:12.5px;flex-wrap:wrap}
 .rawseg{display:inline-flex;margin:2px 0 9px}
 .rawseg button{padding:5px 12px;font-size:11.5px}
 .rawbox .pp-bar{height:6px;background:var(--surface-2);border-radius:999px;overflow:hidden;margin-top:8px}
@@ -563,7 +565,7 @@ const $ = s => R.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const fmt = n => n==null ? "—" : Number(n).toLocaleString("en-IN");
 const kfmt = n => n==null ? "—" : n>=1000 ? (n/1000).toFixed(n>=10000?0:1)+"k" : String(n);
-const mb = b => b==null ? "" : b>=1e9 ? (b/1e9).toFixed(1)+" GB" : (b/1e6).toFixed(0)+" MB";
+const mb = b => b==null ? "" : b>=1e9 ? (b/1e9).toFixed(1)+" GB" : b>=1e6 ? (b/1e6).toFixed(b>=1e8?0:1)+" MB" : Math.max(1,Math.round(b/1e3))+" KB";
 const dmy = s => s ? new Date(s+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"}) : "—";
 const dow = s => s ? new Date(s+"T00:00:00").toLocaleDateString("en-GB",{weekday:"long"}) : "";
 
@@ -658,9 +660,9 @@ function gEdited(c){   // an edited video (Claude's or your own) + a thumbnail w
 function gAssets(c){
   const j=window.PIPE&&PIPE.job(c.id), byClaude=!!(j&&j.media&&(j.media.yt||j.media.ig));   // Claude's render counts as the edited file
   return !!((c.post?.reel||byClaude) && c.post?.postUrl && (!plats(c).includes("yt") || c.vtype!=="long" || c.post?.thumb)); }
-// Ideas → To shoot is free · leaving To shoot needs the research AND the title, description and hashtags ·
-// leaving Editing needs the edited video · leaving Your check needs the copy · going Live needs the link
-function gateFor(f){ return f==="draft"?"prep":f==="inprogress"?"edited":f==="inreview"?"copy":f==="approved"?"live":null; }
+// Ideas → To shoot → Editing are free (the research block is off for now) · leaving Editing needs the edited video ·
+// leaving Your check needs the copy · going Live needs the link
+function gateFor(f){ return f==="inprogress"?"edited":f==="inreview"?"copy":f==="approved"?"live":null; }
 function prepMissing(c){ const p=c.pre||{}, k=p.keywords||[], prim=k.find(x=>x.rank==="primary")||k[0], out=[];
   if(!(gResearch(p)||c.override)){
     if(!p.source) out.push("idea source"); if(!p.tool) out.push("research tool");
@@ -1902,7 +1904,7 @@ function ideaResearchCell(i){
 // Ideation: a short table per section (To decide · Accepted · Parked · Rejected). Everything else about an
 // idea lives in its window, so Accept / Park / Reject sit right in the row without scrolling sideways.
 const IDEA_SECTIONS=[
-  { key:"open",     title:"To decide", hint:"new and under review — research, then accept, park or reject", test:i=>i.status==="new"||i.status==="under_review", open:true },
+  { key:"open",     title:"To decide", hint:"new and under review — accept, park or reject", test:i=>i.status==="new"||i.status==="under_review", open:true },
   { key:"accepted", title:"Accepted",  hint:"on the Content Process board", test:i=>i.status==="accepted" },
   { key:"parked",   title:"Parked",    hint:"good ideas kept for a better moment", test:i=>i.status==="parked" },
   { key:"rejected", title:"Rejected",  hint:"with the reason, so rejections stay countable", test:i=>i.status==="rejected" },
@@ -1977,7 +1979,6 @@ function renderIdeation(){
       <td class="td-idea">${fmtIcon(i)} ${esc(i.idea)}${i.title?`<div class="sub">${esc(i.title)}</div>`:""}</td>
       <td>${who(i.by)}<div class="sub vol">${dmy(i.created)}</div></td>
       <td>${ptags(i)} ${vtagFor(i)}</td>
-      <td class="td-kw">${kwShort(i)}${window.PIPE?ideaResearchCell(i):""}</td>
       <td>${decide}${sec==="open"&&i.status==="under_review"?`<div class="sub">under review</div>`:""}</td>
       <td><button class="cbtn ${i.comments.length?"has":""}" data-cmt="${i.id}">💬 ${i.comments.length||""}</button></td></tr>`; };
 
@@ -1992,7 +1993,7 @@ function renderIdeation(){
     if(!list.length && S2.key!=="open") return "";
     return `<details class="isec" data-isec="${S2.key}" ${open?"open":""}>
       <summary><h3>${S2.title}</h3><span class="count">${list.length}</span><span class="hint">${S2.hint}</span></summary>
-      ${list.length?`<div class="tw"><table class="ideas"><thead><tr><th>Idea</th><th>By</th><th>Platform</th><th>Research</th><th>${S2.key==="open"?"Decide":"Status"}</th><th>💬</th></tr></thead>
+      ${list.length?`<div class="tw"><table class="ideas"><thead><tr><th>Idea</th><th>By</th><th>Platform</th><th>${S2.key==="open"?"Decide":"Status"}</th><th>💬</th></tr></thead>
         <tbody>${list.map(i=>row(i,S2.key)).join("")}</tbody></table></div>`
       :`<p class="hint" style="margin:6px 0 0">Nothing waiting.${ro?"":" Press <b>+ New idea</b> to log one."}</p>`}</details>`; }).join("");
 
@@ -2028,7 +2029,6 @@ function renderIdeation(){
 let DRAG=null;
 function gateChips(c){ const r=gResearch(c.pre)||!!c.override, e=gEdited(c), cp=gCopy(c.pre);
   return `<div class="gates">
-    <span class="gchip ${r?"ok":"no"}">${r?"✓":"×"} research${c.override&&!gResearch(c.pre)?" (ovr)":""}</span>
     <span class="gchip ${e?"ok":""}">${e?"✓":"·"} edited</span>
     <span class="gchip ${cp?"ok":"no"}">${cp?"✓":"×"} copy</span></div>`; }
 
@@ -2047,7 +2047,7 @@ function renderProcess(){
           ${lp?`<span class="badge good">${kfmt(lp.views)} views</span>`:""}
           ${window.PIPE?PIPE.badge(c.id):""}</div>
         ${gateChips(c)}
-        ${s.id==="todo"&&!gatePass(c,"research")?`<div class="hint" style="margin-top:7px;color:var(--crit);font-size:11px">Fill the research block to move it on</div>`:""}</div>`; }).join("")||`<div class="dashed" style="margin:0">${ro?"empty":"drop here"}</div>`}
+</div>`; }).join("")||`<div class="dashed" style="margin:0">${ro?"empty":"drop here"}</div>`}
       </div>`;}).join("");
 
   $("#pane-process").innerHTML=`
@@ -2055,8 +2055,8 @@ function renderProcess(){
       <span class="ic" style="color:var(--accent);border-color:var(--accent)">FLOW</span>
       <p><b>Ideas → To shoot → Editing → Your check → Scheduled → Live.</b> Accepting an idea books the next free posting slot.
       Claude moves cards through Editing and Your check by itself; you approve the edit, then post now or at the slot.
-      A card moves from <b>Ideas</b> to <b>To shoot</b> freely, leaves <b>To shoot</b> only with its research done and title,
-      description and hashtags filled in, leaves <b>Editing</b> only with an edited video, and leaves <b>Your check</b> only with the copy.</p></div>
+      A card moves through <b>Ideas</b> and <b>To shoot</b> freely, leaves <b>Editing</b> only with an edited video,
+      and leaves <b>Your check</b> only with the title, description and hashtags.</p></div>
     <div class="sec"><div class="sec-h"><h3>Content Process</h3>
       <span class="hint">${BC.length} card${BC.length===1?"":"s"} · ${ro?"click a card to open it":"drag cards between columns, or click one to open it"}</span>
       ${ro?"":`<button class="btn pri" id="newCard" style="margin-left:auto">+ New card</button>`}</div>
@@ -2207,6 +2207,13 @@ function renderSchedule(){
 const RAWMODE={};   // card id → "link" | "file": which Raw video option is showing
 let OPEN=null;   // what the window shows ({kind:"card"|"idea", id}), so a refresh can reopen it
 let CLOSE_GUARD=null;   // the open card's "discard unsaved changes?" check
+// raw video audio: a job in progress per card ("Pulling out the audio…"), and short-lived play/download links
+const AUDIOJOB={}, RAWLINKS={};
+// a deleted card: remove its raw video, audio, Claude edit files and finished videos from storage
+function freeCardFiles(id, after){
+  if(!window.PIPE || PIPE.mode()==="off") return;
+  Promise.resolve(after).then(()=>PIPE.purge(id)).then(r=>{ if(r && r.deleted) toast(`Freed ${(r.bytes/1e6).toFixed(r.bytes>1e8?0:1)} MB of storage (${r.deleted} file${r.deleted===1?"":"s"})`); })
+    .catch(e=>toast("The card's files are still in storage: "+e.message+" — see Administration → System stats")); }
 function closeDrawer(force){
   if(force!==true && CLOSE_GUARD && !CLOSE_GUARD()) return;
   CLOSE_GUARD=null; OPEN=null; $("#drawer").classList.remove("on"); $("#scrim").classList.remove("on"); }
@@ -2285,12 +2292,11 @@ function openIdea(id,focusComments,fmtKey){
     const missing=[!(prim&&prim.kw)&&"a primary keyword",prim&&prim.kw&&prim.vol==null&&`volume for “${prim.kw}”`,!i.why&&"why this idea",
       !i.title&&"title",!i.desc&&"description",!i.hashtags&&"hashtags"].filter(Boolean);
     const cpOk=!!(i.title&&i.desc&&i.hashtags);
-    const steps=[["Logged",!isNew],["Researched",researched],[decided?STATUS_UI[i.status].label:"Decided",decided]];
+    const steps=[["Logged",!isNew],[decided?STATUS_UI[i.status].label:"Decided",decided]];
     const next = isNew ? "Write the idea in one line, then Log idea."
       : card&&i.status==="accepted" ? `It's on the board in <b>${esc(STAGES.find(x=>x.id===card.stage).label)}</b>${card.scheduled?` — goes live ${esc(dow(card.scheduled).slice(0,3))} ${esc(dmy(card.scheduled))}`:""}. Open the card to carry on.`
       : i.status==="rejected" ? `Rejected${i.rejectReason?" — "+esc(i.rejectReason):""}. Accept it later if things change.`
       : i.status==="parked" ? "Parked for a better moment. Accept it when it's time."
-      : !researched ? "Next: <b>🔎 Fill with vidIQ</b> (or type the keyword and volume), then decide."
       : `Next: decide. <b>Accept</b> books the next free slot${slotNext?` (${esc(dow(slotNext).slice(0,3))} ${esc(dmy(slotNext))})`:""}.`;
 
     openDrawer(`
@@ -2333,7 +2339,7 @@ function openIdea(id,focusComments,fmtKey){
     </div><div class="dr-col">
 
     ${isNew?`<p class="hint" style="margin:0 0 14px;padding:11px 13px;background:var(--surface-2);border-radius:var(--r)">
-      A new idea is logged with no status. Research it, then the head accepts, parks or rejects it.</p>`
+      A new idea is logged with no status. Then the head accepts, parks or rejects it.</p>`
     :`<div class="block decide">
       <div class="block-h"><h4>Decision</h4><span class="badge ${STATUS_UI[i.status].cls||"mute"}">${STATUS_UI[i.status].label}</span></div>
       ${i.status==="rejected"&&i.rejectReason?`<p class="hint" style="margin:0 0 10px"><b style="color:var(--crit)">${esc(i.rejectReason)}</b> — ${esc(i.rejectNote||"")}</p>`:""}
@@ -2349,40 +2355,20 @@ function openIdea(id,focusComments,fmtKey){
         <div class="pp-row" style="margin-top:8px" data-w="1">
           ${i.status!=="under_review"?`<button class="btn sm" data-st="under_review">Mark as under review</button>`:""}
           ${["parked","rejected"].includes(i.status)?`<button class="btn sm" data-st="new">Back to To decide</button>`:""}</div>
-        ${!researched?`<p class="hint" style="margin:8px 0 0">Tip: research it first so the decision has numbers behind it.</p>`:""}`}
+`}
       </div>`}
 
-    <div class="block" data-gate="pre" style="border-color:${researched&&cpOk?"color-mix(in srgb,var(--good) 40%,var(--line))":"var(--line)"}">
-      <div class="block-h"><h4>Pre-production</h4>
-        ${missing.length?`<span class="pre-miss">Missing: ${esc(missing.join(", "))}</span>`:`<span class="badge good">✓ ready</span>`}</div>
-      <p class="hint" style="margin:-4px 0 10px">Written once here — the card copies all of it when the idea is accepted.</p>
-      <div class="pre-step">
-        <div class="pre-h"><span class="pre-n ${researched?"ok":""}">${researched?"✓":"1"}</span><b>Research</b>
-          ${!isNew&&window.PIPE?`<button class="btn sm ${kwList.some(k=>k.kw)?"":"pri"}" data-research data-w="1" ${rBusy?"disabled":""}>${rBusy?"Asking vidIQ…":kwList.some(k=>k.kw)?"🔎 Refresh with vidIQ":"🔎 Fill with vidIQ"}</button>`:""}</div>
-        ${isNew&&window.PIPE?`<p class="hint pre-note">Log the idea first, then 🔎 Fill with vidIQ appears here.</p>`:""}
-        ${rBusy?`<p class="hint pre-note"><span class="rs-spin"></span>vidIQ is researching this idea — keywords, volumes and titles land below by themselves.</p>`
-          :rFail?`<p class="hint pre-note" style="color:var(--crit)">vidIQ research didn't work: ${esc(rjob.error||"")}</p>`
-          :rData?`<p class="hint pre-note">Filled by vidIQ on ${esc(dmy((rData.at||"").slice(0,10)))}${i.researchScore!=null?` · score <b>${Math.round(i.researchScore)}</b>`:""}${rData.why?" — "+esc(rData.why):""}.</p>`:""}
-        <div class="fld" style="margin-bottom:10px">${kwEditor(kwList,"i-")}</div>
-        <details class="srcd" ${i.source&&i.tool?"":"open"}><summary>Source: <b>${esc(regLabel("source",i.source)||"not set")}</b> · Tool: <b>${esc(regLabel("tool",i.tool)||"not set")}</b> <span class="srcd-ch">change</span></summary>
-          <div class="grid2" style="margin-top:8px">
-            <div class="fld"><label for="i-source">Idea source</label>${regSelect("source","i-source",i.source,"e.g. college WhatsApp group, a parent's email")}</div>
-            <div class="fld"><label for="i-tool">Research tool</label>${regSelect("tool","i-tool",i.tool,"e.g. Semrush, TubeBuddy, Meta Insights")}</div></div></details>
-        <div class="fld ${i.why?"":"bad"}" style="margin:10px 0 0"><label for="i-why">Why this idea</label>
-          <textarea id="i-why" placeholder="One line. What does this win us?">${esc(i.why)}</textarea></div>
-      </div>
-      <div class="pre-step">
-        <div class="pre-h"><span class="pre-n ${cpOk?"ok":""}">${cpOk?"✓":"2"}</span><b>Draft copy</b>
-          <span class="hint">${window.PIPE?"Claude polishes this at the final check":"The card inherits it"}</span></div>
+    <div class="block">
+      <div class="block-h"><h4>Draft copy</h4>
+        <span class="hint">${window.PIPE?"Claude polishes this at the final check":"The card inherits it"}</span></div>
+      <p class="hint" style="margin:-4px 0 10px">Written once here — the card copies it when the idea is accepted.</p>
         <div class="fld"><label for="i-title">Title</label>
-          <input id="i-title" value="${esc(i.title)}" placeholder="The title as it will appear">
-          ${rData&&(rData.titles||[]).length?`<div class="ttl-ideas"><span class="hint">vidIQ ideas:</span>
-            ${rData.titles.map(t=>`<button class="ttl-chip ${t.title===i.title?"on":""}" data-rs-title="${esc(t.title)}" data-w="1">${esc(t.title)}${t.score!=null?` <b>${Math.round(t.score)}</b>`:""}</button>`).join("")}</div>`:""}</div>
+          <input id="i-title" value="${esc(i.title)}" placeholder="The title as it will appear"></div>
         <div class="fld"><label for="i-desc">Description</label>
           <textarea id="i-desc" placeholder="The description / caption as it will be posted">${esc(i.desc)}</textarea></div>
         <div class="fld" style="margin-bottom:0"><label for="i-hashtags">Hashtags</label>
           <input id="i-hashtags" value="${esc(i.hashtags)}" placeholder="#delhiuniversity #csas …"></div>
-      </div></div>
+    </div>
     </div></div>
 
     <div class="row dr-foot">
@@ -2395,9 +2381,8 @@ function openIdea(id,focusComments,fmtKey){
       i.idea=$("#i-idea").value.trim(); i.studentWhy=$("#i-studentwhy").value.trim(); i.by=$("#i-by").value.trim(); i.created=$("#i-created").value||today();
       i.platforms=readPlats("i-platform",plats(i)); i.platform=i.platforms[0]; i.vtype=readReg("vtype","i-vtype",i.vtype)||(fmtOf(i).vtypes||[])[0]||i.format;
       i.hook=$("#i-hook").value.trim(); i.cta=$("#i-cta").value.trim();
-      i.source=readReg("source","i-source"); i.tool=readReg("tool","i-tool"); i.keywords=readKw("i-");
-      i.title=$("#i-title").value.trim(); i.desc=$("#i-desc").value.trim();
-      i.hashtags=$("#i-hashtags").value.trim(); i.why=$("#i-why").value.trim();
+      i.title=$("#i-title").value.trim(); i.desc=$("#i-desc").value.trim();   // research fields are off the form for now: what's stored stays
+      i.hashtags=$("#i-hashtags").value.trim();
       i.extra=readOwn();
     };
     const exists=()=>!!IDEAS.find(x=>x.id===i.id);
@@ -2447,7 +2432,7 @@ function openIdea(id,focusComments,fmtKey){
       if(window.PIPE && PIPE.busy(i.id+"__r")) PIPE.cancel(i.id+"__r").catch(()=>{});
       if(running) [card.id, card.id+"__r", card.id+"__s"].forEach(k=>{ if(PIPE.busy(k)) PIPE.cancel(k).catch(()=>{}); });
       const k=IDEAS.findIndex(x=>x.id===i.id); if(k>=0) IDEAS.splice(k,1);
-      if(card){ const ci=CARDS.indexOf(card); if(ci>=0) CARDS.splice(ci,1); }
+      if(card){ const ci=CARDS.indexOf(card); if(ci>=0) CARDS.splice(ci,1); freeCardFiles(card.id); }
       if(save()){ dirty=false; closeDrawer(true); toast(card?"Idea and its card deleted":"Idea deleted"); } };
     const oc=$("#drawer").querySelector("[data-opencard]");
     if(oc) oc.onclick=()=>{ if(CLOSE_GUARD && !CLOSE_GUARD()) return; openCard(oc.dataset.opencard); };
@@ -2506,7 +2491,6 @@ function syncPipelineStages(jobs){
         if(title) c.pre.title=title; if(desc) c.pre.desc=desc; if(tags) c.pre.hashtags=tags; moved++; } }
     let t=PIPE_STAGE[j.status];
     const at=s=>STAGES.findIndex(x=>x.id===s);
-    if(t && at(t)>at("draft") && at(c.stage)<=at("draft") && !gatePass(c,"prep")) t="draft";   // held in To shoot until research + copy are in
     if(t && at(t) > at(c.stage)){ c.stage=t; moved++; }
   });
   // ideas: vidIQ research results go into the idea itself
@@ -2603,7 +2587,15 @@ function openCard(id,showGate){
         :r&&r.kind==="file"?`<div class="drop has"><span style="font-size:22px">🎞️</span>
             <div style="flex:1;min-width:0"><div class="lbl" style="margin:0 0 2px">Raw video · uploaded</div>
               <div class="nm">${esc(r.name)}</div><div class="sz">${mb(r.size)}${r.by?" · by "+esc(r.by):""}${r.at?" · "+esc(dmy(r.at)):""}</div></div>
-            <label class="btn sm" data-w="1" style="cursor:pointer">Replace<input type="file" accept="video/*" data-rawfile hidden></label></div>
+            <label class="btn sm" data-w="1" style="cursor:pointer">Replace<input type="file" accept="video/*" data-rawfile hidden></label>
+            <button type="button" class="btn sm danger" data-rawdel data-w="1">Delete</button></div>
+            <div class="rawaudio">
+              ${r.audio?`<div class="rawaudio-h">🎵 <b>Audio (WAV)</b> <span class="hint">${mb(r.audio.size)}${r.audio.seconds?" · "+Math.floor(r.audio.seconds/60)+":"+String(r.audio.seconds%60).padStart(2,"0"):""}</span>
+                  <a class="hint" data-rawaudio-dl style="margin-left:auto" hidden>⬇ Download</a></div>
+                <audio controls preload="none" data-rawaudio-play style="width:100%;height:34px;margin-top:6px" hidden></audio>`
+              :`<div class="rawaudio-h">🎵 <b>Audio (WAV)</b> <span class="hint">${AUDIOJOB[c.id]?esc(AUDIOJOB[c.id]):"not made yet"}</span>
+                  ${AUDIOJOB[c.id]?"":`<button type="button" class="btn sm" data-getaudio data-w="1" style="margin-left:auto">Get the audio</button>`}</div>`}
+            </div>
             ${useClaude?`<p class="hint" style="margin:6px 0 0">🤖 Claude edit uses this file.</p>`:""}`
         :isNew?`<p class="hint pre-note">Create the card first, then upload the raw video here.</p>`
         :off?`<p class="hint pre-note">Uploading needs the video storage switched on (an owner sets it up once — <b>routine/SETUP.md</b>). Paste a link for now.</p>`
@@ -2630,7 +2622,7 @@ function openCard(id,showGate){
       <button class="btn sm" id="xClose">Close</button></div>
 
     ${reviewing&&useClaude?`<div id="pipePanel"></div>
-    <details class="dr-more"><summary>Card details — idea, pre-production, post-production</summary>`:""}
+    <details class="dr-more"><summary>Card details — idea, draft copy, shoot, post-production</summary>`:""}
     <div class="dr-cols"><div class="dr-col">
     <div class="fld"><label for="c-idea">Idea</label>
       <input id="c-idea" value="${esc(c.idea)}" placeholder="What is this video, in one line?"></div>
@@ -2642,44 +2634,19 @@ function openCard(id,showGate){
       <div class="fld"><label for="c-sched">Goes live on</label><input id="c-sched" type="date" value="${c.scheduled||""}"></div>
       <div class="fld"><label for="c-time">at</label><input id="c-time" type="time" value="${esc(c.time||slotPlan(c.platform).time)}"></div></div>
 
-    <div class="block" data-gate="pre" style="border-color:${rOk&&cOk?"color-mix(in srgb,var(--good) 40%,var(--line))":"color-mix(in srgb,var(--crit) 35%,var(--line))"}">
-      <div class="block-h"><h4>Pre-production</h4>
-        ${missing.length?`<span class="pre-miss">Missing: ${esc(missing.join(", "))}</span>`:`<span class="badge good">✓ ready</span>`}</div>
+    <div class="block">
+      <div class="block-h"><h4>Draft copy</h4>
+        <span class="hint">${window.PIPE?"Claude polishes this at the final check":"Title, description and hashtags"}</span></div>
       ${srcIdea?`<p class="hint" style="margin:-3px 0 11px;padding:8px 10px;background:var(--surface-2);border-radius:var(--r-s)">
         Copied from the idea when it was accepted. Edit freely here — the original idea is left untouched.
         <button class="btn sm" id="repull" style="margin-left:6px" data-w="1">Re-pull from idea</button></p>`:""}
-
-      <div class="pre-step">
-        <div class="pre-h"><span class="pre-n ${rOk?"ok":""}">${rOk?"✓":"1"}</span><b>Research</b>
-          ${!isNew&&window.PIPE?`<button class="btn sm ${kwList.some(k=>k.kw)?"":"pri"}" data-research data-w="1" ${rBusy?"disabled":""}>${rBusy?"Asking vidIQ…":kwList.some(k=>k.kw)?"🔎 Refresh with vidIQ":"🔎 Fill with vidIQ"}</button>`:""}</div>
-        ${rBusy?`<p class="hint pre-note"><span class="rs-spin"></span>vidIQ is researching this idea — keywords, volumes and titles land in the table below by themselves.</p>`
-          :rFail?`<p class="hint pre-note" style="color:var(--crit)">vidIQ research didn't work: ${esc(rjob.error||"")}</p>`
-          :rData?`<p class="hint pre-note">Filled by vidIQ on ${esc(dmy((rData.at||"").slice(0,10)))}${rData.why?" — "+esc(rData.why):""}. Edit anything.</p>`:""}
-        <div class="fld" style="margin-bottom:10px">${kwEditor(kwList,"c-")}</div>
-        <details class="srcd" ${c.pre.source&&c.pre.tool?"":"open"}><summary>Source: <b>${esc(regLabel("source",c.pre.source)||"not set")}</b> · Tool: <b>${esc(regLabel("tool",c.pre.tool)||"not set")}</b> <span class="srcd-ch">change</span></summary>
-          <div class="grid2" style="margin-top:8px">
-            <div class="fld ${c.pre.source?"":"bad"}"><label for="r-source">Idea source</label>
-              ${regSelect("source","r-source",c.pre.source,"e.g. college WhatsApp group")}</div>
-            <div class="fld ${c.pre.tool?"":"bad"}"><label for="r-tool">Research tool</label>
-              ${regSelect("tool","r-tool",c.pre.tool,"e.g. Semrush, TubeBuddy")}</div></div></details>
-        <div class="fld ${c.pre.why?"":"bad"}" style="margin:10px 0 0"><label for="r-why">Why this idea</label>
-          <textarea id="r-why" placeholder="One line: why students will watch this now.">${esc(c.pre.why)}</textarea></div>
-      </div>
-
-      <div class="pre-step">
-        <div class="pre-h"><span class="pre-n ${cOk?"ok":""}">${cOk?"✓":"2"}</span><b>Draft copy</b>
-          <span class="hint">${window.PIPE?"Claude polishes this at the final check":"Title, description and hashtags"}</span></div>
-        <div class="fld ${c.pre.title?"":"bad"}"><label for="r-title">Title</label>
-          <input id="r-title" value="${esc(c.pre.title)}">
-          ${rData&&(rData.titles||[]).length?`<div class="ttl-ideas"><span class="hint">vidIQ ideas:</span>
-            ${rData.titles.map(t=>`<button class="ttl-chip ${t.title===c.pre.title?"on":""}" data-rs-title="${esc(t.title)}" data-w="1">${esc(t.title)}${t.score!=null?` <b>${Math.round(t.score)}</b>`:""}</button>`).join("")}</div>`:""}</div>
-        <div class="fld ${c.pre.desc?"":"bad"}"><label for="r-desc">Description</label>
-          <textarea id="r-desc">${esc(c.pre.desc)}</textarea></div>
-        <div class="fld ${c.pre.hashtags?"":"bad"}" style="margin-bottom:0"><label for="r-hashtags">Hashtags</label>
-          <input id="r-hashtags" value="${esc(c.pre.hashtags)}" placeholder="#cuet #du"></div>
-      </div>
-      ${c.override?`<p class="hint" style="margin:12px 0 0;padding:9px;background:var(--crit-soft);border-radius:var(--r-s);color:var(--crit)">
-        <b>Research gate overridden</b> by ${esc(c.override.by)} on ${dmy(c.override.on)} — ${esc(c.override.reason)}</p>`:""}</div>
+      <div class="fld"><label for="r-title">Title</label>
+        <input id="r-title" value="${esc(c.pre.title)}"></div>
+      <div class="fld"><label for="r-desc">Description</label>
+        <textarea id="r-desc">${esc(c.pre.desc)}</textarea></div>
+      <div class="fld" style="margin-bottom:0"><label for="r-hashtags">Hashtags</label>
+        <input id="r-hashtags" value="${esc(c.pre.hashtags)}" placeholder="#cuet #du"></div>
+    </div>
 
     ${F.video?`<div class="block">
       <div class="block-h"><h4>Shoot</h4>
@@ -2714,7 +2681,7 @@ function openCard(id,showGate){
         ${claudeDone?`<div class="pp-mini">
             ${jobM.yt?`<div><div class="lbl">YouTube</div><video controls preload="metadata" src="${esc(jobM.yt)}"></video></div>`:""}
             ${jobM.ig?`<div><div class="lbl">Instagram</div><video controls preload="metadata" src="${esc(jobM.ig)}"></video></div>`:""}</div>`
-          :!c.post.reel?`<p class="hint pre-note">${useClaude?`Not edited yet. Add the raw video at the top of this column, then start <b>🤖 Claude edit &amp; post</b>${!isNew?(reviewing?" above":" (top of this column)"):""} — or add your own edit below.`
+          :!c.post.reel?`<p class="hint pre-note">${useClaude?`Not edited yet. Add the raw video at the top of this column, then start <b>🤖 Claude edit</b>${!isNew?(reviewing?" above":" (top of this column)"):""} — or add your own edit below.`
               :F.video?"Not edited yet — add the finished video below once it's edited.":"Not designed yet — add the finished image or slides below."}</p>`:""}
         <details class="manual" ${c.post.reel||!useClaude?"open":""}><summary>${claudeDone?"Use my own edit instead":c.post.reel?(F.video?"Your own edit":"The design"):useClaude?"I edited it myself":F.video?"The finished video":"The finished design"}</summary>
           ${fileSlot("reel", !F.video?"Image / slides":c.vtype==="long"?"Edited video":"Edited reel", F.video?"video/*":"image/*,application/pdf",
@@ -2783,8 +2750,7 @@ function openCard(id,showGate){
       c.vtype=readReg("vtype","c-vtype",c.vtype)||"short";
       if(both(c) && c.vtype==="reel") c.vtype="short";   // one vertical video for both
       c.scheduled=$("#c-sched").value||null; c.time=$("#c-time").value||null;
-      c.pre.source=readReg("source","r-source"); c.pre.tool=readReg("tool","r-tool"); c.pre.keywords=readKw("c-");
-      c.pre.why=$("#r-why").value.trim(); c.pre.title=$("#r-title").value.trim();
+      c.pre.title=$("#r-title").value.trim();   // research fields are off the card for now: what's stored stays
       c.pre.desc=$("#r-desc").value.trim(); c.pre.hashtags=$("#r-hashtags").value.trim();
       $("#drawer").querySelectorAll("[data-plink]").forEach(e=>{ c.post.links[e.dataset.plink]=e.value.trim(); });
       c.post.postUrl=c.post.links[c.platform]||Object.values(c.post.links).find(Boolean)||"";
@@ -2822,13 +2788,41 @@ function openCard(id,showGate){
     $("#drawer").querySelectorAll("[data-rawmode]").forEach(b=>b.onclick=()=>{ read(); RAWMODE[c.id]=b.dataset.rawmode; draw(c.pre.keywords); });
     const keepRaw=up=>{ read(); persist(); c.raw=Object.assign({ kind:"file" }, up, { at:today(), by:meName() }); RAWMODE[c.id]="file";
       if(save()){ dirty=false; opened=snap(); } draw(c.pre.keywords); toast("Raw video uploaded"); };
+    // 🎵 the raw video's sound as a WAV, kept next to it (from the picked file, or the stored video)
+    const getAudio=async src=>{
+      if(AUDIOJOB[c.id]) return; const id=c.id;
+      const step=m=>{ AUDIOJOB[id]=m; const el=$("#drawer").querySelector(".rawaudio .hint"); if(el && OPEN && OPEN.id===id) el.textContent=m; };
+      try{ step("Starting…");
+        if(!src){ const l=await PIPE.rawLinks(id); if(!l.video) throw new Error("The video isn't in storage any more"); src=l.video; }
+        const a=await PIPE.makeAudio(id, src, step);
+        const card=CARDS.find(x=>x.id===id); if(card&&card.raw){ card.raw.audio=a; save(); }
+        delete RAWLINKS[id]; delete AUDIOJOB[id]; toast("Audio ready (WAV)"); }
+      catch(e){ delete AUDIOJOB[id]; toast("Audio: "+e.message); }
+      if(OPEN && OPEN.id===id){ if(dirty) read(); draw(c.pre.keywords); } };
+    const ga=$("#drawer").querySelector("[data-getaudio]"); if(ga) ga.onclick=()=>getAudio(null);
+    // play / download links for the stored audio (short-lived, fetched when the card opens)
+    const ap=$("#drawer").querySelector("[data-rawaudio-play]");
+    if(ap && window.PIPE){ const fill=l=>{ if(!l||!l.audio) return; ap.src=l.audio; ap.hidden=false;
+        const dl=$("#drawer").querySelector("[data-rawaudio-dl]"); if(dl){ dl.href=l.audio; dl.hidden=false; dl.setAttribute("download", (c.pre.title||c.idea||"raw").replace(/[^\w\- ]+/g,"").trim().slice(0,60)+" audio.wav"); } };
+      const cached=RAWLINKS[c.id]; if(cached && Date.now()-cached.at<3e6) fill(cached.data);
+      else PIPE.rawLinks(c.id).then(d=>{ RAWLINKS[c.id]={ at:Date.now(), data:d }; fill(d); }).catch(()=>{}); }
+    // delete the raw video + its audio from storage (checked: the answer says what's really gone)
+    const rdel=$("#drawer").querySelector("[data-rawdel]");
+    if(rdel) rdel.onclick=async()=>{
+      if(!confirm("Delete the raw video"+(c.raw&&c.raw.audio?" and its audio":"")+" from storage? This can't be undone.")) return;
+      rdel.disabled=true; rdel.textContent="Deleting…";
+      try{ const r=await PIPE.deleteRaw(c.id);
+        if(r.still_there&&r.still_there.length){ toast("Storage still has: "+r.still_there.join(", ")+" — try again"); rdel.disabled=false; rdel.textContent="Delete"; return; }
+        read(); c.raw=null; RAWMODE[c.id]="file"; delete RAWLINKS[c.id]; if(save()){ dirty=false; opened=snap(); }
+        toast(r.deleted.length?`Deleted from storage: ${r.deleted.join(", ")} (checked, it's gone)`:"Nothing was in storage — removed from the card"); draw(c.pre.keywords); }
+      catch(e){ toast("Couldn't delete: "+e.message); rdel.disabled=false; rdel.textContent="Delete"; } };
     const rawUpload=async f=>{
       if(!window.PIPE || PIPE.mode()==="off"){ toast("Uploading needs the video storage set up first — paste a link for now"); return; }
       if(!(/^video\//.test(f.type) || /\.(mp4|mov|m4v|mkv)$/i.test(f.name))){ toast("Pick a video file (.mp4 / .mov)"); return; }
       const st=$("#drawer").querySelector("[data-rawup]"), bar=$("#drawer").querySelector("[data-rawbar]");
       if(bar) bar.hidden=false; if(st) st.textContent="Getting an upload link…";
       try{ const up=await PIPE.uploadRaw(c.id, f, pc=>{ if(bar) bar.firstChild.style.width=pc+"%"; if(st) st.textContent=`Uploading ${f.name}… ${pc}%`; });
-        keepRaw(up); }
+        delete RAWLINKS[c.id]; keepRaw(up); getAudio(f); }
       catch(e){ if(st) st.textContent=e.message; if(bar) bar.hidden=true; toast("Upload didn't work: "+e.message); } };
     $("#drawer").querySelectorAll("[data-rawfile]").forEach(inp=>inp.onchange=()=>{ if(inp.files[0]) rawUpload(inp.files[0]); });
     const rd=$("#drawer").querySelector("[data-rawdrop]");
@@ -2836,7 +2830,7 @@ function openCard(id,showGate){
       rd.ondrop=e=>{ e.preventDefault(); rd.style.borderColor=""; const f=(e.dataTransfer.files||[])[0]; if(f) rawUpload(f); }; }
     // Claude pipeline (pipeline.js): raw video → edit → your checks → post
     if(window.PIPE && $("#pipePanel")) PIPE.mount($("#pipePanel"), c, {
-      raw: ()=>c.raw, onRaw: up=>keepRaw(up),
+      raw: ()=>c.raw, onRaw: (up,f)=>{ delete RAWLINKS[c.id]; keepRaw(up); getAudio(f); },
       canEdit, toast, idea: x=>x.ideaId?IDEAS.find(i=>i.id===x.ideaId):null,
       beforeStart: ()=>{ read(); persist(); if(save()){ dirty=false; opened=snap(); } },
       slot: ()=>slotOf(c),
@@ -2886,8 +2880,8 @@ function openCard(id,showGate){
       const running=window.PIPE && (PIPE.busy(c.id) || PIPE.busy(c.id+"__r"));   // a Claude job working on this card gets stopped first
       if(!confirm(running?"Claude is working on this card right now. Deleting it stops that job (files already made are kept). Delete the card?"
         :"Delete this card? The idea it came from stays in Ideation.")) return;
-      if(running){ if(PIPE.busy(c.id)) PIPE.cancel(c.id).catch(()=>{}); if(PIPE.busy(c.id+"__r")) PIPE.cancel(c.id+"__r").catch(()=>{}); }
-      const k=CARDS.findIndex(x=>x.id===c.id); if(k>=0) CARDS.splice(k,1); if(save()){ closeDrawer(true); toast("Card deleted"); } };
+      const stop=running?Promise.all([PIPE.busy(c.id)&&PIPE.cancel(c.id), PIPE.busy(c.id+"__r")&&PIPE.cancel(c.id+"__r")].map(p=>p&&p.catch(()=>{}))):Promise.resolve();
+      const k=CARDS.findIndex(x=>x.id===c.id); if(k>=0) CARDS.splice(k,1); if(save()){ closeDrawer(true); toast("Card deleted"); freeCardFiles(c.id, stop); } };
     const ov=$("#override"); if(ov) ov.onclick=()=>{ read(); persist(); openOverride(c); };
     $("#drawer").querySelectorAll("[data-move]").forEach(b=>b.onclick=()=>{
       read(); if(!c.idea&&!c.pre.title){toast("A card needs an idea or a title");return;}
