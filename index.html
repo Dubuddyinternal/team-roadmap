@@ -914,9 +914,9 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .rmk-colors{display:flex;flex-wrap:wrap;gap:8px}
 .rmk-sw{width:30px;height:30px;border-radius:8px;border:2px solid transparent;cursor:pointer}
 .rmk-sw.sel{border-color:var(--ink);box-shadow:0 0 0 2px var(--card) inset}
-.tl-bar .tl-t{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.tl-bar .tl-t{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto;min-width:36px}
 .tl-bar .tl-src{font-family:var(--mono);font-size:8px;letter-spacing:.06em;background:rgba(255,255,255,.75);border-radius:4px;padding:1px 5px;flex:none}
-.tl-bar .tl-dates{font-family:var(--mono);font-size:10px;opacity:.75;flex:none;margin-left:auto}
+.tl-bar .tl-dates{font-family:var(--mono);font-size:10px;opacity:.75;flex:0 100 auto;min-width:0;overflow:hidden;white-space:nowrap;margin-left:auto}   /* on a short bar the dates give way to the name */
 .tl-bar.st-done{background:var(--done-bg);color:var(--done)}
 .tl-bar.st-progress{background:#FFF2DE;color:#9A6A1B}
 .tl-bar.st-planned{background:var(--indigo-soft);color:var(--indigo)}
@@ -933,6 +933,11 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .tl-lg.ph-implres{background:#EDE9FE;color:#6D28D9}
 .tl-out{position:absolute;top:14px;font-size:12px;color:var(--muted);white-space:nowrap;pointer-events:none}
 .tl-out b{color:var(--ink,#17233A);font-weight:600}
+.tl-out .tl-when{margin-left:10px;font-family:var(--mono);font-size:11.5px}
+.tl-out.click{pointer-events:auto;cursor:pointer;border-radius:6px;padding:0 4px;margin-left:-4px}
+.tl-out.click:hover{background:var(--indigo-soft)}
+.tl-out .tl-edit{margin-left:10px;font-size:11px;color:var(--indigo);opacity:0}
+.tl-out.click:hover .tl-edit{opacity:1}
 .tl-lg.ph-building{background:#DBEAFE;color:#1D4ED8}
 .tl-today{position:absolute;top:0;bottom:0;width:2px;background:var(--blocked);z-index:2;pointer-events:none}
 .tl-today span{position:absolute;top:-2px;left:5px;font-family:var(--mono);font-size:9px;background:var(--blocked);color:#fff;border-radius:4px;padding:2px 6px}
@@ -1175,6 +1180,70 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .td-uprow:hover{background:var(--paper)}
 .td-uptx{display:flex;flex-direction:column;min-width:0}
 .td-uptx span{font-size:12px;color:var(--muted)}
+.td-all-h{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.td-all-h h3{margin:0}
+.td-plan-strip{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,.06)}
+.td-dayslot{display:flex;flex-direction:column;min-width:96px;padding:6px 10px;border:1px dashed var(--line);border-radius:10px;background:var(--paper);font-size:12.5px}
+.td-dayslot span{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.td-dayslot.none{min-width:0;justify-content:center;color:var(--muted)}
+.td-dayslot.kover{border-style:solid;border-color:var(--indigo);background:var(--card)}
+.td-plan{font-size:11.5px;padding:2px 8px;border-radius:99px;background:var(--paper);color:var(--muted)}
+.td-plan.now{color:var(--indigo);font-weight:600}
+.td-dayplan{display:flex;flex-direction:column}
+.td-dayplan .td-hat{margin-bottom:0}
+.td-timebtn{white-space:nowrap}
+.td-timebtn.on{color:var(--indigo);border-color:var(--indigo)}
+/* Today by the clock: a time rail on the left, the thing on the right */
+.td-row{display:grid;grid-template-columns:96px minmax(0,1fr);column-gap:14px}
+.td-row>:last-child{min-width:0;padding-block:6px}
+.td-rail{position:relative;padding:14px 0 10px 24px;display:flex;flex-direction:column;align-items:flex-start;gap:2px}
+.td-rail::before{content:"";position:absolute;left:8px;top:0;bottom:0;width:2px;background:var(--line)}
+.td-dayplan>.td-row:first-child .td-rail::before{top:20px}
+.td-dayplan>.td-row:last-child .td-rail::before{bottom:auto;height:24px}
+.td-rail-t{position:relative;border:0;background:none;padding:0;font:600 13.5px var(--mono);color:var(--ink);cursor:pointer;white-space:nowrap}
+.td-rail-t::before{content:"";position:absolute;left:-21px;top:3px;width:10px;height:10px;border-radius:50%;background:var(--card);border:2px solid var(--indigo)}
+.td-rail-t:hover{color:var(--indigo)}
+.td-rail-sub{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.td-rail-x{border:0;background:none;padding:2px 0;font-size:11px;color:var(--muted);cursor:pointer;opacity:0;transition:opacity .15s}
+.td-row:hover .td-rail-x,.td-rail-x:focus-visible{opacity:1}
+.td-rail-x:hover{color:var(--blocked)}
+.td-row.now .td-rail-t{color:var(--indigo)}
+.td-row.now .td-rail-t::before{background:var(--indigo);box-shadow:0 0 0 4px var(--indigo-soft)}
+.td-row.now .td-hat{border-color:var(--indigo)}
+.td-row.late .td-rail-t{color:var(--blocked)}
+.td-row.late .td-rail-t::before{border-color:var(--blocked);background:var(--blocked)}
+.td-lp-h .td-timebtn{margin-left:6px;padding:2px 8px;font-size:11.5px}
+.td-lp-solo{background:var(--card)}
+.td-lp.td-lp-mini{padding:8px 12px}
+.td-lp.td-lp-mini .td-lp-h{margin-bottom:0;flex-wrap:nowrap}
+.td-lp.td-lp-mini .td-lp-h>b{flex:0 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.td-lp-peek{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;color:var(--muted)}
+.td-lp-go{padding:5px 12px;font-size:13px}
+.td-lp-close{margin-left:auto}
+.td-lp:not(.td-lp-mini) .td-lp-st{margin-right:auto}
+.td-lp.ok.td-lp-mini{border-style:solid;border-color:var(--line)}
+@media (max-width:640px){.td-lp.td-lp-mini .td-lp-h{flex-wrap:wrap}.td-lp-peek{flex-basis:100%;order:5}}
+.td-row .td-lp-h .td-timebtn{display:none}
+.td-row.anytime .td-rail-t{color:var(--muted);font-weight:500}
+.td-row.anytime .td-rail-t::before{border-color:var(--line)}
+.td-row .td-hat-h .td-timebtn,.td-row.itemrow .td-timebtn{display:none}
+.td-row-item{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px}
+.td-row-item>.kcard{flex:0 1 520px;margin:0}
+.td-row.boxrow .td-row-item>*{flex:1 1 100%;margin-bottom:0}
+.td-row-hat{font-size:12px;color:var(--muted)}
+.td-row.gaprow .td-rail{padding:0}
+.td-row.gaprow>:last-child{padding-block:0}
+.td-gap{display:flex;align-items:center;justify-content:center;min-height:12px;border:1px dashed transparent;border-radius:10px;font-size:12px;color:transparent;transition:min-height .15s}
+.td-gap:hover,.td-gap.kover,.td-gap.first{min-height:38px;border-color:var(--line);color:var(--muted);background:var(--paper)}
+.td-gap.kover{border-color:var(--indigo);color:var(--indigo)}
+@media (max-width:640px){.td-row{grid-template-columns:72px minmax(0,1fr);column-gap:8px}.td-rail-t{font-size:12px}}
+.td-act.td-totoday{color:var(--indigo);border-color:var(--indigo);font-weight:600}
+.td-ghost{padding:10px 14px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:14px;background:var(--card)}
+.td-daynote{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;margin:4px 0 6px}
+.td-daynote b{font-size:16px}
+.td-daynote span{font-size:13px;color:var(--muted)}
+.td-all-add{margin-top:8px;width:100%}
+.td-all-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;align-items:start}
 .td-learn{background:var(--card);border:2px solid #F59E0B;border-radius:14px;padding:14px 16px;margin-bottom:14px}
 .td-learn.ok{border:1px solid var(--line)}
 .td-learn-h{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px}
@@ -1203,6 +1272,58 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .td-learn-k{font-size:11px;font-weight:600;color:var(--muted)}
 .td-learn-h .td-more,.td-deepcard .td-more{margin-left:0;flex:none;background:var(--card)}
 .td-setdlg{max-width:540px}
+.td-row.remindrow{margin:-6px 0 2px}
+.td-remind{justify-self:start;border:0;background:none;padding:2px 0;font:inherit;font-size:13px;font-style:italic;color:#9a5b00;cursor:pointer;text-align:left}
+.td-remind:hover{text-decoration:underline;text-underline-offset:3px}
+.td-motto{display:inline-flex;align-items:center;gap:8px;padding:3px 12px 3px 4px;border-radius:99px;background:linear-gradient(90deg,#fff4e0,#f1fbef);border:1px solid #f5d9a8}
+.td-seal{display:inline-flex;flex:none}
+.td-motto-tx{display:flex;flex-direction:column;line-height:1.15}
+.td-motto-tx b{font-size:14px;color:#7a3e00;font-weight:700}
+.td-motto-tx small{font-size:10.5px;color:var(--muted);letter-spacing:.02em}
+.td-stat{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:600;background:#fff4e0;color:#9a5b00;border:1px solid #f5d9a8;white-space:nowrap}
+.td-card.td-done .td-stat{background:var(--paper);color:var(--muted);border-color:var(--line)}
+.td-dline{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:3px dotted #f0a020;border-radius:14px;padding:12px 16px;background:var(--card)}
+.td-dline>b{font-size:16px}
+.td-dline.rest{border-color:var(--line);background:none}
+.td-dline.rest>b{color:var(--muted);font-weight:600}
+.td-dline .td-more{margin-left:auto}
+.td-dline.kover{background:var(--indigo-soft)}
+.td-dline-in{flex:1 1 100%;display:flex;flex-direction:column;gap:10px;margin-top:4px;padding-top:10px;border-top:1px dotted #f0a020}
+.td-dline.rest .td-dline-in{border-top-color:var(--line)}
+.td-dline-kid{display:flex;gap:12px;align-items:flex-start}
+.td-dline-t{flex:0 0 76px;display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding-top:10px}
+.td-dline-t .td-rail-t::before{display:none}
+.td-dline-kid.now .td-rail-t{color:var(--indigo)}
+.td-dline-kid .td-row-item{flex:1;min-width:0}
+.td-dline-kid:hover .td-rail-x,.td-dline-kid:focus-within .td-rail-x{opacity:1}
+.td-dline-n{border:0;background:none;padding:0;font:inherit;font-size:13px;color:#b45309;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.td-dline-n.none{color:var(--muted);text-decoration:none}
+.td-setrow input[type=time]{width:110px}
+.td-dlrow{flex-wrap:wrap;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.td-dlrow .td-set-nm{flex:1 1 180px;min-width:0}
+.td-notime{display:flex;flex-direction:column;gap:8px;min-width:0}
+.td-notime .td-row-hat{margin-top:6px}
+.td-notime-btns{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.td-notime-btns .k-add{flex:1;min-width:160px}
+.td-tick{position:absolute;top:8px;right:8px;width:22px;height:22px;padding:0;border-radius:50%;border:2px solid var(--muted);background:var(--card);color:#fff;font-size:13px;font-weight:700;line-height:18px;cursor:pointer;opacity:.7}
+.td-tick:hover{opacity:1;border-color:#16a34a}
+.td-tick.on{background:#16a34a;border-color:#16a34a;opacity:1}
+.td-why{background:var(--card);border:1px solid var(--line);border-left:4px solid #ff9933;border-radius:12px;padding:12px 14px;margin:0 0 12px}
+.td-why.pop{border:0;padding:0;margin:0;background:none}
+.td-why-hd{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.td-why-hd b{font-size:16px}
+.td-why-lad{list-style:none;margin:0;padding:0 0 0 6px}
+.td-why-lad li{position:relative;padding:3px 0 3px 22px;font-size:14px}
+.td-why-lad li::before{content:"";position:absolute;left:0;top:50%;width:10px;height:10px;margin-top:-5px;border-radius:50%;background:var(--muted);z-index:1}
+.td-why-lad li:not(:last-child)::after{content:"";position:absolute;left:4px;top:50%;height:100%;width:2px;background:var(--line)}
+.td-why-lad li.top{font-weight:700;font-size:16px}
+.td-why-lad li.top::before{background:#ff9933;width:14px;height:14px;margin-top:-7px;left:-2px}
+.td-why-lad li.me{font-weight:700}
+.td-why-lad li.me::before{background:#138808;width:14px;height:14px;margin-top:-7px;left:-2px}
+.td-why-line{margin-top:8px;font-size:13px;color:var(--muted);font-style:italic}
+.td-why-dlg{position:relative;max-width:420px}
+.td-why-x{position:absolute;top:10px;right:10px;border:0;background:none;font-size:18px;cursor:pointer;color:var(--muted)}
+.td-why-morning{font-size:13px;color:var(--muted);margin:0 28px 10px 0}
 .td-setlist{display:flex;flex-direction:column;gap:6px;margin:10px 0 8px}
 .td-setrow{display:flex;gap:6px;align-items:center}
 .td-setrow input{border:1px solid var(--line);border-radius:8px;padding:7px 9px;font:inherit;font-size:14px;background:var(--paper)}
@@ -1273,9 +1394,13 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .td-learn-log{border-top:1px dashed var(--line);margin-top:12px;padding-top:10px;display:flex;flex-direction:column;gap:8px;max-height:320px;overflow:auto}
 .td-learn-row{display:flex;gap:12px}
 .td-learn-d{font-family:var(--mono);font-size:11px;color:var(--muted);flex:none;width:96px;padding-top:2px}
-.td-deepcard{display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#EEF2FF,#F0FDF4);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:14px}
+.td-deepcard{position:relative;display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#EEF2FF,#F0FDF4);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:14px}
 .td-deep-tx{flex:1;min-width:0}.td-deep-tx h2{font-size:17px;margin:0 0 4px}
 .td-deep-sub{font-size:13px;color:var(--muted)}
+.td-editable{cursor:text;border-radius:4px;outline:1px dashed transparent;outline-offset:2px}
+.td-editable:hover,.td-editable:focus-visible{outline-color:var(--line);background:rgba(255,255,255,.5)}
+.td-editable:hover::after{content:" ✎";font-size:.8em;color:var(--muted)}
+.td-edit-in{font:inherit;width:100%;max-width:640px;padding:4px 8px;border:1px solid var(--indigo);border-radius:8px;background:var(--card);color:var(--ink);resize:vertical}
 .td-deep-go{flex:none;white-space:nowrap}
 .td-reasoncard{background:linear-gradient(135deg,#FFF7ED,#FEF3C7)}
 .td-reason-btns{display:flex;flex-wrap:wrap;gap:6px;flex:none}
@@ -1343,6 +1468,13 @@ html,body{height:100%}
 body{margin:0}
 .shell{display:grid;grid-template-columns:276px 1fr;grid-template-rows:minmax(0,1fr);height:100vh;overflow:hidden}
 .rail{background:var(--card);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;position:static;top:auto;align-self:stretch}
+/* « hides the side menu, ☰ in the top bar brings it back (remembered in this browser) */
+.rail-min-btn{margin-left:auto;flex:none;width:28px;height:28px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--muted);font-size:16px;line-height:1;cursor:pointer}
+.rail-min-btn:hover{color:var(--ink);border-color:var(--muted)}
+.rail-open-btn{display:none;margin-right:auto;width:34px;height:34px;border:1px solid var(--line);border-radius:10px;background:var(--card);font-size:16px;cursor:pointer}
+body.rail-hidden .shell{grid-template-columns:minmax(0,1fr)}
+body.rail-hidden .rail{display:none}
+body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-content:center}
 .rail-brand{padding:10px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;min-height:57px;box-sizing:border-box}
 .brand-dot{width:28px;height:28px;border-radius:8px;background:var(--indigo);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-weight:700;font-size:15px;flex:none}
 .brand-logo{height:34px;width:auto;max-width:180px;object-fit:contain;display:block}
@@ -1503,6 +1635,43 @@ body{margin:0}
 .rowmenu-sep{height:1px;background:var(--line);margin:4px 2px}
 .ws-menu-btn{margin-left:auto;flex:none;color:var(--muted);font-size:17px;line-height:1;padding:0 6px;border-radius:6px;cursor:pointer}
 .ws-menu-btn:hover{color:var(--ink);background:var(--indigo-soft)}
+.dv-teammenu{position:absolute;top:10px;right:10px}
+.dv-dl{display:flex;align-items:center;gap:14px;border:1px solid var(--line);border-radius:14px;padding:12px 16px;margin-top:12px;background:linear-gradient(135deg,#FFF7ED,#FFFBEB)}
+.dv-dl.warn{border-color:#fcd34d}.dv-dl.late{border-color:#fca5a5;background:linear-gradient(135deg,#fef2f2,#fff7ed)}.dv-dl.ok{border-color:#BBF7D0;background:linear-gradient(135deg,#f0fdf4,#fffbeb)}
+.dv-dl-ic{font-size:28px;flex:none}
+.dv-dl-tx{flex:1;min-width:0}
+.dv-dl-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.dv-dl-h b{font-size:16px}
+.dv-dl.late .dv-dl-h b{color:#b91c1c}.dv-dl.warn .dv-dl-h b{color:#b45309}
+.dv-dl-date{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+.dv-dl-bar{position:relative;height:10px;border-radius:99px;background:var(--line);margin:8px 0 6px;overflow:hidden}
+.dv-dl-bar i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#fdba74,#f97316);border-radius:99px}
+.dv-dl.late .dv-dl-bar i{background:#ef4444}
+.dv-dl-bar u{position:absolute;left:0;bottom:0;height:3px;background:#16a34a;text-decoration:none;border-radius:99px}
+.dv-dl-sub{font-size:13px;color:var(--muted)}
+.dv-sum{display:flex;flex-direction:column;gap:14px;margin-top:18px}
+.dv-sumcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.dv-sumcard h3{margin:0 0 10px;font-size:15px}
+.dv-sumcard .dv-dl{margin-top:0}
+.dv-sumcols{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.dv-sumcol{background:var(--paper);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column}
+.dv-sumcol b{font-size:20px}.dv-sumcol span{font-size:11.5px;color:var(--muted)}
+.dv-sumcol.c-done b{color:#047857}.dv-sumcol.c-review b{color:#9a5b00}.dv-sumcol.c-progress b{color:#1d4ed8}
+.dv-sumflow{display:flex;align-items:stretch;gap:10px;flex-wrap:wrap}
+.dv-sumstep{flex:1;min-width:150px;display:grid;grid-template-columns:auto 1fr;column-gap:10px;align-items:center;text-align:left;border:1px solid var(--line);border-radius:12px;background:var(--paper);padding:10px 12px;cursor:pointer;font:inherit}
+.dv-sumstep:hover{border-color:var(--indigo)}
+.dv-sumstep span{grid-row:span 3;font-size:24px}.dv-sumstep b{font-size:20px}.dv-sumstep em{font-style:normal;font-weight:600}.dv-sumstep small{color:var(--muted);font-size:11.5px}
+.dv-sumarrow{align-self:center;color:var(--muted);font-size:20px}
+.dv-sumepic{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--line);cursor:pointer}
+.dv-sumepic:first-of-type{border-top:0}
+.dv-sumepic b{flex:1;min-width:160px}
+.dv-sumrow{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:820px){.dv-sumrow{grid-template-columns:1fr}.dv-sumcols{grid-template-columns:repeat(2,1fr)}}
+.dv-sumtypes{display:flex;flex-wrap:wrap;gap:8px}
+.dv-sumtypes .dv-type{cursor:default;font-size:12.5px;padding:4px 10px}
+.dv-sumrev{display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--line)}
+.dv-sumrev:first-of-type{border-top:0}
+.tab-flow{align-self:center;color:var(--muted);font-size:15px;padding:0 2px;user-select:none}
 .ws-item .ws-n + .ws-menu-btn{margin-left:6px}
 
 /* ===== per-space background + picker ===== */
@@ -2575,6 +2744,43 @@ body{margin:0}
 .soc-bkbtn.primary{background:var(--indigo);border-color:var(--indigo);color:#fff;font-weight:600}
 .soc-bkbtn.primary:hover{filter:brightness(1.07);color:#fff}
 /* ===== send-to buttons ===== */
+.dv-type{border:1px solid var(--line);background:var(--card);border-radius:6px;padding:1px 7px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--sans);white-space:nowrap}
+.dv-type.t-epic{background:#f3e8ff;border-color:#d8b4fe;color:#6b21a8}
+.dv-type.t-story{background:#ecfdf5;border-color:#a7f3d0;color:#047857}
+.dv-type.t-task{background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8}
+.dv-type.t-bug{background:#fef2f2;border-color:#fecaca;color:#b91c1c}
+.dv-epic{border:1px solid #d8b4fe;background:#faf5ff;color:#6b21a8;border-radius:99px;padding:1px 8px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--sans);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dv-epic.add,.dv-sub.add{border-style:dashed;background:none;color:var(--muted);font-weight:500}
+.dv-sub{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:99px;padding:1px 8px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--mono)}
+.dv-sub.ok{border-color:var(--done);color:var(--done)}
+.dv-sublist{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.dv-subrow{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;cursor:pointer}
+.dv-subrow.done span{text-decoration:line-through;color:var(--muted)}
+.dv-subrow span{flex:1}
+.dv-subrm{border:0;background:none;color:var(--muted);cursor:pointer}
+.dv-subadd{display:flex;gap:8px}.dv-subadd input{flex:1}
+.dv-epicbox{border:1px solid #e9d5ff;border-left:4px solid #a855f7;border-radius:12px;padding:10px 12px;margin-bottom:8px;background:var(--card)}
+.dv-epictop{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dv-epictg{border:0;background:none;cursor:pointer;color:var(--muted);font-size:13px;width:18px}
+.dv-epict{cursor:pointer;font-size:15px}
+.dv-epicbar{display:inline-block;width:120px;height:7px;border-radius:99px;background:var(--line);overflow:hidden}
+.dv-epicbar i{display:block;height:100%;background:#a855f7}
+.dv-epicn{font-size:12px;color:var(--muted);font-family:var(--mono)}
+.dv-epicst{font-size:11px;font-weight:600;padding:1px 8px;border-radius:99px;background:var(--paper);color:var(--muted)}
+.dv-epicst.c-done{background:#ecfdf5;color:#047857}.dv-epicst.c-review{background:#fff4e0;color:#9a5b00}.dv-epicst.c-progress{background:#eff6ff;color:#1d4ed8}
+.dv-epicbox .acts{margin-left:auto;opacity:.6}
+.dv-epictop:hover .acts,.dv-epictop:focus-within .acts{opacity:1}
+.dv-epicrev{border:1px solid #f5d9a8;background:#fff4e0;color:#9a5b00;border-radius:99px;padding:2px 10px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:var(--sans)}
+.dv-epicrev:hover{border-color:#9a5b00}
+.dv-epicbox.kdrag{cursor:grab}
+.dv-epicbox>.note{margin:6px 0 0 28px;color:var(--muted);font-size:13px}
+.dv-epickids{display:flex;flex-direction:column;gap:4px;margin:8px 0 6px 28px}
+.dv-epickid{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:5px 8px;border-radius:8px;background:var(--paper)}
+.dv-epickid.done .dv-kidt{text-decoration:line-through;color:var(--muted)}
+.dv-kidt{flex:1;min-width:140px;font-size:13.5px}
+.dv-kidwhere{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.dv-epicbox .addline{margin-left:28px;width:calc(100% - 28px)}
+.disc-chip.owner.eng{background:#eef2ff;border-color:#c7d2fe;color:#3730a3}
 .disc-toproc{border:1px solid var(--line-strong);background:var(--card);border-radius:99px;padding:3px 10px;font-size:10.5px;font-weight:600;color:var(--muted);cursor:pointer;font-family:var(--sans)}
 .disc-toproc:hover{border-color:var(--indigo);color:var(--indigo)}
 .disc-toproc.done{border-color:var(--done);color:var(--done)}
@@ -3849,6 +4055,7 @@ body{margin:0}
         <div class="brand-eyebrow">Internal · Team Workspace</div>
         <div class="brand-name" id="rail-teamname">Team</div>
       </div>
+      <button class="rail-min-btn" id="rail-min" title="Hide the side menu" aria-label="Hide the side menu">«</button>
     </div>
     <div class="rail-scroll">
       <div id="ws-switch"></div>
@@ -3869,6 +4076,7 @@ body{margin:0}
   </aside>
   <main class="pane">
     <div class="pane-topbar">
+      <button class="rail-open-btn" id="rail-open" title="Show the side menu" aria-label="Show the side menu">☰</button>
       <div class="corner-nav-wrap">
       <button class="corner-nav ghost" id="nav-a">Workspace</button>
       <button class="corner-nav" id="nav-b">OKRs</button>
@@ -3986,6 +4194,7 @@ body{margin:0}
       <button class="acct-item" id="acct-profile">👤 My profile</button>
       <button class="acct-item" id="acct-hr">🗂️ My HR file</button>
       <button class="acct-item" id="acct-doclib">📚 Our Wiki</button>
+      <button class="acct-item" id="acct-addspace" style="display:none">＋ Add a space</button>
       <button class="acct-item" id="acct-admin" style="display:none">⚙️ Administration</button>
       <button class="acct-item danger" id="acct-logout">→] Sign out</button>
     </div>
@@ -4179,6 +4388,10 @@ body{margin:0}
     <h3 id="rmd-title">Item</h3>
     <div class="dlg-body">
       <div class="hint" id="rmd-path" style="margin-bottom:12px"></div>
+      <div id="rmd-edit-wrap" style="display:none">
+        <div class="field"><label for="rmd-name">✏️ Name</label><input id="rmd-name" data-plain="1"></div>
+        <div class="field"><label for="rmd-note">Note (optional)</label><textarea id="rmd-note" rows="2" data-plain="1"></textarea></div>
+      </div>
       <div class="field-row">
         <div class="field"><label for="rmd-start">Start date</label><input id="rmd-start" type="date"></div>
         <div class="field"><label for="rmd-end">End date</label><input id="rmd-end" type="date"></div>
@@ -4574,6 +4787,42 @@ async function saveMyProfile(){
   const { error } = await SUPA.from("profiles").update({ name: u.name, profile: u.profile || {} }).eq("id", u.id);
   if(error){ showBanner("Couldn't save your profile ("+error.message+")."); return false; }
   return true;
+}
+
+// ---- boards I've hidden from MY sidebar (only for me; synced in my profile: profile.hiddenSpaces[team] = ["cs:<id>", "rm:<id>", "b:dev"…])
+function myHiddenKeys(){ const u = currentUser(), h = (u && u.profile && u.profile.hiddenSpaces) || {}; return Array.isArray(h[TEAM]) ? h[TEAM] : []; }
+function hiddenForMe(key){ return myHiddenKeys().indexOf(key) >= 0; }
+function setHiddenForMe(key, hide, name){
+  const u = currentUser(); if(!u) return;
+  u.profile = u.profile || {}; const hs = u.profile.hiddenSpaces = u.profile.hiddenSpaces || {};
+  const list = (Array.isArray(hs[TEAM]) ? hs[TEAM] : []).filter(k=>k!==key);
+  if(hide) list.push(key);
+  hs[TEAM] = list;
+  saveMyProfile(); renderAll(); if($("admin-page") && $("admin-page").style.display==="block") renderAdminPage();
+  toast(hide ? "\u201C"+(name||"Board")+"\u201D hidden from your sidebar \u2014 bring it back in Administration \u2192 My hidden boards" : "\u201C"+(name||"Board")+"\u201D is back in your sidebar");
+}
+function hiddenKeyName(k){
+  if(k.indexOf("cs:")===0){ const cs = CSPACES.list.find(x=>"cs:"+x.id===k); return cs ? cs.name : null; }
+  if(k.indexOf("rm:")===0){ const m = RMAPS.maps.find(x=>"rm:"+x.id===k); return m ? m.name : null; }
+  if(k==="b:dev") return "Development"; if(k==="b:bugs") return "Bugs";
+  return null;
+}
+function renderAdminHidden(wrap){
+  const h2 = document.createElement("h2"); h2.textContent = "My hidden boards"; h2.style.margin = "0";
+  const sub = document.createElement("div"); sub.className = "hint"; sub.style.margin = "4px 0 16px";
+  sub.textContent = "Boards you hid with \u22EF \u2192 Hide from my sidebar. They're only hidden for you \u2014 everyone else still sees them, and nothing in them changes.";
+  wrap.append(h2, sub);
+  const keys = myHiddenKeys().filter(k=>hiddenKeyName(k));
+  if(!keys.length){ const e = document.createElement("div"); e.className = "empty"; e.textContent = "Nothing hidden \u2014 every board you can see is in your sidebar."; wrap.appendChild(e); return; }
+  const list = document.createElement("div"); list.className = "admin-table";
+  keys.forEach(k=>{
+    const r = document.createElement("div"); r.className = "au-row"; r.style.cssText = "display:flex;align-items:center;gap:12px;justify-content:space-between";
+    const n = document.createElement("b"); n.textContent = hiddenKeyName(k);
+    const btn = document.createElement("button"); btn.className = "btn save"; btn.textContent = "\uD83D\uDC41 Show again";
+    btn.onclick = ()=> setHiddenForMe(k, false, hiddenKeyName(k));
+    r.append(n, btn); list.appendChild(r);
+  });
+  wrap.appendChild(list);
 }
 
 // ---- people management: goes through the server ("manage-people" function) or
@@ -5644,6 +5893,7 @@ function saveDisc(){
 }
 function boardBugs(cs){ return teamBugs().filter(t=> (t.board || null) === (cs ? cs.id : null)); }
 let devSprint = null;  // sprint currently shown on the board
+let devView = "board";  // the dev space's tab: board (the sprint) | epics | backlog
 const backlogSel = new Set();   // ids of backlog cards selected for bulk actions (session only)
 
 /* ============ TOP-LEVEL ROADMAPS (Jira-style timelines) ============ */
@@ -5975,7 +6225,227 @@ function syncContentSpaces(){
 }
 function saveContent(){ CONTENT.updated = todayStr(); syncContentSpaces(); renderAll(); pushAll(); }
 function saveTeamIdeas(){ TIDEAS.updated = todayStr(); renderAll(); pushAll(); }
-function saveDev(){ DEV.updated = todayStr(); syncLinkedBugs(); renderAll(); pushAll(); }
+function saveDev(){ DEV.updated = todayStr(); devAutoReviewer(); syncLinkedBugs(); renderAll(); pushAll(); }
+/* Rule: any dev card that reaches In Review gets Sumit Kumar as its reviewer (it then shows in his My To-do);
+   the reviewer is cleared when the card leaves review, so it's set again the next time it comes back. */
+const DEV_REVIEWER_NAME = "Sumit Kumar";
+function devReviewerEmail(){
+  const want = DEV_REVIEWER_NAME.toLowerCase();
+  const all = (typeof USERS !== "undefined" && USERS) || [];
+  const u = all.find(x=> String(userDisplayName(x)||"").trim().toLowerCase()===want || String(x.name||"").trim().toLowerCase()===want)
+    || all.find(x=> String(userDisplayName(x)||"").toLowerCase().indexOf("sumit")===0);
+  return u ? u.email : "";
+}
+function devAutoReviewer(){
+  let rv = null;
+  (DEV.cards||[]).forEach(c=>{
+    if(devIsEpic(c)){ c.sprint = null; delete c.epic; c.col = devEpicCol(c); }   // an epic is as far as its stories (and can be reviewed as a whole)
+    if(c.col==="review"){ if(!c.reviewer){ if(rv===null) rv = devReviewerEmail(); if(rv) c.reviewer = rv; } }
+    else if(c.reviewer) delete c.reviewer;
+  });
+}
+/* ===== Jira-style card types: ⚡ Epic › 📗 Story / ☑️ Task / 🐞 Bug › sub-tasks =====
+   c.type: "epic" | "story" (default) | "task" | "bug"; c.epic: the epic's id (for non-epics);
+   c.subtasks: [{id, title, done}]. Epics never sit in a sprint — their stories do. */
+const DEV_TYPES = [
+  {key:"epic",  icon:"\u26A1",           label:"Epic",  hint:"A big piece of work, made of many stories"},
+  {key:"story", icon:"\uD83D\uDCD7",     label:"Story", hint:"One feature from the user's side"},
+  {key:"task",  icon:"\u2611\uFE0F",     label:"Task",  hint:"Technical work that isn't a user feature"},
+  {key:"bug",   icon:"\uD83D\uDC1E",     label:"Bug",   hint:"Something that's broken"},
+];
+function devType(c){ return DEV_TYPES.find(t=>t.key===c.type) || DEV_TYPES[1]; }
+function devIsEpic(c){ return c && c.type==="epic"; }
+function devWork(c){ return !devIsEpic(c); }   // what sits on boards / backlog / counts
+function devEpicsOf(spaceId){ return (DEV.cards||[]).filter(c=>devIsEpic(c) && c.space===spaceId); }
+function devEpicKids(e){ return (DEV.cards||[]).filter(c=>c.epic===e.id && !devIsEpic(c)); }
+// an epic's state from its stories: done when every one is done, review when the rest wait in review
+function devEpicCol(e){
+  const k = devEpicKids(e);
+  if(!k.length) return ["progress","review","done"].indexOf(e.col)>=0 ? e.col : "todo";
+  if(k.every(x=>x.col==="done")) return "done";
+  if(k.every(x=>x.col==="done"||x.col==="review")) return "review";
+  return k.some(x=>x.col!=="todo") ? "progress" : "todo";
+}
+// move a whole epic: to review / done takes its unfinished stories along; back to work just moves the epic
+function devEpicSetCol(e, col){
+  const kids = devEpicKids(e);
+  if(col==="review") kids.forEach(k=>{ if(k.col!=="done") k.col = "review"; });
+  else if(col==="done") kids.forEach(k=>{ k.col = "done"; });
+  else kids.forEach(k=>{ if(k.col==="review") k.col = col; });
+  e.col = col; saveDev();
+  toast(col==="review" ? "\u26A1 "+e.title+" sent to review"+(kids.length ? " with its "+kids.filter(k=>k.col==="review").length+" open stor"+(kids.filter(k=>k.col==="review").length===1?"y":"ies") : "")
+    : "\u26A1 "+e.title+" \u2192 "+todoKLabelSafe(col));
+}
+function devTypeChip(c){
+  const T = devType(c), b = document.createElement("button");
+  b.className = "dv-type t-"+T.key; b.textContent = T.icon+" "+T.label;
+  b.title = T.hint + (editMode ? " \u2014 click to change" : "");
+  b.onclick = e=>{ e.stopPropagation(); if(!editMode) return;
+    openChoice("What kind of card is \u201C"+c.title+"\u201D?", DEV_TYPES.map(t=>({label:t.icon+" "+t.label+" \u2014 "+t.hint, value:t.key})), k=>{
+      if(k==="epic"){ c.type = "epic"; c.sprint = null; delete c.epic; devEpicOpen.add(c.id); }
+      else { c.type = k; }
+      saveDev();
+    }); };
+  return b;
+}
+function devEpicChip(c){
+  if(devIsEpic(c)) return null;
+  const e = c.epic ? (DEV.cards||[]).find(x=>x.id===c.epic) : null;
+  const epics = devEpicsOf(c.space);
+  if(!e && !(editMode && epics.length)) return null;
+  const b = document.createElement("button");
+  b.className = "dv-epic"+(e?"":" add"); b.textContent = e ? "\u26A1 "+e.title : "\uFF0B epic";
+  b.title = e ? "Part of the epic \u201C"+e.title+"\u201D" + (editMode ? " \u2014 click to change" : "") : "Put it in an epic";
+  b.onclick = ev=>{ ev.stopPropagation(); if(!editMode) return;
+    openChoice("Which epic is \u201C"+c.title+"\u201D part of?", [{label:"\u2014 No epic", value:""}].concat(epics.map(x=>({label:"\u26A1 "+x.title, value:x.id}))), id=>{
+      if(id) c.epic = id; else delete c.epic; saveDev(); }); };
+  return b;
+}
+function devSubChip(c){
+  if(devIsEpic(c)) return null;
+  const st = c.subtasks || [];
+  if(!st.length && !editMode) return null;
+  const b = document.createElement("button");
+  const d = st.filter(x=>x.done).length;
+  b.className = "dv-sub"+(st.length && d===st.length ? " ok" : "")+(st.length?"":" add");
+  b.textContent = st.length ? "\u2611 "+d+"/"+st.length : "\uFF0B sub-task";
+  b.title = st.length ? "Sub-tasks \u2014 "+d+" of "+st.length+" done" : "Break it into small steps";
+  b.onclick = e=>{ e.stopPropagation(); devSubtasksDialog(c); };
+  return b;
+}
+// the sub-task checklist of one card (anyone can tick; adding / removing needs Edit mode)
+function devSubtasksDialog(c){
+  const ov = document.createElement("div"); ov.className = "overlay show";
+  const dg = document.createElement("div"); dg.className = "dialog"; dg.style.maxWidth = "520px";
+  dg.setAttribute("role","dialog"); dg.setAttribute("aria-modal","true"); ov.appendChild(dg);
+  const h = document.createElement("h3"); h.textContent = "\u2611 Sub-tasks \u2014 "+c.title; dg.appendChild(h);
+  const body = document.createElement("div"); body.className = "dlg-body"; dg.appendChild(body);
+  const list = document.createElement("div"); list.className = "dv-sublist"; body.appendChild(list);
+  const draw = ()=>{
+    list.innerHTML = "";
+    (c.subtasks||[]).forEach((x,i)=>{
+      const r = document.createElement("label"); r.className = "dv-subrow"+(x.done?" done":"");
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!x.done;
+      cb.onchange = ()=>{ x.done = cb.checked; saveDev(); draw(); };
+      const t = document.createElement("span"); t.textContent = x.title;
+      r.append(cb, t);
+      if(editMode){ const rm = document.createElement("button"); rm.className = "dv-subrm"; rm.textContent = "\u2715"; rm.title = "Remove";
+        rm.onclick = e=>{ e.preventDefault(); c.subtasks.splice(i,1); if(!c.subtasks.length) delete c.subtasks; saveDev(); draw(); }; r.appendChild(rm); }
+      list.appendChild(r);
+    });
+    if(!(c.subtasks||[]).length){ const e = document.createElement("div"); e.className = "empty"; e.textContent = "No sub-tasks yet."; list.appendChild(e); }
+  };
+  draw();
+  if(editMode){
+    const row = document.createElement("div"); row.className = "dv-subadd";
+    const inp = document.createElement("input"); inp.placeholder = "A small step, e.g. Design the screen"; inp.dataset.plain = "1";
+    const add = document.createElement("button"); add.className = "btn"; add.textContent = "\uFF0B Add";
+    const go = ()=>{ const v = inp.value.trim(); if(!v) return; (c.subtasks = c.subtasks || []).push({id:"st-"+Date.now().toString(36), title:v, done:false}); inp.value = ""; saveDev(); draw(); inp.focus(); };
+    add.onclick = go; inp.onkeydown = e=>{ if(e.key==="Enter"){ e.preventDefault(); go(); } };
+    row.append(inp, add); body.appendChild(row);
+    setTimeout(()=>inp.focus(), 0);
+  }
+  const btns = document.createElement("div"); btns.className = "btns";
+  const cl = document.createElement("button"); cl.className = "btn save"; cl.textContent = "Done";
+  const close = ()=>{ if(ov.parentNode) ov.parentNode.removeChild(ov); };
+  cl.onclick = close; ov.onclick = e=>{ if(e.target===ov) close(); };
+  btns.appendChild(cl); dg.appendChild(btns);
+  document.body.appendChild(ov);
+}
+const devEpicOpen = new Set();   // epics opened on the board (the rest show one line)
+function devEpicsSection(spc, sp){
+  const epics = devEpicsOf(spc);
+  const block = document.createElement("section");
+  block.className = "module-block dv-epics";
+  const bh = document.createElement("div"); bh.className = "module-head";
+  const h2 = document.createElement("h2"); h2.textContent = "\u26A1 Epics";
+  const pc = document.createElement("span"); pc.className = "pct"; pc.textContent = epics.length+" epic(s) \u00B7 big pieces of work, each made of stories";
+  bh.append(h2, pc); block.appendChild(bh);
+  epics.forEach(e=>{
+    const kids = devEpicKids(e), done = kids.filter(k=>k.col==="done").length, open = devEpicOpen.has(e.id);
+    const box = document.createElement("div"); box.className = "dv-epicbox"+(open?" open":"");
+    const top = document.createElement("div"); top.className = "dv-epictop";
+    const tg = document.createElement("button"); tg.className = "dv-epictg"; tg.textContent = open ? "\u25BE" : "\u25B8"; tg.title = open ? "Fold" : "Show its stories";
+    tg.onclick = ()=>{ if(open) devEpicOpen.delete(e.id); else devEpicOpen.add(e.id); renderAll(); };
+    const t = document.createElement("b"); t.className = "dv-epict"; t.textContent = "\u26A1 "+e.title; t.onclick = tg.onclick;
+    const bar = document.createElement("span"); bar.className = "dv-epicbar"; bar.title = done+" of "+kids.length+" done";
+    bar.innerHTML = "<i></i>"; bar.querySelector("i").style.width = (kids.length ? Math.round(done/kids.length*100) : 0)+"%";
+    const n = document.createElement("span"); n.className = "dv-epicn"; n.textContent = kids.length ? done+" of "+kids.length+" done" : "no stories yet";
+    const st = document.createElement("span"); st.className = "dv-epicst c-"+devEpicCol(e); st.textContent = todoKLabelSafe(devEpicCol(e));
+    top.append(tg, t, bar, n, st);
+    const ecol = devEpicCol(e);
+    if(ecol==="review"){ const rc = reviewerChip(e); if(rc) top.appendChild(rc); }
+    if(ecol!=="review" && ecol!=="done"){
+      const rv = document.createElement("button"); rv.className = "dv-epicrev"; rv.textContent = "\uD83D\uDC40 Send to review";
+      rv.title = "Send the whole epic to review \u2014 its open stories move to In review together (or drag the epic onto a column)";
+      rv.onclick = ev=>{ ev.stopPropagation(); devEpicSetCol(e, "review"); };
+      top.appendChild(rv);
+    }
+    if(e.from){ const oc = originChip(e); if(oc) top.appendChild(oc); }
+    if(e.assignee) top.appendChild(assigneeAvatar(e.assignee));
+    top.appendChild(commentChip(e, ()=>saveDev()));
+    if(editMode){
+      const acts = document.createElement("div"); acts.className = "acts";
+      acts.appendChild(actBtn("pencil","Edit epic",false, ()=> openDialog("Edit epic", e, v=>{ applyFields(e, v); applyCardFields(e, v); if(v.photos && v.photos.length) e.photos = v.photos; else delete e.photos; saveDev(); }, {photos:true, assignee:true, duedate:true, priority:true, labels:true})));
+      acts.appendChild(actBtn("trash","Delete epic",true, ()=>{
+        if(confirm("Delete the epic \u201C"+e.title+"\u201D? Its "+kids.length+" stor"+(kids.length===1?"y stays":"ies stay")+" on the board, just without an epic.")){
+          kids.forEach(k=>delete k.epic); DEV.cards.splice(DEV.cards.indexOf(e),1); saveDev(); toast("Epic deleted"); } }));
+      top.appendChild(acts);
+    }
+    box.appendChild(top);
+    // drag the whole epic onto a sprint column (In review, Done …)
+    makeCardDraggable(box, e.id, ecol, (id, toCol)=>{ if(toCol && toCol!==devEpicCol(e)) devEpicSetCol(e, toCol); });
+    // other cards can't be dropped onto an epic box (it isn't a column)
+    ["dragover","drop"].forEach(ev=> box.addEventListener(ev, x=>{ if(_kDrag && _kDrag.id!==e.id){ x.stopImmediatePropagation(); } }, true));
+    if(open){
+      if(e.note){ const nt = document.createElement("div"); nt.className = "note"; nt.textContent = e.note; box.appendChild(nt); }
+      const list = document.createElement("div"); list.className = "dv-epickids";
+      kids.forEach(k=>{
+        const r = document.createElement("div"); r.className = "dv-epickid"+(k.col==="done"?" done":"");
+        const spr = k.sprint ? (DEV.sprints||[]).find(x=>x.id===k.sprint) : null;
+        const where = document.createElement("span"); where.className = "dv-kidwhere"; where.textContent = (spr ? spr.name : "Backlog")+" \u00B7 "+todoKLabelSafe(k.col);
+        const kt = document.createElement("span"); kt.className = "dv-kidt"; kt.textContent = k.title;
+        r.append(devTypeChip(k), kt, where);
+        const sc = devSubChip(k); if(sc) r.appendChild(sc);
+        if(k.assignee) r.appendChild(assigneeAvatar(k.assignee));
+        if(!k.sprint && sp && !sp.completed && editMode){ const mv = document.createElement("button"); mv.className = "upd"; mv.textContent = "\u2192 "+sp.name; mv.title = "Pull into the current sprint"; mv.onclick = ()=>{ k.sprint = sp.id; k.col = "todo"; saveDev(); toast("Pulled into "+sp.name); }; r.appendChild(mv); }
+        list.appendChild(r);
+      });
+      if(!kids.length){ const em = document.createElement("div"); em.className = "empty"; em.textContent = "No stories in this epic yet."; list.appendChild(em); }
+      box.appendChild(list);
+      if(editMode){
+        const add = document.createElement("button"); add.className = "addline"; add.textContent = "\uFF0B Add a story to this epic";
+        add.onclick = ()=> openDialog("New story in \u201C"+e.title+"\u201D", {}, v=>{
+          const c = { id:"dv-"+Date.now().toString(36), title:v.title, col:"todo", sprint:null, space:e.space, type:"story", epic:e.id };
+          if(v.note) c.note = v.note; applyCardFields(c, v); if(v.photos && v.photos.length) c.photos = v.photos;
+          DEV.cards.push(c); saveDev(); toast("Story added to the backlog, in "+e.title);
+        }, {photos:true, assignee:true, duedate:true, priority:true, labels:true});
+        box.appendChild(add);
+      }
+    }
+    block.appendChild(box);
+  });
+  if(!epics.length){ const em = document.createElement("div"); em.className = "empty"; em.textContent = "No epics yet. An epic is a big piece of work (e.g. CRM + Analytics) \u2014 its stories go into sprints."; block.appendChild(em); }
+  if(editMode){
+    const add = document.createElement("button"); add.className = "addline"; add.textContent = "\uFF0B New epic";
+    add.onclick = ()=> openDialog("New epic", {}, v=>{
+      const c = { id:"dv-"+Date.now().toString(36), title:v.title, col:"todo", sprint:null, space:spc, type:"epic" };
+      if(v.note) c.note = v.note; applyCardFields(c, v); if(v.photos && v.photos.length) c.photos = v.photos;
+      DEV.cards.push(c); devEpicOpen.add(c.id); saveDev(); toast("Epic created \u2014 add its stories");
+    }, {photos:true, assignee:true, duedate:true, priority:true, labels:true});
+    block.appendChild(add);
+  }
+  return block;
+}
+function todoKLabelSafe(k){ const c = KCOLS.find(x=>x.key===k); return c ? (k==="review" ? "In review by "+DEV_REVIEWER_NAME.split(" ")[0] : c.label) : k; }
+function reviewerChip(c){
+  if(c.col!=="review" || !c.reviewer) return null;
+  const m = ((typeof USERS!=="undefined" && USERS)||[]).find(u=>u.email===c.reviewer);
+  const sp = document.createElement("span"); sp.className = "src team";
+  sp.textContent = "👀 Review: "+(m ? String(userDisplayName(m)).split(" ")[0] : c.reviewer);
+  sp.title = "In review — waiting on "+(m ? userDisplayName(m) : c.reviewer);
+  return sp;
+}
 function saveRmaps(){ renderAll(); pushAll(); }
 function scStripIds(o, _seen){
   _seen = _seen || new WeakSet();
@@ -7160,16 +7630,21 @@ function workTabs(){
       ? [{key:"ideation",label:"All ideas"},{key:"ideation-roadmap",label:"Roadmap"}]
       : [{key:pdtView,label:pdtSectionLabel(pdtView)}];
   if(view==="social") return SX.tabs.map(([key,label])=>({key, label}));
+  if(view==="dev"){   // the flow: ⚡ Epics → Backlog → Board (the sprint)
+    const spc = currentSpace(), cards = DEV.cards||[];
+    const ne = cards.filter(c=>devIsEpic(c) && c.space===spc).length, nb = cards.filter(c=>!c.sprint && c.space===spc && devWork(c)).length;
+    return [{key:"epics",label:"\u26A1 Epics"+(ne?" \u00B7 "+ne:""), flow:true},{key:"backlog",label:"Backlog"+(nb?" \u00B7 "+nb:""), flow:true},{key:"board",label:"Board", flow:true}];
+  }
   if(view==="campaign" && window.CX) return campTabs(currentCampaign()).map(([key,label])=>({key, label}));
   if(view==="watch" && window.WX) return WX.tabs.map(([key,label])=>({key, label}));
   if(view==="horizon" && window.HX) return HX.tabs.map(([key,label])=>({key, label}));
   const l = view==="rmap" ? "Timeline" : view==="okr" ? "Objectives"
-    : view==="dev" ? "Board" : (view==="bugs"||view==="cbugs") ? "Board" : view==="content" ? "Board"
+    : (view==="bugs"||view==="cbugs") ? "Board" : view==="content" ? "Board"
     : view==="ideas" ? "Ideas" : view==="admin" ? "Admin" : "Board";
   return [{key:"work",label:l}];
 }
 // which work tab is highlighted while the work pane is showing
-function workTabActiveKey(){ return view==="disc" ? discView : view==="social" ? socialView : view==="campaign" ? campView : view==="watch" ? watchView : view==="horizon" ? horizonView : view==="pdt" ? pdtView : "work"; }
+function workTabActiveKey(){ return view==="dev" ? devView : view==="disc" ? discView : view==="social" ? socialView : view==="campaign" ? campView : view==="watch" ? watchView : view==="horizon" ? horizonView : view==="pdt" ? pdtView : "work"; }
 function applyPaneTab(){
   const su=$("pane-summary"), wk=$("pane-work");
   if(su) su.classList.toggle("show", paneTab==="summary");
@@ -7178,6 +7653,7 @@ function applyPaneTab(){
 function selectWorkTab(key){
   paneTab="work";
   if(view==="disc" && discView!==key){ discView=key; renderAll(); return; }  // re-render the sub-view
+  if(view==="dev" && devView!==key){ devView=key; renderAll(); return; }
   if(view==="social" && socialView!==key){ socialView=key; renderAll(); return; }
   if(view==="campaign" && campView!==key){ campView=key; renderAll(); return; }
   if(view==="watch" && watchView!==key){ watchView=key; renderAll(); return; }
@@ -7191,7 +7667,10 @@ function renderTabs(){
   if(sig!==_lastNavSig){ _lastNavSig=sig; paneTab="work"; }
   strip.innerHTML="";
   const actKey = workTabActiveKey();
+  let _prevFlow = false;
   ((view==="social" || view==="campaign" || view==="watch" || view==="horizon") ? [] : [{summary:true,label:"Summary"}]).concat(workTabs()).forEach(t=>{
+    if(t.flow && _prevFlow){ const ar=document.createElement("span"); ar.className="tab-flow"; ar.textContent="\u2192"; ar.setAttribute("aria-hidden","true"); strip.appendChild(ar); }   // Epics → Backlog → Board
+    _prevFlow = !!t.flow;
     const b=document.createElement("button");
     const on = t.summary ? (paneTab==="summary") : (paneTab==="work" && t.key===actKey);
     b.className="tab"+(on?" active":"");
@@ -7283,13 +7762,14 @@ function renderHeader(){
   } else if(view==="dev"){
     const spc = currentSpace();
     const sp = currentSprint();
-    const inSp = sp ? DEV.cards.filter(c=>c.sprint===sp.id) : [];
+    const inSp = sp ? DEV.cards.filter(c=>c.sprint===sp.id && devWork(c)) : [];
     const doneN = inSp.filter(c=>c.col==="done").length;
     pct = inSp.length ? Math.round(doneN/inSp.length*100) : 0;
     stats.append(
-      mkStat(DEV.cards.filter(c=>!c.sprint && c.space===spc).length,"Backlog"),
+      mkStat(devEpicsOf(spc).length,"\u26A1 Epics"),
+      mkStat(DEV.cards.filter(c=>!c.sprint && c.space===spc && devWork(c)).length,"Backlog"),
       mkStat(inSp.length,"In sprint"),
-      mkStat(inSp.filter(c=>c.col==="progress"||c.col==="review").length,"In flight"),
+      mkStat(inSp.filter(c=>c.col==="review").length,"In review by "+DEV_REVIEWER_NAME.split(" ")[0]),
       mkStat(doneN,"Done"),
     );
     updated = DEV.updated || "\u2014";
@@ -7344,6 +7824,7 @@ function renderHeader(){
     updated = DATA.updated || "—";
   }
   if(typeof todoRenderSummary==="function") todoRenderSummary($("pane-summary"), view==="todo");   // My To-do history (my-todo.js); removed on other views
+  devRenderSummary($("pane-summary"), view==="dev");   // engineering: sprint deadline, Epics → Backlog → Sprint, epics, types, review
   const ov = document.createElement("div");
   ov.className = "overall";
   ov.innerHTML = `<label>${view==="okr"?"Cycle score":"Overall completion"} — <b>${pct}%</b></label>
@@ -7557,6 +8038,10 @@ function allTasks(){
   });
   (CSPACES.list||[]).filter(x=>x.type==="discovery").forEach(cs=>{
     (cs.ideas||[]).forEach(i=> out.push({tid:i.id, task:i, path:cs.name+" · Ideas", kind:"idea"}));
+  });
+  // items written straight onto a roadmap (not from any space): map.own = [{tid, title, note, status}]
+  ((typeof RMAPS!=="undefined" && RMAPS.maps) || []).forEach(m=>{
+    (m.own||[]).forEach(t=> out.push({tid:t.tid, task:t, path:m.name+" \u00B7 written on this roadmap", kind:"own", map:m}));
   });
   return out.filter(x=>x.tid);
 }
@@ -11279,7 +11764,7 @@ function kanbanBoard(items, opts){
     const head = document.createElement("div");
     head.className = "kcol-head";
     head.innerHTML = "<b></b><span class='cnt'></span>";
-    head.querySelector("b").textContent = col.label + (col.key==="done" ? " \u2713" : "");
+    head.querySelector("b").textContent = ((opts.colLabels && opts.colLabels[col.key]) || col.label) + (col.key==="done" ? " \u2713" : "");
     const inCol = items.filter(i=>i.col===col.key).sort((a,b)=>(a.ord||0)-(b.ord||0));
     head.querySelector(".cnt").textContent = inCol.length;
     kc.appendChild(head);
@@ -11417,23 +11902,21 @@ function renderSidebarDev(){
   wrap.innerHTML = "";
   const spc = currentSpace();
 
+  $("side-title").style.display = "none";   // no "Modules" / "Dev spaces (teams)" headings — the team cards speak for themselves
   // --- team / dev-space switcher ---
-  const tl = document.createElement("div");
-  tl.className = "side-title"; tl.style.marginTop = "0"; tl.textContent = "Dev spaces (teams)";
-  wrap.appendChild(tl);
   DEV.spaces.forEach(space=>{
-    const cards = DEV.cards.filter(c=>c.space===space.id);
+    const cards = DEV.cards.filter(c=>c.space===space.id && devWork(c));
     const doneN = cards.filter(c=>c.col==="done").length;
     const b = mkSideCard(space.id===spc, ()=>{ devSpace = space.id; devSprint = null; renderAll(); });
     b.innerHTML = '<span class="name"></span><span class="pct"></span>';
     b.querySelector(".name").textContent = space.name;
-    b.querySelector(".pct").textContent = DEV.sprints.filter(x=>x.space===space.id).length + " sprint(s) \u00b7 " + doneN + "/" + cards.length + " done";
-    if(editMode){
-      cardActs(b, [
-        ...moveBtns(DEV.spaces, DEV.spaces.indexOf(space), ()=>saveDev(), "space"),
-        actBtn("pencil","Rename team / space",false, ()=>
-          openDialog("Rename dev space", {title:space.name}, v=>{ space.name = v.title; saveDev(); }, {hideExtras:true, titleLabel:"Team / space name"})),
-        actBtn("trash","Delete space",true, ()=>{
+    b.querySelector(".pct").remove();   // just the name — counts live on the board
+    if(editMode){   // ⋯ : add a sprint, rename, move, delete — instead of buttons always showing
+      b.style.position = "relative";
+      const menu = document.createElement("span");
+      menu.className = "ws-menu-btn dv-teammenu"; menu.textContent = "\u22EF"; menu.title = "Sprints and team settings";
+      const i = DEV.spaces.indexOf(space);
+      const doDelete = ()=>{
           const n = DEV.cards.filter(c=>c.space===space.id).length;
           const last = DEV.spaces.length<=1;
           const msg = last
@@ -11453,34 +11936,37 @@ function renderSidebarDev(){
             }
             saveDev(); toast("Dev space deleted");
           }
-        }),
-      ]);
+      };
+      menu.onclick = e=>{ e.stopPropagation(); openRowMenu(menu, [
+        {label:"\uFF0B New sprint", onClick:()=> openDialog("New sprint in \u201C"+space.name+"\u201D", {title:"Sprint "+(DEV.sprints.filter(x=>x.space===space.id).length+1)}, v=>{
+          const sp = { id:"sp-"+Date.now().toString(36), name:v.title, space:space.id };
+          if(v.start) sp.start = v.start;
+          if(v.deadline) sp.end = v.deadline;
+          DEV.sprints.push(sp); devSpace = space.id; devSprint = sp.id; devView = "board";
+          saveDev(); toast("Sprint created \u2014 pull cards in from the Backlog tab");
+        }, {hideExtras:true, dates:true})},
+        {label:"\u270F\uFE0F Rename team", onClick:()=> openDialog("Rename dev team", {title:space.name}, v=>{ space.name = v.title; saveDev(); }, {hideExtras:true, titleLabel:"Team / space name"})},
+        i>0 && {label:"\u2191 Move up", onClick:()=>{ DEV.spaces.splice(i-1, 0, DEV.spaces.splice(i,1)[0]); saveDev(); }},
+        i<DEV.spaces.length-1 && {label:"\u2193 Move down", onClick:()=>{ DEV.spaces.splice(i+1, 0, DEV.spaces.splice(i,1)[0]); saveDev(); }},
+        {label:"Delete team\u2026", danger:true, onClick: doDelete},
+      ].filter(Boolean)); };
+      b.appendChild(menu);
     }
     wrap.appendChild(b);
   });
-  if(editMode){
-    const addSpace = document.createElement("button");
-    addSpace.className = "mod add";
-    addSpace.textContent = "\uFF0B New dev space (team)";
-    addSpace.onclick = ()=> openDialog("New dev space", {}, v=>{
-      const sp = {id:"space-"+Date.now().toString(36), name:v.title};
-      DEV.spaces.push(sp); devSpace = sp.id; devSprint = null;
-      saveDev(); toast("Dev space created");
-    }, {hideExtras:true, titleLabel:"Team / space name (e.g. Panel Team, App Team)"});
-    wrap.appendChild(addSpace);
-  }
+  // "＋ New dev team" lives in the engineering space's ⋯ menu (Spaces list), not here
 
   const st = document.createElement("div");
   st.className = "side-title"; st.textContent = "Sprints";
   wrap.appendChild(st);
   const cur = currentSprint();
   DEV.sprints.filter(sp=>sp.space===spc).forEach(sp=>{
-    const n = DEV.cards.filter(c=>c.sprint===sp.id).length;
-    const doneN = DEV.cards.filter(c=>c.sprint===sp.id && c.col==="done").length;
+    const n = DEV.cards.filter(c=>c.sprint===sp.id && devWork(c)).length;
+    const doneN = DEV.cards.filter(c=>c.sprint===sp.id && devWork(c) && c.col==="done").length;
     const b = mkSideCard(cur && cur.id===sp.id, ()=>{ devSprint = sp.id; renderAll(); });
     b.innerHTML = '<span class="name"></span><span class="pct"></span>';
     b.querySelector(".name").textContent = (sp.completed ? "\u2713 " : "") + sp.name;
-    b.querySelector(".pct").textContent = (sp.start||sp.end ? (sp.start||"?")+" \u2192 "+(sp.end||"?")+" \u00b7 " : "") + doneN+"/"+n+" done";
+    b.querySelector(".pct").remove();   // just the name — dates and progress are on the sprint's deadline card
     if(sp.completed) b.style.opacity = ".6";
     if(editMode){
       cardActs(b, [
@@ -11504,31 +11990,130 @@ function renderSidebarDev(){
     }
     wrap.appendChild(b);
   });
-  if(editMode){
-    const add = document.createElement("button");
-    add.className = "mod add";
-    add.textContent = "\uFF0B New sprint";
-    add.onclick = ()=> openDialog("New sprint", {title:"Sprint "+(DEV.sprints.filter(x=>x.space===spc).length+1)}, v=>{
-      const sp = { id:"sp-"+Date.now().toString(36), name:v.title, space:spc };
-      if(v.start) sp.start = v.start;
-      if(v.deadline) sp.end = v.deadline;
-      DEV.sprints.push(sp);
-      devSprint = sp.id;
-      saveDev(); toast("Sprint created \u2014 pull cards in from the backlog");
-    }, {hideExtras:true, dates:true});
-    wrap.appendChild(add);
-  }
-  const backlogN = DEV.cards.filter(c=>!c.sprint && c.space===spc).length;
-  const note = document.createElement("div");
-  note.className = "lb-note";
-  note.textContent = backlogN+" item(s) in the backlog below the board. Anyone can move cards; adding, sprints and editing need Edit mode.";
-  wrap.appendChild(note);
+  // new sprints: the team's ⋯ menu → ＋ New sprint
 }
 
+// a new engineering team (dev space) — from the engineering space's ⋯ menu
+function devNewTeam(){
+  if(!editMode){ toast("Turn on Edit mode to add a team"); return; }
+  openDialog("New dev team", {}, v=>{
+    const sp = {id:"space-"+Date.now().toString(36), name:v.title};
+    DEV.spaces.push(sp); devSpace = sp.id; devSprint = null; view = "dev";
+    saveDev(); toast("Dev team created");
+  }, {hideExtras:true, titleLabel:"Team / space name (e.g. Panel Team, App Team)"});
+}
+/* ---- a sprint's deadline card (like My To-do's Wake up): ⏳ ends on …, N days left, and a timeline bar ---- */
+// sprint dates are typed by hand ("25 September", "4th July", or 2026-10-15): read them as local days
+function devParseDay(str, year){
+  const t = String(str||"").trim(); if(!t) return null;
+  if(/^\d{4}-\d{2}-\d{2}/.test(t)){ const p = t.slice(0,10).split("-"); return new Date(+p[0], +p[1]-1, +p[2]); }
+  const clean = t.replace(/(\d+)(st|nd|rd|th)\b/gi, "$1").replace(/,/g, " ");
+  const withYear = /\b\d{4}\b/.test(clean) ? clean : clean+" "+(year || new Date().getFullYear());
+  const d = new Date(withYear);
+  return isNaN(d) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+function devSprintDeadline(sp, spCards){
+  if(!sp.end) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  let end = devParseDay(sp.end), start = sp.start ? devParseDay(sp.start) : null;
+  if(!end) return null;
+  if(start && end < start) end = new Date(end.getFullYear()+1, end.getMonth(), end.getDate());   // "25 Dec → 10 Jan"
+  if(start && start > today && (start - today) > 180*864e5) start = new Date(start.getFullYear()-1, start.getMonth(), start.getDate());
+  if(start && !/\b\d{4}\b/.test(String(sp.end)) && end < start) end = new Date(start.getFullYear(), end.getMonth(), end.getDate());
+  const day = 864e5, left = Math.round((end - today)/day), total = start ? Math.max(1, Math.round((end - start)/day)) : 0;
+  const gone = start ? Math.min(total, Math.max(0, Math.round((today - start)/day))) : 0;
+  const done = spCards.filter(c=>c.col==="done").length, all = spCards.length;
+  const late = left < 0 && !sp.completed, warn = left >= 0 && left <= 2;
+  const box = document.createElement("div"); box.className = "dv-dl"+(sp.completed ? " ok" : late ? " late" : warn ? " warn" : "");
+  const ic = document.createElement("span"); ic.className = "dv-dl-ic"; ic.textContent = sp.completed ? "\u2705" : late ? "\u23F0" : "\u23F3";
+  const tx = document.createElement("div"); tx.className = "dv-dl-tx";
+  const h = document.createElement("div"); h.className = "dv-dl-h";
+  const fmt = d=> d.toLocaleDateString(undefined, {day:"numeric", month:"short"});
+  h.innerHTML = "<b></b><span class='dv-dl-date'></span>";
+  h.querySelector("b").textContent = sp.completed ? "Sprint completed" : late ? Math.abs(left)+" day"+(Math.abs(left)===1?"":"s")+" past the deadline" : left===0 ? "Ends today" : left+" day"+(left===1?"":"s")+" left";
+  h.querySelector(".dv-dl-date").textContent = (start ? fmt(start)+" \u2192 " : "deadline ") + fmt(end);
+  tx.appendChild(h);
+  // the timeline: how much of the sprint's time has gone, with today marked; the work done shown under it
+  if(start){
+    const bar = document.createElement("div"); bar.className = "dv-dl-bar"; bar.title = gone+" of "+total+" days gone";
+    const fill = document.createElement("i"); fill.style.width = Math.round(gone/total*100)+"%"; bar.appendChild(fill);
+    const work = document.createElement("u"); work.style.width = (all ? Math.round(done/all*100) : 0)+"%"; work.title = done+" of "+all+" cards done"; bar.appendChild(work);
+    tx.appendChild(bar);
+  }
+  const sub = document.createElement("div"); sub.className = "dv-dl-sub";
+  const dayTxt = !start ? "" : today < start ? "Starts in "+Math.round((start-today)/day)+" day(s) \u00B7 " : "Day "+Math.min(total, gone+1)+" of "+total+" \u00B7 ";
+  sub.textContent = dayTxt + done+" of "+all+" cards done" + (all && !sp.completed && start ? (Math.round(done/all*100) >= Math.round(gone/total*100) ? " \u2014 on track \u2705" : " \u2014 behind the clock") : "");
+  tx.appendChild(sub);
+  box.append(ic, tx);
+  return box;
+}
+/* ---- the engineering Summary tab, below the numbers ---- */
+function devRenderSummary(pane, show){
+  let box = document.getElementById("dev-summary");
+  if(!show){ if(box) box.remove(); return; }
+  if(!pane) return;
+  if(!box){ box = document.createElement("div"); box.id = "dev-summary"; box.className = "dv-sum"; pane.appendChild(box); }
+  box.innerHTML = "";
+  const spc = currentSpace(), sp = currentSprint(), cards = (DEV.cards||[]).filter(c=>c.space===spc);
+  const work = cards.filter(devWork), epics = cards.filter(devIsEpic);
+  const inSp = sp ? work.filter(c=>c.sprint===sp.id) : [];
+  const card = (title, cls)=>{ const c = document.createElement("section"); c.className = "dv-sumcard"+(cls?" "+cls:""); const h = document.createElement("h3"); h.textContent = title; c.appendChild(h); box.appendChild(c); return c; };
+  // 1) the current sprint and its deadline
+  if(sp){
+    const c = card("\uD83C\uDFC3 "+sp.name+(sp.completed?" (completed)":""));
+    const dl = devSprintDeadline(sp, inSp); if(dl) c.appendChild(dl);
+    const cols = document.createElement("div"); cols.className = "dv-sumcols";
+    KCOLS.forEach(k=>{ const n = inSp.filter(x=>x.col===k.key).length; const d = document.createElement("div"); d.className = "dv-sumcol c-"+k.key;
+      d.innerHTML = "<b></b><span></span>"; d.querySelector("b").textContent = n; d.querySelector("span").textContent = todoKLabelSafe(k.key); cols.appendChild(d); });
+    c.appendChild(cols);
+  }
+  // 2) the flow of work
+  const fl = card("How work flows");
+  const flow = document.createElement("div"); flow.className = "dv-sumflow";
+  const step = (ico, n, lbl, sub, tab)=>{ const b = document.createElement("button"); b.className = "dv-sumstep"; b.innerHTML = "<span></span><b></b><em></em><small></small>";
+    b.querySelector("span").textContent = ico; b.querySelector("b").textContent = n; b.querySelector("em").textContent = lbl; b.querySelector("small").textContent = sub;
+    b.onclick = ()=>{ devView = tab; paneTab = "work"; renderAll(); }; return b; };
+  const arrow = ()=>{ const a = document.createElement("span"); a.className = "dv-sumarrow"; a.textContent = "\u2192"; return a; };
+  const openSprints = (DEV.sprints||[]).filter(x=>x.space===spc && !x.completed);
+  flow.append(
+    step("\u26A1", epics.length, "Epics", epics.filter(e=>devEpicCol(e)==="done").length+" done", "epics"), arrow(),
+    step("\uD83D\uDCE5", work.filter(c=>!c.sprint).length, "Backlog", "waiting for a sprint", "backlog"), arrow(),
+    step("\uD83C\uDFC3", work.filter(c=>c.sprint && openSprints.some(x=>x.id===c.sprint)).length, "In sprints", openSprints.length+" open sprint"+(openSprints.length===1?"":"s"), "board"));
+  fl.appendChild(flow);
+  // 3) every epic's progress
+  const ec = card("\u26A1 Epics");
+  if(!epics.length){ const e = document.createElement("div"); e.className = "empty"; e.textContent = "No epics yet \u2014 add one in the Epics tab."; ec.appendChild(e); }
+  epics.forEach(e=>{
+    const kids = devEpicKids(e), done = kids.filter(k=>k.col==="done").length, col = devEpicCol(e);
+    const r = document.createElement("div"); r.className = "dv-sumepic";
+    r.innerHTML = "<b></b><span class='dv-epicbar'><i></i></span><span class='dv-epicn'></span><span class='dv-epicst'></span>";
+    r.querySelector("b").textContent = "\u26A1 "+e.title;
+    r.querySelector("i").style.width = (kids.length ? Math.round(done/kids.length*100) : 0)+"%";
+    r.querySelector(".dv-epicn").textContent = kids.length ? done+" of "+kids.length+" done" : "no stories yet";
+    const st = r.querySelector(".dv-epicst"); st.textContent = todoKLabelSafe(col); st.classList.add("c-"+col);
+    r.onclick = ()=>{ devEpicOpen.add(e.id); devView = "epics"; paneTab = "work"; renderAll(); };
+    ec.appendChild(r);
+  });
+  // 4) what kind of work, and 5) what waits on review
+  const row = document.createElement("div"); row.className = "dv-sumrow"; box.appendChild(row);
+  const tc = document.createElement("section"); tc.className = "dv-sumcard"; tc.innerHTML = "<h3>Kinds of work</h3>"; row.appendChild(tc);
+  const types = document.createElement("div"); types.className = "dv-sumtypes";
+  DEV_TYPES.filter(t=>t.key!=="epic").forEach(t=>{ const n = work.filter(c=>devType(c).key===t.key).length, open = work.filter(c=>devType(c).key===t.key && c.col!=="done").length;
+    const d = document.createElement("div"); d.className = "dv-type t-"+t.key; d.textContent = t.icon+" "+n+" "+(n===1 ? t.label : t.key==="story" ? "Stories" : t.label+"s")+" \u00B7 "+open+" open"; types.appendChild(d); });
+  const subs = work.reduce((a,c)=>{ (c.subtasks||[]).forEach(x=>{ a.n++; if(x.done) a.d++; }); return a; }, {n:0,d:0});
+  if(subs.n){ const d = document.createElement("div"); d.className = "dv-sub ok"; d.textContent = "\u2611 "+subs.d+"/"+subs.n+" sub-tasks done"; types.appendChild(d); }
+  tc.appendChild(types);
+  const rc = document.createElement("section"); rc.className = "dv-sumcard"; rc.innerHTML = "<h3></h3>"; row.appendChild(rc);
+  const rev = cards.filter(c=>c.col==="review" && !(c.epic && (cards.find(x=>x.id===c.epic)||{}).col==="review"));
+  rc.querySelector("h3").textContent = "\uD83D\uDC40 Waiting for "+DEV_REVIEWER_NAME.split(" ")[0]+"\u2019s review \u00B7 "+rev.length;
+  if(!rev.length){ const e = document.createElement("div"); e.className = "empty"; e.textContent = "Nothing waiting for review."; rc.appendChild(e); }
+  rev.forEach(c=>{ const d = document.createElement("div"); d.className = "dv-sumrev"; d.append(devTypeChip(c)); const t = document.createElement("span"); t.textContent = c.title; d.appendChild(t); rc.appendChild(d); });
+}
 function devCardOpts(sprintId){
   return {
     onMove: saveDev,
-    cardExtras: c => [originChip(c), commentChip(c, ()=>saveDev())],
+    colLabels: { review: "In review by "+DEV_REVIEWER_NAME.split(" ")[0] },   // everything in review waits on Sumit (devAutoReviewer)
+    cardExtras: c => [devTypeChip(c), devEpicChip(c), devSubChip(c), originChip(c), reviewerChip(c), commentChip(c, ()=>saveDev())],
     onEdit: c => openDialog("Edit card", c, v=>{
       applyFields(c, v);
       applyCardFields(c, v);
@@ -11552,7 +12137,9 @@ function renderContentDev(){
   const wrap = $("content");
   wrap.innerHTML = "";
   const sp = currentSprint();
+  if(devView==="epics"){ wrap.appendChild(devEpicsSection(currentSpace(), sp)); return; }   // ⚡ Epics tab
 
+  if(devView!=="backlog"){   // Board tab: the sprint only
   if(sp){
     const head = document.createElement("section");
     head.className = "module-block";
@@ -11562,12 +12149,7 @@ function renderContentDev(){
     const h2 = document.createElement("h2");
     h2.textContent = sp.name + (sp.completed ? " (completed)" : "");
     row.appendChild(h2);
-    if(sp.start || sp.end){
-      const d = document.createElement("span"); d.className = "pct";
-      d.textContent = (sp.start||"?") + " \u2192 " + (sp.end||"?");
-      row.appendChild(d);
-    }
-    const spCards = DEV.cards.filter(c=>c.sprint===sp.id);
+    const spCards = DEV.cards.filter(c=>c.sprint===sp.id && devWork(c));
     const cnt = document.createElement("span"); cnt.className = "pct";
     cnt.textContent = spCards.filter(c=>c.col==="done").length + "/" + spCards.length + " done";
     row.appendChild(cnt);
@@ -11588,22 +12170,24 @@ function renderContentDev(){
       row.appendChild(btn);
     }
     head.appendChild(row);
+    const dl = devSprintDeadline(sp, spCards); if(dl) head.appendChild(dl);
     wrap.appendChild(head);
     wrap.appendChild(kanbanBoard(spCards, devCardOpts(sp.id)));
   } else {
     const d = document.createElement("div");
     d.className = "empty";
     d.textContent = DEV.sprints.length
-      ? "All sprints completed. " + (editMode ? "Create the next one from the left." : "Turn on Edit to start the next sprint.")
-      : (editMode ? "No sprint yet \u2014 create one from the left, then pull backlog items in." : "No sprint yet \u2014 turn on Edit to create Sprint 1.");
+      ? "All sprints completed. " + (editMode ? "Add the next one from the team\u2019s \u22EF menu on the left." : "Turn on Edit to start the next sprint.")
+      : (editMode ? "No sprint yet \u2014 add one from the team\u2019s \u22EF menu on the left (\uFF0B New sprint), then pull backlog items in." : "No sprint yet \u2014 turn on Edit to create Sprint 1.");
     wrap.appendChild(d);
+  }
+  return;
   }
 
   const spc = currentSpace();
-  const backlog = DEV.cards.filter(c=>!c.sprint && c.space===spc);
+  const backlog = DEV.cards.filter(c=>!c.sprint && c.space===spc && devWork(c));
   const block = document.createElement("section");
   block.className = "module-block";
-  block.style.marginTop = "16px";
   const bh = document.createElement("div");
   bh.className = "module-head";
   const h2b = document.createElement("h2"); h2b.textContent = "Backlog";
@@ -11714,6 +12298,7 @@ function renderContentDev(){
     if(ps) body.appendChild(ps);
     const meta = document.createElement("div");
     meta.className = "meta";
+    [devTypeChip(c), devEpicChip(c), devSubChip(c)].forEach(x=>x && meta.appendChild(x));
     const oc = originChip(c);
     if(oc) meta.appendChild(oc);
     if(c.owner){ const o = document.createElement("span"); o.className = "owner"; o.textContent = c.owner; meta.appendChild(o); }
@@ -12005,6 +12590,25 @@ function renderContentRmap(extMap, extOpts){
     addB.textContent = "\uFF0B Add items from any space";
     addB.onclick = ()=> openRmapPicker(m);
     row.appendChild(addB);
+    // or write something that isn't on any space — it lives on this roadmap only
+    const ownB = document.createElement("button");
+    ownB.className = "tool";
+    ownB.textContent = "\u270F\uFE0F Write an item";
+    ownB.title = "Add something that isn't in any space \u2014 it lives only on this roadmap";
+    ownB.onclick = ()=> openDialog("New item on \u201C"+m.name+"\u201D", {}, v=>{
+      const tid = "rmo-"+Date.now().toString(36);
+      const t = { tid, title:v.title, status:"planned" };
+      if(v.note) t.note = v.note;
+      if(v.owner) t.owner = v.owner;
+      (m.own = m.own || []).push(t);
+      const st = todayISO(), en = new Date(new Date(st+"T00:00:00").getTime()+30*864e5);   // a month to start with; drag the ends
+      m.items.push({ rid:"ri-"+Math.random().toString(36).slice(2,7), tid, start:st, end: en.getFullYear()+"-"+String(en.getMonth()+1).padStart(2,"0")+"-"+String(en.getDate()).padStart(2,"0") });
+      saveRmaps();
+      // straight to its dates: when it starts and when it ends
+      const _it = m.items[m.items.length-1], _en = allTasks().find(x=>x.tid===tid);
+      if(_en) editRmapItem(m, _it, _en);
+    }, {titleLabel:"What is it?", noteLabel:"Note (optional)"});
+    row.appendChild(ownB);
     }
     const addMk = document.createElement("button");
     addMk.className = "tool";
@@ -12184,7 +12788,7 @@ function renderContentRmap(extMap, extOpts){
     if(_ph) bar.classList.add("ph-" + _ph.key);
     if(_ph && it.done) bar.classList.add("done");
     else if(_ph && it.end < todayISO() && entry.task.stage===_ph.key) bar.classList.add("overdue");   // still in that phase past its end
-    const src = _ph ? (it.done ? "\u2713 " : "") + _ph.short : entry.kind==="dev" ? "DEV" : entry.kind==="bug" ? "BUG" : entry.kind==="content" ? "EDU" : entry.kind==="idea" ? "IDEA" : "PROD";
+    const src = _ph ? (it.done ? "\u2713 " : "") + _ph.short : entry.kind==="dev" ? "DEV" : entry.kind==="bug" ? "BUG" : entry.kind==="content" ? "EDU" : entry.kind==="idea" ? "IDEA" : entry.kind==="own" ? "\u270F\uFE0F" : "PROD";
     bar.innerHTML = (editMode ? '<span class="tl-h l" title="Drag to change the start date"></span>' : '')
       + '<span class="tl-src"></span><span class="tl-t"></span><span class="tl-dates"></span>'
       + (editMode ? '<span class="tl-h r" title="Drag to change the end date"></span>' : '');
@@ -12208,6 +12812,21 @@ function renderContentRmap(extMap, extOpts){
       out.querySelector("span").textContent = _ph.label + (it.done ? " \u2713 completed " + fmtD(it.done) : "") + " \u00b7 " + fmtD(it.start) + " \u2192 " + fmtD(it.end)
         + (entry.task.assignee ? " \u00b7 \uD83D\uDC64 " + discOwnerName(entry.task.assignee) : "");
       r.appendChild(out);
+    } else {
+      // every bar says plainly when it starts and ends (and how long), just past its end
+      const days = Math.round((dNum(it.end) - dNum(it.start))) + 1;
+      const out = document.createElement("div"); out.className = "tl-out tl-out-dates";
+      out.style.left = (parseFloat(bar.style.left) + parseFloat(bar.style.width) + 10) + "px";
+      out.innerHTML = "<b></b><span class='tl-when'></span>";
+      out.querySelector("b").textContent = entry.task.title || "(untitled)";
+      out.querySelector(".tl-when").textContent = "\u25B6 " + fmtD(it.start) + "  \u2192  \u25A0 " + fmtD(it.end) + " \u00B7 " + days + " day" + (days===1?"":"s");
+      if(editMode){   // the label beside the bar opens the same edit window as clicking the bar
+        const ed = document.createElement("span"); ed.className = "tl-edit"; ed.textContent = "\u270F\uFE0F Edit"; out.appendChild(ed);
+        out.classList.add("click"); out.title = "Edit name, dates, done";
+        out.onclick = ()=> editRmapItem(m, it, entry);
+      }
+      r.appendChild(out);
+      bar.querySelector(".tl-dates").textContent = "";   // shown beside the bar instead
     }
     rows.appendChild(r);
   });
@@ -12402,18 +13021,35 @@ function editRmapItem(map, it, entry){
   $("rmd-done-wrap").style.display = _rph ? "flex" : "none";
   $("rmd-done").checked = !!it.done;
   if(_rph){ $("rmd-done-lbl").textContent = _rph.label + " completed"; $("rmd-path").textContent = entry.path + " \u00b7 " + _rph.label; }
+  const _own = entry.kind==="own";
+  // an item written on this roadmap: edit its name and note here too
+  $("rmd-edit-wrap").style.display = _own ? "" : "none";
+  $("rmd-remove").textContent = _own ? "\uD83D\uDDD1 Delete item" : "Remove from roadmap";
+  $("rmd-save").textContent = _own ? "Save" : "Save dates";
+  if(_own){
+    $("rmd-title").textContent = "\u270F\uFE0F Edit item";
+    $("rmd-name").value = entry.task.title || ""; $("rmd-note").value = entry.task.note || "";
+    $("rmd-done-wrap").style.display = "flex"; $("rmd-done-lbl").textContent = "Done"; $("rmd-done").checked = entry.task.status==="done";
+  }
   $("rmd-save").onclick = ()=>{
     const s0 = $("rmd-start").value, e0 = $("rmd-end").value;
     if(!s0 || !e0){ toast("Pick both dates"); return; }
     if(dNum(e0) < dNum(s0)){ toast("The end date is before the start date"); return; }
     it.start = s0; it.end = e0;
     if(_rph){ if($("rmd-done").checked){ if(!it.done) it.done = todayISO(); } else delete it.done; }
+    if(_own){
+      const nm = $("rmd-name").value.trim(); if(!nm){ toast("Give it a name"); return; }
+      entry.task.title = nm;
+      const nt = $("rmd-note").value.trim(); if(nt) entry.task.note = nt; else delete entry.task.note;
+      entry.task.status = $("rmd-done").checked ? "done" : "planned";
+    }
     $("rmd-overlay").classList.remove("show");
     saveRmaps();
   };
   $("rmd-remove").onclick = ()=>{
-    if(confirm("Remove \u201C"+(entry.task.title||"")+"\u201D from this roadmap? The card itself is not deleted.")){
+    if(confirm(_own ? "Delete \u201C"+(entry.task.title||"")+"\u201D? It was written on this roadmap, so it goes completely." : "Remove \u201C"+(entry.task.title||"")+"\u201D from this roadmap? The card itself is not deleted.")){
       map.items.splice(map.items.indexOf(it),1);
+      if(_own && map.own) map.own = map.own.filter(x=>x.tid!==entry.tid);
       $("rmd-overlay").classList.remove("show");
       saveRmaps();
     }
@@ -12627,8 +13263,44 @@ function discStateChip(idea){
 }
 // Product Roadmap: the one person responsible for an idea (idea.assignee = their email)
 function discOwnerName(email){ if(!email) return ""; const m = assigneeMembers().find(u=>u.email===email); return m ? userDisplayName(m) : email; }
+/* Who holds an idea once it's with engineering: Pancham (or the dev card's assignee) while it's being built,
+   Sumit once the dev card is In review; back to the idea's own owner when the dev card is done. */
+const DEV_LEAD_NAME = "Pancham";
+function devUserByName(name){
+  const want = String(name||"").toLowerCase(), all = (typeof USERS!=="undefined" && USERS) || [];
+  return all.find(u=> String(userDisplayName(u)||"").trim().toLowerCase()===want)
+    || all.find(u=> String(userDisplayName(u)||"").trim().toLowerCase().indexOf(want)===0) || null;
+}
+function devLeadEmail(){ const u = devUserByName(DEV_LEAD_NAME); return u ? u.email : ""; }
+// the dev cards for an idea: sent with → Engineering (fromIdea), or made by hand with the same title
+function discEngCards(idea){
+  const t = String(idea.title||"").trim().toLowerCase();
+  return (DEV.cards||[]).filter(c=> c.fromIdea===idea.id || (!c.fromIdea && t && String(c.title||"").trim().toLowerCase()===t));
+}
+function discWithEng(cs, idea){
+  if(!cs || cs.type!=="discovery") return null;
+  const cards = discEngCards(idea);
+  const colOf = c=> devIsEpic(c) ? devEpicCol(c) : c.col;   // an epic is as far as its stories
+  const card = cards.find(c=>colOf(c)!=="done");
+  if(card){
+    if(colOf(card)==="review") return { state:"review", email: card.reviewer || devReviewerEmail(), name: DEV_REVIEWER_NAME, card };
+    return { state:"eng", email: card.assignee || devLeadEmail(), name: DEV_LEAD_NAME, card };
+  }
+  if(idea.stage==="building" && !cards.length) return { state:"eng", email: devLeadEmail(), name: DEV_LEAD_NAME };
+  return null;
+}
 function discOwnerChip(cs, idea){
   const c = document.createElement("button");
+  const hand = discWithEng(cs, idea);
+  if(hand){
+    const nm = hand.email ? discOwnerName(hand.email) : hand.name;
+    c.className = "disc-chip owner has eng";
+    c.textContent = (hand.state==="review" ? "\uD83D\uDC40 " : "\uD83D\uDEE0\uFE0F ") + nm + (hand.state==="review" ? " \u00B7 review" : " \u00B7 engineering");
+    c.title = hand.state==="review" ? "Engineering moved it to In review \u2014 waiting on " + nm
+      : "With engineering \u2014 " + nm + " has it until it's moved to In review" + (idea.assignee ? " (owner: " + discOwnerName(idea.assignee) + ")" : "");
+    c.onclick = e=>{ e.stopPropagation(); if(hand.card){ view="dev"; devSpace=hand.card.space||null; devSprint=hand.card.sprint||null; renderAll(); } };
+    return c;
+  }
   c.className = "disc-chip owner" + (idea.assignee ? " has" : "");
   c.textContent = idea.assignee ? "\uD83D\uDC64 " + discOwnerName(idea.assignee) : "\uD83D\uDC64 Tag owner";
   c.title = idea.assignee ? "Responsible: " + discOwnerName(idea.assignee) + (editMode ? " (click to change)" : "") : "Tag the person responsible";
@@ -12695,6 +13367,58 @@ function openIdeaDialog(cs, idea, presetStage){
     }
     saveDisc();
   }, _own ? {photos:true, assignee:true, noOwner:true, assigneeLabel:"Responsible person (optional)"} : {photos:true});
+}
+/* Product Roadmap → Engineering: pick the team (dev space), then its Backlog or one of its open sprints.
+   The dev card remembers the idea (fromIdea), so the button turns into "✓ in <team> · <board>" and opens it. */
+function discToEngBtn(cs, idea){
+  const card = discEngCards(idea)[0];
+  const b = document.createElement("button");
+  b.className = "disc-toproc"+(card?" done":"");
+  if(card){
+    const sp = (DEV.spaces||[]).find(x=>x.id===card.space), spr = (DEV.sprints||[]).find(x=>x.id===card.sprint);
+    b.textContent = "\u2713 "+(sp?sp.name:"Engineering")+" \u00B7 "+(devIsEpic(card) ? "\u26A1 Epic" : (spr?spr.name:"Backlog"));
+    b.title = "Already sent to engineering \u2014 open it there";
+    b.onclick = e=>{ e.stopPropagation(); view="dev"; devSpace=card.space||null; devSprint=card.sprint||null; renderAll(); };
+    return b;
+  }
+  b.textContent = "\u2192 Engineering";
+  b.title = "Send to an engineering team\u2019s board \u2014 its backlog or a sprint";
+  b.onclick = e=>{ e.stopPropagation(); discSendToEng(cs, idea); };
+  return b;
+}
+function discSendToEng(cs, idea){
+  const spaces = DEV.spaces || [];
+  const base = spaceId=>{ const c = { id:"dv-"+Date.now().toString(36), title:idea.title, col:"todo", sprint:null, space:spaceId, from:"roadmap", fromIdea:idea.id, area:cs.name };
+    if(idea.note) c.note = idea.note; if(idea.photos && idea.photos.length) c.photos = idea.photos.slice(); return c; };
+  const spName = id=>{ const x = spaces.find(y=>y.id===id); return x ? x.name : "Engineering"; };
+  // 3) which board: Backlog or an open sprint of that team
+  const toBoard = (spaceId, type, epicId)=>{
+    const sps = (DEV.sprints||[]).filter(x=>x.space===spaceId && !x.completed);
+    const send = sprintId=>{
+      const c = base(spaceId); c.type = type; c.sprint = sprintId||null; if(epicId) c.epic = epicId;
+      DEV.cards.push(c); saveDev();
+      const spr = sps.find(x=>x.id===sprintId);
+      toast("Sent to "+spName(spaceId)+" \u00B7 "+(spr?spr.name:"Backlog")+" as a "+devType(c).label.toLowerCase());
+    };
+    const opts = [{label:"\uD83D\uDCE5 Backlog", value:""}].concat(sps.map(x=>({label:"\uD83C\uDFC3 "+x.name+" \u2192 To Do", value:x.id})));
+    if(opts.length===1) send(""); else openChoice("Which board?", opts, send);
+  };
+  // 2) what is it — an epic (big, many stories) or one story / task / bug
+  const askType = spaceId=>{
+    openChoice("What is \u201C"+idea.title+"\u201D for engineering?", DEV_TYPES.map(t=>({label:t.icon+" "+t.label+" \u2014 "+t.hint, value:t.key})), type=>{
+      if(type==="epic"){
+        const c = base(spaceId); c.type = "epic"; DEV.cards.push(c); devEpicOpen.add(c.id); saveDev();
+        toast("Epic created in "+spName(spaceId)+" \u2014 add its stories under \u26A1 Epics"); return;
+      }
+      const epics = devEpicsOf(spaceId);
+      if(!epics.length){ toBoard(spaceId, type, ""); return; }
+      openChoice("Is it part of an epic?", [{label:"\u2014 No epic", value:""}].concat(epics.map(x=>({label:"\u26A1 "+x.title, value:x.id}))), eid=> toBoard(spaceId, type, eid));
+    });
+  };
+  // 1) which team
+  if(!spaces.length){ toast("No engineering team yet \u2014 add a dev space first"); return; }
+  if(spaces.length===1) askType(spaces[0].id);
+  else openChoice("Send \u201C"+idea.title+"\u201D to which team?", spaces.map(x=>({label:"\uD83D\uDEE0\uFE0F "+x.name, value:x.id})), askType);
 }
 function discIdeaActs(cs, idea){
   const acts = document.createElement("div");
@@ -13786,7 +14510,7 @@ function discRoadmapPane(cs){
       if(idea.note && cs.type==="social") card.title = idea.note;   // keep it available on hover
       const _kps = photoStrip(idea.photos); if(_kps) card.appendChild(_kps);
       const meta = document.createElement("div"); meta.className = "kcard-meta disc-meta";
-      if(cs.type==="discovery" && (idea.assignee || editMode)) meta.appendChild(discOwnerChip(cs, idea));
+      if(cs.type==="discovery" && (idea.assignee || editMode || discWithEng(cs, idea))) meta.appendChild(discOwnerChip(cs, idea));
       meta.appendChild(discThemeChip(idea, cs));
       if(cs.type!=="social") meta.appendChild(discStateChip(idea));
       if(cs.type==="discovery"){
@@ -13810,6 +14534,7 @@ function discRoadmapPane(cs){
         b.onclick=(e)=>{ e.stopPropagation(); if(already){ socialView="process"; renderAll(); return; } socIdeaToProcess(cs, idea); };
         meta.appendChild(b);
       }
+      if(cs.type==="discovery" && editMode) meta.appendChild(discToEngBtn(cs, idea));
       card.appendChild(meta);
       if(cs.type==="discovery" && _phs) card.appendChild(_phs);
       // click opens the idea editor
@@ -14058,7 +14783,7 @@ function renderAll(){
     const _strat = docStrategyChip();
     if(_strat) ws.appendChild(_strat);
     /* ---- top-level ROADMAPS first (timelines across every space) ---- */
-    const _allRm = RMAPS.maps.filter(m=>canViewSpace(rmapRef(m)));
+    const _allRm = RMAPS.maps.filter(m=>canViewSpace(rmapRef(m)) && !hiddenForMe("rm:"+m.id));
     // the ROADMAPS heading only shows when there's a roadmap to see (new ones are made in Administration → Roadmaps)
     if(_allRm.length){
       const rl = document.createElement("div");
@@ -14081,6 +14806,7 @@ function renderAll(){
         menu.onclick = e=>{ e.stopPropagation(); openRowMenu(menu, [
           {label:"Settings", onClick:()=> openSpaceSettings(rmapRef(m))},
           {label:"Set background", onClick:()=> openBgPicker(rmapRef(m))},
+          {label:"\uD83D\uDE48 Hide from my sidebar", onClick:()=> setHiddenForMe("rm:"+m.id, true, m.name)},
           hasPerm("delete_roadmaps") && {label:"Delete roadmap", danger:true, onClick:()=> deleteRoadmap(m)},
         ].filter(Boolean)); };
         b.appendChild(menu);
@@ -14103,6 +14829,7 @@ function renderAll(){
       g.items.forEach(w=>{
         if(w.key==="dev" && BUILTIN_HIDDEN.dev) return;
         if(w.key==="bugs" && BUILTIN_HIDDEN.bugs) return;
+        if(hiddenForMe("b:"+w.key)) return;
         const b = document.createElement("button");
         b.className = "ws-item"+(view===w.key?" active":"");
         b.innerHTML = '<span class="dot"></span><span></span>';
@@ -14116,6 +14843,8 @@ function renderAll(){
           menu.onclick = e=>{ e.stopPropagation(); openRowMenu(menu, [
             {label:"Settings", onClick:()=> openSpaceSettings(ref)},
             {label:"Set background", onClick:()=> openBgPicker(ref)},
+            w.key==="dev" && {label:"\uFF0B New dev team", onClick: devNewTeam},
+            {label:"\uD83D\uDE48 Hide from my sidebar", onClick:()=> setHiddenForMe("b:"+w.key, true, w.label)},
             hasPerm("delete_spaces") && {label:"Delete\u2026", danger:true, onClick:()=> { if(w.key==="bugs") deleteBuiltinBugs(); else deleteBuiltinDev(); }},
           ].filter(Boolean)); };
           b.appendChild(menu);
@@ -14124,10 +14853,11 @@ function renderAll(){
       });
       /* custom spaces created from templates */
       // spaces inside a Marketing space are drawn under it, not at the top level
-      const _allCs = CSPACES.list.filter(cs=>canViewSpace(csRef(cs)) && !mktParentOf(cs));
+      const _allCs = CSPACES.list.filter(cs=>canViewSpace(csRef(cs)) && !mktParentOf(cs) && !hiddenForMe("cs:"+cs.id));
       const _shownCs = stableSidebar(_allCs, cs=>csIsActive(cs), SIDEBAR_CAP);
       const _drawCs = (cs, _host, _nested)=>{
         if(!canViewSpace(csRef(cs))) return;   // private spaces hidden from non-members
+        if(hiddenForMe("cs:"+cs.id)) return;    // I hid it from my sidebar (Administration → My hidden boards)
         const active = csIsActive(cs);
         const b = document.createElement("button");
         b.className = "ws-item"+(active && cs.type!=="marketing"?" active":"")+(_nested?" ws-nested":"")+(cs.type==="marketing"?" ws-parent":"");
@@ -14194,6 +14924,8 @@ function renderAll(){
             {label:"Set background", onClick:()=> openBgPicker({key:"cs:"+cs.id, obj:cs, name:cs.name})},
           ];
           if(cs.type==="pdt") _items.push({label:"Board mapping", onClick:()=>{ view="pdt"; activeCspace=cs.id; pdtView="mapping"; renderAll(); }});
+          if(cs.type==="scrum") _items.push({label:"\uFF0B New dev team", onClick: devNewTeam});
+          _items.push({label:"\uD83D\uDE48 Hide from my sidebar", onClick:()=> setHiddenForMe("cs:"+cs.id, true, cs.name)});
           _items.push({label: cs.okr ? "Change linked OKR\u2026" : "Link to an OKR\u2026", onClick:()=> csOkrOpen(cs)});
           if(hasPerm("add_spaces")){   // put a space inside a Marketing space, or take it out
             const _par = mktParentOf(cs);
@@ -14330,16 +15062,8 @@ function renderAll(){
         _moreCs.onclick = ()=> openAllList("spaces");
         ws.appendChild(_moreCs);
       }
-      // top-level "＋ Add space": a new space of its own (a Marketing space is a parent that holds others);
-      // the "＋ Add space" inside a Marketing space adds to that parent instead
-      if(hasPerm("add_spaces")){
-        const _addTop = document.createElement("button");
-        _addTop.className = "ws-item ws-add";
-        _addTop.textContent = "\uFF0B Add parent space";
-        _addTop.title = "Add a new space to the sidebar";
-        _addTop.onclick = ()=>{ window._pendingParent = null; $("tpl-overlay").classList.add("show"); };
-        ws.appendChild(_addTop);
-      }
+      // new top-level spaces are added from the profile menu (＋ Add a space) or Administration → Spaces,
+      // for roles given "Add spaces" — not from the sidebar. "＋ Add space" inside a Marketing space still adds to it.
     });
   }
   // Educational Content sections now live as content-type spaces under SPACES.
@@ -16313,10 +17037,11 @@ function scBoards(){
   try{
     if(typeof DEV!=="undefined" && DEV && ((DEV.cards&&DEV.cards.length) || (DEV.spaces&&DEV.spaces.length))){
       var allc={}; KCOLS.forEach(function(c){allc[c.key]=0;});
-      (DEV.cards||[]).forEach(function(c){ if(allc[c.col]!==undefined) allc[c.col]++; });
-      out.push({id:"dev", label:"Development", cols:KC, counts:allc, total:(DEV.cards||[]).length});
+      var work=(DEV.cards||[]).filter(function(c){ return c.type!=="epic"; });
+      work.forEach(function(c){ if(allc[c.col]!==undefined) allc[c.col]++; });
+      out.push({id:"dev", label:"Development", cols:KC, counts:allc, total:work.length});
       cspaces().filter(function(x){return x.type==="scrum" && x.devId;}).forEach(function(cs){
-        var cards=(DEV.cards||[]).filter(function(c){ return c.space===cs.devId; });
+        var cards=(DEV.cards||[]).filter(function(c){ return c.space===cs.devId && c.type!=="epic"; });
         var dc={}; KCOLS.forEach(function(c){dc[c.key]=0;});
         cards.forEach(function(c){ if(dc[c.col]!==undefined) dc[c.col]++; });
         out.push({id:"dev:"+cs.devId, label:cs.name, cols:KC, counts:dc, total:cards.length});
@@ -19650,6 +20375,7 @@ function openAccount(){
   if(u.profile && u.profile.photo){ av.style.backgroundImage = "url("+u.profile.photo+")"; av.textContent = ""; }
   else { av.style.backgroundImage = "none"; av.style.background = userAvatarColor(u); av.textContent = (userDisplayName(u)||"?").charAt(0).toUpperCase(); }
   $("acct-admin").style.display = roleOf(currentUser(), TEAM) ? "" : "none";   // everyone in the team; sections follow their role
+  if($("acct-addspace")) $("acct-addspace").style.display = hasPerm("add_spaces") ? "" : "none";   // only roles given "Add spaces"
   $("account-overlay").classList.add("show");
 }
 $("acct-teams") && ($("acct-teams").onclick = ()=>{ $("account-overlay").classList.remove("show"); location.href = location.pathname; });
@@ -19657,6 +20383,7 @@ $("acct-profile") && ($("acct-profile").onclick = ()=>{ $("account-overlay").cla
 $("acct-hr") && ($("acct-hr").onclick = ()=>{ $("account-overlay").classList.remove("show"); if(typeof openMyHrFile === "function") openMyHrFile(); });
 $("acct-doclib") && ($("acct-doclib").onclick = ()=>{ $("account-overlay").classList.remove("show"); openDocLib(); });
 $("acct-admin") && ($("acct-admin").onclick = ()=>{ $("account-overlay").classList.remove("show"); openAdmin(); });
+$("acct-addspace") && ($("acct-addspace").onclick = ()=>{ $("account-overlay").classList.remove("show"); window._pendingParent = null; $("tpl-overlay").classList.add("show"); });
 $("acct-logout") && ($("acct-logout").onclick = ()=> logout());
 $("account-overlay") && $("account-overlay").addEventListener("click", e=>{ if(e.target===$("account-overlay")) $("account-overlay").classList.remove("show"); });
 
@@ -19790,6 +20517,8 @@ function adminSections(){
     { k:"policies",    ico:"📜", lbl:"Company policies", group:"me", show: !!me && !!SUPA && typeof renderAdminPolicies === "function", render: renderAdminPolicies },
     { k:"mypayments",  ico:"💸", lbl:"My payments", group:"me", show: !!me && !!SUPA && typeof renderAdminMyPayments === "function", render: renderAdminMyPayments },
     { k:"myaccess",    ico:"🔎", lbl:"My access",            show: !!me,                           group:"me", render: renderMyAccess },
+    { k:"myhidden",    ico:"\uD83D\uDE48", lbl:"My hidden boards" + (myHiddenKeys().filter(k=>hiddenKeyName(k)).length ? " (" + myHiddenKeys().filter(k=>hiddenKeyName(k)).length + ")" : ""), crumb:"My hidden boards",
+                                                                        show: !!me,                           group:"me", render: renderAdminHidden },
     { k:"myideas",     ico:"💡", lbl:"My product ideas",     show: !!me && !!SUPA && typeof pitchTarget === "function" && !!pitchTarget(), group:"me", render: renderAdminMyIdeas },
     { k:"myfeedback",  ico:"📝", lbl:"My monthly feedback",  show: !!me && !!SUPA && typeof renderAdminMyFeedback === "function", group:"me", render: renderAdminMyFeedback },
     { k:"notifications", ico:"📣", lbl:"Notifications",      show: hasPerm("send_notifications") && !!SUPA, group:"me", render: renderAdminNotifications },
@@ -21887,5 +22616,15 @@ try{ if(sessionStorage.getItem("culReopen")){ sessionStorage.removeItem("culReop
 <script>if(/\.vercel\.app$/.test(location.hostname)){const t=document.createElement("div");t.textContent="PREVIEW · not the live site";
 t.style.cssText="position:fixed;left:50%;bottom:10px;transform:translateX(-50%);z-index:99999;padding:5px 12px;border-radius:20px;background:#ff6a2b;color:#fff;font:700 11px/1 system-ui,sans-serif;letter-spacing:.06em;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.2)";
 document.body.appendChild(t);}</script>
+<script>
+/* side menu: « hides it, ☰ brings it back; remembered per browser */
+(function(){
+  var KEY = "cf-rail-hidden", set = function(on){ document.body.classList.toggle("rail-hidden", on); try { localStorage.setItem(KEY, on ? "1" : ""); } catch (_) {} };
+  try { if (localStorage.getItem(KEY) === "1") document.body.classList.add("rail-hidden"); } catch (_) {}
+  var a = document.getElementById("rail-min"), b = document.getElementById("rail-open");
+  if (a) a.onclick = function(){ set(true); };
+  if (b) b.onclick = function(){ set(false); };
+})();
+</script>
 </body>
 </html>
