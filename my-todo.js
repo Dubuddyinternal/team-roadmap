@@ -264,6 +264,7 @@ function todoFixedSetCol(f, iso, col) {
 function todoFixedCards(iso) {
   return todoFixedFor(null, iso).map(function (f) {
     return { key: "fx:" + f.id, fixed: f, day: iso, hat: f.hat, icon: "🔁", src: "Fixed", where: todoFixedRule(f), title: f.title,
+      board: "Fixed", status: todoFixedRule(f),
       col: todoFixedCol(f, iso), boardCol: todoFixedCol(f, iso), write: function (k) { todoFixedSetCol(f, iso, k); },
       open: function () { todoFixedSetup(f.hat); } };
   });
@@ -371,6 +372,9 @@ function todoCanSee(cs) { try { return typeof canViewSpace !== "function" || can
 function todoISO(d) { return d && /^\d{4}-\d{2}-\d{2}/.test(String(d)) ? String(d).slice(0, 10) : ""; }
 
 /* each entry: { key, hat, src, icon, title, where, col (from the board), due, write(col) | null, open() } */
+// the status a card is waiting in on its own board, in that board's words
+function todoKLabel(k) { var c = (typeof KCOLS !== "undefined" ? KCOLS : []).find(function (x) { return x.key === k; }); return c ? c.label : String(k || "To do"); }
+function todoCap(s) { s = String(s || ""); return s.charAt(0).toUpperCase() + s.slice(1); }
 function todoAssigned() {
   var me = todoMe(), out = [];
   if (!me.email && !me.id) return out;
@@ -381,6 +385,7 @@ function todoAssigned() {
     if ((c.assignee || "").toLowerCase() !== me.email) return;
     var sp = (DEV.spaces || []).find(function (s) { return s.id === c.space; });
     out.push({ key: "dev:" + c.id, hat: "product", icon: "🛠️", src: "Dev", title: c.title, where: sp ? sp.name : "Development",
+      board: "Engineering · " + (sp ? sp.name : "Development"), status: todoKLabel(c.col),
       col: todoColFromKcol(c.col), due: todoISO(c.duedate),
       write: hasPerm("edit") ? function (k) { c.col = k; saveDev(); } : null,
       open: function () { view = "dev"; devSpace = c.space || null; devSprint = c.sprint || null; renderAll(); } });
@@ -391,7 +396,8 @@ function todoAssigned() {
     var rv = c.reviewer || (typeof devReviewerEmail === "function" ? devReviewerEmail() : "");   // cards already in review before the rule: same reviewer
     if (rv.toLowerCase() !== me.email) return;
     var sp = (DEV.spaces || []).find(function (s) { return s.id === c.space; }), key = "devrev:" + c.id;
-    out.push({ key: key, hat: "product", icon: "👀", src: "Review", title: c.title, where: sp ? sp.name : "Development",
+    out.push({ key: key, hat: "product", icon: "🛠️", src: "Review", title: c.title, where: sp ? sp.name : "Development",
+      board: "Engineering · " + (sp ? sp.name : "Development"), status: "👀 In review — waiting for you",
       col: TODO.over[key] || "todo", boardCol: "todo", due: todoISO(c.duedate),
       write: hasPerm("edit") ? function (k) { if (k === "done") { c.col = "done"; delete TODO.over[key]; saveDev(); } else if (k === "todo") delete TODO.over[key]; else TODO.over[key] = k; } : null,
       open: function () { view = "dev"; devSpace = c.space || null; devSprint = c.sprint || null; renderAll(); } });
@@ -401,6 +407,7 @@ function todoAssigned() {
     if ((t.assignee || "").toLowerCase() !== me.email) return;
     var b = t.board ? spaces.find(function (x) { return x.id === t.board; }) : null;
     out.push({ key: "bug:" + t.id, hat: "product", icon: "🐞", src: "Bug", title: t.title, where: b ? b.name : "Bugs",
+      board: b ? b.name : "Bugs", status: todoKLabel(t.col),
       col: todoColFromKcol(t.col), due: todoISO(t.duedate),
       write: hasPerm("edit") ? function (k) { t.col = k; saveBugs(); } : null,
       open: function () { if (b) { view = "cbugs"; activeCspace = b.id; } else view = "bugs"; renderAll(); } });
@@ -413,6 +420,7 @@ function todoAssigned() {
       var st = (typeof discStages === "function" ? discStages(cs) : []).find(function (x) { return x.key === i.stage; });
       var ph = (cs.tl && cs.tl.items || []).find(function (t) { return t.tid === i.id && t.phase === i.stage && !t.done; });
       out.push({ key: "idea:" + i.id, hat: "product", icon: "💡", src: "Product Roadmap", title: i.title, where: cs.name + (st ? " · " + st.label : ""),
+        board: cs.name, status: st ? st.label : todoCap(i.stage),
         col: (i.stage === "done" || i.stage === "wont") ? "done" : ["primary", "implres", "building"].indexOf(i.stage) >= 0 ? "progress" : "todo",
         due: ph ? todoISO(ph.end) : "",
         write: null, open: function () { view = "disc"; activeCspace = cs.id; discView = "roadmap"; renderAll(); } });
@@ -422,6 +430,7 @@ function todoAssigned() {
       if (!todoNameIsMe(me, it.owner)) return;
       var done = (it.lane === "bugs" && it.col === "done") || (it.lane === "qa" && it.col === "passed") || (it.lane === "dev" && it.col === "qa");
       out.push({ key: "pdt:" + it.id, hat: "product", icon: "🧩", src: "Product", title: it.title, where: cs.name,
+        board: cs.name + (it.lane ? " · " + todoCap(it.lane) : ""), status: todoCap(it.col),
         col: done ? "done" : ["progress", "review", "testing", "verify"].indexOf(it.col) >= 0 ? "progress" : "todo", due: todoISO(it.due),
         write: null, open: function () { view = "pdt"; activeCspace = cs.id; pdtView = it.lane; renderAll(); } });
     });
@@ -429,6 +438,7 @@ function todoAssigned() {
     if (cs.type === "campaign") (cs.items || []).forEach(function (it, n) {
       if (!it.ownerId || it.ownerId !== me.id) return;
       out.push({ key: "camp:" + cs.id + ":" + (it.id || n), hat: "ceo", icon: "📣", src: "Campaign", title: it.name || "(piece)", where: cs.name,
+        board: cs.name, status: it.sentCardId ? "Sent" : "To make",
         col: it.sentCardId ? "done" : "todo", write: null,
         open: function () { view = "campaign"; activeCspace = cs.id; campView = "assign"; renderAll(); } });
     });
@@ -436,6 +446,7 @@ function todoAssigned() {
     if (cs.type === "watch") (cs.companies || []).forEach(function (co, n) {
       if (!co.ownerId || co.ownerId !== me.id) return;
       out.push({ key: "watch:" + cs.id + ":" + (co.id || n), hat: "ceo", icon: "👀", src: "Keep an Eye", title: "Study " + (co.name || ""), where: cs.name,
+        board: cs.name, status: "To study",
         col: "todo", due: todoISO(co.due), write: null,
         open: function () { view = "watch"; activeCspace = cs.id; watchView = "fill"; renderAll(); } });
     });
@@ -444,6 +455,7 @@ function todoAssigned() {
       var mine = t.ownerId && t.ownerId === me.id, check = t.checkerId && t.checkerId === me.id;
       if (!mine && !check) return;
       out.push({ key: "hz:" + cs.id + ":" + (t.id || n) + (mine ? "" : ":chk"), hat: "ceo", icon: "🔭", src: "Horizon", title: (mine ? "" : "Check: ") + (t.q || "(topic)"), where: cs.name,
+        board: cs.name, status: mine ? "To answer" : "To check",
         col: "todo", write: null,
         open: function () { view = "horizon"; activeCspace = cs.id; horizonView = mine ? "fill" : "check"; renderAll(); } });
     });
@@ -455,6 +467,7 @@ function todoAssigned() {
       if (t.items && t.items.length) { t.items.forEach(function (s, j) { leaf(s, trail + "." + j); }); return; }
       if (!todoNameIsMe(me, t.owner)) return;
       out.push({ key: "mod:" + path + ":" + (t.tid || trail), hat: "product", icon: "🗺️", src: "Roadmap", title: t.title, where: label,
+        board: "Roadmap · " + label, status: todoCap(t.status || "planned"),
         col: todoColFromStatus(t.status), due: todoISO(t.deadline),
         write: hasPerm("edit") ? function (k) { t.status = k === "todo" ? "planned" : k; saveRoadmap(); } : null,
         open: function () { view = "roadmap"; navTo(path); } });
@@ -469,6 +482,7 @@ function todoAssigned() {
       if (t.items && t.items.length) { t.items.forEach(walk); return; }
       if (!todoNameIsMe(me, t.owner)) return;
       out.push({ key: "edu:" + (t.tid || t.title), hat: "ceo", icon: "📚", src: "Content", title: t.title, where: s.name || "Educational Content",
+        board: "Content · " + (s.name || "Educational Content"), status: todoCap(t.status || "planned"),
         col: todoColFromStatus(t.status), due: todoISO(t.deadline),
         write: hasPerm("edit") ? function (k) { t.status = k === "todo" ? "planned" : k; saveContent(); } : null,
         open: function () { view = "content"; activeSection = s.key; renderAll(); } });
@@ -801,12 +815,15 @@ function todoCard(entry, own) {
   card.appendChild(t);
   if (own && own.note) card.appendChild(todoEl("div", "kn", own.note));
   var meta = todoEl("div", "kcard-meta");
+  // two tags: which board it's from, and the status it's waiting in there
   if (own) meta.appendChild(todoEl("span", "td-src own", "✏️ My to-do"));
   else {
-    var s = todoEl("button", "td-src", entry.icon + " " + entry.src + " · " + entry.where);
-    s.title = "Open it on its board"; s.onclick = function (ev) { ev.stopPropagation(); entry.open(); };
+    var s = todoEl("button", "td-src", entry.icon + " " + (entry.board || entry.src + " · " + entry.where));
+    s.title = "From: " + (entry.board || entry.where) + " — open it there"; s.onclick = function (ev) { ev.stopPropagation(); entry.open(); };
     meta.appendChild(s);
   }
+  var stt = own ? todoKLabel(own.col === "progress" ? "progress" : own.col === "done" ? "done" : "todo") : entry.status;
+  if (stt) { var sc = todoEl("span", "td-stat", stt); sc.title = "Status on its board"; meta.appendChild(sc); }
   var dc = todoDueChip(own ? own.due : entry.due, col); if (dc) meta.appendChild(dc);
   var pl = todoPlanned(key);
   if (pl && col !== "done") {
