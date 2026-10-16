@@ -5807,6 +5807,7 @@ function saveDisc(){
 }
 function boardBugs(cs){ return teamBugs().filter(t=> (t.board || null) === (cs ? cs.id : null)); }
 let devSprint = null;  // sprint currently shown on the board
+let devView = "board";  // the dev space's tab: board (the sprint) | epics | backlog
 const backlogSel = new Set();   // ids of backlog cards selected for bulk actions (session only)
 
 /* ============ TOP-LEVEL ROADMAPS (Jira-style timelines) ============ */
@@ -6269,7 +6270,7 @@ const devEpicOpen = new Set();   // epics opened on the board (the rest show one
 function devEpicsSection(spc, sp){
   const epics = devEpicsOf(spc);
   const block = document.createElement("section");
-  block.className = "module-block dv-epics"; block.style.marginTop = "16px";
+  block.className = "module-block dv-epics";
   const bh = document.createElement("div"); bh.className = "module-head";
   const h2 = document.createElement("h2"); h2.textContent = "\u26A1 Epics";
   const pc = document.createElement("span"); pc.className = "pct"; pc.textContent = epics.length+" epic(s) \u00B7 big pieces of work, each made of stories";
@@ -7528,16 +7529,21 @@ function workTabs(){
       ? [{key:"ideation",label:"All ideas"},{key:"ideation-roadmap",label:"Roadmap"}]
       : [{key:pdtView,label:pdtSectionLabel(pdtView)}];
   if(view==="social") return SX.tabs.map(([key,label])=>({key, label}));
+  if(view==="dev"){   // Board (the sprint) · ⚡ Epics · Backlog, like Jira
+    const spc = currentSpace(), cards = DEV.cards||[];
+    const ne = cards.filter(c=>devIsEpic(c) && c.space===spc).length, nb = cards.filter(c=>!c.sprint && c.space===spc && devWork(c)).length;
+    return [{key:"board",label:"Board"},{key:"epics",label:"\u26A1 Epics"+(ne?" \u00B7 "+ne:"")},{key:"backlog",label:"Backlog"+(nb?" \u00B7 "+nb:"")}];
+  }
   if(view==="campaign" && window.CX) return campTabs(currentCampaign()).map(([key,label])=>({key, label}));
   if(view==="watch" && window.WX) return WX.tabs.map(([key,label])=>({key, label}));
   if(view==="horizon" && window.HX) return HX.tabs.map(([key,label])=>({key, label}));
   const l = view==="rmap" ? "Timeline" : view==="okr" ? "Objectives"
-    : view==="dev" ? "Board" : (view==="bugs"||view==="cbugs") ? "Board" : view==="content" ? "Board"
+    : (view==="bugs"||view==="cbugs") ? "Board" : view==="content" ? "Board"
     : view==="ideas" ? "Ideas" : view==="admin" ? "Admin" : "Board";
   return [{key:"work",label:l}];
 }
 // which work tab is highlighted while the work pane is showing
-function workTabActiveKey(){ return view==="disc" ? discView : view==="social" ? socialView : view==="campaign" ? campView : view==="watch" ? watchView : view==="horizon" ? horizonView : view==="pdt" ? pdtView : "work"; }
+function workTabActiveKey(){ return view==="dev" ? devView : view==="disc" ? discView : view==="social" ? socialView : view==="campaign" ? campView : view==="watch" ? watchView : view==="horizon" ? horizonView : view==="pdt" ? pdtView : "work"; }
 function applyPaneTab(){
   const su=$("pane-summary"), wk=$("pane-work");
   if(su) su.classList.toggle("show", paneTab==="summary");
@@ -7546,6 +7552,7 @@ function applyPaneTab(){
 function selectWorkTab(key){
   paneTab="work";
   if(view==="disc" && discView!==key){ discView=key; renderAll(); return; }  // re-render the sub-view
+  if(view==="dev" && devView!==key){ devView=key; renderAll(); return; }
   if(view==="social" && socialView!==key){ socialView=key; renderAll(); return; }
   if(view==="campaign" && campView!==key){ campView=key; renderAll(); return; }
   if(view==="watch" && watchView!==key){ watchView=key; renderAll(); return; }
@@ -11889,7 +11896,7 @@ function renderSidebarDev(){
   const backlogN = DEV.cards.filter(c=>!c.sprint && c.space===spc && devWork(c)).length;
   const note = document.createElement("div");
   note.className = "lb-note";
-  note.textContent = backlogN+" item(s) in the backlog below the board. Anyone can move cards; adding, sprints and editing need Edit mode.";
+  note.textContent = backlogN+" item(s) in the Backlog tab. Anyone can move cards; adding, sprints and editing need Edit mode.";
   wrap.appendChild(note);
 }
 
@@ -11921,7 +11928,9 @@ function renderContentDev(){
   const wrap = $("content");
   wrap.innerHTML = "";
   const sp = currentSprint();
+  if(devView==="epics"){ wrap.appendChild(devEpicsSection(currentSpace(), sp)); return; }   // ⚡ Epics tab
 
+  if(devView!=="backlog"){   // Board tab: the sprint only
   if(sp){
     const head = document.createElement("section");
     head.className = "module-block";
@@ -11967,13 +11976,13 @@ function renderContentDev(){
       : (editMode ? "No sprint yet \u2014 create one from the left, then pull backlog items in." : "No sprint yet \u2014 turn on Edit to create Sprint 1.");
     wrap.appendChild(d);
   }
+  return;
+  }
 
   const spc = currentSpace();
-  wrap.appendChild(devEpicsSection(spc, sp));   // ⚡ Epics, each with its stories and progress
   const backlog = DEV.cards.filter(c=>!c.sprint && c.space===spc && devWork(c));
   const block = document.createElement("section");
   block.className = "module-block";
-  block.style.marginTop = "16px";
   const bh = document.createElement("div");
   bh.className = "module-head";
   const h2b = document.createElement("h2"); h2b.textContent = "Backlog";
