@@ -914,9 +914,9 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .rmk-colors{display:flex;flex-wrap:wrap;gap:8px}
 .rmk-sw{width:30px;height:30px;border-radius:8px;border:2px solid transparent;cursor:pointer}
 .rmk-sw.sel{border-color:var(--ink);box-shadow:0 0 0 2px var(--card) inset}
-.tl-bar .tl-t{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.tl-bar .tl-t{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto;min-width:36px}
 .tl-bar .tl-src{font-family:var(--mono);font-size:8px;letter-spacing:.06em;background:rgba(255,255,255,.75);border-radius:4px;padding:1px 5px;flex:none}
-.tl-bar .tl-dates{font-family:var(--mono);font-size:10px;opacity:.75;flex:none;margin-left:auto}
+.tl-bar .tl-dates{font-family:var(--mono);font-size:10px;opacity:.75;flex:0 100 auto;min-width:0;overflow:hidden;white-space:nowrap;margin-left:auto}   /* on a short bar the dates give way to the name */
 .tl-bar.st-done{background:var(--done-bg);color:var(--done)}
 .tl-bar.st-progress{background:#FFF2DE;color:#9A6A1B}
 .tl-bar.st-planned{background:var(--indigo-soft);color:var(--indigo)}
@@ -8015,6 +8015,10 @@ function allTasks(){
   (CSPACES.list||[]).filter(x=>x.type==="discovery").forEach(cs=>{
     (cs.ideas||[]).forEach(i=> out.push({tid:i.id, task:i, path:cs.name+" · Ideas", kind:"idea"}));
   });
+  // items written straight onto a roadmap (not from any space): map.own = [{tid, title, note, status}]
+  ((typeof RMAPS!=="undefined" && RMAPS.maps) || []).forEach(m=>{
+    (m.own||[]).forEach(t=> out.push({tid:t.tid, task:t, path:m.name+" \u00B7 written on this roadmap", kind:"own", map:m}));
+  });
   return out.filter(x=>x.tid);
 }
 function taskByTid(tid){
@@ -12562,6 +12566,22 @@ function renderContentRmap(extMap, extOpts){
     addB.textContent = "\uFF0B Add items from any space";
     addB.onclick = ()=> openRmapPicker(m);
     row.appendChild(addB);
+    // or write something that isn't on any space — it lives on this roadmap only
+    const ownB = document.createElement("button");
+    ownB.className = "tool";
+    ownB.textContent = "\u270F\uFE0F Write an item";
+    ownB.title = "Add something that isn't in any space \u2014 it lives only on this roadmap";
+    ownB.onclick = ()=> openDialog("New item on \u201C"+m.name+"\u201D", {}, v=>{
+      const tid = "rmo-"+Date.now().toString(36);
+      const t = { tid, title:v.title, status:"planned" };
+      if(v.note) t.note = v.note;
+      if(v.owner) t.owner = v.owner;
+      (m.own = m.own || []).push(t);
+      const st = todayISO(), en = new Date(new Date(st+"T00:00:00").getTime()+30*864e5);   // a month to start with; drag the ends
+      m.items.push({ rid:"ri-"+Math.random().toString(36).slice(2,7), tid, start:st, end: en.getFullYear()+"-"+String(en.getMonth()+1).padStart(2,"0")+"-"+String(en.getDate()).padStart(2,"0") });
+      saveRmaps(); toast("Added \u2014 drag its ends to set the dates");
+    }, {titleLabel:"What is it?", noteLabel:"Note (optional)"});
+    row.appendChild(ownB);
     }
     const addMk = document.createElement("button");
     addMk.className = "tool";
@@ -12741,7 +12761,7 @@ function renderContentRmap(extMap, extOpts){
     if(_ph) bar.classList.add("ph-" + _ph.key);
     if(_ph && it.done) bar.classList.add("done");
     else if(_ph && it.end < todayISO() && entry.task.stage===_ph.key) bar.classList.add("overdue");   // still in that phase past its end
-    const src = _ph ? (it.done ? "\u2713 " : "") + _ph.short : entry.kind==="dev" ? "DEV" : entry.kind==="bug" ? "BUG" : entry.kind==="content" ? "EDU" : entry.kind==="idea" ? "IDEA" : "PROD";
+    const src = _ph ? (it.done ? "\u2713 " : "") + _ph.short : entry.kind==="dev" ? "DEV" : entry.kind==="bug" ? "BUG" : entry.kind==="content" ? "EDU" : entry.kind==="idea" ? "IDEA" : entry.kind==="own" ? "\u270F\uFE0F" : "PROD";
     bar.innerHTML = (editMode ? '<span class="tl-h l" title="Drag to change the start date"></span>' : '')
       + '<span class="tl-src"></span><span class="tl-t"></span><span class="tl-dates"></span>'
       + (editMode ? '<span class="tl-h r" title="Drag to change the end date"></span>' : '');
@@ -12959,18 +12979,26 @@ function editRmapItem(map, it, entry){
   $("rmd-done-wrap").style.display = _rph ? "flex" : "none";
   $("rmd-done").checked = !!it.done;
   if(_rph){ $("rmd-done-lbl").textContent = _rph.label + " completed"; $("rmd-path").textContent = entry.path + " \u00b7 " + _rph.label; }
+  const _own = entry.kind==="own";
+  if(_own){
+    $("rmd-done-wrap").style.display = "flex"; $("rmd-done-lbl").textContent = "Done"; $("rmd-done").checked = entry.task.status==="done";
+    $("rmd-title").title = "Click to rename"; $("rmd-title").style.cursor = "pointer";
+    $("rmd-title").onclick = ()=>{ const n = prompt("Rename", entry.task.title||""); if(n && n.trim()){ entry.task.title = n.trim(); $("rmd-title").textContent = n.trim(); saveRmaps(); } };
+  } else { $("rmd-title").onclick = null; $("rmd-title").style.cursor = ""; $("rmd-title").title = ""; }
   $("rmd-save").onclick = ()=>{
     const s0 = $("rmd-start").value, e0 = $("rmd-end").value;
     if(!s0 || !e0){ toast("Pick both dates"); return; }
     if(dNum(e0) < dNum(s0)){ toast("The end date is before the start date"); return; }
     it.start = s0; it.end = e0;
     if(_rph){ if($("rmd-done").checked){ if(!it.done) it.done = todayISO(); } else delete it.done; }
+    if(_own) entry.task.status = $("rmd-done").checked ? "done" : "planned";
     $("rmd-overlay").classList.remove("show");
     saveRmaps();
   };
   $("rmd-remove").onclick = ()=>{
-    if(confirm("Remove \u201C"+(entry.task.title||"")+"\u201D from this roadmap? The card itself is not deleted.")){
+    if(confirm(_own ? "Delete \u201C"+(entry.task.title||"")+"\u201D? It was written on this roadmap, so it goes completely." : "Remove \u201C"+(entry.task.title||"")+"\u201D from this roadmap? The card itself is not deleted.")){
       map.items.splice(map.items.indexOf(it),1);
+      if(_own && map.own) map.own = map.own.filter(x=>x.tid!==entry.tid);
       $("rmd-overlay").classList.remove("show");
       saveRmaps();
     }
