@@ -1627,6 +1627,8 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .rowmenu-sep{height:1px;background:var(--line);margin:4px 2px}
 .ws-menu-btn{margin-left:auto;flex:none;color:var(--muted);font-size:17px;line-height:1;padding:0 6px;border-radius:6px;cursor:pointer}
 .ws-menu-btn:hover{color:var(--ink);background:var(--indigo-soft)}
+.dv-teammenu{position:absolute;top:10px;right:10px}
+.tab-flow{align-self:center;color:var(--muted);font-size:15px;padding:0 2px;user-select:none}
 .ws-item .ws-n + .ws-menu-btn{margin-left:6px}
 
 /* ===== per-space background + picker ===== */
@@ -7566,10 +7568,10 @@ function workTabs(){
       ? [{key:"ideation",label:"All ideas"},{key:"ideation-roadmap",label:"Roadmap"}]
       : [{key:pdtView,label:pdtSectionLabel(pdtView)}];
   if(view==="social") return SX.tabs.map(([key,label])=>({key, label}));
-  if(view==="dev"){   // Board (the sprint) · ⚡ Epics · Backlog, like Jira
+  if(view==="dev"){   // the flow: ⚡ Epics → Backlog → Board (the sprint)
     const spc = currentSpace(), cards = DEV.cards||[];
     const ne = cards.filter(c=>devIsEpic(c) && c.space===spc).length, nb = cards.filter(c=>!c.sprint && c.space===spc && devWork(c)).length;
-    return [{key:"board",label:"Board"},{key:"epics",label:"\u26A1 Epics"+(ne?" \u00B7 "+ne:"")},{key:"backlog",label:"Backlog"+(nb?" \u00B7 "+nb:"")}];
+    return [{key:"epics",label:"\u26A1 Epics"+(ne?" \u00B7 "+ne:""), flow:true},{key:"backlog",label:"Backlog"+(nb?" \u00B7 "+nb:""), flow:true},{key:"board",label:"Board", flow:true}];
   }
   if(view==="campaign" && window.CX) return campTabs(currentCampaign()).map(([key,label])=>({key, label}));
   if(view==="watch" && window.WX) return WX.tabs.map(([key,label])=>({key, label}));
@@ -7603,7 +7605,10 @@ function renderTabs(){
   if(sig!==_lastNavSig){ _lastNavSig=sig; paneTab="work"; }
   strip.innerHTML="";
   const actKey = workTabActiveKey();
+  let _prevFlow = false;
   ((view==="social" || view==="campaign" || view==="watch" || view==="horizon") ? [] : [{summary:true,label:"Summary"}]).concat(workTabs()).forEach(t=>{
+    if(t.flow && _prevFlow){ const ar=document.createElement("span"); ar.className="tab-flow"; ar.textContent="\u2192"; ar.setAttribute("aria-hidden","true"); strip.appendChild(ar); }   // Epics → Backlog → Board
+    _prevFlow = !!t.flow;
     const b=document.createElement("button");
     const on = t.summary ? (paneTab==="summary") : (paneTab==="work" && t.key===actKey);
     b.className="tab"+(on?" active":"");
@@ -11838,12 +11843,12 @@ function renderSidebarDev(){
     b.innerHTML = '<span class="name"></span><span class="pct"></span>';
     b.querySelector(".name").textContent = space.name;
     b.querySelector(".pct").textContent = DEV.sprints.filter(x=>x.space===space.id).length + " sprint(s) \u00b7 " + doneN + "/" + cards.length + " done";
-    if(editMode){
-      cardActs(b, [
-        ...moveBtns(DEV.spaces, DEV.spaces.indexOf(space), ()=>saveDev(), "space"),
-        actBtn("pencil","Rename team / space",false, ()=>
-          openDialog("Rename dev space", {title:space.name}, v=>{ space.name = v.title; saveDev(); }, {hideExtras:true, titleLabel:"Team / space name"})),
-        actBtn("trash","Delete space",true, ()=>{
+    if(editMode){   // ⋯ : add a sprint, rename, move, delete — instead of buttons always showing
+      b.style.position = "relative";
+      const menu = document.createElement("span");
+      menu.className = "ws-menu-btn dv-teammenu"; menu.textContent = "\u22EF"; menu.title = "Sprints and team settings";
+      const i = DEV.spaces.indexOf(space);
+      const doDelete = ()=>{
           const n = DEV.cards.filter(c=>c.space===space.id).length;
           const last = DEV.spaces.length<=1;
           const msg = last
@@ -11863,8 +11868,21 @@ function renderSidebarDev(){
             }
             saveDev(); toast("Dev space deleted");
           }
-        }),
-      ]);
+      };
+      menu.onclick = e=>{ e.stopPropagation(); openRowMenu(menu, [
+        {label:"\uFF0B New sprint", onClick:()=> openDialog("New sprint in \u201C"+space.name+"\u201D", {title:"Sprint "+(DEV.sprints.filter(x=>x.space===space.id).length+1)}, v=>{
+          const sp = { id:"sp-"+Date.now().toString(36), name:v.title, space:space.id };
+          if(v.start) sp.start = v.start;
+          if(v.deadline) sp.end = v.deadline;
+          DEV.sprints.push(sp); devSpace = space.id; devSprint = sp.id; devView = "board";
+          saveDev(); toast("Sprint created \u2014 pull cards in from the Backlog tab");
+        }, {hideExtras:true, dates:true})},
+        {label:"\u270F\uFE0F Rename team", onClick:()=> openDialog("Rename dev team", {title:space.name}, v=>{ space.name = v.title; saveDev(); }, {hideExtras:true, titleLabel:"Team / space name"})},
+        i>0 && {label:"\u2191 Move up", onClick:()=>{ DEV.spaces.splice(i-1, 0, DEV.spaces.splice(i,1)[0]); saveDev(); }},
+        i<DEV.spaces.length-1 && {label:"\u2193 Move down", onClick:()=>{ DEV.spaces.splice(i+1, 0, DEV.spaces.splice(i,1)[0]); saveDev(); }},
+        {label:"Delete team\u2026", danger:true, onClick: doDelete},
+      ].filter(Boolean)); };
+      b.appendChild(menu);
     }
     wrap.appendChild(b);
   });
@@ -11904,25 +11922,7 @@ function renderSidebarDev(){
     }
     wrap.appendChild(b);
   });
-  if(editMode){
-    const add = document.createElement("button");
-    add.className = "mod add";
-    add.textContent = "\uFF0B New sprint";
-    add.onclick = ()=> openDialog("New sprint", {title:"Sprint "+(DEV.sprints.filter(x=>x.space===spc).length+1)}, v=>{
-      const sp = { id:"sp-"+Date.now().toString(36), name:v.title, space:spc };
-      if(v.start) sp.start = v.start;
-      if(v.deadline) sp.end = v.deadline;
-      DEV.sprints.push(sp);
-      devSprint = sp.id;
-      saveDev(); toast("Sprint created \u2014 pull cards in from the backlog");
-    }, {hideExtras:true, dates:true});
-    wrap.appendChild(add);
-  }
-  const backlogN = DEV.cards.filter(c=>!c.sprint && c.space===spc && devWork(c)).length;
-  const note = document.createElement("div");
-  note.className = "lb-note";
-  note.textContent = backlogN+" item(s) in the Backlog tab. Anyone can move cards; adding, sprints and editing need Edit mode.";
-  wrap.appendChild(note);
+  // new sprints: the team's ⋯ menu → ＋ New sprint
 }
 
 // a new engineering team (dev space) — from the engineering space's ⋯ menu
@@ -12006,8 +12006,8 @@ function renderContentDev(){
     const d = document.createElement("div");
     d.className = "empty";
     d.textContent = DEV.sprints.length
-      ? "All sprints completed. " + (editMode ? "Create the next one from the left." : "Turn on Edit to start the next sprint.")
-      : (editMode ? "No sprint yet \u2014 create one from the left, then pull backlog items in." : "No sprint yet \u2014 turn on Edit to create Sprint 1.");
+      ? "All sprints completed. " + (editMode ? "Add the next one from the team\u2019s \u22EF menu on the left." : "Turn on Edit to start the next sprint.")
+      : (editMode ? "No sprint yet \u2014 add one from the team\u2019s \u22EF menu on the left (\uFF0B New sprint), then pull backlog items in." : "No sprint yet \u2014 turn on Edit to create Sprint 1.");
     wrap.appendChild(d);
   }
   return;
