@@ -1628,6 +1628,41 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .ws-menu-btn{margin-left:auto;flex:none;color:var(--muted);font-size:17px;line-height:1;padding:0 6px;border-radius:6px;cursor:pointer}
 .ws-menu-btn:hover{color:var(--ink);background:var(--indigo-soft)}
 .dv-teammenu{position:absolute;top:10px;right:10px}
+.dv-dl{display:flex;align-items:center;gap:14px;border:1px solid var(--line);border-radius:14px;padding:12px 16px;margin-top:12px;background:linear-gradient(135deg,#FFF7ED,#FFFBEB)}
+.dv-dl.warn{border-color:#fcd34d}.dv-dl.late{border-color:#fca5a5;background:linear-gradient(135deg,#fef2f2,#fff7ed)}.dv-dl.ok{border-color:#BBF7D0;background:linear-gradient(135deg,#f0fdf4,#fffbeb)}
+.dv-dl-ic{font-size:28px;flex:none}
+.dv-dl-tx{flex:1;min-width:0}
+.dv-dl-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.dv-dl-h b{font-size:16px}
+.dv-dl.late .dv-dl-h b{color:#b91c1c}.dv-dl.warn .dv-dl-h b{color:#b45309}
+.dv-dl-date{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+.dv-dl-bar{position:relative;height:10px;border-radius:99px;background:var(--line);margin:8px 0 6px;overflow:hidden}
+.dv-dl-bar i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#fdba74,#f97316);border-radius:99px}
+.dv-dl.late .dv-dl-bar i{background:#ef4444}
+.dv-dl-bar u{position:absolute;left:0;bottom:0;height:3px;background:#16a34a;text-decoration:none;border-radius:99px}
+.dv-dl-sub{font-size:13px;color:var(--muted)}
+.dv-sum{display:flex;flex-direction:column;gap:14px;margin-top:18px}
+.dv-sumcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.dv-sumcard h3{margin:0 0 10px;font-size:15px}
+.dv-sumcard .dv-dl{margin-top:0}
+.dv-sumcols{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.dv-sumcol{background:var(--paper);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column}
+.dv-sumcol b{font-size:20px}.dv-sumcol span{font-size:11.5px;color:var(--muted)}
+.dv-sumcol.c-done b{color:#047857}.dv-sumcol.c-review b{color:#9a5b00}.dv-sumcol.c-progress b{color:#1d4ed8}
+.dv-sumflow{display:flex;align-items:stretch;gap:10px;flex-wrap:wrap}
+.dv-sumstep{flex:1;min-width:150px;display:grid;grid-template-columns:auto 1fr;column-gap:10px;align-items:center;text-align:left;border:1px solid var(--line);border-radius:12px;background:var(--paper);padding:10px 12px;cursor:pointer;font:inherit}
+.dv-sumstep:hover{border-color:var(--indigo)}
+.dv-sumstep span{grid-row:span 3;font-size:24px}.dv-sumstep b{font-size:20px}.dv-sumstep em{font-style:normal;font-weight:600}.dv-sumstep small{color:var(--muted);font-size:11.5px}
+.dv-sumarrow{align-self:center;color:var(--muted);font-size:20px}
+.dv-sumepic{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 0;border-top:1px solid var(--line);cursor:pointer}
+.dv-sumepic:first-of-type{border-top:0}
+.dv-sumepic b{flex:1;min-width:160px}
+.dv-sumrow{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:820px){.dv-sumrow{grid-template-columns:1fr}.dv-sumcols{grid-template-columns:repeat(2,1fr)}}
+.dv-sumtypes{display:flex;flex-wrap:wrap;gap:8px}
+.dv-sumtypes .dv-type{cursor:default;font-size:12.5px;padding:4px 10px}
+.dv-sumrev{display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--line)}
+.dv-sumrev:first-of-type{border-top:0}
 .tab-flow{align-self:center;color:var(--muted);font-size:15px;padding:0 2px;user-select:none}
 .ws-item .ws-n + .ws-menu-btn{margin-left:6px}
 
@@ -7700,13 +7735,14 @@ function renderHeader(){
   } else if(view==="dev"){
     const spc = currentSpace();
     const sp = currentSprint();
-    const inSp = sp ? DEV.cards.filter(c=>c.sprint===sp.id) : [];
+    const inSp = sp ? DEV.cards.filter(c=>c.sprint===sp.id && devWork(c)) : [];
     const doneN = inSp.filter(c=>c.col==="done").length;
     pct = inSp.length ? Math.round(doneN/inSp.length*100) : 0;
     stats.append(
+      mkStat(devEpicsOf(spc).length,"\u26A1 Epics"),
       mkStat(DEV.cards.filter(c=>!c.sprint && c.space===spc && devWork(c)).length,"Backlog"),
       mkStat(inSp.length,"In sprint"),
-      mkStat(inSp.filter(c=>c.col==="progress"||c.col==="review").length,"In flight"),
+      mkStat(inSp.filter(c=>c.col==="review").length,"In review by "+DEV_REVIEWER_NAME.split(" ")[0]),
       mkStat(doneN,"Done"),
     );
     updated = DEV.updated || "\u2014";
@@ -7761,6 +7797,7 @@ function renderHeader(){
     updated = DATA.updated || "—";
   }
   if(typeof todoRenderSummary==="function") todoRenderSummary($("pane-summary"), view==="todo");   // My To-do history (my-todo.js); removed on other views
+  devRenderSummary($("pane-summary"), view==="dev");   // engineering: sprint deadline, Epics → Backlog → Sprint, epics, types, review
   const ov = document.createElement("div");
   ov.className = "overall";
   ov.innerHTML = `<label>${view==="okr"?"Cycle score":"Overall completion"} — <b>${pct}%</b></label>
@@ -11842,7 +11879,7 @@ function renderSidebarDev(){
     const b = mkSideCard(space.id===spc, ()=>{ devSpace = space.id; devSprint = null; renderAll(); });
     b.innerHTML = '<span class="name"></span><span class="pct"></span>';
     b.querySelector(".name").textContent = space.name;
-    b.querySelector(".pct").textContent = DEV.sprints.filter(x=>x.space===space.id).length + " sprint(s) \u00b7 " + doneN + "/" + cards.length + " done";
+    b.querySelector(".pct").remove();   // just the name — counts live on the board
     if(editMode){   // ⋯ : add a sprint, rename, move, delete — instead of buttons always showing
       b.style.position = "relative";
       const menu = document.createElement("span");
@@ -11898,7 +11935,7 @@ function renderSidebarDev(){
     const b = mkSideCard(cur && cur.id===sp.id, ()=>{ devSprint = sp.id; renderAll(); });
     b.innerHTML = '<span class="name"></span><span class="pct"></span>';
     b.querySelector(".name").textContent = (sp.completed ? "\u2713 " : "") + sp.name;
-    b.querySelector(".pct").textContent = (sp.start||sp.end ? (sp.start||"?")+" \u2192 "+(sp.end||"?")+" \u00b7 " : "") + doneN+"/"+n+" done";
+    b.querySelector(".pct").remove();   // just the name — dates and progress are on the sprint's deadline card
     if(sp.completed) b.style.opacity = ".6";
     if(editMode){
       cardActs(b, [
@@ -11933,6 +11970,113 @@ function devNewTeam(){
     DEV.spaces.push(sp); devSpace = sp.id; devSprint = null; view = "dev";
     saveDev(); toast("Dev team created");
   }, {hideExtras:true, titleLabel:"Team / space name (e.g. Panel Team, App Team)"});
+}
+/* ---- a sprint's deadline card (like My To-do's Wake up): ⏳ ends on …, N days left, and a timeline bar ---- */
+// sprint dates are typed by hand ("25 September", "4th July", or 2026-10-15): read them as local days
+function devParseDay(str, year){
+  const t = String(str||"").trim(); if(!t) return null;
+  if(/^\d{4}-\d{2}-\d{2}/.test(t)){ const p = t.slice(0,10).split("-"); return new Date(+p[0], +p[1]-1, +p[2]); }
+  const clean = t.replace(/(\d+)(st|nd|rd|th)\b/gi, "$1").replace(/,/g, " ");
+  const withYear = /\b\d{4}\b/.test(clean) ? clean : clean+" "+(year || new Date().getFullYear());
+  const d = new Date(withYear);
+  return isNaN(d) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+function devSprintDeadline(sp, spCards){
+  if(!sp.end) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  let end = devParseDay(sp.end), start = sp.start ? devParseDay(sp.start) : null;
+  if(!end) return null;
+  if(start && end < start) end = new Date(end.getFullYear()+1, end.getMonth(), end.getDate());   // "25 Dec → 10 Jan"
+  if(start && start > today && (start - today) > 180*864e5) start = new Date(start.getFullYear()-1, start.getMonth(), start.getDate());
+  if(start && !/\b\d{4}\b/.test(String(sp.end)) && end < start) end = new Date(start.getFullYear(), end.getMonth(), end.getDate());
+  const day = 864e5, left = Math.round((end - today)/day), total = start ? Math.max(1, Math.round((end - start)/day)) : 0;
+  const gone = start ? Math.min(total, Math.max(0, Math.round((today - start)/day))) : 0;
+  const done = spCards.filter(c=>c.col==="done").length, all = spCards.length;
+  const late = left < 0 && !sp.completed, warn = left >= 0 && left <= 2;
+  const box = document.createElement("div"); box.className = "dv-dl"+(sp.completed ? " ok" : late ? " late" : warn ? " warn" : "");
+  const ic = document.createElement("span"); ic.className = "dv-dl-ic"; ic.textContent = sp.completed ? "\u2705" : late ? "\u23F0" : "\u23F3";
+  const tx = document.createElement("div"); tx.className = "dv-dl-tx";
+  const h = document.createElement("div"); h.className = "dv-dl-h";
+  const fmt = d=> d.toLocaleDateString(undefined, {day:"numeric", month:"short"});
+  h.innerHTML = "<b></b><span class='dv-dl-date'></span>";
+  h.querySelector("b").textContent = sp.completed ? "Sprint completed" : late ? Math.abs(left)+" day"+(Math.abs(left)===1?"":"s")+" past the deadline" : left===0 ? "Ends today" : left+" day"+(left===1?"":"s")+" left";
+  h.querySelector(".dv-dl-date").textContent = (start ? fmt(start)+" \u2192 " : "deadline ") + fmt(end);
+  tx.appendChild(h);
+  // the timeline: how much of the sprint's time has gone, with today marked; the work done shown under it
+  if(start){
+    const bar = document.createElement("div"); bar.className = "dv-dl-bar"; bar.title = gone+" of "+total+" days gone";
+    const fill = document.createElement("i"); fill.style.width = Math.round(gone/total*100)+"%"; bar.appendChild(fill);
+    const work = document.createElement("u"); work.style.width = (all ? Math.round(done/all*100) : 0)+"%"; work.title = done+" of "+all+" cards done"; bar.appendChild(work);
+    tx.appendChild(bar);
+  }
+  const sub = document.createElement("div"); sub.className = "dv-dl-sub";
+  const dayTxt = !start ? "" : today < start ? "Starts in "+Math.round((start-today)/day)+" day(s) \u00B7 " : "Day "+Math.min(total, gone+1)+" of "+total+" \u00B7 ";
+  sub.textContent = dayTxt + done+" of "+all+" cards done" + (all && !sp.completed && start ? (Math.round(done/all*100) >= Math.round(gone/total*100) ? " \u2014 on track \u2705" : " \u2014 behind the clock") : "");
+  tx.appendChild(sub);
+  box.append(ic, tx);
+  return box;
+}
+/* ---- the engineering Summary tab, below the numbers ---- */
+function devRenderSummary(pane, show){
+  let box = document.getElementById("dev-summary");
+  if(!show){ if(box) box.remove(); return; }
+  if(!pane) return;
+  if(!box){ box = document.createElement("div"); box.id = "dev-summary"; box.className = "dv-sum"; pane.appendChild(box); }
+  box.innerHTML = "";
+  const spc = currentSpace(), sp = currentSprint(), cards = (DEV.cards||[]).filter(c=>c.space===spc);
+  const work = cards.filter(devWork), epics = cards.filter(devIsEpic);
+  const inSp = sp ? work.filter(c=>c.sprint===sp.id) : [];
+  const card = (title, cls)=>{ const c = document.createElement("section"); c.className = "dv-sumcard"+(cls?" "+cls:""); const h = document.createElement("h3"); h.textContent = title; c.appendChild(h); box.appendChild(c); return c; };
+  // 1) the current sprint and its deadline
+  if(sp){
+    const c = card("\uD83C\uDFC3 "+sp.name+(sp.completed?" (completed)":""));
+    const dl = devSprintDeadline(sp, inSp); if(dl) c.appendChild(dl);
+    const cols = document.createElement("div"); cols.className = "dv-sumcols";
+    KCOLS.forEach(k=>{ const n = inSp.filter(x=>x.col===k.key).length; const d = document.createElement("div"); d.className = "dv-sumcol c-"+k.key;
+      d.innerHTML = "<b></b><span></span>"; d.querySelector("b").textContent = n; d.querySelector("span").textContent = todoKLabelSafe(k.key); cols.appendChild(d); });
+    c.appendChild(cols);
+  }
+  // 2) the flow of work
+  const fl = card("How work flows");
+  const flow = document.createElement("div"); flow.className = "dv-sumflow";
+  const step = (ico, n, lbl, sub, tab)=>{ const b = document.createElement("button"); b.className = "dv-sumstep"; b.innerHTML = "<span></span><b></b><em></em><small></small>";
+    b.querySelector("span").textContent = ico; b.querySelector("b").textContent = n; b.querySelector("em").textContent = lbl; b.querySelector("small").textContent = sub;
+    b.onclick = ()=>{ devView = tab; paneTab = "work"; renderAll(); }; return b; };
+  const arrow = ()=>{ const a = document.createElement("span"); a.className = "dv-sumarrow"; a.textContent = "\u2192"; return a; };
+  const openSprints = (DEV.sprints||[]).filter(x=>x.space===spc && !x.completed);
+  flow.append(
+    step("\u26A1", epics.length, "Epics", epics.filter(e=>devEpicCol(e)==="done").length+" done", "epics"), arrow(),
+    step("\uD83D\uDCE5", work.filter(c=>!c.sprint).length, "Backlog", "waiting for a sprint", "backlog"), arrow(),
+    step("\uD83C\uDFC3", work.filter(c=>c.sprint && openSprints.some(x=>x.id===c.sprint)).length, "In sprints", openSprints.length+" open sprint"+(openSprints.length===1?"":"s"), "board"));
+  fl.appendChild(flow);
+  // 3) every epic's progress
+  const ec = card("\u26A1 Epics");
+  if(!epics.length){ const e = document.createElement("div"); e.className = "empty"; e.textContent = "No epics yet \u2014 add one in the Epics tab."; ec.appendChild(e); }
+  epics.forEach(e=>{
+    const kids = devEpicKids(e), done = kids.filter(k=>k.col==="done").length, col = devEpicCol(e);
+    const r = document.createElement("div"); r.className = "dv-sumepic";
+    r.innerHTML = "<b></b><span class='dv-epicbar'><i></i></span><span class='dv-epicn'></span><span class='dv-epicst'></span>";
+    r.querySelector("b").textContent = "\u26A1 "+e.title;
+    r.querySelector("i").style.width = (kids.length ? Math.round(done/kids.length*100) : 0)+"%";
+    r.querySelector(".dv-epicn").textContent = kids.length ? done+" of "+kids.length+" done" : "no stories yet";
+    const st = r.querySelector(".dv-epicst"); st.textContent = todoKLabelSafe(col); st.classList.add("c-"+col);
+    r.onclick = ()=>{ devEpicOpen.add(e.id); devView = "epics"; paneTab = "work"; renderAll(); };
+    ec.appendChild(r);
+  });
+  // 4) what kind of work, and 5) what waits on review
+  const row = document.createElement("div"); row.className = "dv-sumrow"; box.appendChild(row);
+  const tc = document.createElement("section"); tc.className = "dv-sumcard"; tc.innerHTML = "<h3>Kinds of work</h3>"; row.appendChild(tc);
+  const types = document.createElement("div"); types.className = "dv-sumtypes";
+  DEV_TYPES.filter(t=>t.key!=="epic").forEach(t=>{ const n = work.filter(c=>devType(c).key===t.key).length, open = work.filter(c=>devType(c).key===t.key && c.col!=="done").length;
+    const d = document.createElement("div"); d.className = "dv-type t-"+t.key; d.textContent = t.icon+" "+n+" "+(n===1 ? t.label : t.key==="story" ? "Stories" : t.label+"s")+" \u00B7 "+open+" open"; types.appendChild(d); });
+  const subs = work.reduce((a,c)=>{ (c.subtasks||[]).forEach(x=>{ a.n++; if(x.done) a.d++; }); return a; }, {n:0,d:0});
+  if(subs.n){ const d = document.createElement("div"); d.className = "dv-sub ok"; d.textContent = "\u2611 "+subs.d+"/"+subs.n+" sub-tasks done"; types.appendChild(d); }
+  tc.appendChild(types);
+  const rc = document.createElement("section"); rc.className = "dv-sumcard"; rc.innerHTML = "<h3></h3>"; row.appendChild(rc);
+  const rev = cards.filter(c=>c.col==="review" && !(c.epic && (cards.find(x=>x.id===c.epic)||{}).col==="review"));
+  rc.querySelector("h3").textContent = "\uD83D\uDC40 Waiting for "+DEV_REVIEWER_NAME.split(" ")[0]+"\u2019s review \u00B7 "+rev.length;
+  if(!rev.length){ const e = document.createElement("div"); e.className = "empty"; e.textContent = "Nothing waiting for review."; rc.appendChild(e); }
+  rev.forEach(c=>{ const d = document.createElement("div"); d.className = "dv-sumrev"; d.append(devTypeChip(c)); const t = document.createElement("span"); t.textContent = c.title; d.appendChild(t); rc.appendChild(d); });
 }
 function devCardOpts(sprintId){
   return {
@@ -11974,11 +12118,6 @@ function renderContentDev(){
     const h2 = document.createElement("h2");
     h2.textContent = sp.name + (sp.completed ? " (completed)" : "");
     row.appendChild(h2);
-    if(sp.start || sp.end){
-      const d = document.createElement("span"); d.className = "pct";
-      d.textContent = (sp.start||"?") + " \u2192 " + (sp.end||"?");
-      row.appendChild(d);
-    }
     const spCards = DEV.cards.filter(c=>c.sprint===sp.id && devWork(c));
     const cnt = document.createElement("span"); cnt.className = "pct";
     cnt.textContent = spCards.filter(c=>c.col==="done").length + "/" + spCards.length + " done";
@@ -12000,6 +12139,7 @@ function renderContentDev(){
       row.appendChild(btn);
     }
     head.appendChild(row);
+    const dl = devSprintDeadline(sp, spCards); if(dl) head.appendChild(dl);
     wrap.appendChild(head);
     wrap.appendChild(kanbanBoard(spCards, devCardOpts(sp.id)));
   } else {
