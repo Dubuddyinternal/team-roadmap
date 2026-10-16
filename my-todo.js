@@ -57,7 +57,8 @@
    mark when each kind of work happens — 🚗 Reaching office 9–10 (after
    Deep thinking 6–8 and Reasoning time 8–9), CEO's learning 10–12:30, Break
    12:30–1, Product Head 1–3, CEO 3–4:30, Sumit YouTube 5–7 — each with how many open things wait in
-   that hat. A New learning box can belong to a hat (settings.learnParts[].hat):
+   that hat; a line can carry a motto with a small seal — Sumit YouTube's is
+   "शिक्षार्थ आइए, सेवार्थ जाइए" (also on its hat in All to be done). A New learning box can belong to a hat (settings.learnParts[].hat):
    in a hat with a line — all four are in 🧭 CEO — it sits inside that hat's
    learning line (CEO's learning) every day, one after another from the
    line's start, each for its own minutes (AI 60, the rest 30), unless it
@@ -124,6 +125,9 @@ function todoWithHat(B, cb) {
   if (hs.length === 1) { cb(hs[0]); return; }
   openChoice("Which kind of work is it?", hs.map(function (k) { var h = todoHat(k); return { label: h.icon + " " + h.label, value: k }; }), cb);
 }
+// why the channel exists — shown with a small seal on the Sumit YouTube line and hat
+var TODO_YT_MOTTO = "शिक्षार्थ आइए, सेवार्थ जाइए";
+var TODO_YT_MOTTO_EN = "Come to learn, go out to serve";
 // the day's reminder lines on Today / Tomorrow (edit in ⋯ → Day lines)
 var TODO_DAY_LINES = [
   { id: "dl-commute", from: "09:00", to: "10:00", label: "Reaching office", hat: "", icon: "🚗" },
@@ -131,7 +135,7 @@ var TODO_DAY_LINES = [
   { id: "dl-break", from: "12:30", to: "13:00", label: "Break", hat: "" },
   { id: "dl-product", from: "13:00", to: "15:00", label: "Product Head work", hat: "product" },
   { id: "dl-ceo", from: "15:00", to: "16:30", label: "CEO work", hat: "ceo" },
-  { id: "dl-youtube", from: "17:00", to: "19:00", label: "Sumit YouTube", hat: "youtube" },
+  { id: "dl-youtube", from: "17:00", to: "19:00", label: "Sumit YouTube", hat: "youtube", motto: TODO_YT_MOTTO },
 ];
 var TODO_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 var TODO_DONE_SHOW = 6;          // each hat's Done column shows the latest few; "Show all" opens the rest
@@ -623,11 +627,25 @@ function todoLearnLine(P) {
   var bs = TODO.settings.dayBlocks.filter(function (b) { return b.hat === P.hat; });
   return bs.find(function (b) { return b.learn; }) || bs[0] || null;   // the hat's learning line first (CEO's learning), else its first line
 }
+// the seal and motto (शिक्षार्थ आइए, सेवार्थ जाइए) — a reminder of why the work is done
+function todoMotto(text) {
+  var m = todoEl("span", "td-motto");
+  var seal = todoEl("span", "td-seal"); seal.setAttribute("aria-hidden", "true");
+  seal.innerHTML = '<svg viewBox="0 0 40 40" width="30" height="30"><circle cx="20" cy="20" r="18" fill="#fff8ec" stroke="#ff9933" stroke-width="2.5"/><circle cx="20" cy="20" r="13.5" fill="none" stroke="#138808" stroke-width="1.2" stroke-dasharray="2 2"/>'
+    + '<path d="M11 24.5c3-1.6 6-1.6 9 0 3-1.6 6-1.6 9 0v-9c-3-1.6-6-1.6-9 0-3-1.6-6-1.6-9 0z" fill="#fff" stroke="#9a5b00" stroke-width="1.3" stroke-linejoin="round"/><path d="M20 15.5v9" stroke="#9a5b00" stroke-width="1.3"/>'
+    + '<path d="M20 8.5c1.6 1.8 1.6 3.4 0 4.6-1.6-1.2-1.6-2.8 0-4.6z" fill="#ff9933"/></svg>';
+  var tx = todoEl("span", "td-motto-tx");
+  tx.appendChild(todoEl("b", "", text));
+  if (text === TODO_YT_MOTTO) tx.appendChild(todoEl("small", "", TODO_YT_MOTTO_EN));
+  m.append(seal, tx); m.title = "Why this work: " + text;
+  return m;
+}
 // one dotted reminder line: its name, and how many open things wait in its hat (click → All to be done)
 function todoDayLine(b, assigned, day) {
   var box = todoEl("div", "td-dline" + (b.hat ? "" : " rest"));
   var H = b.hat ? todoHat(b.hat) : null;
   box.appendChild(todoEl("b", "", (b.icon || (H ? H.icon : "☕")) + " " + b.label));
+  if (b.motto) box.appendChild(todoMotto(b.motto));
   var learnHere = todoLearnParts().some(function (P) { var L = todoLearnLine(P); return L && L.id === b.id; });
   if (H && !learnHere) {   // a learning line shows its boxes, not a count of cards
     // open in this hat and not yet planned for the day (the planned ones are on the timeline already)
@@ -653,7 +671,8 @@ function todoDayLinesSettings() {
       var hs = todoEl("select"); [{ key: "", icon: "☕", label: "No hat (a break)" }].concat(TODO_HATS).forEach(function (h) { var o = todoEl("option", "", h.icon + " " + h.label); o.value = h.key; hs.appendChild(o); });
       hs.value = b.hat; hs.onchange = function () { b.hat = hs.value; };
       var rm = todoEl("button", "td-act danger", "Remove"); rm.onclick = function () { rows.splice(i, 1); draw(); };
-      r.append(f, t, nm, hs, rm); list.appendChild(r);
+      var mo = todoEl("input", "td-set-nm"); mo.value = b.motto || ""; mo.placeholder = "Motto under it (optional)"; mo.oninput = function () { b.motto = mo.value; };
+      r.append(f, t, nm, hs, mo, rm); list.appendChild(r);
     });
     var add = todoEl("button", "addline k-add", "＋ Add a line");
     add.onclick = function () { rows.push({ id: todoId(), from: "09:00", to: "10:00", label: "", hat: "" }); draw(); };
@@ -665,7 +684,7 @@ function todoDayLinesSettings() {
   }, function () {
     var ok = rows.filter(function (b) { return b.from && b.label.trim(); });
     if (ok.some(function (b) { return b.to && b.to <= b.from; })) return "Each line must end after it starts.";
-    TODO.settings.dayBlocks = ok.map(function (b) { return { id: b.id, from: b.from, to: b.to || "", label: b.label.trim(), hat: b.hat, learn: !!b.learn, icon: b.icon || "" }; });
+    TODO.settings.dayBlocks = ok.map(function (b) { return { id: b.id, from: b.from, to: b.to || "", label: b.label.trim(), hat: b.hat, learn: !!b.learn, icon: b.icon || "", motto: (b.motto || "").trim() }; });
     return "";
   });
 }
@@ -923,6 +942,8 @@ function todoAllOpen(assigned) {
     var sec = todoEl("div", "td-upday");
     var hd = todoEl("div", "td-all-h");
     hd.appendChild(todoEl("h3", "", H.icon + " " + H.label));
+    var hl = TODO.settings.dayBlocks.find(function (b) { return b.hat === H.key && b.motto; });
+    if (hl) hd.appendChild(todoMotto(hl.motto));   // e.g. Sumit YouTube: शिक्षार्थ आइए, सेवार्थ जाइए
     hd.appendChild(todoEl("span", "td-hat-n", cards.length + " to do"));
     var more = todoEl("button", "td-more", "⋯"); more.title = "Set up fixed things · add a to-do";
     more.onclick = function (ev) { ev.stopPropagation(); todoHatMenu(more, H.key); };
@@ -1024,7 +1045,9 @@ function todoSettingsNorm(s) {
   // once: 🚗 Reaching office 9–10, before CEO's learning
   if (!s.dayLinesV3 && Array.isArray(s.dayBlocks)) { if (!s.dayBlocks.some(function (b) { return b && b.id === "dl-commute"; })) s.dayBlocks.unshift(Object.assign({}, TODO_DAY_LINES[0])); s.dayLinesV3 = 1; s.morningRetime = 1; }   // once: the day as CEO's learning 10–12:30 · Break · Product Head 1–3 · CEO 3–4:30 · YouTube 5–7
   var bl = Array.isArray(s.dayBlocks) ? s.dayBlocks.filter(function (b) { return b && hm(b.from) && b.label; }) : null;
-  s.dayBlocks = (bl || TODO_DAY_LINES).map(function (b) { return { id: b.id || todoId(), from: b.from, to: hm(b.to) ? b.to : "", label: String(b.label).slice(0, 60), hat: TODO_HATS.some(function (h) { return h.key === b.hat; }) ? b.hat : "", learn: !!b.learn, icon: b.icon ? String(b.icon).slice(0, 4) : "" }; });
+  s.dayBlocks = (bl || TODO_DAY_LINES).map(function (b) { return { id: b.id || todoId(), from: b.from, to: hm(b.to) ? b.to : "", label: String(b.label).slice(0, 60), hat: TODO_HATS.some(function (h) { return h.key === b.hat; }) ? b.hat : "", learn: !!b.learn, icon: b.icon ? String(b.icon).slice(0, 4) : "", motto: b.motto ? String(b.motto).slice(0, 120) : "" }; });
+  // once: the Sumit YouTube line carries the motto
+  if (!s.ytMottoV1) { s.dayBlocks.forEach(function (b) { if (b.hat === "youtube" && !b.motto) b.motto = TODO_YT_MOTTO; }); s.ytMottoV1 = 1; }
   return s;
 }
 function todoLearnParts() { return TODO.settings.learnParts; }
