@@ -397,13 +397,16 @@ function todoAssigned() {
   // dev cards waiting in In Review with me as the reviewer (set automatically when a card reaches review)
   ((DEV && DEV.cards) || []).forEach(function (c) {
     if (c.col !== "review" || (c.assignee || "").toLowerCase() === me.email) return;
+    var ep = c.epic ? (DEV.cards || []).find(function (x) { return x.id === c.epic; }) : null;
+    if (ep && ep.col === "review") return;   // the whole epic is in review: one card for it, not one per story
+    var isEpic = c.type === "epic", kids = isEpic ? (DEV.cards || []).filter(function (x) { return x.epic === c.id; }) : [];
     var rv = c.reviewer || (typeof devReviewerEmail === "function" ? devReviewerEmail() : "");   // cards already in review before the rule: same reviewer
     if (rv.toLowerCase() !== me.email) return;
     var sp = (DEV.spaces || []).find(function (s) { return s.id === c.space; }), key = "devrev:" + c.id;
-    out.push({ key: key, hat: "product", icon: "🛠️", src: "Review", title: c.title, where: sp ? sp.name : "Development",
-      board: "Engineering · " + (sp ? sp.name : "Development"), status: "👀 In review — waiting for you",
+    out.push({ key: key, hat: "product", icon: isEpic ? "⚡" : "🛠️", src: "Review", title: (isEpic ? "Epic: " : "") + c.title, where: sp ? sp.name : "Development",
+      board: "Engineering · " + (sp ? sp.name : "Development"), status: "👀 In review — waiting for you" + (isEpic && kids.length ? " (" + kids.length + " stories)" : ""),
       col: TODO.over[key] || "todo", boardCol: "todo", due: todoISO(c.duedate),
-      write: hasPerm("edit") ? function (k) { if (k === "done") { c.col = "done"; delete TODO.over[key]; saveDev(); } else if (k === "todo") delete TODO.over[key]; else TODO.over[key] = k; } : null,
+      write: hasPerm("edit") ? function (k) { if (k === "done") { if (isEpic && typeof devEpicSetCol === "function") { delete TODO.over[key]; devEpicSetCol(c, "done"); return; } c.col = "done"; delete TODO.over[key]; saveDev(); } else if (k === "todo") delete TODO.over[key]; else TODO.over[key] = k; } : null,
       open: function () { view = "dev"; devSpace = c.space || null; devSprint = c.sprint || null; renderAll(); } });
   });
   // bugs
