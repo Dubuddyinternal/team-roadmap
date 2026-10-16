@@ -933,6 +933,11 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .tl-lg.ph-implres{background:#EDE9FE;color:#6D28D9}
 .tl-out{position:absolute;top:14px;font-size:12px;color:var(--muted);white-space:nowrap;pointer-events:none}
 .tl-out b{color:var(--ink,#17233A);font-weight:600}
+.tl-out .tl-when{margin-left:10px;font-family:var(--mono);font-size:11.5px}
+.tl-out.click{pointer-events:auto;cursor:pointer;border-radius:6px;padding:0 4px;margin-left:-4px}
+.tl-out.click:hover{background:var(--indigo-soft)}
+.tl-out .tl-edit{margin-left:10px;font-size:11px;color:var(--indigo);opacity:0}
+.tl-out.click:hover .tl-edit{opacity:1}
 .tl-lg.ph-building{background:#DBEAFE;color:#1D4ED8}
 .tl-today{position:absolute;top:0;bottom:0;width:2px;background:var(--blocked);z-index:2;pointer-events:none}
 .tl-today span{position:absolute;top:-2px;left:5px;font-family:var(--mono);font-size:9px;background:var(--blocked);color:#fff;border-radius:4px;padding:2px 6px}
@@ -4383,6 +4388,10 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
     <h3 id="rmd-title">Item</h3>
     <div class="dlg-body">
       <div class="hint" id="rmd-path" style="margin-bottom:12px"></div>
+      <div id="rmd-edit-wrap" style="display:none">
+        <div class="field"><label for="rmd-name">✏️ Name</label><input id="rmd-name" data-plain="1"></div>
+        <div class="field"><label for="rmd-note">Note (optional)</label><textarea id="rmd-note" rows="2" data-plain="1"></textarea></div>
+      </div>
       <div class="field-row">
         <div class="field"><label for="rmd-start">Start date</label><input id="rmd-start" type="date"></div>
         <div class="field"><label for="rmd-end">End date</label><input id="rmd-end" type="date"></div>
@@ -12579,7 +12588,10 @@ function renderContentRmap(extMap, extOpts){
       (m.own = m.own || []).push(t);
       const st = todayISO(), en = new Date(new Date(st+"T00:00:00").getTime()+30*864e5);   // a month to start with; drag the ends
       m.items.push({ rid:"ri-"+Math.random().toString(36).slice(2,7), tid, start:st, end: en.getFullYear()+"-"+String(en.getMonth()+1).padStart(2,"0")+"-"+String(en.getDate()).padStart(2,"0") });
-      saveRmaps(); toast("Added \u2014 drag its ends to set the dates");
+      saveRmaps();
+      // straight to its dates: when it starts and when it ends
+      const _it = m.items[m.items.length-1], _en = allTasks().find(x=>x.tid===tid);
+      if(_en) editRmapItem(m, _it, _en);
     }, {titleLabel:"What is it?", noteLabel:"Note (optional)"});
     row.appendChild(ownB);
     }
@@ -12785,6 +12797,21 @@ function renderContentRmap(extMap, extOpts){
       out.querySelector("span").textContent = _ph.label + (it.done ? " \u2713 completed " + fmtD(it.done) : "") + " \u00b7 " + fmtD(it.start) + " \u2192 " + fmtD(it.end)
         + (entry.task.assignee ? " \u00b7 \uD83D\uDC64 " + discOwnerName(entry.task.assignee) : "");
       r.appendChild(out);
+    } else {
+      // every bar says plainly when it starts and ends (and how long), just past its end
+      const days = Math.round((dNum(it.end) - dNum(it.start))) + 1;
+      const out = document.createElement("div"); out.className = "tl-out tl-out-dates";
+      out.style.left = (parseFloat(bar.style.left) + parseFloat(bar.style.width) + 10) + "px";
+      out.innerHTML = "<b></b><span class='tl-when'></span>";
+      out.querySelector("b").textContent = entry.task.title || "(untitled)";
+      out.querySelector(".tl-when").textContent = "\u25B6 " + fmtD(it.start) + "  \u2192  \u25A0 " + fmtD(it.end) + " \u00B7 " + days + " day" + (days===1?"":"s");
+      if(editMode){   // the label beside the bar opens the same edit window as clicking the bar
+        const ed = document.createElement("span"); ed.className = "tl-edit"; ed.textContent = "\u270F\uFE0F Edit"; out.appendChild(ed);
+        out.classList.add("click"); out.title = "Edit name, dates, done";
+        out.onclick = ()=> editRmapItem(m, it, entry);
+      }
+      r.appendChild(out);
+      bar.querySelector(".tl-dates").textContent = "";   // shown beside the bar instead
     }
     rows.appendChild(r);
   });
@@ -12980,18 +13007,27 @@ function editRmapItem(map, it, entry){
   $("rmd-done").checked = !!it.done;
   if(_rph){ $("rmd-done-lbl").textContent = _rph.label + " completed"; $("rmd-path").textContent = entry.path + " \u00b7 " + _rph.label; }
   const _own = entry.kind==="own";
+  // an item written on this roadmap: edit its name and note here too
+  $("rmd-edit-wrap").style.display = _own ? "" : "none";
+  $("rmd-remove").textContent = _own ? "\uD83D\uDDD1 Delete item" : "Remove from roadmap";
+  $("rmd-save").textContent = _own ? "Save" : "Save dates";
   if(_own){
+    $("rmd-title").textContent = "\u270F\uFE0F Edit item";
+    $("rmd-name").value = entry.task.title || ""; $("rmd-note").value = entry.task.note || "";
     $("rmd-done-wrap").style.display = "flex"; $("rmd-done-lbl").textContent = "Done"; $("rmd-done").checked = entry.task.status==="done";
-    $("rmd-title").title = "Click to rename"; $("rmd-title").style.cursor = "pointer";
-    $("rmd-title").onclick = ()=>{ const n = prompt("Rename", entry.task.title||""); if(n && n.trim()){ entry.task.title = n.trim(); $("rmd-title").textContent = n.trim(); saveRmaps(); } };
-  } else { $("rmd-title").onclick = null; $("rmd-title").style.cursor = ""; $("rmd-title").title = ""; }
+  }
   $("rmd-save").onclick = ()=>{
     const s0 = $("rmd-start").value, e0 = $("rmd-end").value;
     if(!s0 || !e0){ toast("Pick both dates"); return; }
     if(dNum(e0) < dNum(s0)){ toast("The end date is before the start date"); return; }
     it.start = s0; it.end = e0;
     if(_rph){ if($("rmd-done").checked){ if(!it.done) it.done = todayISO(); } else delete it.done; }
-    if(_own) entry.task.status = $("rmd-done").checked ? "done" : "planned";
+    if(_own){
+      const nm = $("rmd-name").value.trim(); if(!nm){ toast("Give it a name"); return; }
+      entry.task.title = nm;
+      const nt = $("rmd-note").value.trim(); if(nt) entry.task.note = nt; else delete entry.task.note;
+      entry.task.status = $("rmd-done").checked ? "done" : "planned";
+    }
     $("rmd-overlay").classList.remove("show");
     saveRmaps();
   };
