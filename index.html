@@ -2543,13 +2543,28 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .rmg-cell.now{background:var(--indigo-soft)}
 .rmg-blk{margin:5px 3px;border-radius:6px;color:#fff;font-size:12px;font-weight:600;padding:7px 9px;display:flex;align-items:center;cursor:pointer;z-index:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
 .rmg-blk{contain:inline-size;min-width:0}
-.rmg-days{grid-auto-rows:38px}
+.rmg-days .rmg-phase{background:var(--paper)}
+.rmg-pname{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rmg-pct{font-family:var(--mono);font-size:10.5px;color:var(--muted);font-weight:600}
+.rmg-cell.phase{background:var(--paper)}
+.rmg-cell.phase.now,.rmg-cell.addrow.now{background:color-mix(in srgb,var(--indigo-soft) 70%,var(--paper))}
+.rmg-sum{align-self:center;height:5px;border-radius:99px;background:var(--line-strong);margin:0 1px;z-index:1;pointer-events:none}
+.rmg-task{grid-column:1;display:flex;flex-direction:column;justify-content:center;gap:1px;padding:4px 10px 4px 26px;border-bottom:1px solid var(--line);position:sticky;left:0;background:var(--card);z-index:2;min-width:0}
+.rmg-task.muted{color:var(--muted);font-size:12px;font-style:italic}
+.rmg-tt{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rmg-td{font-family:var(--mono);font-size:9.5px;color:var(--muted);white-space:nowrap}
+.rmg-task.done .rmg-tt{color:var(--muted);text-decoration:line-through}
+.rmg-days .rmg-cell{border-bottom:1px solid var(--line)}
+.rml-qadd{width:100%;box-sizing:border-box;border:1px dashed transparent;background:transparent;border-radius:6px;padding:4px 6px;font:inherit;font-size:12.5px;color:var(--ink,#172B4D)}
+.rml-qadd::placeholder{color:var(--indigo);opacity:.8;font-weight:600}
+.rml-qadd:hover{border-color:var(--line-strong)}
+.rml-qadd:focus{outline:none;border-color:var(--indigo);background:var(--card)}
+.rmg-add,.rms-add{padding-left:20px}
+.rmw-addbox{flex:1;min-width:0}
+.rmg-days{grid-auto-rows:40px}
 .rmg-days .rmg-wk{grid-row:1}
 .rmg-blk.rmg-line{height:16px;margin:0 1px;padding:0;align-self:center;border-radius:99px;overflow:visible;contain:none;white-space:nowrap;position:relative;font-size:0}
 .rmg-blk.rmg-line.locked{outline-offset:2px}
-.rmg-name{position:absolute;left:calc(100% + 8px);top:50%;transform:translateY(-50%);font-size:12px;font-weight:600;color:var(--ink,#172B4D);pointer-events:none;white-space:nowrap}
-.rmg-name.left{left:auto;right:calc(100% + 8px)}
-.rmg-blk.rmg-line.done .rmg-name{color:var(--muted);text-decoration:line-through}
 
 .rm-rename{cursor:pointer;display:inline-flex;align-items:center;gap:8px;border-radius:8px;padding:2px 6px;margin-left:-6px}
 .rm-rename:hover{background:var(--indigo-soft)}
@@ -12772,6 +12787,31 @@ function rmlCard(m, it, en, ln){
 }
 
 /* ---- write a new item straight onto a lane ---- */
+/* "＋ Add task…" line in a chart's left column: type a name, Enter adds it to that phase / swimlane /
+   group (starting today, one week long — drag or click it to adjust) and keeps the cursor there */
+let rmlQuickFocus = null;
+function rmlQuickAdd(m, laneId, title){
+  const tid = "rmo-"+Date.now().toString(36)+Math.random().toString(36).slice(2,4);
+  (m.own = m.own || []).push({ tid, title, status:"planned" });
+  const st = todayISO();
+  m.items.push({ rid:"ri-"+Math.random().toString(36).slice(2,7), tid, start:st, end:dISO(dNum(st)+6), lane:laneId });
+}
+function rmlQuickAddInput(m, ln, cls){
+  const box = document.createElement("div"); box.className = cls;
+  const inp = document.createElement("input"); inp.type = "text"; inp.className = "rml-qadd"; inp.placeholder = "＋ Add task…";
+  inp.title = "Type a task name and press Enter";
+  inp.onkeydown = e=>{
+    if(e.key==="Escape"){ inp.value = ""; inp.blur(); return; }
+    if(e.key!=="Enter") return;
+    const v = inp.value.trim(); if(!v) return;
+    rmlQuickAdd(m, ln.id, v); rmlQuickFocus = { key: m.id + ":" + ln.id, until: Date.now() + 2000 };
+    saveRmaps();
+  };
+  box.appendChild(inp);
+  /* the page can redraw more than once after a save: keep the cursor in this box for each redraw */
+  if(rmlQuickFocus && rmlQuickFocus.key === m.id + ":" + ln.id && Date.now() < rmlQuickFocus.until) setTimeout(()=> inp.focus(), 0);
+  return box;
+}
 function rmlNewOwn(m, laneId){
   openDialog("New item on “"+m.name+"”", {}, v=>{
     const tid = "rmo-"+Date.now().toString(36);
@@ -12951,8 +12991,8 @@ function renderRmapGantt(m, wrap, byTid){
   const nD = nW*7, dayOf = n => n - w0;
   const scroll = document.createElement("div"); scroll.className = "rmg-scroll";
   const grid = document.createElement("div"); grid.className = "rmg-grid rmg-days";
-  grid.style.gridTemplateColumns = "170px repeat("+nD+", minmax(0, 1fr))";
-  grid.style.minWidth = (170 + nW*(nW<=5 ? 0 : 84)) + "px";
+  grid.style.gridTemplateColumns = "250px repeat("+nD+", minmax(0, 1fr))";
+  grid.style.minWidth = (250 + nW*(nW<=5 ? 0 : 84)) + "px";
   const corner = document.createElement("div"); corner.className = "rmg-corner"; grid.appendChild(corner);
   const tw = wkOf(today), inRange = today >= w0 && today < w0 + nD;
   for(let w=0; w<nW; w++){
@@ -12962,7 +13002,15 @@ function renderRmapGantt(m, wrap, byTid){
     grid.appendChild(c);
   }
   const weekPx = ()=> (grid.querySelector(".rmg-wk")||{}).offsetWidth || 0;
+  const cellsRow = (row, laneId, cls)=>{
+    for(let w=0; w<nW; w++){
+      const bg = document.createElement("div"); bg.className = "rmg-cell" + (cls ? " "+cls : "") + (inRange && w===tw ? " now" : ""); bg.dataset.lane = laneId;
+      bg.style.gridRow = String(row); bg.style.gridColumn = (2 + w*7) + " / span 7";
+      grid.appendChild(bg);
+    }
+  };
   let rIdx = 2;
+  /* left column reads like a task list: phase header, its tasks, then "＋ Add task…" */
   m.lanes.forEach(ln=>{
     const items = live.filter(it=> rmlLaneOf(m, it)===ln)
       .filter(it=>{ /* in a window, drop tasks entirely outside it */
@@ -12970,10 +13018,9 @@ function renderRmapGantt(m, wrap, byTid){
         return !(e0 < 0 || s0 > nD-1);
       })
       .sort((x,y)=> dNum(x.start||todayISO()) - dNum(y.start||todayISO()));
-    const span = Math.max(1, items.length);
-    const lab = document.createElement("div"); lab.className = "rmg-phase";
-    lab.style.gridRow = rIdx + " / span " + span; lab.dataset.lane = ln.id;
-    lab.textContent = ln.name;
+    const lab = document.createElement("div"); lab.className = "rmg-phase"; lab.style.gridRow = String(rIdx); lab.dataset.lane = ln.id;
+    const lt = document.createElement("span"); lt.className = "rmg-pname"; lt.textContent = ln.name; lab.appendChild(lt);
+    const ct = document.createElement("span"); ct.className = "rmg-pct"; ct.textContent = items.length || ""; lab.appendChild(ct);
     if(editMode){
       const ed = document.createElement("button"); ed.className = "rml-mini"; ed.textContent = "✎"; ed.title = "Rename / delete phase";
       ed.onclick = ()=> rmlEditLane(m, ln);
@@ -12981,28 +13028,46 @@ function renderRmapGantt(m, wrap, byTid){
     }
     rmlLaneDrag(lab, m, ln);
     grid.appendChild(lab);
-    for(let r=0; r<span; r++) for(let w=0; w<nW; w++){
-      const bg = document.createElement("div"); bg.className = "rmg-cell" + (inRange && w===tw ? " now" : "") + (r===span-1 ? " last" : ""); bg.dataset.lane = ln.id;
-      bg.style.gridRow = String(rIdx + r); bg.style.gridColumn = (2 + w*7) + " / span 7";
-      grid.appendChild(bg);
+    cellsRow(rIdx, ln.id, "phase");
+    /* thin summary line over the phase's tasks */
+    if(items.length){
+      const s0 = Math.max(0, Math.min(...items.map(it=> dayOf(dNum(it.start||it.end||todayISO())))));
+      const e0 = Math.min(nD-1, Math.max(...items.map(it=> dayOf(dNum(it.end||it.start||todayISO())))));
+      const sm = document.createElement("div"); sm.className = "rmg-sum"; sm.style.gridRow = String(rIdx); sm.style.gridColumn = (s0+2) + " / " + (e0+3);
+      grid.appendChild(sm);
     }
-    items.forEach((it, r)=>{
+    rIdx++;
+    items.forEach(it=>{
       const en = byTid[it.tid], st = effStatus(en.task), locked = isLocked(en.task);
       const s = Math.max(0, dayOf(dNum(it.start || it.end || todayISO())));
       const e = Math.min(nD-1, Math.max(s, dayOf(dNum(it.end || it.start || todayISO()))));
+      const nm = document.createElement("div"); nm.className = "rmg-task" + (st==="done" ? " done" : ""); nm.style.gridRow = String(rIdx); nm.dataset.lane = ln.id;
+      nm.innerHTML = '<span class="rmg-tt"></span><span class="rmg-td"></span>';
+      nm.firstChild.textContent = (st==="done" ? "✓ " : locked ? "🔒 " : "") + (en.task.title || "(untitled)");
+      nm.lastChild.textContent = rmlFmt(it.start) + (it.end && it.end!==it.start ? " → " + rmlFmt(it.end) : "");
+      nm.title = (en.task.title||"") + (it.team ? "\nTeam: " + it.team : "") + "\n" + en.path;
+      if(editMode){ nm.onclick = ()=> rmlEditItem(m, it, en); nm.style.cursor = "pointer"; }
+      grid.appendChild(nm);
+      cellsRow(rIdx, ln.id, "");
       const blk = document.createElement("div");
       blk.className = "rmg-blk rmg-line" + (st==="done" ? " done" : "") + (locked ? " locked" : "");
-      blk.style.gridRow = String(rIdx + r); blk.style.gridColumn = (s + 2) + " / " + (e + 3);
+      blk.style.gridRow = String(rIdx); blk.style.gridColumn = (s + 2) + " / " + (e + 3);
       blk.style.background = it.color || colorOf(it.team);
-      const name = document.createElement("span");
-      name.className = "rmg-name" + (e > nD*0.72 ? " left" : "");
-      name.textContent = (st==="done" ? "✓ " : locked ? "🔒 " : "") + (en.task.title || "(untitled)");
-      blk.appendChild(name);
-      blk.title = (en.task.title||"") + "\n" + rmlFmt(it.start) + " → " + rmlFmt(it.end) + (it.team ? "\nTeam: " + it.team : "") + "\n" + en.path;
+      blk.title = nm.title + "\n" + rmlFmt(it.start) + " → " + rmlFmt(it.end);
       if(editMode) rmgItemDrag(blk, m, it, ()=> weekPx()/7, 1, ()=> rmlEditItem(m, it, en)); else blk.style.cursor = "default";
       grid.appendChild(blk);
+      rIdx++;
     });
-    rIdx += span;
+    if(editMode){
+      const add = rmlQuickAddInput(m, ln, "rmg-task rmg-add");
+      add.style.gridRow = String(rIdx); add.dataset.lane = ln.id;
+      grid.appendChild(add);
+      cellsRow(rIdx, ln.id, "addrow");
+      rIdx++;
+    } else if(!items.length){
+      const e = document.createElement("div"); e.className = "rmg-task muted"; e.style.gridRow = String(rIdx); e.textContent = "No tasks";
+      grid.appendChild(e); cellsRow(rIdx, ln.id, ""); rIdx++;
+    }
   });
   if(inRange){
     const tl = document.createElement("div"); tl.className = "rms-today"; tl.title = "Today";
@@ -13103,7 +13168,13 @@ function rmgSwimlanes(m, wrap, byTid, live, w0, nW, today){
     rmlLaneDrag(band, m, ln);
     grid.appendChild(band);
     r++;
+    const addRow = ()=>{
+      if(!editMode) return;
+      const add = rmlQuickAddInput(m, ln, "rms-task rms-add"); add.style.gridRow = String(r); add.dataset.lane = ln.id;
+      grid.appendChild(add); weekCells(r, true, ln.id); r++;
+    };
     if(!items.length){
+      if(editMode){ addRow(); return; }
       const e = document.createElement("div"); e.className = "rms-task muted"; e.style.gridRow = String(r); e.textContent = "No tasks in this window"; e.dataset.lane = ln.id;
       grid.appendChild(e); weekCells(r, true, ln.id); r++;
       return;
@@ -13125,6 +13196,7 @@ function rmgSwimlanes(m, wrap, byTid, live, w0, nW, today){
       grid.appendChild(bar);
       r++;
     });
+    addRow();
   });
   if(inRange){
     const tl = document.createElement("div"); tl.className = "rms-today"; tl.title = "Today";
@@ -13220,6 +13292,7 @@ function renderRmapWbs(m, wrap, byTid){
     live.filter(it=> rmlLaneOf(m, it)===ln)
       .sort((a,b)=> dNum(a.start||todayISO()) - dNum(b.start||todayISO()))
       .forEach(it=> rows.push({ kind:"task", lvl:lvl+1, it, en:byTid[it.tid] }));
+    if(editMode) rows.push({ kind:"add", lvl:lvl+1, ln });
   };
   rmwLaneKids(m, null).forEach(ln=> walk(ln, 0));
   const rowOf = {}; rows.forEach((r,i)=>{ if(r.kind==="task") rowOf[r.it.tid] = i; });
@@ -13286,10 +13359,12 @@ function renderRmapWbs(m, wrap, byTid){
   const barGeo = {};   /* tid -> {x1, x2, y} for arrows */
   rows.forEach((r, ri)=>{
     const rw = document.createElement("div"); rw.className = "rmw-row " + r.kind + (r.kind==="group" ? " lvl" + Math.min(r.lvl,3) : "");
-    rw.dataset.lane = r.kind==="group" ? r.ln.id : rmlLaneOf(m, r.it).id;   /* drop a dragged task here to move it into this group */
+    rw.dataset.lane = r.kind==="task" ? rmlLaneOf(m, r.it).id : r.ln.id;   /* drop a dragged task here to move it into this group */
     const nm = document.createElement("div"); nm.className = "rmw-name"; nm.style.paddingLeft = (10 + r.lvl*18) + "px";
     const ln = document.createElement("div"); ln.className = "rmw-lane"; ln.style.width = W + "px";
-    if(r.kind==="group"){
+    if(r.kind==="add"){
+      const q = rmlQuickAddInput(m, r.ln, "rmw-addbox"); nm.appendChild(q);
+    } else if(r.kind==="group"){
       const key = m.id+":"+r.ln.id, closed = !!rmwCollapsed[key];
       const tg = document.createElement("button"); tg.className = "rmw-tg"; tg.textContent = closed ? "▸" : "▾";
       tg.title = closed ? "Expand" : "Collapse";
