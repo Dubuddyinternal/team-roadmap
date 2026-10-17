@@ -259,8 +259,14 @@ tr.rowlink:hover .td-idea{color:var(--accent-ink);text-decoration:underline;text
   transform:translate(-50%,-50%) scale(.97);opacity:0;pointer-events:none;transition:transform .18s ease,opacity .18s ease;
   overflow-y:auto;overscroll-behavior:contain;padding:0 28px 28px;font-family:var(--sans);font-size:14px;line-height:1.5;color:var(--ink)}
 .drawer.on{transform:translate(-50%,-50%);opacity:1;pointer-events:auto}
+/* rounded corners hold for everything inside, the scroll bar included; a slim bar that keeps clear of the corners */
+.drawer{clip-path:inset(0 round 16px);scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--ink) 22%,transparent) transparent}
+.drawer::-webkit-scrollbar{width:10px}
+.drawer::-webkit-scrollbar-track{background:transparent;margin:14px 0}
+.drawer::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--ink) 20%,transparent);border-radius:10px;border:3px solid transparent;background-clip:padding-box}
+.drawer::-webkit-scrollbar-thumb:hover{background-color:color-mix(in srgb,var(--ink) 35%,transparent)}
 .drawer.wide{width:min(1100px,calc(100% - 48px))}
-@media(max-width:700px){.drawer,.drawer.wide{top:0;left:0;width:100%;max-height:none;height:100%;border-radius:0;border:none;transform:translateY(12px);padding:0 16px calc(28px + env(safe-area-inset-bottom,0px))}
+@media(max-width:700px){.drawer,.drawer.wide{clip-path:none;top:0;left:0;width:100%;max-height:none;height:100%;border-radius:0;border:none;transform:translateY(12px);padding:0 16px calc(28px + env(safe-area-inset-bottom,0px))}
   .drawer.on{transform:none}}
 .dr-h{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin:0 -28px 18px;padding:20px 28px 14px;
   position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
