@@ -1046,6 +1046,8 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .dep-item:hover{background:var(--indigo-soft)}
 .dep-item input{width:15px;height:15px;accent-color:var(--indigo);cursor:pointer;flex:none;margin:0}
 .dep-item .di-title{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.field label.dep-item{display:flex;margin:0;font-size:inherit;color:inherit;font-family:inherit;text-transform:none;letter-spacing:normal}
+.field .dep-item input{width:15px;min-width:15px;padding:0;flex:none}
 .dep-item.is-done .di-title{color:var(--muted);text-decoration:line-through}
 .dep-item .di-status{font-family:var(--mono);font-size:10px;padding:2px 7px;border-radius:99px;background:var(--planned-bg);color:var(--planned);white-space:nowrap;flex:none}
 .dep-item .di-status.done{background:var(--done-bg);color:var(--done)}
@@ -2425,34 +2427,275 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .okr-modetg{display:inline-flex;gap:4px;background:var(--card);border:1px solid var(--line-strong);border-radius:99px;padding:3px;margin-bottom:16px}
 .okr-modetg .okr-mode{border:none;background:none;border-radius:99px;padding:6px 15px;font-weight:600;font-size:12.5px;color:var(--muted);cursor:pointer;font-family:var(--disp)}
 .okr-modetg .okr-mode.on{background:var(--indigo);color:#fff}
-.okrflow{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:14px;background:var(--bg);height:min(74vh,760px);min-height:430px;margin:8px 0 14px;touch-action:none;cursor:default}
-.okrflow.panning{cursor:grabbing}
-.okrflow-canvas{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
-.okrflow-links{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
-.okrflow-node{position:absolute!important;width:230px;min-width:230px;max-width:230px;cursor:grab;user-select:none;transition:opacity .16s,box-shadow .16s,border-color .16s;z-index:2}
-.okrflow-node.dragging{cursor:grabbing;z-index:9;box-shadow:0 12px 28px rgba(0,0,0,.18)}
-.okrflow-node.dim{opacity:.22}
-.okrflow-node.lit{border-color:var(--indigo);box-shadow:0 4px 16px rgba(0,0,0,.09)}
-.okrflow-node.pick{box-shadow:0 0 0 2px var(--indigo),0 6px 20px rgba(0,0,0,.12)}
-.okrflow-node button,.okrflow-node input{cursor:pointer}
-.okrflow-bar{position:absolute;top:12px;right:12px;display:flex;gap:6px;z-index:20}
-.okrflow-zb{border:1px solid var(--line-strong);background:var(--card);color:inherit;border-radius:99px;width:32px;height:32px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--disp);display:flex;align-items:center;justify-content:center;padding:0}
-.okrflow-zb.wide{width:auto;padding:0 14px;font-size:12px;font-weight:600}
-.okrflow-zb:hover{background:rgba(0,0,0,.05)}
-.okrflow-hint{position:absolute;left:12px;bottom:10px;font-size:11.5px;color:var(--muted);background:var(--card);border:1px solid var(--line);border-radius:99px;padding:5px 13px;z-index:20;pointer-events:none;opacity:.92}
-.okrtree-scroll{overflow-x:auto;padding:8px 0 16px}
+.rml-draggable{cursor:grab}
+.rml-draggable::before{content:"⋮⋮";font-size:12px;letter-spacing:-2px;color:var(--muted);opacity:.45;margin-right:6px}
+.rml-draggable:hover::before{opacity:1}
+.rml-dragging{opacity:.45}
+.rml-lh.rml-draggable{position:relative}
+.rml-lh.rml-draggable::before{position:absolute;right:10px;top:12px;margin:0}
+.rmg-phase.rml-draggable{justify-content:flex-start}
+.rmg-phase .rml-mini{margin-left:auto}
+.rmg-phase .rml-mini + .rml-mini{margin-left:0}
+.rml-drop-above{box-shadow:inset 0 3px 0 var(--indigo)!important}
+.rml-drop-below{box-shadow:inset 0 -3px 0 var(--indigo)!important}
+.rmw-scroll{overflow:auto;max-height:78vh;border:1px solid var(--line);border-radius:14px;background:var(--card);margin-bottom:12px;position:relative}
+.rmw-inner{position:relative}
+.rmw-head{display:flex;position:sticky;top:0;z-index:6;background:var(--paper);border-bottom:1px solid var(--line-strong)}
+.rmw-name{flex:0 0 300px;width:300px;box-sizing:border-box;position:sticky;left:0;z-index:4;background:var(--card);border-right:1px solid var(--line-strong);display:flex;align-items:center;gap:6px;padding-right:8px;min-width:0;overflow:hidden}
+.rmw-hname{background:var(--paper);z-index:7;font-weight:700;font-size:13px;justify-content:center;height:46px}
+.rmw-scale{position:relative;height:46px;flex:none}
+.rmw-sline{position:relative;height:23px;border-bottom:1px solid var(--line)}
+.rmw-seg{position:absolute;top:0;height:100%;box-sizing:border-box;border-left:1px solid var(--line);font-family:var(--mono);font-size:10.5px;color:var(--muted);display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap}
+.rmw-sline:first-child .rmw-seg{font-weight:700;color:var(--ink,#172B4D)}
+.rmw-seg.we{background:rgba(0,0,0,.035)}
+.rmw-body{position:relative}
+.rmw-gridlines{position:absolute;top:0;bottom:0;pointer-events:none;z-index:0}
+.rmw-gridlines i{position:absolute;top:0;bottom:0;border-left:1px solid var(--line);opacity:.6}
+.rmw-today{position:absolute;top:0;bottom:0;border-left:2px dashed var(--indigo);z-index:3}
+.rmw-links{position:absolute;top:0;pointer-events:none;z-index:2;overflow:visible}
+.rmw-row{display:flex;height:32px;border-bottom:1px solid var(--line)}
+.rmw-row.group .rmw-name{font-weight:700;background:var(--paper)}
+.rmw-row.group.lvl0 .rmw-name{font-size:13.5px}
+.rmw-row.group .rmw-name,.rmw-row.task .rmw-name{font-size:12.5px}
+.rmw-lane{position:relative;flex:none;height:100%}
+.rmw-tg{border:0;background:none;cursor:pointer;color:var(--muted);font-size:11px;width:16px;padding:0;flex:none}
+.rmw-gname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rmw-gct{font-family:var(--mono);font-size:10.5px;color:var(--muted);font-weight:600;margin-left:auto}
+.rmw-act{display:none;padding:1px 6px;flex:none}
+.rmw-name:hover .rmw-act{display:inline-block}
+.rmw-cb{width:14px;height:14px;margin:0 2px 0 16px;flex:none;accent-color:var(--done)}
+.rmw-tname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rmw-tname.done{color:var(--muted);text-decoration:line-through}
+.rmw-sum{--sum:#C8473B;position:absolute;top:11px;height:9px;background:color-mix(in srgb,var(--sum) 35%,#fff);z-index:2}
+.rmw-sum.sub{--sum:#2E9466}
+.rmw-sum i{position:absolute;left:0;top:0;bottom:0;background:var(--sum)}
+.rmw-sum::before,.rmw-sum::after{content:"";position:absolute;bottom:-6px;border:6px solid transparent;border-top:7px solid var(--sum)}
+.rmw-sum::before{left:-6px}.rmw-sum::after{right:-6px}
+.rmw-bar{--bar:#2F55B5;position:absolute;top:7px;height:18px;border-radius:3px;z-index:2;cursor:grab;box-sizing:border-box;border:1px solid var(--bar);background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--bar) 22%,#fff) 0 4px,color-mix(in srgb,var(--bar) 40%,#fff) 4px 8px);touch-action:none}
+.rmw-bar i{position:absolute;left:0;top:0;bottom:0;background:var(--bar);border-radius:2px 0 0 2px}
+.rmw-bar.done{opacity:.6}
+.rmw-bar.locked{outline:2px dashed var(--blocked);outline-offset:1px}
+.rmw-bar.drag{cursor:grabbing;box-shadow:0 4px 12px rgba(0,0,0,.25);z-index:5}
+.rmw-grip{position:absolute;right:-1px;top:0;bottom:0;width:7px;cursor:ew-resize;background:rgba(255,255,255,.55);border-left:1px solid var(--bar);border-radius:0 3px 3px 0}
+.rmw-blab{position:absolute;top:8px;font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap;z-index:2;pointer-events:none}
+.rmw-empty{padding:30px;text-align:center;color:var(--muted)}
+.rmw-lg-sum{width:22px!important;height:8px!important;background:#C8473B;border-radius:0!important}
+.rmw-lg-bar{width:22px!important;height:10px!important;background:linear-gradient(90deg,#2F55B5 55%,#B9C6EA 55%)}
+.rmw-lg-dep{width:22px!important;height:0!important;border-top:1.5px solid #2F55B5;border-radius:0!important}
+.rmg-blk{touch-action:none}
+.rmg-dragging{opacity:.35}
+.rmg-ghost{z-index:400;pointer-events:none;box-shadow:0 12px 30px rgba(0,0,0,.3)!important;opacity:.95;cursor:grabbing;box-sizing:border-box}
+.rmg-cell.rmg-drop,.rmg-phase.rmg-drop,.rms-task.rmg-drop{background:color-mix(in srgb,var(--indigo) 12%,transparent)!important}
+.rms-band.rmg-drop{box-shadow:inset 0 0 0 2px var(--indigo)}
+.rml-lane.rmg-drop{box-shadow:0 0 0 2px var(--indigo)!important;background:var(--indigo-soft)!important}
+.rmw-row.rmg-drop,.rmw-row.rmg-drop .rmw-name{background:var(--indigo-soft)!important}
+.rmg-grid{position:relative}
+.rml-deps{position:absolute;left:0;top:0;pointer-events:none;z-index:3;overflow:visible}
+.rmb-type{flex:none;font:inherit;font-size:11.5px;padding:3px 6px;border:1px solid var(--line-strong);border-radius:6px;background:var(--card);color:var(--ink,#172B4D);cursor:pointer}
+.rmb-search{width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);font:inherit;margin-bottom:8px}
+.rmb-list{max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.rmb-grp{position:sticky;top:0;background:var(--paper);font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:6px 12px;border-bottom:1px solid var(--line)}
+.rmb-row{display:flex;align-items:center;gap:9px;padding:8px 12px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px}
+.rmb-row:hover{background:var(--indigo-soft)}
+.rmb-row input{width:15px;height:15px;accent-color:var(--indigo);flex:none;margin:0}
+.rmb-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rmb-m{font-family:var(--mono);font-size:10.5px;color:var(--muted);white-space:nowrap}
+.rmb-row.done .rmb-t{color:var(--muted);text-decoration:line-through}
+.rmb-row.off{opacity:.5;cursor:not-allowed}
+.rmb-empty{padding:18px;text-align:center;color:var(--muted);font-size:13px}
+/* chart roadmaps: quiet page header, one compact control bar, the chart gets the space */
+body.rm-chart #rm-subtitle{display:none}
+body.rm-chart .pane-head{padding-bottom:0}
+body.rm-chart .tabstrip{margin-top:6px}
+body.rm-chart .pane-body{padding-top:10px}
+body.rm-chart #pane-work > .controls{display:none}
+.rm-bar{padding:10px 14px!important;margin-bottom:10px!important}
+.rm-bar .module-head{margin-bottom:0;gap:8px}
+.rm-bar h2{font-size:18px;margin:0}
+.rm-bar .rmg-win{margin-left:2px}
+.tool.sm{font-size:12px;padding:5px 10px;border-radius:99px;font-weight:600}
+.tool.sm.primary{color:#fff}
+.rml-redpill{font-size:11.5px;font-weight:700;color:var(--blocked);background:var(--blocked-bg);border-radius:99px;padding:3px 10px}
+.rmw-name.rml-draggable::before{position:absolute;left:0;margin:0}
+.rml-tv,.rml-te{position:absolute;top:0;pointer-events:none;border-color:#B4BCC8;border-style:solid;border-width:0}
+.rml-tv{bottom:0;border-left-width:1px}
+.rml-te{height:50%;width:10px;border-left-width:1px;border-bottom-width:1px}
+.rml-te.more::after{content:"";position:absolute;left:-1px;top:100%;height:100%;border-left:1px solid #B4BCC8}
+.rmw-row.group .rmw-name{font-weight:500}
+.rmw-row.group.lvl0 .rmw-name{font-weight:700}
+.rmw-row.group:not(.lvl0) .rmw-gname{font-weight:500}
+.rmw-row.group:not(.lvl0) .rmw-name{background:var(--card)}
+.rml-sw{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+.rml-sw button{width:28px;height:28px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;box-shadow:inset 0 0 0 1px rgba(0,0,0,.1)}
+.rml-sw button.auto{width:auto;border-radius:99px;padding:0 10px;font-size:11.5px;font-weight:600;background:var(--paper);color:var(--muted);border-color:var(--line-strong)}
+.rml-sw button.on{border-color:var(--ink,#172B4D);box-shadow:0 0 0 2px var(--card) inset}
+.rml-sw input[type=color]{width:34px;height:28px;padding:0;border:1px solid var(--line-strong);border-radius:8px;background:none;cursor:pointer}
+.rms-grid .rmg-corner{font-family:var(--mono);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);display:flex;align-items:flex-end;padding:0 12px 9px}
+.rms-band{display:flex;align-items:center;gap:10px;padding:8px 12px;background:color-mix(in srgb,var(--sw) 14%,var(--card));border-left:5px solid var(--sw);border-bottom:1px solid var(--line);position:sticky;left:0;z-index:2}
+.rms-name{font-weight:800;font-size:13.5px;color:var(--sw)}
+.rms-cnt{font-family:var(--mono);font-size:11px;color:var(--muted);margin-right:auto}
+.rms-band .rml-mini{opacity:.6}.rms-band:hover .rml-mini{opacity:1}
+.rms-task{grid-column:1;display:flex;flex-direction:column;justify-content:center;gap:2px;padding:6px 12px 6px 18px;border-bottom:1px solid var(--line);position:sticky;left:0;background:var(--card);z-index:2;min-width:0}
+.rms-task.muted{color:var(--muted);font-size:12px;font-style:italic}
+.rms-t{font-weight:400;font-size:12.5px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rms-sub{font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rms-grid .rmg-cell{border-bottom:1px solid var(--line)}
+.rms-grid .rms-bar{margin:8px 1px;padding:4px 8px;font-size:11px;border-radius:99px}
+.rms-grid.big .rms-bar{font-size:12.5px;padding:7px 12px;margin:10px 1px}
+.rms-today{border-left:2px dashed var(--indigo);z-index:1;pointer-events:none;margin-left:-1px}
+.rms-lg-today{width:0!important;height:12px!important;border-left:2px dashed var(--indigo);border-radius:0!important}
+.rmg-win{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:6px}
+.rmg-seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:99px;padding:2px;background:var(--card)}
+.rmg-seg button{border:0;background:none;border-radius:99px;padding:4px 11px;font-size:12px;font-weight:600;cursor:pointer;color:var(--muted);font-family:var(--disp)}
+.rmg-seg button.on{background:var(--indigo);color:#fff}
+.rmg-nav{border:1px solid var(--line-strong);background:var(--card);border-radius:99px;min-width:30px;height:28px;padding:0 10px;font-size:12.5px;font-weight:600;cursor:pointer;color:inherit;font-family:var(--disp)}
+.rmg-nav:hover{border-color:var(--indigo);color:var(--indigo)}
+.rmg-wl{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--ink,#172B4D)}
+.rmg-grid.mid{grid-auto-rows:minmax(54px,auto)}
+.rmg-grid.mid .rmg-blk{font-size:13px;padding:9px 11px}
+.rmg-grid.big{grid-auto-rows:minmax(70px,auto)}
+.rmg-grid.big .rmg-wk{font-size:13px;padding:12px 6px 10px}
+.rmg-grid.big .rmg-blk{font-size:14.5px;padding:12px 14px;margin:7px 5px;white-space:normal}
+.rmg-grid.big .rmg-phase{font-size:14.5px}
+.rmg-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--card);margin-bottom:12px}
+.rmg-grid{display:grid;min-width:max-content;grid-auto-rows:minmax(44px,auto)}
+.rmg-corner{grid-row:1;grid-column:1;border-bottom:1px solid var(--line);position:sticky;left:0;background:var(--card);z-index:3}
+.rmg-wk{grid-row:1;text-align:center;font-family:var(--mono);font-size:11px;font-weight:700;color:var(--muted);padding:9px 4px 7px;border-bottom:1px solid var(--line);border-left:1px solid var(--line)}
+.rmg-wk small{display:block;font-weight:500;font-size:10px;opacity:.8}
+.rmg-wk.now{color:var(--indigo);background:var(--indigo-soft)}
+.rmg-phase{grid-column:1;display:flex;align-items:center;justify-content:space-between;gap:6px;padding:8px 12px;font-weight:700;font-size:13px;border-bottom:1px solid var(--line);position:sticky;left:0;background:var(--paper);z-index:2}
+.rmg-phase .rml-mini{opacity:0}
+.rmg-phase:hover .rml-mini{opacity:1}
+.rmg-cell{border-left:1px solid var(--line)}
+.rmg-cell.last{border-bottom:1px solid var(--line)}
+.rmg-cell.now{background:var(--indigo-soft)}
+.rmg-blk{margin:5px 3px;border-radius:6px;color:#fff;font-size:12px;font-weight:600;padding:7px 9px;display:flex;align-items:center;cursor:pointer;z-index:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+.rmg-blk{contain:inline-size;min-width:0}
+.rmg-days .rmg-phase{background:var(--paper)}
+.rmg-days .rmg-phase.sub{background:var(--card);position:sticky}
+.rmg-phase.sub .rmg-pname{font-weight:600;font-size:12.5px}
+.rmg-phase.sub.d2 .rmg-pname{font-weight:500;font-style:italic}
+.rmg-pname{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rmg-pct{font-family:var(--mono);font-size:10.5px;color:var(--muted);font-weight:600}
+.rmg-cell.phase{background:var(--paper)}
+.rmg-cell.phase.now,.rmg-cell.addrow.now{background:color-mix(in srgb,var(--indigo-soft) 70%,var(--paper))}
+.rmg-sum{align-self:center;height:5px;border-radius:99px;background:var(--line-strong);margin:0 1px;z-index:1;pointer-events:none}
+.rmg-task{grid-column:1;display:flex;flex-direction:column;justify-content:center;gap:1px;padding:4px 10px 4px 26px;border-bottom:1px solid var(--line);position:sticky;left:0;background:var(--card);z-index:2;min-width:0}
+.rmg-task.muted{color:var(--muted);font-size:12px;font-style:italic}
+.rmg-colrs{grid-column:1;justify-self:end;width:10px;margin-right:-5px;position:sticky;z-index:6;cursor:col-resize;touch-action:none}
+.rmg-colrs::after{content:"";position:absolute;top:0;bottom:0;left:4px;width:2px;border-radius:2px;background:transparent;transition:background .15s}
+.rmg-colrs:hover::after,.rmg-colrs.drag::after{background:var(--accent,#E8622C)}
+.rmg-tt{font-size:12.5px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rmg-td{font-family:var(--mono);font-size:9.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rmg-task.done .rmg-tt{color:var(--muted);text-decoration:line-through}
+.rmg-days .rmg-cell{border-bottom:1px solid var(--line)}
+.rml-qadd{width:100%;box-sizing:border-box;border:1px dashed transparent;background:transparent;border-radius:6px;padding:4px 6px;font:inherit;font-size:12.5px;color:var(--ink,#172B4D)}
+.rml-qadd::placeholder{color:var(--indigo);opacity:.8;font-weight:600}
+.rml-qadd:hover{border-color:var(--line-strong)}
+.rml-qadd:focus{outline:none;border-color:var(--indigo);background:var(--card)}
+.rmg-add,.rms-add{padding-left:20px}
+.rmw-addbox{flex:1;min-width:0}
+.rmg-days{grid-auto-rows:40px}
+.rmg-days .rmg-wk{grid-row:1}
+.rmg-blk.rmg-line{height:16px;margin:0 1px;padding:0;align-self:center;border-radius:99px;overflow:visible;contain:none;white-space:nowrap;position:relative;font-size:0}
+.rmg-blk.rmg-line.locked{outline-offset:2px}
+
+.rm-rename{cursor:pointer;display:inline-flex;align-items:center;gap:8px;border-radius:8px;padding:2px 6px;margin-left:-6px}
+.rm-rename:hover{background:var(--indigo-soft)}
+.rm-rename-pen{font-size:14px;color:var(--muted);opacity:0;transition:opacity .12s}
+.rm-rename:hover .rm-rename-pen{opacity:1;color:var(--indigo)}
+.rmg-blk:hover{filter:brightness(1.08);box-shadow:0 3px 10px rgba(0,0,0,.18)}
+.rmg-blk.done{opacity:.55}
+.rmg-blk.locked{outline:2px dashed var(--blocked);outline-offset:1px}
+.rmg-legend{display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:12px;color:var(--muted);margin:0 0 16px}
+.rmg-legend b{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em}
+.rmg-legend span{display:inline-flex;align-items:center;gap:6px}
+.rmg-legend i{display:inline-block;width:14px;height:10px;border-radius:3px}
+/* roadmap · lanes view */
+.rml-lane{background:var(--card);border:1px solid var(--line);border-radius:14px;margin:0 0 14px;display:flex;overflow:hidden}
+.rml-lane.ongoing{border-left:4px solid var(--progress)}
+.rml-lh{flex:0 0 190px;padding:14px;border-right:1px dashed var(--line-strong);display:flex;flex-direction:column;gap:6px;background:var(--paper)}
+.rml-lname{font-family:var(--disp);font-weight:700;font-size:15px;line-height:1.25}
+.rml-kind{display:inline-block;margin-left:6px;font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--indigo);background:var(--indigo-soft);padding:1px 7px;border-radius:99px;vertical-align:2px}
+.rml-lane.ongoing .rml-kind{color:var(--progress);background:var(--progress-bg,#FFF3E0)}
+.rml-lsum{font-size:12px;color:var(--muted)}
+.rml-lsum.bad{color:var(--blocked);font-weight:600}
+.rml-lacts{display:flex;gap:4px;margin-top:auto}
+.rml-mini{border:1px solid var(--line-strong);background:var(--card);border-radius:6px;padding:2px 8px;font-size:11.5px;cursor:pointer;color:var(--muted);font-family:var(--disp)}
+.rml-mini:hover{border-color:var(--indigo);color:var(--indigo)}
+.rml-track{flex:1;overflow-x:auto;padding:14px 16px 16px}
+.rml-rail{position:relative;display:flex;gap:16px;align-items:flex-start;min-height:120px}
+.rml-rail::before{content:"";position:absolute;left:0;right:0;top:27px;border-top:2px solid var(--line-strong)}
+.rml-stop{position:relative;flex:0 0 230px;display:flex;flex-direction:column;align-items:flex-start}
+.rml-date{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--muted);height:18px;white-space:nowrap}
+.rml-dot{width:14px;height:14px;border-radius:50%;border:3px solid var(--indigo);background:var(--card);margin:2px 0 8px 10px;position:relative;z-index:1}
+.rml-stop.done .rml-dot{background:var(--done);border-color:var(--done)}
+.rml-stop.ok .rml-dot{border-color:var(--done)}
+.rml-stop.bad .rml-dot{background:var(--blocked);border-color:var(--blocked)}
+.rml-stop.bad .rml-date{color:var(--blocked)}
+.rml-stop.ok .rml-date,.rml-stop.done .rml-date{color:var(--done)}
+.rml-card{width:100%;box-sizing:border-box;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;display:flex;flex-direction:column;gap:5px;transition:border-color .12s,box-shadow .12s}
+.rml-card:hover{border-color:var(--indigo);box-shadow:0 4px 14px rgba(23,35,58,.08)}
+.rml-stop.bad .rml-card{border-color:var(--blocked);background:var(--blocked-bg)}
+.rml-path{font-family:var(--mono);font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rml-title{font-weight:700;font-size:13.5px;line-height:1.3}
+.rml-meta{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.rml-st{font-size:10.5px;font-weight:600;padding:1px 8px;border-radius:99px;background:var(--paper);color:var(--muted)}
+.rml-st.st-done{background:var(--done-bg);color:var(--done)}
+.rml-st.st-progress{background:var(--progress-bg,#FFF3E0);color:var(--progress)}
+.rml-st.st-blocked{background:var(--blocked-bg);color:var(--blocked)}
+.rml-team{font-size:11px;color:var(--muted)}
+.rml-health{font-size:11.5px;font-weight:600;line-height:1.35}
+.rml-health.bad{color:var(--blocked)}
+.rml-health.ok{color:var(--done)}
+.rml-health.unknown{color:var(--muted);font-weight:500}
+.rml-row{font-size:12px;line-height:1.4;color:var(--ink,#172B4D)}
+.rml-row b{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.rml-donebtn{align-self:flex-start;margin-top:2px}
+.rml-today{flex:0 0 auto;align-self:stretch;border-left:2px dashed var(--indigo);position:relative;margin:0 -4px}
+.rml-today span{position:absolute;top:0;left:4px;font-family:var(--mono);font-size:10px;font-weight:700;color:var(--indigo);background:var(--card);padding:0 4px}
+.rml-empty{font-size:12.5px;color:var(--muted);padding:44px 6px 0;position:relative;z-index:1}
+.rml-hint{font-size:11.5px;color:var(--muted);margin:2px 0 14px}
+@media(max-width:760px){.rml-lane{flex-direction:column}.rml-lh{flex-basis:auto;border-right:0;border-bottom:1px dashed var(--line-strong)}}
+.okrtree-scroll{overflow-x:auto;padding:10px 6px 18px;margin:8px 0 6px}
 .okrtree{display:inline-block;min-width:100%;text-align:center}
-.okrtree ul{display:flex;justify-content:center;gap:18px;list-style:none;margin:0;padding:26px 0 0;position:relative}
+.okrtree ul{display:flex;justify-content:center;list-style:none;margin:0;padding:26px 0 0;position:relative}
 .okrtree > ul{padding-top:0}
-.okrtree li{position:relative;padding:26px 8px 0;text-align:center}
-.okrtree li::before,.okrtree li::after{content:"";position:absolute;top:0;height:26px;width:50%;border-top:2px solid var(--line-strong)}
-.okrtree li::before{right:50%;border-right:2px solid var(--line-strong)}
-.okrtree li::after{left:50%}
-.okrtree li:only-child::before,.okrtree li:only-child::after{width:50%}
-.okrtree li:first-child::before,.okrtree li:last-child::after{border:0}
-.okrtree li:last-child::before{border-right:2px solid var(--line-strong)}
-.okrtree ul ul::before{content:"";position:absolute;top:0;left:50%;height:26px;border-left:2px solid var(--line-strong)}
+.okrtree li{list-style:none;position:relative;padding:26px 8px 0;text-align:center}
+.okrtree li::before,.okrtree li::after{content:"";position:absolute;top:0;right:50%;width:50%;height:26px;border-top:2px solid var(--line-strong)}
+.okrtree li::after{right:auto;left:50%;border-left:2px solid var(--line-strong)}
+.okrtree li:first-child::before,.okrtree li:last-child::after{border:0 none}
+.okrtree li:last-child::before{border-right:2px solid var(--line-strong);border-radius:0 7px 0 0}
+.okrtree li:first-child::after{border-radius:7px 0 0 0}
+.okrtree li:only-child::before{display:none}
+.okrtree li:only-child::after{border:0 none;border-left:2px solid var(--line-strong);border-radius:0}
+.okrtree ul ul::before{content:"";position:absolute;top:0;left:50%;width:0;height:26px;border-left:2px solid var(--line-strong)}
+.okrtree > ul > li{padding-top:0}
+.okrtree ul.okrtree-stack{flex-direction:column;align-items:center;gap:14px}
+.okrtree ul.okrtree-stack::before{height:100%;bottom:0;z-index:0}
+.okrtree ul.okrtree-stack > li{padding:0 8px;z-index:1}
+.okrtree li.okrtree-col > ul.okrtree-stack{padding-top:0}
+.okrtree ul.okrtree-stack > li::before,.okrtree ul.okrtree-stack > li::after{display:none}
+.okrtree-bar{display:flex;justify-content:flex-end;align-items:center;gap:6px;margin:4px 0 -4px}
+.okrtree-zb{border:1px solid var(--line-strong);background:var(--card);color:inherit;border-radius:99px;min-width:32px;height:30px;padding:0 10px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--disp)}
+.okrtree-zb:hover{border-color:var(--indigo);color:var(--indigo)}
+.okrtree-zl{font-family:var(--mono);font-size:11.5px;color:var(--muted);min-width:76px;text-align:center}
 .okrtree > ul > li::before,.okrtree > ul > li::after{display:none}
+.okrtree-node[data-oid]{width:220px;min-width:220px;max-width:220px}
+.okrtree-node.dim{opacity:.3}
+.okrtree-node.lit{border-color:var(--indigo)}
+.okrtree-node.pick{box-shadow:0 0 0 2px var(--indigo),0 6px 20px rgba(0,0,0,.12)}
+.okrtree-node[data-oid]{cursor:pointer;transition:opacity .16s,box-shadow .16s,border-color .16s}
+.okrtree-ns{min-width:280px;max-width:360px;border:1.5px solid var(--indigo);border-top:4px solid var(--indigo);background:linear-gradient(180deg,var(--indigo-soft),var(--card));text-align:center;padding:14px 18px 15px}
+.okrtree-ns.empty{border-style:dashed;background:var(--card)}
+.okrtree-ns-lv{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--indigo);font-weight:700;margin-bottom:6px}
+.okrtree-ns-t{font-family:var(--disp);font-weight:800;font-size:17px;line-height:1.3;margin-bottom:8px}
+.okrtree-ns.empty .okrtree-ns-t{font-weight:600;font-size:13px;color:var(--muted)}
+.okrtree-ns-note{font-size:12px;color:var(--muted);margin-bottom:8px}
+.okrtree-ns-fig{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.okrtree-ns-fig b{color:var(--ink,#172B4D);font-size:14px}
+.okrtree-ns .okrtree-acts{justify-content:center}
+.okrtree-hint{font-size:11.5px;color:var(--muted);text-align:center;margin:0 0 12px}
 .okrtree-node{display:inline-block;min-width:196px;max-width:250px;background:var(--card);border:1px solid var(--line);border-top:3px solid var(--indigo);border-radius:12px;padding:12px 14px 13px;text-align:left;position:relative;vertical-align:top}
 .okrtree-lv{font-family:var(--mono);font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--indigo);margin-bottom:5px}
 .okrtree-mine{color:var(--done)}
@@ -4386,6 +4629,7 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
         <div class="field"><label for="rms-end">Board ends</label><input id="rms-end" type="month"></div>
       </div>
       <div class="hint" style="margin:-4px 0 4px">The timeline shows exactly this window and scrolls left ↔ right inside it. Leave both empty to auto-fit around your items.</div>
+      <div class="field" id="rms-view-wrap"><label for="rms-view">Roadmap type</label><select id="rms-view"><option value="wbs">Project Gantt — task tree, groups, % complete, dependencies</option><option value="timeline">Timeline — Gantt bars across months</option><option value="lanes">Lanes — horizontal lines of projects &amp; ongoing work</option><option value="gantt">Simple Gantt — weeks × phases, coloured by team</option><option value="swimlane">Swimlane Gantt — a band per team, a row per task</option></select></div>
     </div>
     <div class="btns">
       <button class="btn" onclick="document.getElementById('rms-overlay').classList.remove('show')">Cancel</button>
@@ -4548,7 +4792,7 @@ let DATA = null, OKRS = null, CONTENT = null, TIDEAS = null, DEV = null, BUGS = 
 const KCOLS = [ {key:"todo",label:"To Do"}, {key:"progress",label:"In Progress"}, {key:"review",label:"In Review"}, {key:"done",label:"Done"} ];
 const OKR_LEVELS = [ {key:"company",label:"Company"}, {key:"department",label:"Department"}, {key:"team",label:"Team"}, {key:"subteam",label:"Sub-team"}, {key:"individual",label:"Individual"} ];
 let okrFilter = null;   // null = all levels; else a level key to focus
-let okrView2 = "board";   // "board" | "tree"  (List view retired)
+let okrView2 = "tree";    // "tree" (Org tree, the default) | "board"  (List view retired)
 let okrBoardMine = false;   // filter every OKR view to the ones I own (objective or key result)
 let okrTreeExpanded = {};
 let okrPermId = null;
@@ -7684,7 +7928,7 @@ function workTabs(){
   if(view==="campaign" && window.CX) return campTabs(currentCampaign()).map(([key,label])=>({key, label}));
   if(view==="watch" && window.WX) return WX.tabs.map(([key,label])=>({key, label}));
   if(view==="horizon" && window.HX) return HX.tabs.map(([key,label])=>({key, label}));
-  const l = view==="rmap" ? "Timeline" : view==="okr" ? "Objectives"
+  const l = view==="rmap" ? ({lanes:"Lanes", gantt:"Gantt", swimlane:"Swimlanes", wbs:"Project Gantt"}[rmapViewOf(currentRmap())] || "Timeline") : view==="okr" ? "Objectives"
     : (view==="bugs"||view==="cbugs") ? "Board" : view==="content" ? "Board"
     : view==="ideas" ? "Ideas" : view==="admin" ? "Admin" : "Board";
   return [{key:"work",label:l}];
@@ -7755,9 +7999,20 @@ function renderHeader(){
     ? "Reported by the team and by students \u2014 triage, fix, verify, close."
     : view==="ideas"
     ? "Anyone on the team can pitch an idea \u2014 name on it, points for it, and a clear stage so nothing disappears."
+    : (view==="rmap" && rmapViewOf(currentRmap())!=="timeline")
+    ? ""   /* chart roadmaps: the chart speaks for itself */
     : view==="rmap"
-    ? "A timeline across every space \u2014 pull in tasks, dev cards, and bugs from anywhere and schedule them."
+    ? (rmapViewOf(currentRmap())==="wbs"
+      ? "The whole project as a task tree \u2014 groups, dates, % complete and what depends on what."
+      : rmapViewOf(currentRmap())==="swimlane"
+      ? "One band per team or workstream, one row per task \u2014 bars on the exact days each task runs."
+      : rmapViewOf(currentRmap())==="gantt"
+      ? "Weeks across the top, phases down the side \u2014 each task a block over the weeks it runs, coloured by team."
+      : rmapViewOf(currentRmap())==="lanes"
+      ? "Lines of work across every space \u2014 projects with a due date, and ongoing work that turns red when it slips."
+      : "A timeline across every space \u2014 pull in tasks, dev cards, and bugs from anywhere and schedule them.")
     : (DATA.subtitle||"");
+  document.body.classList.toggle("rm-chart", view==="rmap" && rmapViewOf(currentRmap())!=="timeline");
   document.title = $("rm-title").textContent + " \u00b7 " + ((TEAMS[TEAM] && TEAMS[TEAM].name) || TEAM || "Cyberflow");
   (function(){
     var _tn=(TEAMS[TEAM] && TEAMS[TEAM].name) || (TEAM ? TEAM.charAt(0).toUpperCase()+TEAM.slice(1) : "Team");
@@ -8114,11 +8369,22 @@ function blockerLabel(entry){
   return STATUS_LABEL[effStatus(t)] || effStatus(t);
 }
 // Returns the blockers that are NOT yet done. Empty array = task is unlocked.
+/* dependency type per blocker, kept on the waiting task: task.depType = { blockerTid: "SS"|"FF"|"SF" }
+   (missing = "FS"). FS: start after it finishes · SS: start once it has started ·
+   FF: finish only after it finishes · SF: finish only after it has started. Only FS / SS lock the start. */
+const DEP_TYPES = [["FS","Finish → start","starts when this finishes"],["SS","Start → start","starts once this has started"],["FF","Finish → finish","can finish only after this finishes"],["SF","Start → finish","can finish only after this starts"]];
+function depTypeOf(task, tid){ return (task && task.depType && task.depType[tid]) || "FS"; }
 function openBlockers(task){
   if(!task.blockedBy || !task.blockedBy.length) return [];
   return task.blockedBy
     .map(tid => taskByTid(tid))
-    .filter(b => b && effStatus(b.task) !== "done");
+    .filter(b => {
+      if(!b) return false;
+      const ty = depTypeOf(task, b.tid), st = effStatus(b.task);
+      if(ty==="SS") return st==="planned";
+      if(ty==="FF" || ty==="SF") return false;
+      return st !== "done";
+    });
 }
 function isLocked(task){ return openBlockers(task).length > 0; }
 
@@ -10098,73 +10364,21 @@ function okrEditNode(ob, cyc){
   }, {level:true, alignTo:true, alignOptions:okrAlignOptions(cyc, ob.id), owners:true});
 }
 
-/* ================= OKR flow canvas (Org tree): movable nodes, arrows pointing up ================= */
-var okrFlowSel = null;                 /* objective id whose lineage is lit */
-var okrFlowView = {x:40, y:24, k:1};   /* pan + zoom */
-var _okrFlowSaveT = null;
-var okrFlowFitKey = "";                /* which cycle the view has been fitted to */
-function okrFlowSaveSoon(){
-  if(_okrFlowSaveT) clearTimeout(_okrFlowSaveT);
-  _okrFlowSaveT=setTimeout(function(){ _okrFlowSaveT=null; OKRS.updated=todayStr(); pushAll(); }, 900);
-}
-/* scale + centre so the whole chart is on screen */
-function okrFlowFit(host, cv, objs){
-  var minL=null,minT=null,maxR=0,maxB=0;
-  objs.forEach(function(o){
-    var el=cv.querySelector('[data-fid="'+o.id+'"]'); if(!el) return;
-    var x=parseFloat(el.style.left)||0, y=parseFloat(el.style.top)||0;
-    var wd=el.offsetWidth||230, ht=el.offsetHeight||132;
-    if(minL===null||x<minL) minL=x;
-    if(minT===null||y<minT) minT=y;
-    if(x+wd>maxR) maxR=x+wd;
-    if(y+ht>maxB) maxB=y+ht;
-  });
-  if(minL===null){ okrFlowView={x:40,y:44,k:1}; okrFlowApplyView(cv); return; }
-  var W=host.clientWidth||1100, H=host.clientHeight||470;
-  var cw=Math.max(1,maxR-minL), ch=Math.max(1,maxB-minT);
-  var k=Math.min(1, (W-56)/cw, (H-112)/ch);
-  k=Math.max(0.45, k);
-  okrFlowView.k=k;
-  okrFlowView.x=Math.round((W-cw*k)/2 - minL*k);
-  okrFlowView.y=Math.round(Math.max(48, (H-ch*k)/2) - minT*k);
-  okrFlowApplyView(cv);
-}
-/* tidy top-down layout: children side by side, parent centred over them */
-function okrFlowLayout(objs, sizes){
-  var byId={}; objs.forEach(function(o){ byId[o.id]=o; });
-  var kids={}; objs.forEach(function(o){
-    var p=(o.alignsTo && byId[o.alignsTo]) ? o.alignsTo : "__root";
-    (kids[p]=kids[p]||[]).push(o);
-  });
-  var GAPX=36, GAPY=66;
-  var depth={};
-  objs.forEach(function(o){ var d=0,cur=o,g=0; while(cur && cur.alignsTo && byId[cur.alignsTo] && g++<24){ d++; cur=byId[cur.alignsTo]; } depth[o.id]=d; });
-  var maxd=0; objs.forEach(function(o){ if(depth[o.id]>maxd) maxd=depth[o.id]; });
-  var rowH=[], i;
-  for(i=0;i<=maxd;i++) rowH[i]=0;
-  objs.forEach(function(o){ var h=(sizes[o.id]&&sizes[o.id].h)||132; if(h>rowH[depth[o.id]]) rowH[depth[o.id]]=h; });
-  var rowY=[], acc=0;
-  for(i=0;i<=maxd;i++){ rowY[i]=acc; acc+=rowH[i]+GAPY; }
-  var pos={}, cursor=0, seen={};
-  function place(o){
-    if(seen[o.id]) return; seen[o.id]=1;
-    var w=(sizes[o.id]&&sizes[o.id].w)||224;
-    var ch=kids[o.id]||[];
-    if(!ch.length){ pos[o.id]={x:cursor, y:rowY[depth[o.id]], w:w}; cursor+=w+GAPX; return; }
-    ch.forEach(place);
-    var l=pos[ch[0].id], r=pos[ch[ch.length-1].id];
-    var cx=(l.x + r.x + r.w)/2;
-    pos[o.id]={x:Math.round(cx-w/2), y:rowY[depth[o.id]], w:w};
-    if(pos[o.id].x+w+GAPX > cursor) cursor = pos[o.id].x+w+GAPX;
-  }
-  (kids["__root"]||[]).forEach(function(r){ place(r); cursor+=GAPX; });
-  objs.forEach(function(o){ if(!pos[o.id]) pos[o.id]={x:cursor, y:rowY[depth[o.id]]||0, w:224}, cursor+=260; });
-  var minx=null; objs.forEach(function(o){ if(minx===null || pos[o.id].x<minx) minx=pos[o.id].x; });
-  if(minx) objs.forEach(function(o){ pos[o.id].x-=minx; });
-  return pos;
+/* ================= OKR Org tree: fixed top-down chart (like My Team), North Star on top ================= */
+var okrTreeSel = null;                 /* objective id whose line is lit */
+var okrTreeZoom = "fit";               /* "fit" = shrink to the screen width, or a fixed scale */
+function okrTreeApplyZoom(scroll, tree, lbl){
+  tree.style.zoom=1;
+  var k = okrTreeZoom;
+  if(k==="fit"){ var w=tree.offsetWidth||1; k=Math.max(0.4, Math.min(1, (scroll.clientWidth-4)/w)); }
+  tree.style.zoom=k;
+  if(lbl) lbl.textContent=(okrTreeZoom==="fit"?"Fit · ":"")+Math.round(k*100)+"%";
+  /* keep the top of the chart (North Star) in the middle of the view */
+  scroll.scrollLeft=Math.max(0,(scroll.scrollWidth-scroll.clientWidth)/2);
+  return k;
 }
 /* everything on this objective's line: its parents all the way up, and everything under it */
-function okrFlowLineage(id, objs){
+function okrTreeLineage(id, objs){
   var set={}, byId={}; objs.forEach(function(o){ byId[o.id]=o; });
   if(!id || !byId[id]) return set;
   set[id]=1;
@@ -10177,155 +10391,96 @@ function okrFlowLineage(id, objs){
   while(grew && guard++<24){ grew=false; objs.forEach(function(o){ if(!down[o.id] && o.alignsTo && down[o.alignsTo]){ down[o.id]=1; set[o.id]=1; grew=true; } }); }
   return set;
 }
-function okrFlowApplyView(cv){ cv.style.transform="translate("+okrFlowView.x+"px,"+okrFlowView.y+"px) scale("+okrFlowView.k+")"; }
-function okrFlowDrawLinks(host, objs){
-  var svg=host.querySelector(".okrflow-links"); if(!svg) return;
-  var byId={}; objs.forEach(function(o){ byId[o.id]=o; });
-  var lin = okrFlowSel ? okrFlowLineage(okrFlowSel, objs) : null;
-  var W=0,H=0;
-  objs.forEach(function(o){
-    var el=host.querySelector('[data-fid="'+o.id+'"]'); if(!el) return;
-    var x=parseFloat(el.style.left)||0, y=parseFloat(el.style.top)||0;
-    W=Math.max(W, x+(el.offsetWidth||224)+80); H=Math.max(H, y+(el.offsetHeight||132)+80);
+function okrTreePaint(host, objs){
+  var lin = okrTreeSel ? okrTreeLineage(okrTreeSel, objs) : null;
+  host.querySelectorAll(".okrtree-node[data-oid]").forEach(function(el){
+    var id=el.getAttribute("data-oid");
+    el.classList.toggle("lit", !!(lin && lin[id]));
+    el.classList.toggle("dim", !!(lin && !lin[id]));
+    el.classList.toggle("pick", okrTreeSel===id);
   });
-  svg.setAttribute("width",W); svg.setAttribute("height",H); svg.setAttribute("viewBox","0 0 "+W+" "+H);
-  var out='<defs>'
-   +'<marker id="okrflow-ar" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="var(--line-strong)"/></marker>'
-   +'<marker id="okrflow-arL" markerWidth="10" markerHeight="10" refX="7.5" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--indigo)"/></marker>'
-   +'</defs>';
-  objs.forEach(function(o){
-    if(!o.alignsTo || !byId[o.alignsTo]) return;
-    var ce=host.querySelector('[data-fid="'+o.id+'"]'), pe=host.querySelector('[data-fid="'+o.alignsTo+'"]');
-    if(!ce||!pe) return;
-    var cx=(parseFloat(ce.style.left)||0)+(ce.offsetWidth||224)/2, cy=(parseFloat(ce.style.top)||0);
-    var px=(parseFloat(pe.style.left)||0)+(pe.offsetWidth||224)/2, py=(parseFloat(pe.style.top)||0)+(pe.offsetHeight||132);
-    var mid=(cy+py)/2;
-    var lit = lin ? (lin[o.id] && lin[o.alignsTo]) : false;
-    var dim = lin && !lit;
-    /* drawn child -> parent, so the arrowhead lands on the objective above */
-    out+='<path d="M'+cx+','+cy+' C'+cx+','+mid+' '+px+','+mid+' '+px+','+py+'" fill="none"'
-      +' stroke="'+(lit?'var(--indigo)':'var(--line-strong)')+'" stroke-width="'+(lit?2.6:2)+'"'
-      +' opacity="'+(dim?0.18:(lit?1:0.7))+'" marker-end="url(#'+(lit?'okrflow-arL':'okrflow-ar')+')"/>';
-  });
-  svg.innerHTML=out;
 }
-function okrFlowPaintState(host, objs){
-  var lin = okrFlowSel ? okrFlowLineage(okrFlowSel, objs) : null;
-  objs.forEach(function(o){
-    var el=host.querySelector('[data-fid="'+o.id+'"]'); if(!el) return;
-    el.classList.toggle("lit", !!(lin && lin[o.id]));
-    el.classList.toggle("dim", !!(lin && !lin[o.id]));
-    el.classList.toggle("pick", okrFlowSel===o.id);
-  });
-  okrFlowDrawLinks(host, objs);
+/* North Star Metric — one per team, sits above every cycle's objectives */
+function okrNorthStarEdit(){
+  var ns=OKRS.northStar||{};
+  openDialog(ns.title?"Edit North Star Metric":"Set North Star Metric", {title:ns.title||"", current:ns.current??0, target:ns.target??"", unit:ns.unit||"", note:ns.note||""}, function(v){
+    if(!(v.title||"").trim()){ delete OKRS.northStar; saveOkrs(); toast("North Star removed"); return; }
+    OKRS.northStar={ title:v.title.trim(), current:Number(v.current)||0, target:Number(v.target)||0, unit:v.unit||"" };
+    if(v.note) OKRS.northStar.note=v.note;
+    saveOkrs(); toast("North Star saved");
+  }, {metric:true, titleLabel:"North Star Metric (clear it to remove)"});
+}
+function okrNorthStarNode(){
+  var ns=OKRS.northStar;
+  var card=document.createElement("div"); card.className="okrtree-node okrtree-ns";
+  if(!ns || !ns.title){
+    card.classList.add("empty");
+    card.innerHTML='<div class="okrtree-ns-lv">★ North Star Metric</div><div class="okrtree-ns-t">Set the one number every objective below should move</div>';
+    var b=document.createElement("button"); b.className="okrtree-mini"; b.textContent="＋ Set North Star"; b.onclick=function(e){ e.stopPropagation(); okrNorthStarEdit(); };
+    card.appendChild(b);
+    return card;
+  }
+  var tgt=Number(ns.target)||0, cur=Number(ns.current)||0;
+  var pc = tgt ? Math.max(0, Math.min(100, Math.round(cur/tgt*100))) : 0;
+  card.innerHTML='<div class="okrtree-ns-lv">★ North Star Metric</div>'
+    +'<div class="okrtree-ns-t">'+mtEsc(ns.title)+'</div>'
+    +(ns.note?'<div class="okrtree-ns-note">'+mtEsc(ns.note)+'</div>':'')
+    +(tgt?'<div class="okrtree-kr-bar"><i style="width:'+pc+'%;background:'+scoreColor(pc)+'"></i></div>'
+      +'<div class="okrtree-ns-fig"><b>'+fmt(cur)+'</b> / '+fmt(tgt)+' '+mtEsc(ns.unit||"")+' · '+pc+'%</div>'
+      :'<div class="okrtree-ns-fig"><b>'+fmt(cur)+'</b> '+mtEsc(ns.unit||"")+'</div>');
+  if(editMode){
+    var acts=document.createElement("div"); acts.className="okrtree-acts";
+    acts.appendChild(okrMini("✎ Edit","Edit the North Star Metric", okrNorthStarEdit));
+    card.appendChild(acts);
+  }
+  return card;
 }
 function renderOkrTree(cyc, wrap){
   var _scope = okrBoardScope(cyc);
   var objs = _scope ? cyc.objectives.filter(function(o){ return _scope[o.id]; }) : cyc.objectives;
+  var byId={}; objs.forEach(function(o){ byId[o.id]=o; });
+  /* anything whose parent isn't on screen (other cycle, filtered out) starts its own branch */
+  var roots=objs.filter(function(o){ return !(o.alignsTo && byId[o.alignsTo]); });
+  var hasNs = !!(OKRS.northStar && OKRS.northStar.title);
+  var scroll=document.createElement("div"); scroll.className="okrtree-scroll";
+  var tree=document.createElement("div"); tree.className="okrtree";
+  var top=document.createElement("ul");
+  if(hasNs || editMode){
+    var nsLi=document.createElement("li");
+    nsLi.appendChild(okrNorthStarNode());
+    if(roots.length) nsLi.appendChild(okrTreeKids(roots, cyc, objs));
+    top.appendChild(nsLi);
+  } else {
+    roots.forEach(function(r){ top.appendChild(okrTreeNode(r, cyc, objs)); });
+  }
+  tree.appendChild(top);
+  var bar=document.createElement("div"); bar.className="okrtree-bar";
+  var lbl=document.createElement("span"); lbl.className="okrtree-zl";
+  function zb(txt,title,fn){ var b=document.createElement("button"); b.className="okrtree-zb"; b.textContent=txt; b.title=title; b.onclick=fn; return b; }
+  var cur=1;
+  bar.appendChild(zb("−","Zoom out", function(){ okrTreeZoom=Math.max(0.4, Math.round((cur-0.1)*10)/10); cur=okrTreeApplyZoom(scroll, tree, lbl); }));
+  bar.appendChild(lbl);
+  bar.appendChild(zb("＋","Zoom in", function(){ okrTreeZoom=Math.min(1.4, Math.round((cur+0.1)*10)/10); cur=okrTreeApplyZoom(scroll, tree, lbl); }));
+  bar.appendChild(zb("⤢ Fit","Show the whole chart in one view", function(){ okrTreeZoom="fit"; cur=okrTreeApplyZoom(scroll, tree, lbl); }));
+  if(objs.length) wrap.appendChild(bar);
+  scroll.appendChild(tree); wrap.appendChild(scroll);
+  cur=okrTreeApplyZoom(scroll, tree, lbl);
   if(!objs.length){
     var e=document.createElement("div"); e.className="empty";
     e.textContent = okrBoardMine ? "Nothing owned by you in this cycle." : ("No objectives yet."+((editMode||SESSION)?" Add one below.":""));
     wrap.appendChild(e);
   } else {
-    var host=document.createElement("div"); host.className="okrflow";
-    var cv=document.createElement("div"); cv.className="okrflow-canvas";
-    var svg=document.createElementNS("http://www.w3.org/2000/svg","svg"); svg.setAttribute("class","okrflow-links");
-    cv.appendChild(svg); host.appendChild(cv);
-
-    var sizes={};
-    objs.forEach(function(o){
-      var card=okrTreeNode(o, cyc, objs, true);
-      card.setAttribute("data-fid", o.id);
-      card.classList.add("okrflow-node");
-      cv.appendChild(card);
+    okrTreePaint(tree, objs);
+    tree.addEventListener("click", function(ev){
+      if(ev.target.closest("button,input,a")) return;
+      var node=ev.target.closest(".okrtree-node[data-oid]");
+      var id=node ? node.getAttribute("data-oid") : null;
+      okrTreeSel = (!id || okrTreeSel===id) ? null : id;
+      okrTreePaint(tree, objs);
     });
-    wrap.appendChild(host);
-    objs.forEach(function(o){
-      var el=cv.querySelector('[data-fid="'+o.id+'"]');
-      sizes[o.id]={w:el.offsetWidth||224, h:el.offsetHeight||132};
-    });
-    var pos=okrFlowLayout(objs, sizes);
-    objs.forEach(function(o){
-      var el=cv.querySelector('[data-fid="'+o.id+'"]');
-      var hasSaved = (typeof o.fx==="number" && typeof o.fy==="number");
-      el.style.left = (hasSaved ? o.fx : pos[o.id].x) + "px";
-      el.style.top  = (hasSaved ? o.fy : pos[o.id].y) + "px";
-    });
-    if(okrFlowFitKey !== cyc.key){ okrFlowFitKey = cyc.key; okrFlowFit(host, cv, objs); }
-    else okrFlowApplyView(cv);
-    okrFlowPaintState(host, objs);
-
-    /* ---- drag a node ---- */
-    var drag=null;
-    host.addEventListener("pointerdown", function(e){
-      var node = e.target.closest ? e.target.closest(".okrflow-node") : null;
-      if(node && !(e.target.closest("button") || e.target.closest("input") || e.target.closest("a"))){
-        var id=node.getAttribute("data-fid");
-        drag={node:node, id:id, sx:e.clientX, sy:e.clientY, ox:parseFloat(node.style.left)||0, oy:parseFloat(node.style.top)||0, moved:false};
-        node.classList.add("dragging");
-        host.setPointerCapture && host.setPointerCapture(e.pointerId);
-        e.preventDefault();
-        return;
-      }
-      if(!node){
-        drag={pan:true, sx:e.clientX, sy:e.clientY, ox:okrFlowView.x, oy:okrFlowView.y, moved:false};
-        host.classList.add("panning");
-        host.setPointerCapture && host.setPointerCapture(e.pointerId);
-      }
-    });
-    host.addEventListener("pointermove", function(e){
-      if(!drag) return;
-      var dx=e.clientX-drag.sx, dy=e.clientY-drag.sy;
-      if(Math.abs(dx)>3 || Math.abs(dy)>3) drag.moved=true;
-      if(drag.pan){ okrFlowView.x=drag.ox+dx; okrFlowView.y=drag.oy+dy; okrFlowApplyView(cv); return; }
-      drag.node.style.left=Math.round(drag.ox+dx/okrFlowView.k)+"px";
-      drag.node.style.top =Math.round(drag.oy+dy/okrFlowView.k)+"px";
-      okrFlowDrawLinks(host, objs);
-    });
-    function endDrag(){
-      if(!drag) return;
-      host.classList.remove("panning");
-      if(drag.node){
-        drag.node.classList.remove("dragging");
-        if(drag.moved){
-          var ob=objs.filter(function(o){return o.id===drag.id;})[0];
-          if(ob){ ob.fx=parseFloat(drag.node.style.left)||0; ob.fy=parseFloat(drag.node.style.top)||0; okrFlowSaveSoon(); }
-        } else {
-          okrFlowSel = (okrFlowSel===drag.id) ? null : drag.id;
-          okrFlowPaintState(host, objs);
-        }
-      } else if(!drag.moved){
-        if(okrFlowSel){ okrFlowSel=null; okrFlowPaintState(host, objs); }
-      }
-      drag=null;
-    }
-    host.addEventListener("pointerup", endDrag);
-    host.addEventListener("pointercancel", endDrag);
-    host.addEventListener("wheel", function(e){
-      if(!(e.ctrlKey||e.metaKey)) return;     /* plain scroll still scrolls the page */
-      e.preventDefault();
-      var k=Math.min(1.6, Math.max(0.35, okrFlowView.k * (e.deltaY<0 ? 1.1 : 0.9)));
-      okrFlowView.k=k; okrFlowApplyView(cv);
-    }, {passive:false});
-
-    /* ---- canvas toolbar ---- */
-    var bar=document.createElement("div"); bar.className="okrflow-bar";
-    function zbtn(txt, title, fn){ var b=document.createElement("button"); b.className="okrflow-zb"; b.textContent=txt; b.title=title; b.onclick=fn; return b; }
-    function zoom(mul){ okrFlowView.k=Math.min(1.6, Math.max(0.35, okrFlowView.k*mul)); okrFlowApplyView(cv); }
-    bar.appendChild(zbtn("−","Zoom out", function(){ zoom(0.85); }));
-    bar.appendChild(zbtn("▣","Fit — show the whole chart", function(){ okrFlowFit(host, cv, objs); }));
-    bar.appendChild(zbtn("＋","Zoom in", function(){ zoom(1.18); }));
-    var rst=zbtn("↺ Tidy up","Snap every card back to the automatic layout", function(){
-      if(!window.confirm("Put every card back where it started? Any positions people have dragged are lost.")) return;
-      cyc.objectives.forEach(function(o){ delete o.fx; delete o.fy; });
-      okrFlowSel=null; okrFlowFitKey=""; saveOkrs();
-    });
-    rst.classList.add("wide"); bar.appendChild(rst);
-    host.appendChild(bar);
-
-    var hint=document.createElement("div"); hint.className="okrflow-hint";
-    hint.textContent="Drag a card to move it · drag the background to pan · click a card to light up its line to the top";
-    host.appendChild(hint);
+    var hint=document.createElement("div"); hint.className="okrtree-hint";
+    hint.textContent="Click a card to light up its line up to the North Star · lines follow “aligns to”, change it from ✎ on a card";
+    wrap.appendChild(hint);
   }
   if(editMode){
     var add=document.createElement("button"); add.className="addline"; add.style.padding="12px";
@@ -10334,9 +10489,22 @@ function renderOkrTree(cyc, wrap){
     wrap.appendChild(add);
   }
 }
+/* children row. Objectives with nothing under them are stacked in one column
+   (left of their siblings) so the chart stays narrow enough to read in one view. */
+function okrTreeKids(kids, cyc, objs){
+  var ul=document.createElement("ul");
+  var leaves=kids.filter(function(k){ return !objs.some(function(o){ return o.alignsTo===k.id; }); });
+  if(leaves.length<2){ kids.forEach(function(k){ ul.appendChild(okrTreeNode(k, cyc, objs)); }); return ul; }
+  var stack=document.createElement("ul"); stack.className="okrtree-stack";
+  leaves.forEach(function(k){ stack.appendChild(okrTreeNode(k, cyc, objs)); });
+  if(leaves.length===kids.length) return stack;
+  var col=document.createElement("li"); col.className="okrtree-col"; col.appendChild(stack); ul.appendChild(col);
+  kids.forEach(function(k){ if(leaves.indexOf(k)<0) ul.appendChild(okrTreeNode(k, cyc, objs)); });
+  return ul;
+}
 function okrTreeNode(ob, cyc, objs, flat){
   var li=document.createElement("li");
-  var card=document.createElement("div"); card.className="okrtree-node"; card.id="obj-"+ob.id;
+  var card=document.createElement("div"); card.className="okrtree-node"; card.id="obj-"+ob.id; card.setAttribute("data-oid", ob.id);
   var lv=(ob.level||"").trim();
   var p=objRollupPct(ob);
   var auto=ob.rollup==="auto";
@@ -10390,7 +10558,7 @@ function okrTreeNode(ob, cyc, objs, flat){
   if(flat) return card;
   li.appendChild(card);
   var kids=objs.filter(function(o){return o.alignsTo===ob.id;});
-  if(kids.length){ var ul=document.createElement("ul"); kids.forEach(function(k){ ul.appendChild(okrTreeNode(k, cyc, objs)); }); li.appendChild(ul); }
+  if(kids.length) li.appendChild(okrTreeKids(kids, cyc, objs));
   return li;
 }
 /* ---- permissions modal ---- */
@@ -10826,8 +10994,8 @@ function renderContentOkr(){
     return;
   }
   var _tg=document.createElement('div'); _tg.className='okr-modetg';
-  if(okrView2!=='tree' && okrView2!=='board') okrView2='board';   // old sessions may still hold "list"
-  [['board','Board'],['tree','Org tree']].forEach(function(m){ var b=document.createElement('button'); b.className='okr-mode'+(okrView2===m[0]?' on':''); b.textContent=m[1]; b.onclick=function(){ okrView2=m[0]; renderAll(); }; _tg.appendChild(b); });
+  if(okrView2!=='tree' && okrView2!=='board') okrView2='tree';   // old sessions may still hold "list"
+  [['tree','Org tree'],['board','Board']].forEach(function(m){ var b=document.createElement('button'); b.className='okr-mode'+(okrView2===m[0]?' on':''); b.textContent=m[1]; b.onclick=function(){ okrView2=m[0]; renderAll(); }; _tg.appendChild(b); });
   var _canImp = (typeof canEditHere==="function") ? canEditHere() : editMode;
   if(_canImp){
     var _imp=document.createElement('button'); _imp.className='okr-mode okr-imp'; _imp.textContent='\u2b06 Import OKRs';
@@ -12508,6 +12676,1241 @@ function openStoryImport(spaceId){
    product-roadmap tasks, content tasks, dev cards, bug tickets.
    Each item carries start/end months and renders as a bar.
    ================================================================ */
+/* ================================================================
+   ROADMAP · LANES VIEW
+   The same roadmap items, drawn as horizontal lines (lanes) instead of a
+   Gantt timeline. Each lane is a line of dated stops, earliest first, so a
+   project reads left → right like a milestone timeline. A lane can be a
+   project ("by when") or ongoing work (blogs, social, notifications) whose
+   card turns red when its health rule fails.
+   Stored on the roadmap:  m.view = "timeline" | "lanes"   (picked in roadmap settings)
+                           m.lanes = [{id, name, kind:"project"|"ongoing"}]
+   and on each item:       it.lane, it.owner (free-text name), it.team, it.progress (done so far),
+                           it.next (next steps), it.rule {type, days}, it.lastDone
+   ================================================================ */
+/* the small buttons at the right of a chart's top bar: add from spaces · write a task · ＋ row */
+function rmlBarButtons(row, m, rowWord){
+  const spx = document.createElement("span"); spx.className = "spacer"; row.appendChild(spx);
+  const mk = (txt, title, fn, cls)=>{ const b = document.createElement("button"); b.className = "tool sm" + (cls ? " " + cls : ""); b.textContent = txt; b.title = title; b.onclick = fn; row.appendChild(b); };
+  mk("＋ From spaces", "Add items from any space", ()=> openRmapPicker(m), "primary");
+  mk("✏️ Write task", "Write a new task on this roadmap", ()=> rmlNewOwn(m, rmlEnsureLanes(m)[0].id));
+  mk("＋ " + rowWord, "Add a " + rowWord.toLowerCase(), ()=> rmlEditLane(m, null));
+}
+/* roadmap name in the header of Lanes / Gantt views: click it (edit mode) to rename or change type */
+function rmapTitleEl(m){
+  const h2 = document.createElement("h2"); h2.textContent = m.name;
+  if(editMode){
+    h2.className = "rm-rename"; h2.title = "Click to rename, or change the roadmap type";
+    h2.onclick = ()=> openRmapSettings(m);
+    const pen = document.createElement("span"); pen.className = "rm-rename-pen"; pen.textContent = "\u270E"; h2.appendChild(pen);
+  }
+  return h2;
+}
+function rmapViewOf(m){ return m && (m.view==="lanes" || m.view==="gantt" || m.view==="swimlane" || m.view==="wbs") ? m.view : "timeline"; }
+/* "gantt" and "swimlane" share the week grid, window controls and rows = m.lanes */
+function rmgIsGrid(m){ return !!m && (m.view==="gantt" || m.view==="swimlane"); }
+function rmlEnsureLanes(m, vw){
+  if(!Array.isArray(m.lanes) || !m.lanes.length) m.lanes = [{ id:"ln-"+Date.now().toString(36), name: {gantt:"Planning", swimlane:"Product", wbs:"Project"}[vw||m.view] || "Projects", kind:"project" }];
+  return m.lanes;
+}
+function rmlLaneOf(m, it){ return m.lanes.find(l=>l.id===it.lane) || m.lanes[0]; }
+
+/* ---- ongoing-work health: which rules exist and how each is checked ---- */
+const RML_RULES = [
+  { key:"",       label:"No rule" },
+  { key:"stale",  label:"Red if not done for N days (tick ✓ Done each time)", days:true },
+  { key:"videos", label:"Content calendar: red if a video in the next 7 days isn’t ready" },
+  { key:"blogs",  label:"Blogs: red if no blog for N days", days:true },
+  { key:"notif",  label:"Notifications: red if no automatic send for N days", days:true },
+  { key:"manual", label:"Set by hand (green / red)" },
+];
+/* returns {state:"ok"|"bad"|"unknown", text} */
+function rmlHealth(it){
+  const r = it.rule || {};
+  const today = dNum(todayISO());
+  if(r.type==="stale"){
+    const n = Math.max(1, Number(r.days)||7);
+    if(!it.lastDone) return { state:"bad", text:"Never marked done" };
+    const ago = today - dNum(it.lastDone);
+    return ago > n ? { state:"bad", text:"Last done "+ago+" days ago (limit "+n+")" } : { state:"ok", text:"Done "+(ago? ago+" day"+(ago>1?"s":"")+" ago" : "today") };
+  }
+  if(r.type==="manual") return r.red ? { state:"bad", text:r.why||"Marked red" } : { state:"ok", text:"Marked green" };
+  if(r.type) return rmlSourceHealth(Object.assign({ _it:it }, r), today);
+  return null;
+}
+
+function renderRmapLanes(m, wrap, byTid){
+  rmlEnsureLanes(m);
+  const live = m.items.filter(it=> byTid[it.tid]);
+  const head = document.createElement("section");
+  head.className = "module-block rm-bar";
+  const row = document.createElement("div"); row.className = "module-head";
+  const h2 = rmapTitleEl(m);
+  row.appendChild(h2);
+  /* only the one number that matters here: how many cards are red */
+  const red = live.filter(it=> rmlIsRed(it, byTid[it.tid])).length;
+  if(red){ const rb = document.createElement("span"); rb.className = "rml-redpill"; rb.textContent = red + " need attention"; row.appendChild(rb); }
+  if(editMode) rmlBarButtons(row, m, "Lane");
+  head.appendChild(row);
+  wrap.appendChild(head);
+
+  m.lanes.forEach(ln=>{
+    const items = live.filter(it=> rmlLaneOf(m, it)===ln)
+      .sort((a,b)=> (dNum(a.end||a.start||todayISO()) - dNum(b.end||b.start||todayISO())));
+    const sec = document.createElement("section"); sec.className = "rml-lane" + (ln.kind==="ongoing" ? " ongoing" : "");
+    sec.dataset.lane = ln.id;
+    const lh = document.createElement("div"); lh.className = "rml-lh";
+    const nm = document.createElement("div"); nm.className = "rml-lname"; nm.textContent = ln.name;
+    const kd = document.createElement("span"); kd.className = "rml-kind"; kd.textContent = ln.kind==="ongoing" ? "Ongoing" : "Project";
+    nm.appendChild(kd);
+    lh.appendChild(nm);
+    const lred = items.filter(it=> rmlIsRed(it, byTid[it.tid])).length;
+    const sm = document.createElement("div"); sm.className = "rml-lsum" + (lred ? " bad" : "");
+    sm.textContent = items.length + " item" + (items.length===1?"":"s") + (lred ? " · " + lred + " red" : (items.length ? " · all on track" : ""));
+    lh.appendChild(sm);
+    if(editMode){
+      const la = document.createElement("div"); la.className = "rml-lacts";
+      const mk = (t, title, fn)=>{ const b=document.createElement("button"); b.className="rml-mini"; b.textContent=t; b.title=title; b.onclick=fn; return b; };
+      la.appendChild(mk("＋", "Write a new item on this lane", ()=> rmlNewOwn(m, ln.id)));
+      la.appendChild(mk("✎", "Rename / change lane type", ()=> rmlEditLane(m, ln)));
+      if(m.lanes.length>1) la.appendChild(mk("×", "Delete lane (its items move to the first lane)", ()=>{
+        if(!confirm("Delete the lane “"+ln.name+"”? Its items move to “"+m.lanes.find(l=>l!==ln).name+"”.")) return;
+        m.lanes.splice(m.lanes.indexOf(ln),1);
+        m.items.forEach(it=>{ if(it.lane===ln.id) it.lane = m.lanes[0].id; });
+        saveRmaps();
+      }));
+      lh.appendChild(la);
+    }
+    rmlLaneDrag(lh, m, ln);
+    sec.appendChild(lh);
+
+    const track = document.createElement("div"); track.className = "rml-track";
+    const rail = document.createElement("div"); rail.className = "rml-rail";
+    if(!items.length){
+      const e = document.createElement("div"); e.className = "rml-empty";
+      e.textContent = editMode ? "Nothing on this line yet — ＋ to write an item, or add items from any space and move them here." : "Nothing on this line yet.";
+      rail.appendChild(e);
+    }
+    const today = todayISO();
+    let todayDrawn = false;
+    items.forEach(it=>{
+      const en = byTid[it.tid];
+      if(ln.kind!=="ongoing" && !todayDrawn && it.end && dNum(it.end) >= dNum(today)){
+        todayDrawn = true;
+        const tm = document.createElement("div"); tm.className = "rml-today"; tm.innerHTML = "<span>Today</span>";
+        if(rail.children.length) rail.appendChild(tm);
+      }
+      rail.appendChild(rmlCard(m, it, en, ln));
+    });
+    track.appendChild(rail);
+    sec.appendChild(track);
+    wrap.appendChild(sec);
+  });
+  const hint = document.createElement("div"); hint.className = "rml-hint";
+  hint.textContent = "Each line reads left → right by due date. Click a card to set its lane, due date, team, progress, next steps, blockers and health rule.";
+  wrap.appendChild(hint);
+}
+function rmlIsRed(it, en){
+  if(!en) return false;
+  const st = effStatus(en.task);
+  if(st!=="done" && it.end && dNum(it.end) < dNum(todayISO()) && !(it.rule && it.rule.type)) return true;
+  if(isLocked(en.task)) return true;
+  const h = rmlHealth(it);
+  return !!(h && h.state==="bad");
+}
+function rmlFmt(d){
+  if(!d) return "No date";
+  const M = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const p = d.split("-"); return (+p[2]) + " " + M[(+p[1])-1];
+}
+function rmlCard(m, it, en, ln){
+  const t = en.task, st = effStatus(t);
+  const ongoing = ln.kind==="ongoing";
+  const h = rmlHealth(it);
+  const overdue = !ongoing && st!=="done" && it.end && dNum(it.end) < dNum(todayISO());
+  const locked = isLocked(t);
+  const bad = (h && h.state==="bad") || overdue || locked;
+  const stop = document.createElement("div");
+  stop.className = "rml-stop" + (st==="done" ? " done" : "") + (bad ? " bad" : "") + (h && h.state==="ok" ? " ok" : "");
+  const date = document.createElement("div"); date.className = "rml-date";
+  date.textContent = ongoing ? (h ? (h.state==="bad" ? "● Needs attention" : h.state==="ok" ? "● On track" : "● Not checked") : "Ongoing")
+                             : (st==="done" ? "✓ " : "By ") + rmlFmt(it.end);
+  const dot = document.createElement("div"); dot.className = "rml-dot";
+  const card = document.createElement("div"); card.className = "rml-card";
+  const owner = it.team || (it.owner ? "" : t.owner || t.assignee) || "";
+  let html = '<div class="rml-path">'+mtEsc(en.kind==="own" ? "Written on this roadmap" : en.path)+'</div>'
+    + '<div class="rml-title">'+mtEsc(t.title||"(untitled)")+'</div>'
+    + '<div class="rml-meta"><span class="rml-st st-'+mtEsc(st||"planned")+'">'+mtEsc(STATUS_LABEL[st]||st||"Planned")+'</span>'
+    + (it.owner ? '<span class="rml-team">👤 '+mtEsc(it.owner)+'</span>' : '')
+    + (owner ? '<span class="rml-team">👥 '+mtEsc(owner)+'</span>' : '') + '</div>';
+  if(h) html += '<div class="rml-health '+h.state+'">'+mtEsc(h.text)+'</div>';
+  if(overdue) html += '<div class="rml-health bad">Past due — '+(dNum(todayISO())-dNum(it.end))+' day(s) late</div>';
+  if(it.progress) html += '<div class="rml-row"><b>Done so far</b>'+mtEsc(it.progress)+'</div>';
+  if(it.next) html += '<div class="rml-row"><b>Next</b>'+mtEsc(it.next)+'</div>';
+  card.innerHTML = html;
+  const lc = lockChip(t);
+  if(lc){ const w = document.createElement("div"); w.className = "rml-lock"; w.appendChild(lc); card.appendChild(w); }
+  if(ongoing && it.rule && (it.rule.type==="stale" || it.rule.type==="blogs") && editMode){
+    const b = document.createElement("button"); b.className = "rml-mini rml-donebtn"; b.textContent = "✓ Done today";
+    b.title = "Log that this was done today — resets the red timer";
+    b.onclick = e=>{ e.stopPropagation(); it.lastDone = todayISO(); saveRmaps(); toast("Logged for today"); };
+    card.appendChild(b);
+  }
+  if(editMode){ card.style.touchAction = "none"; card.title = "Click to edit · drag to another lane"; rmgItemDrag(card, m, it, ()=>1, 0, ()=> rmlEditItem(m, it, en)); }
+  if(!editMode) card.style.cursor = "default";
+  stop.append(date, dot, card);
+  return stop;
+}
+
+/* ---- write a new item straight onto a lane ---- */
+/* "＋ Add task…" line in a chart's left column: type a name, Enter adds it to that phase / swimlane /
+   group (starting today, one week long — drag or click it to adjust) and keeps the cursor there */
+let rmlQuickFocus = null;
+function rmlQuickAdd(m, laneId, title){
+  const tid = "rmo-"+Date.now().toString(36)+Math.random().toString(36).slice(2,4);
+  (m.own = m.own || []).push({ tid, title, status:"planned" });
+  const st = todayISO();
+  m.items.push({ rid:"ri-"+Math.random().toString(36).slice(2,7), tid, start:st, end:dISO(dNum(st)+6), lane:laneId });
+}
+function rmlQuickAddInput(m, ln, cls){
+  const box = document.createElement("div"); box.className = cls;
+  const inp = document.createElement("input"); inp.type = "text"; inp.className = "rml-qadd"; inp.placeholder = "＋ Add task…";
+  inp.title = "Type a task name and press Enter";
+  inp.onkeydown = e=>{
+    if(e.key==="Escape"){ inp.value = ""; inp.blur(); return; }
+    if(e.key!=="Enter") return;
+    const v = inp.value.trim(); if(!v) return;
+    rmlQuickAdd(m, ln.id, v); rmlQuickFocus = { key: m.id + ":" + ln.id, until: Date.now() + 2000 };
+    saveRmaps();
+  };
+  box.appendChild(inp);
+  /* the page can redraw more than once after a save: keep the cursor in this box for each redraw */
+  if(rmlQuickFocus && rmlQuickFocus.key === m.id + ":" + ln.id && Date.now() < rmlQuickFocus.until) setTimeout(()=> inp.focus(), 0);
+  return box;
+}
+function rmlNewOwn(m, laneId){
+  openDialog("New item on “"+m.name+"”", {}, v=>{
+    const tid = "rmo-"+Date.now().toString(36);
+    const t = { tid, title:v.title, status:"planned" };
+    if(v.note) t.note = v.note;
+    (m.own = m.own || []).push(t);
+    const st = todayISO();
+    const it = { rid:"ri-"+Math.random().toString(36).slice(2,7), tid, start:st, end:dISO(dNum(st)+14), lane:laneId };
+    m.items.push(it);
+    saveRmaps();
+    const en = allTasks().find(x=>x.tid===tid);
+    if(en) rmlEditItem(m, it, en);
+  }, {titleLabel:"What is it?", noteLabel:"Note (optional)"});
+}
+
+/* ---- lane dialog: name + project/ongoing ---- */
+/* reorder lanes / phases / swimlanes: drag the row label, or Move up / down in its dialog */
+function rmlMoveLane(m, ln, to){
+  const from = m.lanes.indexOf(ln); if(from<0) return;
+  to = Math.max(0, Math.min(m.lanes.length-1, to)); if(to===from) return;
+  m.lanes.splice(from, 1); m.lanes.splice(to, 0, ln);
+  saveRmaps();
+}
+let rmlDragLane = null;
+function rmlLaneDrag(el, m, ln){
+  if(!editMode || m.lanes.length<2) return;
+  el.draggable = true; el.classList.add("rml-draggable");
+  el.title = (el.title ? el.title + " · " : "") + "Drag up or down to reorder";
+  el.addEventListener("dragstart", e=>{ rmlDragLane = ln; e.dataTransfer.effectAllowed = "move"; try{ e.dataTransfer.setData("text/plain", ln.id); }catch(_){} el.classList.add("rml-dragging"); });
+  el.addEventListener("dragend", ()=>{ rmlDragLane = null; el.classList.remove("rml-dragging"); document.querySelectorAll(".rml-drop-above,.rml-drop-below").forEach(x=> x.classList.remove("rml-drop-above","rml-drop-below")); });
+  el.addEventListener("dragover", e=>{
+    if(!rmlDragLane || rmlDragLane===ln) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = "move";
+    const r = el.getBoundingClientRect(), below = e.clientY > r.top + r.height/2;
+    el.classList.toggle("rml-drop-below", below); el.classList.toggle("rml-drop-above", !below);
+  });
+  el.addEventListener("dragleave", ()=> el.classList.remove("rml-drop-above","rml-drop-below"));
+  el.addEventListener("drop", e=>{
+    if(!rmlDragLane || rmlDragLane===ln) return;
+    e.preventDefault();
+    const r = el.getBoundingClientRect(), below = e.clientY > r.top + r.height/2;
+    const src = rmlDragLane; rmlDragLane = null;
+    const from = m.lanes.indexOf(src); let to = m.lanes.indexOf(ln) + (below ? 1 : 0);
+    if(from < to) to--;
+    rmlMoveLane(m, src, to);
+  });
+}
+/* tree connector lines in a left-column cell: verticals for ancestors that continue, and an
+   elbow into this row. Column j sits under the toggle of the level-j parent. */
+function rmlTreeLines(cell, lvl, guides, last, pad, step){
+  if(!lvl) return;
+  const x = j=> (pad + j*step + 7) + "px";
+  (guides||[]).forEach((on, j)=>{ if(on){ const v = document.createElement("i"); v.className = "rml-tv"; v.style.left = x(j); cell.appendChild(v); } });
+  const e = document.createElement("i"); e.className = "rml-te" + (last ? "" : " more"); e.style.left = x(lvl-1); cell.appendChild(e);
+}
+/* Simple Gantt phases nest: phase › sub-phase › sub-sub-phase */
+const RMG_MAX_DEPTH = 2;
+function rmlLaneDepth(m, ln){ let d = 0, cur = ln; while(cur && cur.parent && d < 12){ cur = m.lanes.find(x=>x.id===cur.parent); if(cur) d++; } return d; }
+function rmlEditLane(m, ln, preset){
+  const wbs = m.view==="wbs", nest = m.view==="gantt";
+  const g = rmgIsGrid(m) || wbs, word = wbs ? "group" : m.view==="swimlane" ? "swimlane" : g ? "phase" : "lane";
+  const fields = [{ k:"name", label: word[0].toUpperCase()+word.slice(1)+" name", type:"text", value: ln ? ln.name : "", ph: m.view==="swimlane" ? "e.g. Product, Marketing, Engineering" : g ? "e.g. Brainstorming, Research, Design, Testing" : "e.g. Product launch, Blogs, Social media" }];
+  if(wbs){
+    const banned = new Set(ln ? rmwDescLanes(m, ln).map(l=>l.id) : []);
+    fields.push({ k:"parent", label:"Inside group", type:"select", value: ln ? (ln.parent || "") : ((preset && preset.parent) || ""), opts: [["","— top level —"]].concat(m.lanes.filter(l=> !banned.has(l.id)).map(l=>[l.id, rmwLanePath(m, l)])) });
+    fields.push({ k:"color", label:"Summary bar colour", type:"color", value: ln && ln.color || "", autoTip:"Red for top-level groups, green inside" });
+  }
+  if(nest){
+    /* a phase can sit inside another, up to sub-sub-phase; its own sub-phases move with it */
+    const banned = new Set(ln ? rmwDescLanes(m, ln).map(l=>l.id) : []);
+    const below = ln ? Math.max(...rmwDescLanes(m, ln).map(l=> rmlLaneDepth(m, l))) - rmlLaneDepth(m, ln) : 0;
+    const ok = m.lanes.filter(l=> !banned.has(l.id) && rmlLaneDepth(m, l) + 1 + below <= RMG_MAX_DEPTH);
+    fields.push({ k:"parent", label:"Inside phase", type:"select", value: ln ? (ln.parent || "") : ((preset && preset.parent) || ""), opts: [["","— top level —"]].concat(ok.map(l=>[l.id, rmwLanePath(m, l)])) });
+  }
+  if(m.view==="swimlane") fields.push({ k:"color", label:"Swimlane colour", type:"color", value: ln && ln.color || "", autoTip:"Next colour in the palette" });
+  if(!g) fields.push({ k:"kind", label:"Type", type:"select", value: ln ? ln.kind : "project", opts:[["project","Project — things with a due date"],["ongoing","Ongoing — running work with health rules"]] });
+  const idx = ln ? m.lanes.indexOf(ln) : -1;
+  const extra = [];
+  if(idx>0) extra.push(["↑ Move up", "Move this "+word+" one row up", ()=> rmlMoveLane(m, ln, idx-1)]);
+  if(ln && idx<m.lanes.length-1) extra.push(["↓ Move down", "Move this "+word+" one row down", ()=> rmlMoveLane(m, ln, idx+1)]);
+  if(ln && m.lanes.length>1) extra.push(["Delete "+word, "Its items move to the first "+word, ()=>{
+    if(!confirm("Delete the "+word+" “"+ln.name+"”? Its items move to “"+m.lanes.find(l=>l!==ln).name+"”.")) return false;
+    m.lanes.splice(m.lanes.indexOf(ln),1);
+    m.lanes.forEach(l=>{ if(l.parent===ln.id){ if(ln.parent) l.parent = ln.parent; else delete l.parent; } });
+    const to = (ln.parent && m.lanes.find(l=>l.id===ln.parent)) || m.lanes[0];
+    m.items.forEach(it=>{ if(it.lane===ln.id) it.lane = to.id; });
+    saveRmaps();
+  }, true]);
+  rmlModal(ln ? "Edit "+word : (preset && preset.parent ? "New sub-"+word+" in “"+((m.lanes.find(l=>l.id===preset.parent)||{}).name||"")+"”" : "New "+word), fields, v=>{
+    const name = (v.name||"").trim(); if(!name){ toast("Give the "+word+" a name"); return false; }
+    const kind = g ? "project" : v.kind;
+    const target = ln || { id:"ln-"+Date.now().toString(36) };
+    target.name = name; target.kind = kind;
+    if(m.view==="swimlane" || wbs){ if(v.color) target.color = v.color; else delete target.color; }
+    if(wbs || nest){ if(v.parent) target.parent = v.parent; else delete target.parent; }
+    if(!ln) m.lanes.push(target);
+    saveRmaps();
+  }, { extra });
+}
+
+/* ================================================================
+   ROADMAP · SIMPLE GANTT
+   Weeks across the top, phases down the side (the roadmap's lanes), and
+   each item as a block over the weeks it runs, coloured by its team.
+   ================================================================ */
+const RMG_COLORS = ["#C8473B","#D9A030","#2F6DB5","#2E9466","#8A55C2","#D9682B","#3A9CA8","#B5487F"];
+let rmgFrom = {};   /* per roadmap (session): first day of the window when a window size is picked */
+const RMG_WINDOWS = [[4,"1 month"],[8,"2 months"],[13,"3 months"],[0,"All"]];
+function rmgWeekStart(n){ const dow = (new Date(n*86400000).getUTCDay()+6)%7; return n - dow; }   /* Monday */
+function renderRmapGantt(m, wrap, byTid){
+  rmlEnsureLanes(m);
+  const live = m.items.filter(it=> byTid[it.tid]);
+  const today = dNum(todayISO());
+  /* week range: the roadmap's board months if set, else around the items */
+  let a, b;
+  if(m.rangeStart && m.rangeEnd){ a = dNum(monthStartISO(m.rangeStart)); b = dNum(monthEndISO(m.rangeEnd)); }
+  else {
+    const ns = live.flatMap(it=> [it.start, it.end].filter(Boolean).map(dNum));
+    a = ns.length ? Math.min(...ns) : today; b = ns.length ? Math.max(...ns) : today + 55;
+    b = Math.max(b, a + 55);
+  }
+  /* window: "1 month" = the 4–5 weeks of a calendar month, else N weeks from a chosen Monday */
+  const win = Number(m.gWin)||0;
+  let w0, nW, winLabel = "";
+  if(win===4){
+    const f = rmgFrom[m.id] || todayISO().slice(0,7)+"-01";
+    const ms = dNum(f.slice(0,7)+"-01"), me = dNum(monthEndISO(f.slice(0,7)));
+    w0 = rmgWeekStart(ms); nW = Math.floor((rmgWeekStart(me) - w0)/7) + 1;
+    winLabel = ymShort(f.slice(0,7));
+  } else if(win){
+    w0 = rmgWeekStart(rmgFrom[m.id] ? dNum(rmgFrom[m.id]) : today); nW = win;
+    winLabel = rmlFmt(dISO(w0)) + " – " + rmlFmt(dISO(w0 + nW*7 - 1));
+  } else {
+    w0 = rmgWeekStart(a); nW = Math.min(104, Math.floor((rmgWeekStart(b) - w0)/7) + 1);
+  }
+  const wkRaw = n => Math.floor((n - w0)/7);
+  const wkOf = n => Math.max(0, Math.min(nW-1, wkRaw(n)));
+  /* one colour per team, in first-seen order */
+  const teams = [];
+  live.forEach(it=>{ const t=(it.team||"").trim(); if(t && teams.indexOf(t)<0) teams.push(t); });
+  const colorOf = t => { const i = teams.indexOf((t||"").trim()); return i<0 ? "#8C95A3" : RMG_COLORS[i % RMG_COLORS.length]; };
+
+  const head = document.createElement("section");
+  head.className = "module-block rm-bar";
+  const row = document.createElement("div"); row.className = "module-head";
+  const h2 = rmapTitleEl(m);
+  const pc = document.createElement("span"); pc.className = "pct";
+  const done = live.filter(it=> effStatus(byTid[it.tid].task)==="done").length;
+  row.append(h2);
+  /* how much to show: 1 / 2 / 3 months, or everything */
+  const ctl = document.createElement("span"); ctl.className = "rmg-win";
+  const seg = document.createElement("span"); seg.className = "rmg-seg";
+  RMG_WINDOWS.forEach(([wv, lbl])=>{
+    const bt = document.createElement("button"); bt.textContent = lbl; bt.className = win===wv ? "on" : "";
+    bt.title = wv ? "Show " + lbl + " at a time — bigger blocks" : "Show every week the roadmap covers";
+    bt.onclick = ()=>{ if(win===wv) return; m.gWin = wv; delete rmgFrom[m.id]; saveRmaps(); };
+    seg.appendChild(bt);
+  });
+  ctl.appendChild(seg);
+  if(win){
+    const step = dir=>{
+      if(win===4){ const f = rmgFrom[m.id] || todayISO().slice(0,7)+"-01"; rmgFrom[m.id] = idxYm(ymIdx(f.slice(0,7)) + dir) + "-01"; }
+      else rmgFrom[m.id] = dISO(w0 + dir*win*7);
+      renderAll();
+    };
+    const nb = (t, title, fn)=>{ const x=document.createElement("button"); x.className="rmg-nav"; x.textContent=t; x.title=title; x.onclick=fn; return x; };
+    ctl.appendChild(nb("‹", "Previous", ()=> step(-1)));
+    ctl.appendChild(nb("Today", "Jump back to now", ()=>{ delete rmgFrom[m.id]; renderAll(); }));
+    ctl.appendChild(nb("›", "Next", ()=> step(1)));
+    const wl = document.createElement("span"); wl.className = "rmg-wl"; wl.textContent = winLabel; ctl.appendChild(wl);
+  }
+  row.appendChild(ctl);
+  if(editMode) rmlBarButtons(row, m, m.view==="swimlane" ? "Swimlane" : "Phase");
+  head.appendChild(row); wrap.appendChild(head);
+  if(m.view==="swimlane"){ rmgSwimlanes(m, wrap, byTid, live, w0, nW, today); return; }
+
+  /* day columns (7 per week) so a task covers exactly its own days; every task gets its own
+     slim line and its name sits beside the bar, so text never resizes the chart */
+  const nD = nW*7, dayOf = n => n - w0;
+  const scroll = document.createElement("div"); scroll.className = "rmg-scroll";
+  const grid = document.createElement("div"); grid.className = "rmg-grid rmg-days";
+  const nameW = rmgNameW(m, 250), colsRest = "repeat("+nD+", minmax(0, 1fr))", minExtra = nW*(nW<=5 ? 0 : 84);
+  grid.style.gridTemplateColumns = nameW + "px " + colsRest;
+  grid.style.minWidth = (nameW + minExtra) + "px";
+  const corner = document.createElement("div"); corner.className = "rmg-corner"; grid.appendChild(corner);
+  const tw = wkOf(today), inRange = today >= w0 && today < w0 + nD;
+  for(let w=0; w<nW; w++){
+    const c = document.createElement("div"); c.className = "rmg-wk" + (inRange && w===tw ? " now" : "");
+    c.style.gridColumn = (2 + w*7) + " / span 7";
+    c.innerHTML = "Week " + (w+1) + "<small>" + rmlFmt(dISO(w0 + w*7)) + (nW<=9 ? " – " + rmlFmt(dISO(w0 + w*7 + 6)) : "") + "</small>";
+    grid.appendChild(c);
+  }
+  const weekPx = ()=> (grid.querySelector(".rmg-wk")||{}).offsetWidth || 0;
+  const cellsRow = (row, laneId, cls)=>{
+    for(let w=0; w<nW; w++){
+      const bg = document.createElement("div"); bg.className = "rmg-cell" + (cls ? " "+cls : "") + (inRange && w===tw ? " now" : ""); bg.dataset.lane = laneId;
+      bg.style.gridRow = String(row); bg.style.gridColumn = (2 + w*7) + " / span 7";
+      grid.appendChild(bg);
+    }
+  };
+  let rIdx = 2;
+  const barEls = {};
+  /* left column reads like a task list: phase header, its tasks, "＋ Add task…", then its
+     sub-phases (and their sub-phases) the same way, indented */
+  const laneItems = ln => live.filter(it=> rmlLaneOf(m, it)===ln)
+    .filter(it=>{ /* in a window, drop tasks entirely outside it */
+      const s0 = dayOf(dNum(it.start || it.end || todayISO())), e0 = dayOf(dNum(it.end || it.start || todayISO()));
+      return !(e0 < 0 || s0 > nD-1);
+    })
+    .sort((x,y)=> dNum(x.start||todayISO()) - dNum(y.start||todayISO()));
+  const order = [];
+  const walk = (pid, d)=> rmwLaneKids(m, pid).forEach(l=>{ order.push([l, d]); walk(l.id, d+1); });
+  walk(null, 0);
+  order.forEach(([ln, depth])=>{
+    const items = laneItems(ln);
+    const all = rmwDescLanes(m, ln).flatMap(laneItems);   /* this phase and everything inside it */
+    const lab = document.createElement("div"); lab.className = "rmg-phase" + (depth ? " sub d" + Math.min(depth, 2) : ""); lab.style.gridRow = String(rIdx); lab.dataset.lane = ln.id;
+    if(depth){ lab.style.paddingLeft = (12 + depth*18) + "px"; rmlTreeLines(lab, depth, [], false, 6, 18); }
+    const lt = document.createElement("span"); lt.className = "rmg-pname"; lt.textContent = ln.name; lab.appendChild(lt);
+    const ct = document.createElement("span"); ct.className = "rmg-pct"; ct.textContent = all.length || ""; lab.appendChild(ct);
+    if(editMode){
+      if(depth < RMG_MAX_DEPTH){
+        const sb = document.createElement("button"); sb.className = "rml-mini"; sb.textContent = "＋ Sub"; sb.title = "Add a sub-phase inside “"+ln.name+"”";
+        sb.onclick = e=>{ e.stopPropagation(); rmlEditLane(m, null, { parent: ln.id }); };
+        lab.appendChild(sb);
+      }
+      const ed = document.createElement("button"); ed.className = "rml-mini"; ed.textContent = "✎"; ed.title = "Rename / move / delete phase";
+      ed.onclick = ()=> rmlEditLane(m, ln);
+      lab.appendChild(ed);
+    }
+    rmlLaneDrag(lab, m, ln);
+    grid.appendChild(lab);
+    cellsRow(rIdx, ln.id, "phase");
+    /* thin summary line over the phase's tasks, sub-phases included */
+    if(all.length){
+      const s0 = Math.max(0, Math.min(...all.map(it=> dayOf(dNum(it.start||it.end||todayISO())))));
+      const e0 = Math.min(nD-1, Math.max(...all.map(it=> dayOf(dNum(it.end||it.start||todayISO())))));
+      const sm = document.createElement("div"); sm.className = "rmg-sum"; sm.style.gridRow = String(rIdx); sm.style.gridColumn = (s0+2) + " / " + (e0+3);
+      grid.appendChild(sm);
+    }
+    rIdx++;
+    items.forEach((it, ii)=>{
+      const en = byTid[it.tid], st = effStatus(en.task), locked = isLocked(en.task);
+      const s = Math.max(0, dayOf(dNum(it.start || it.end || todayISO())));
+      const e = Math.min(nD-1, Math.max(s, dayOf(dNum(it.end || it.start || todayISO()))));
+      const nm = document.createElement("div"); nm.className = "rmg-task" + (st==="done" ? " done" : ""); nm.style.gridRow = String(rIdx); nm.dataset.lane = ln.id;
+      nm.innerHTML = '<span class="rmg-tt"></span><span class="rmg-td"></span>';
+      nm.firstChild.textContent = (st==="done" ? "✓ " : locked ? "🔒 " : "") + (en.task.title || "(untitled)");
+      nm.lastChild.textContent = rmlFmt(it.start) + (it.end && it.end!==it.start ? " → " + rmlFmt(it.end) : "") + (it.owner ? " · 👤 " + it.owner : "");
+      nm.title = (en.task.title||"") + (it.owner ? "\nOwner: " + it.owner : "") + (it.team ? "\nTeam: " + it.team : "") + "\n" + en.path;
+      if(editMode){ nm.onclick = ()=> rmlEditItem(m, it, en); nm.style.cursor = "pointer"; }
+      if(depth) nm.style.paddingLeft = (26 + depth*18) + "px";
+      rmlTreeLines(nm, depth+1, [], !editMode && ii===items.length-1, 6, 18);
+      grid.appendChild(nm);
+      cellsRow(rIdx, ln.id, "");
+      const blk = document.createElement("div");
+      blk.className = "rmg-blk rmg-line" + (st==="done" ? " done" : "") + (locked ? " locked" : "");
+      blk.style.gridRow = String(rIdx); blk.style.gridColumn = (s + 2) + " / " + (e + 3);
+      blk.style.background = it.color || colorOf(it.team);
+      blk.title = nm.title + "\n" + rmlFmt(it.start) + " → " + rmlFmt(it.end);
+      barEls[it.tid] = blk;
+      if(editMode) rmgItemDrag(blk, m, it, ()=> weekPx()/7, 1, ()=> rmlEditItem(m, it, en)); else blk.style.cursor = "default";
+      grid.appendChild(blk);
+      rIdx++;
+    });
+    if(editMode){
+      const add = rmlQuickAddInput(m, ln, "rmg-task rmg-add");
+      add.style.gridRow = String(rIdx); add.dataset.lane = ln.id;
+      if(depth) add.style.paddingLeft = (26 + depth*18) + "px";
+      rmlTreeLines(add, depth+1, [], true, 6, 18);
+      grid.appendChild(add);
+      cellsRow(rIdx, ln.id, "addrow");
+      rIdx++;
+    } else if(!items.length && !rmwLaneKids(m, ln.id).length){
+      const e = document.createElement("div"); e.className = "rmg-task muted"; e.style.gridRow = String(rIdx); e.textContent = "No tasks";
+      grid.appendChild(e); cellsRow(rIdx, ln.id, ""); rIdx++;
+    }
+  });
+  if(inRange){
+    const tl = document.createElement("div"); tl.className = "rms-today"; tl.title = "Today";
+    tl.style.gridRow = "1 / " + rIdx; tl.style.gridColumn = String(dayOf(today) + 2);
+    grid.appendChild(tl);
+  }
+  rmgColResizer(grid, m, nameW, 250, rIdx, colsRest, minExtra);
+  scroll.appendChild(grid); wrap.appendChild(scroll);
+  rmlDepOverlay(grid, barEls, byTid);
+
+  const lg = document.createElement("div"); lg.className = "rmg-legend";
+  lg.innerHTML = '<b>Legend</b>' + (teams.length ? teams.map(t=> '<span><i style="background:'+colorOf(t)+'"></i>'+mtEsc(t)+'</span>').join("") : '<span class="muted">Give tasks a “Team involved” to colour them by team</span>')
+    + (live.some(it=>!(it.team||"").trim()) && teams.length ? '<span><i style="background:#8C95A3"></i>No team</span>' : '');
+  if(live.some(it=> byTid[it.tid] && (byTid[it.tid].task.blockedBy||[]).length)) lg.insertAdjacentHTML("beforeend", rmlDepLegend());
+  wrap.appendChild(lg);
+}
+
+/* one dependency arrow between two bars, by type. fr / to = {x1, x2, y}; returns {d, bad} where
+   bad = the dates break the rule (drawn red) */
+function rmlDepPath(type, fr, to, half){
+  const g = 8, y0 = fr.y, y3 = to.y, mid = y3 > y0 ? y3 - half : y3 + half;
+  if(type==="SS"){
+    const x = Math.min(fr.x1, to.x1) - g;
+    return { d:"M"+fr.x1+","+y0+" H"+x+" V"+y3+" H"+(to.x1-2), bad: to.x1 < fr.x1 };
+  }
+  if(type==="FF"){
+    const x = Math.max(fr.x2, to.x2) + g;
+    return { d:"M"+fr.x2+","+y0+" H"+x+" V"+y3+" H"+(to.x2+2), bad: to.x2 < fr.x2 };
+  }
+  if(type==="SF"){
+    const d = (to.x2 + g <= fr.x1 - g)
+      ? "M"+fr.x1+","+y0+" H"+(fr.x1-g)+" V"+y3+" H"+(to.x2+2)
+      : "M"+fr.x1+","+y0+" H"+(fr.x1-g)+" V"+mid+" H"+(to.x2+g)+" V"+y3+" H"+(to.x2+2);
+    return { d, bad: to.x2 < fr.x1 };
+  }
+  const d = (to.x1 - 10 >= fr.x2 + g)
+    ? "M"+fr.x2+","+y0+" H"+(fr.x2+g)+" V"+y3+" H"+(to.x1-2)
+    : "M"+fr.x2+","+y0+" H"+(fr.x2+g)+" V"+mid+" H"+(to.x1-12)+" V"+y3+" H"+(to.x1-2);
+  return { d, bad: to.x1 < fr.x2 };
+}
+const RML_DEP_DEFS = '<defs><marker id="rml-ar" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#2F55B5"/></marker>'
+  + '<marker id="rml-arR" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#C8473B"/></marker></defs>';
+function rmlDepSvgPaths(pairs, half){
+  let out = RML_DEP_DEFS;
+  pairs.forEach(({type, fr, to})=>{
+    const p = rmlDepPath(type, fr, to, half);
+    out += '<path d="'+p.d+'" fill="none" stroke="'+(p.bad ? "#C8473B" : "#2F55B5")+'" stroke-width="1.4"'+(type!=="FS" ? ' stroke-dasharray="'+(type==="SS" ? "5 3" : type==="FF" ? "2 3" : "8 3 2 3")+'"' : '')+' marker-end="url(#'+(p.bad ? "rml-arR" : "rml-ar")+')"/>';
+  });
+  return out;
+}
+function rmlDepLegend(){
+  const sw = dash=> '<svg width="26" height="8" style="vertical-align:middle"><line x1="0" y1="4" x2="26" y2="4" stroke="#2F55B5" stroke-width="1.6"'+(dash ? ' stroke-dasharray="'+dash+'"' : '')+'/></svg>';
+  return '<span>'+sw("")+' Finish → start</span><span>'+sw("5 3")+' Start → start</span><span>'+sw("2 3")+' Finish → finish</span><span>'+sw("8 3 2 3")+' Start → finish</span><span><svg width="26" height="8" style="vertical-align:middle"><line x1="0" y1="4" x2="26" y2="4" stroke="#C8473B" stroke-width="1.6"/></svg> Dates break the link</span>';
+}
+/* arrows over a CSS-grid chart (Simple / Swimlane Gantt): measured from the bars once laid out */
+function rmlDepOverlay(grid, bars, byTid){
+  const draw = ()=>{
+    const old = grid.querySelector(":scope > .rml-deps"); if(old) old.remove();
+    const gr = grid.getBoundingClientRect(), geo = {};
+    Object.keys(bars).forEach(tid=>{ const r = bars[tid].getBoundingClientRect(); geo[tid] = { x1: r.left-gr.left, x2: r.right-gr.left, y: r.top-gr.top+r.height/2 }; });
+    const pairs = [];
+    Object.keys(bars).forEach(tid=>{
+      const t = byTid[tid] && byTid[tid].task;
+      (t && t.blockedBy || []).forEach(bt=>{ if(geo[bt]) pairs.push({ type: depTypeOf(t, bt), fr: geo[bt], to: geo[tid] }); });
+    });
+    if(!pairs.length) return;
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("class", "rml-deps");
+    svg.setAttribute("width", grid.scrollWidth); svg.setAttribute("height", grid.scrollHeight);
+    svg.innerHTML = rmlDepSvgPaths(pairs, 18);
+    grid.appendChild(svg);
+  };
+  draw();
+  if(window.ResizeObserver){ let w = grid.clientWidth; new ResizeObserver(()=>{ if(grid.clientWidth!==w){ w = grid.clientWidth; draw(); } }).observe(grid); }
+}
+/* drag a task block / bar to another phase or swimlane (the row under the pointer, via data-lane)
+   and sideways by whole units (a week in Simple Gantt, a day in Swimlane Gantt). A click still edits. */
+function rmgItemDrag(el, m, it, unitPx, unitDays, onClick){
+  el.addEventListener("pointerdown", e=>{
+    if(e.button!==0) return;
+    if(e.target.closest && e.target.closest("button,input,a")) return;
+    const sx = e.clientX, sy = e.clientY, host = el.closest(".rmg-grid") || document;
+    let moved = false, target = null, ghost = null;
+    const mark = id=>{ host.querySelectorAll(".rmg-drop").forEach(x=> x.classList.remove("rmg-drop")); if(id) host.querySelectorAll('[data-lane="'+id+'"]').forEach(x=> x.classList.add("rmg-drop")); };
+    const mv = ev=>{
+      const dx = ev.clientX - sx, dy = ev.clientY - sy;
+      if(!moved && Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
+      if(!moved){
+        moved = true;
+        /* a floating copy follows the pointer, so scroll boxes can't clip it */
+        const r = el.getBoundingClientRect();
+        ghost = el.cloneNode(true); ghost.classList.add("rmg-ghost");
+        Object.assign(ghost.style, { position:"fixed", left:r.left+"px", top:r.top+"px", width:r.width+"px", height:r.height+"px", margin:"0", background: getComputedStyle(el).background });
+        document.body.appendChild(ghost);
+        el.classList.add("rmg-dragging");
+      }
+      ghost.style.transform = "translate("+dx+"px,"+dy+"px)";
+      const under = document.elementFromPoint(ev.clientX, ev.clientY);
+      target = under && under.closest ? under.closest("[data-lane]") : null;
+      mark(target && target.dataset.lane);
+    };
+    const up = ev=>{
+      window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up);
+      mark(null); el.classList.remove("rmg-dragging"); if(ghost) ghost.remove();
+      if(!moved){ onClick(); return; }
+      const dx = ev.clientX - sx, u = unitPx() || 1;
+      const shift = unitDays ? Math.round(dx / u) * unitDays : 0;
+      const lane = target && target.dataset.lane;
+      let changed = false;
+      if(lane && lane !== rmlLaneOf(m, it).id){ it.lane = lane; changed = true; }
+      if(shift){
+        const s = dNum(it.start||it.end||todayISO()), en = dNum(it.end||it.start||todayISO());
+        it.start = dISO(s + shift); it.end = dISO(en + shift); changed = true;
+      }
+      if(changed){ saveRmaps(); toast("Moved"); }
+    };
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+  });
+}
+/* Swimlane Gantt: one band per swimlane (team / workstream), one row per task,
+   bars placed on exact days; colour = the swimlane. */
+/* task-name column width: drag its right edge to widen it so long names show in full,
+   double-click to reset. Kept per chart in this browser only (a personal view setting). */
+function rmgNameW(m, def){
+  try{ const v = Number(localStorage.getItem("rmgNameW:" + m.id)); if(v >= 150 && v <= 900) return v; }catch(e){}
+  return def;
+}
+function rmgColResizer(grid, m, w, def, rows, colsRest, minExtra){
+  const h = document.createElement("div"); h.className = "rmg-colrs";
+  h.title = "Drag to widen or narrow the task names · double-click to reset";
+  h.style.gridRow = "1 / " + rows; h.style.left = (w - 5) + "px";
+  const setW = x=>{
+    grid.style.gridTemplateColumns = x + "px " + colsRest; h.style.left = (x - 5) + "px";
+    if(minExtra !== null) grid.style.minWidth = (x + minExtra) + "px";
+  };
+  h.addEventListener("pointerdown", e=>{
+    e.preventDefault(); e.stopPropagation();
+    const sx = e.clientX, w0 = w;
+    h.setPointerCapture(e.pointerId); h.classList.add("drag");
+    const mv = ev=>{ w = Math.max(150, Math.min(900, Math.round(w0 + ev.clientX - sx))); setW(w); };
+    const up = ()=>{
+      h.removeEventListener("pointermove", mv); h.removeEventListener("pointerup", up); h.classList.remove("drag");
+      if(w === w0) return;
+      try{ localStorage.setItem("rmgNameW:" + m.id, String(w)); }catch(e){}
+      renderAll();   /* redraw so dependency arrows follow the bars */
+    };
+    h.addEventListener("pointermove", mv); h.addEventListener("pointerup", up);
+  });
+  h.ondblclick = ()=>{ try{ localStorage.removeItem("rmgNameW:" + m.id); }catch(e){} renderAll(); };
+  grid.appendChild(h);
+}
+function rmgSwimlanes(m, wrap, byTid, live, w0, nW, today){
+  const nD = nW*7;
+  const dayOf = n => n - w0;
+  const scroll = document.createElement("div"); scroll.className = "rmg-scroll";
+  const grid = document.createElement("div"); grid.className = "rmg-grid rms-grid" + (nW<=5 ? " big" : nW<=9 ? " mid" : "");
+  const nameW = rmgNameW(m, 210), colsRest = "repeat("+nD+", minmax("+(nW<=5 ? 0 : 11)+"px, 1fr))";
+  grid.style.gridTemplateColumns = nameW + "px " + colsRest;
+  const corner = document.createElement("div"); corner.className = "rmg-corner"; corner.textContent = "Task"; grid.appendChild(corner);
+  const inRange = today >= w0 && today < w0 + nD, td = dayOf(today), tw = Math.floor(td/7);
+  for(let w=0; w<nW; w++){
+    const c = document.createElement("div"); c.className = "rmg-wk" + (inRange && w===tw ? " now" : "");
+    c.style.gridColumn = (2 + w*7) + " / span 7";
+    c.innerHTML = "Week " + (w+1) + "<small>" + rmlFmt(dISO(w0 + w*7)) + (nW<=9 ? " – " + rmlFmt(dISO(w0 + w*7 + 6)) : "") + "</small>";
+    grid.appendChild(c);
+  }
+  let r = 2;
+  const barEls = {};
+  const weekCells = (row, last, laneId)=>{
+    for(let w=0; w<nW; w++){
+      const bg = document.createElement("div"); bg.className = "rmg-cell" + (last ? " last" : "") + (inRange && w===tw ? " now" : ""); bg.dataset.lane = laneId;
+      bg.style.gridRow = String(row); bg.style.gridColumn = (2 + w*7) + " / span 7";
+      grid.appendChild(bg);
+    }
+  };
+  m.lanes.forEach((ln, li)=>{
+    const col = ln.color || RMG_COLORS[li % RMG_COLORS.length];
+    const items = live.filter(it=> rmlLaneOf(m, it)===ln).filter(it=>{
+      const s0 = dayOf(dNum(it.start || it.end || todayISO())), e0 = dayOf(dNum(it.end || it.start || todayISO()));
+      return !(e0 < 0 || s0 > nD-1);
+    }).sort((x,y)=> dNum(x.start||todayISO()) - dNum(y.start||todayISO()));
+    const band = document.createElement("div"); band.className = "rms-band";
+    band.style.gridRow = String(r); band.style.gridColumn = "1 / -1"; band.style.setProperty("--sw", col); band.dataset.lane = ln.id;
+    const done = items.filter(it=> effStatus(byTid[it.tid].task)==="done").length;
+    band.innerHTML = '<span class="rms-name">'+mtEsc(ln.name)+'</span><span class="rms-cnt">'+items.length+' task'+(items.length===1?'':'s')+(items.length ? ' · '+done+' done' : '')+'</span>';
+    if(editMode){
+      const mk = (t, title, fn)=>{ const b=document.createElement("button"); b.className="rml-mini"; b.textContent=t; b.title=title; b.onclick=fn; return b; };
+      band.appendChild(mk("＋", "Write a task in this swimlane", ()=> rmlNewOwn(m, ln.id)));
+      band.appendChild(mk("✎", "Rename / delete swimlane", ()=> rmlEditLane(m, ln)));
+    }
+    rmlLaneDrag(band, m, ln);
+    grid.appendChild(band);
+    r++;
+    const addRow = ()=>{
+      if(!editMode) return;
+      const add = rmlQuickAddInput(m, ln, "rms-task rms-add"); add.style.gridRow = String(r); add.dataset.lane = ln.id;
+      grid.appendChild(add); weekCells(r, true, ln.id); r++;
+    };
+    if(!items.length){
+      if(editMode){ addRow(); return; }
+      const e = document.createElement("div"); e.className = "rms-task muted"; e.style.gridRow = String(r); e.textContent = "No tasks in this window"; e.dataset.lane = ln.id;
+      grid.appendChild(e); weekCells(r, true, ln.id); r++;
+      return;
+    }
+    items.forEach((it, ii)=>{
+      const en = byTid[it.tid], st = effStatus(en.task), locked = isLocked(en.task);
+      const lab = document.createElement("div"); lab.className = "rms-task"; lab.style.gridRow = String(r); lab.dataset.lane = ln.id;
+      lab.innerHTML = '<span class="rms-t">'+mtEsc(en.task.title||"(untitled)")+'</span>'
+        + '<span class="rms-sub">'+mtEsc([it.owner ? "👤 " + it.owner : "", it.team || (it.owner ? "" : en.task.owner) || "", rmlFmt(it.start)+" → "+rmlFmt(it.end)].filter(Boolean).join(" · "))+'</span>';
+      grid.appendChild(lab);
+      weekCells(r, ii===items.length-1, ln.id);
+      const s = Math.max(0, dayOf(dNum(it.start || it.end || todayISO()))), e = Math.min(nD-1, Math.max(s, dayOf(dNum(it.end || it.start || todayISO()))));
+      const bar = document.createElement("div");
+      bar.className = "rmg-blk rms-bar" + (st==="done" ? " done" : "") + (locked ? " locked" : "");
+      bar.style.gridRow = String(r); bar.style.gridColumn = (s + 2) + " / " + (e + 3); bar.style.background = it.color || col;
+      bar.textContent = (st==="done" ? "✓ " : locked ? "🔒 " : "") + (STATUS_LABEL[st] || st || "");
+      bar.title = (en.task.title||"") + "\n" + rmlFmt(it.start) + " → " + rmlFmt(it.end) + (it.owner ? "\nOwner: " + it.owner : "") + (it.team ? "\n" + it.team : "") + "\n" + en.path;
+      if(editMode){ rmgItemDrag(bar, m, it, ()=> ((grid.querySelector(".rmg-wk")||{}).offsetWidth||0)/7, 1, ()=> rmlEditItem(m, it, en)); lab.onclick = ()=> rmlEditItem(m, it, en); lab.style.cursor = "pointer"; } else bar.style.cursor = "default";
+      barEls[it.tid] = bar;
+      grid.appendChild(bar);
+      r++;
+    });
+    addRow();
+  });
+  if(inRange){
+    const tl = document.createElement("div"); tl.className = "rms-today"; tl.title = "Today";
+    tl.style.gridRow = "1 / " + r; tl.style.gridColumn = String(td + 2);
+    grid.appendChild(tl);
+  }
+  rmgColResizer(grid, m, nameW, 210, r, colsRest, null);
+  scroll.appendChild(grid); wrap.appendChild(scroll);
+  rmlDepOverlay(grid, barEls, byTid);
+  const lg = document.createElement("div"); lg.className = "rmg-legend";
+  lg.innerHTML = '<b>Swimlanes</b>' + m.lanes.map((ln,li)=> '<span><i style="background:'+(ln.color || RMG_COLORS[li % RMG_COLORS.length])+'"></i>'+mtEsc(ln.name)+'</span>').join("")
+    + '<span><i class="rms-lg-today"></i>Today</span>';
+  if(live.some(it=> byTid[it.tid] && (byTid[it.tid].task.blockedBy||[]).length)) lg.insertAdjacentHTML("beforeend", rmlDepLegend());
+  wrap.appendChild(lg);
+}
+
+/* ================================================================
+   ROADMAP · PROJECT GANTT (work breakdown)
+   Task tree on the left (groups → sub-groups → tasks, from m.lanes with
+   ln.parent), a quarter/month · month/week · month/day scale on top,
+   summary bars per group, task bars showing % complete, dependency arrows
+   from "Blocked by", drag a bar to move it or its right edge to stretch it.
+   Stored: ln.parent (group nesting), it.pct (0–100 complete), it.color.
+   ================================================================ */
+const RMW_ZOOMS = [["day","Days",30],["week","Weeks",12],["month","Months",4],["quarter","Quarters",1.6]];
+const RMW_ROW = 32, RMW_NAMEW = 300;
+let rmwZoom = {}, rmwCollapsed = {}, rmwScroll = {};
+function rmwPct(it, en){
+  if(effStatus(en.task)==="done") return 100;
+  const p = Number(it.pct); return isFinite(p) ? Math.max(0, Math.min(100, Math.round(p))) : 0;
+}
+function rmwLaneKids(m, pid){ return m.lanes.filter(l=> (l.parent && m.lanes.some(x=>x.id===l.parent) ? l.parent : null) === (pid||null)); }
+function rmwLanePath(m, ln){ const out=[]; let cur=ln, g=0; while(cur && g++<12){ out.unshift(cur.name); cur = m.lanes.find(x=>x.id===cur.parent); } return out.join(" › "); }
+function rmwDescLanes(m, ln){ const out=[ln]; rmwLaneKids(m, ln.id).forEach(k=> out.push(...rmwDescLanes(m, k))); return out; }
+
+function renderRmapWbs(m, wrap, byTid){
+  rmlEnsureLanes(m);
+  const live = m.items.filter(it=> byTid[it.tid]);
+  const today = dNum(todayISO());
+  const zk = rmwZoom[m.id] || m.wZoom || "month";
+  const pxd = (RMW_ZOOMS.find(z=>z[0]===zk) || RMW_ZOOMS[2])[2];
+  /* range: board months if set, else around the tasks with some air */
+  let n0, n1;
+  if(m.rangeStart && m.rangeEnd){ n0 = dNum(monthStartISO(m.rangeStart)); n1 = dNum(monthEndISO(m.rangeEnd)); }
+  else {
+    const ns = live.flatMap(it=> [it.start, it.end].filter(Boolean).map(dNum));
+    const a = Math.min(today, ...(ns.length ? ns : [today])) - 14, b = Math.max(today, ...(ns.length ? ns : [today])) + 45;
+    n0 = dNum(dISO(a).slice(0,7)+"-01"); n1 = dNum(monthEndISO(dISO(b).slice(0,7)));
+  }
+  const nD = n1 - n0 + 1, W = Math.round(nD * pxd);
+  const X = n => Math.round((n - n0) * pxd);
+
+  /* ---- header bar ---- */
+  const head = document.createElement("section");
+  head.className = "module-block rm-bar";
+  const row = document.createElement("div"); row.className = "module-head";
+  const h2 = rmapTitleEl(m);
+  row.appendChild(h2);
+  const seg = document.createElement("span"); seg.className = "rmg-seg"; seg.style.marginLeft = "6px";
+  RMW_ZOOMS.forEach(([k, lbl])=>{
+    const b = document.createElement("button"); b.textContent = lbl; b.className = zk===k ? "on" : "";
+    b.onclick = ()=>{ if(zk===k) return; rmwZoom[m.id] = k; m.wZoom = k; delete rmwScroll[m.id]; saveRmaps(); };
+    seg.appendChild(b);
+  });
+  row.appendChild(seg);
+  const tb = document.createElement("button"); tb.className = "rmg-nav"; tb.textContent = "Today"; tb.title = "Scroll to today";
+  row.appendChild(tb);
+  if(editMode) rmlBarButtons(row, m, "Group");
+  head.appendChild(row); wrap.appendChild(head);
+
+  /* ---- rows: groups (recursive) then their tasks ---- */
+  /* each row also carries what the tree lines need: guides[j] = keep the line of
+     column j running past this row; last = this is its parent's last child */
+  const rows = [];   /* {kind:"group"|"task"|"add", lvl, ln?, it?, en?, guides, last} */
+  const walk = (ln, lvl, guides, last)=>{
+    rows.push({ kind:"group", lvl, ln, guides, last });
+    if(rmwCollapsed[m.id+":"+ln.id]) return;
+    const kidGuides = lvl >= 1 ? guides.concat([!last]) : [];
+    const kids = [];
+    rmwLaneKids(m, ln.id).forEach(k=> kids.push({ g:k }));
+    live.filter(it=> rmlLaneOf(m, it)===ln)
+      .sort((a,b)=> dNum(a.start||todayISO()) - dNum(b.start||todayISO()))
+      .forEach(it=> kids.push({ it }));
+    if(editMode) kids.push({ add:true });
+    kids.forEach((k, i)=>{
+      const kl = i === kids.length-1;
+      if(k.g) walk(k.g, lvl+1, kidGuides, kl);
+      else if(k.it) rows.push({ kind:"task", lvl:lvl+1, it:k.it, en:byTid[k.it.tid], guides:kidGuides, last:kl });
+      else rows.push({ kind:"add", lvl:lvl+1, ln, guides:kidGuides, last:kl });
+    });
+  };
+  rmwLaneKids(m, null).forEach(ln=> walk(ln, 0, [], true));
+  const rowOf = {}; rows.forEach((r,i)=>{ if(r.kind==="task") rowOf[r.it.tid] = i; });
+  /* summary of a group: every task in it and its sub-groups */
+  const groupSpan = ln=>{
+    const ids = new Set(rmwDescLanes(m, ln).map(l=>l.id));
+    const its = live.filter(it=> ids.has(rmlLaneOf(m, it).id));
+    if(!its.length) return null;
+    let s = Infinity, e = -Infinity, w = 0, d = 0;
+    its.forEach(it=>{
+      const a = dNum(it.start||it.end||todayISO()), b = dNum(it.end||it.start||todayISO());
+      s = Math.min(s, a); e = Math.max(e, b);
+      const len = Math.max(1, b-a+1); w += len; d += len * rmwPct(it, byTid[it.tid]) / 100;
+    });
+    return { s, e, pct: w ? Math.round(d/w*100) : 0, n: its.length };
+  };
+
+  /* ---- scale segments ---- */
+  const M3 = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const segs = (keyFn, lblFn)=>{
+    const out = []; let cur = null;
+    for(let n=n0; n<=n1; n++){ const k = keyFn(n); if(!cur || cur.k!==k){ cur = { k, n, len:0, lbl:lblFn(n) }; out.push(cur); } cur.len++; }
+    return out;
+  };
+  const ymOf = n=> dISO(n).slice(0,7);
+  const qOf = n=>{ const d = dISO(n); return d.slice(0,4) + " Q" + (Math.floor((+d.slice(5,7)-1)/3)+1); };
+  let top, bot;
+  if(zk==="day"){ top = segs(ymOf, n=> M3[+dISO(n).slice(5,7)-1]+" "+dISO(n).slice(0,4)); bot = segs(n=>n, n=> String(+dISO(n).slice(8,10))); }
+  else if(zk==="week"){ top = segs(ymOf, n=> M3[+dISO(n).slice(5,7)-1]+" "+dISO(n).slice(0,4)); bot = segs(rmgWeekStart, n=> String(+dISO(n).slice(8,10))); }
+  else if(zk==="month"){ top = segs(qOf, qOf); bot = segs(ymOf, n=> M3[+dISO(n).slice(5,7)-1]); }
+  else { top = segs(n=> dISO(n).slice(0,4), n=> dISO(n).slice(0,4)); bot = segs(qOf, n=> qOf(n).slice(5)); }
+
+  const scroll = document.createElement("div"); scroll.className = "rmw-scroll";
+  const inner = document.createElement("div"); inner.className = "rmw-inner"; inner.style.width = (RMW_NAMEW + W) + "px";
+  /* header */
+  const hd = document.createElement("div"); hd.className = "rmw-head";
+  const hn = document.createElement("div"); hn.className = "rmw-name rmw-hname"; hn.textContent = "Task name";
+  const hs = document.createElement("div"); hs.className = "rmw-scale"; hs.style.width = W + "px";
+  [top, bot].forEach((ss, ri)=>{
+    const line = document.createElement("div"); line.className = "rmw-sline" + (ri ? " bot" : "");
+    ss.forEach(sg=>{
+      const c = document.createElement("div"); c.className = "rmw-seg";
+      c.style.left = X(sg.n) + "px"; c.style.width = Math.round(sg.len*pxd) + "px";
+      if(ri && zk==="day"){ const dw = new Date(sg.n*86400000).getUTCDay(); if(dw===0||dw===6) c.classList.add("we"); }
+      c.textContent = Math.round(sg.len*pxd) >= 18 ? sg.lbl : "";
+      line.appendChild(c);
+    });
+    hs.appendChild(line);
+  });
+  hd.append(hn, hs); inner.appendChild(hd);
+
+  /* body */
+  const body = document.createElement("div"); body.className = "rmw-body";
+  const grid = document.createElement("div"); grid.className = "rmw-gridlines"; grid.style.left = RMW_NAMEW + "px"; grid.style.width = W + "px";
+  bot.forEach(sg=>{ const l = document.createElement("i"); l.style.left = X(sg.n) + "px"; grid.appendChild(l); });
+  if(today >= n0 && today <= n1){ const t = document.createElement("b"); t.className = "rmw-today"; t.style.left = (X(today) + pxd/2) + "px"; t.title = "Today"; grid.appendChild(t); }
+  body.appendChild(grid);
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg"); svg.setAttribute("class", "rmw-links");
+  svg.setAttribute("width", W); svg.setAttribute("height", rows.length * RMW_ROW);
+  svg.style.left = RMW_NAMEW + "px";
+  body.appendChild(svg);
+
+  const barGeo = {};   /* tid -> {x1, x2, y} for arrows */
+  rows.forEach((r, ri)=>{
+    const rw = document.createElement("div"); rw.className = "rmw-row " + r.kind + (r.kind==="group" ? " lvl" + Math.min(r.lvl,3) : "");
+    rw.dataset.lane = r.kind==="task" ? rmlLaneOf(m, r.it).id : r.ln.id;   /* drop a dragged task here to move it into this group */
+    const nm = document.createElement("div"); nm.className = "rmw-name"; nm.style.paddingLeft = (10 + r.lvl*18) + "px";
+    rmlTreeLines(nm, r.lvl, r.guides, r.last, 10, 18);
+    const ln = document.createElement("div"); ln.className = "rmw-lane"; ln.style.width = W + "px";
+    if(r.kind==="add"){
+      const q = rmlQuickAddInput(m, r.ln, "rmw-addbox"); nm.appendChild(q);
+    } else if(r.kind==="group"){
+      const key = m.id+":"+r.ln.id, closed = !!rmwCollapsed[key];
+      const tg = document.createElement("button"); tg.className = "rmw-tg"; tg.textContent = closed ? "▸" : "▾";
+      tg.title = closed ? "Expand" : "Collapse";
+      tg.onclick = e=>{ e.stopPropagation(); if(closed) delete rmwCollapsed[key]; else rmwCollapsed[key] = 1; renderAll(); };
+      const sp = groupSpan(r.ln);
+      const t = document.createElement("span"); t.className = "rmw-gname"; t.textContent = r.ln.name; t.title = rmwLanePath(m, r.ln);
+      const ct = document.createElement("span"); ct.className = "rmw-gct"; ct.textContent = sp ? sp.pct + "%" : "";
+      nm.append(tg, t, ct);
+      if(editMode){
+        const mk = (x, title, fn)=>{ const b=document.createElement("button"); b.className="rml-mini rmw-act"; b.textContent=x; b.title=title; b.onclick=e=>{ e.stopPropagation(); fn(); }; return b; };
+        nm.appendChild(mk("＋", "Write a task in this group", ()=> rmlNewOwn(m, r.ln.id)));
+        nm.appendChild(mk("＋ Sub", "Add a sub-group inside “"+r.ln.name+"”", ()=> rmlEditLane(m, null, { parent: r.ln.id })));
+        nm.appendChild(mk("✎", "Rename / move / delete group", ()=> rmlEditLane(m, r.ln)));
+        rmlLaneDrag(nm, m, r.ln);
+      }
+      if(sp){
+        const bar = document.createElement("div"); bar.className = "rmw-sum" + (r.lvl ? " sub" : "");
+        if(r.ln.color) bar.style.setProperty("--sum", r.ln.color);
+        bar.style.left = X(sp.s) + "px"; bar.style.width = Math.max(6, Math.round((sp.e - sp.s + 1)*pxd)) + "px";
+        bar.innerHTML = '<i style="width:'+sp.pct+'%"></i>';
+        bar.title = r.ln.name + " · " + sp.n + " task(s) · " + sp.pct + "% complete\n" + rmlFmt(dISO(sp.s)) + " → " + rmlFmt(dISO(sp.e));
+        ln.appendChild(bar);
+      }
+    } else {
+      const { it, en } = r, t = en.task, st = effStatus(t), pct = rmwPct(it, en), locked = isLocked(t);
+      const canTick = editMode && (en.kind==="own" || (t.status!==undefined && t.col===undefined && !(t.items && t.items.length)));
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.className = "rmw-cb"; cb.checked = st==="done"; cb.disabled = !canTick;
+      cb.title = canTick ? "Mark done / not done" : "Status comes from its own board";
+      cb.onclick = e=>{ e.stopPropagation(); t.status = cb.checked ? "done" : "progress"; if(cb.checked) it.pct = 100; saveRmaps(); pushAll(); };
+      const tt = document.createElement("span"); tt.className = "rmw-tname" + (st==="done" ? " done" : ""); tt.textContent = (locked ? "🔒 " : "") + (t.title || "(untitled)");
+      tt.title = (t.title||"") + "\n" + en.path + (it.owner ? "\nOwner: " + it.owner : "") + (it.team ? "\n" + it.team : "");
+      nm.append(cb, tt);
+      const s = dNum(it.start||it.end||todayISO()), e = Math.max(s, dNum(it.end||it.start||todayISO()));
+      const bar = document.createElement("div"); bar.className = "rmw-bar" + (locked ? " locked" : "") + (st==="done" ? " done" : "");
+      if(it.color) bar.style.setProperty("--bar", it.color);
+      bar.style.left = X(s) + "px"; bar.style.width = Math.max(6, Math.round((e - s + 1)*pxd)) + "px";
+      bar.innerHTML = '<i style="width:'+pct+'%"></i>' + (editMode ? '<span class="rmw-grip" title="Drag to change the end date"></span>' : '');
+      bar.title = (t.title||"") + "\n" + rmlFmt(it.start) + " → " + rmlFmt(it.end) + " · " + pct + "% complete" + (it.team ? "\n" + it.team : "");
+      const lab = document.createElement("span"); lab.className = "rmw-blab"; lab.textContent = pct + "%" + (it.owner ? " · 👤 " + it.owner : "") + (it.team ? " · " + it.team : "");
+      lab.style.left = (X(s) + Math.max(6, Math.round((e - s + 1)*pxd)) + 6) + "px";
+      ln.append(bar, lab);
+      barGeo[it.tid] = { x1: X(s), x2: X(s) + Math.max(6, Math.round((e - s + 1)*pxd)), y: ri*RMW_ROW + RMW_ROW/2 };
+      const open = ()=>{ if(editMode) rmlEditItem(m, it, en); };
+      tt.onclick = open; if(editMode) tt.style.cursor = "pointer";
+      if(editMode){ tt.onclick = null; tt.style.touchAction = "none"; tt.title += "\nClick to edit · drag onto a group to move it there"; rmgItemDrag(tt, m, it, ()=>1, 0, open); }
+      if(editMode) rmwBarDrag(bar, lab, it, pxd, open);
+    }
+    rw.append(nm, ln); body.appendChild(rw);
+  });
+  /* dependency arrows: from the blocker's end to the waiting task's start */
+  const pairs = [];
+  live.forEach(it=>{
+    const t = byTid[it.tid].task, to = barGeo[it.tid];
+    if(!to || !t.blockedBy) return;
+    t.blockedBy.forEach(bt=>{ const fr = barGeo[bt]; if(fr) pairs.push({ type: depTypeOf(t, bt), fr, to }); });
+  });
+  svg.innerHTML = rmlDepSvgPaths(pairs, RMW_ROW/2);
+  if(!rows.length){ const e = document.createElement("div"); e.className = "rmw-empty"; e.textContent = "No groups yet — ＋ Group to start."; body.appendChild(e); }
+  inner.appendChild(body); scroll.appendChild(inner); wrap.appendChild(scroll);
+
+  const toToday = ()=>{ scroll.scrollLeft = Math.max(0, X(today) - 160); };
+  tb.onclick = toToday;
+  if(rmwScroll[m.id]){ scroll.scrollLeft = rmwScroll[m.id].x; scroll.scrollTop = rmwScroll[m.id].y; } else toToday();
+  scroll.addEventListener("scroll", ()=>{ rmwScroll[m.id] = { x: scroll.scrollLeft, y: scroll.scrollTop }; });
+
+  const lg = document.createElement("div"); lg.className = "rmg-legend";
+  lg.innerHTML = '<b>Legend</b><span><i class="rmw-lg-sum"></i>Group (summary)</span><span><i class="rmw-lg-bar"></i>Task — solid part is done</span>'
+    + '<span><i class="rms-lg-today"></i>Today</span>'
+    + (editMode ? '<span class="muted">Drag a bar to move it, its right edge to stretch it</span>' : '');
+  if(live.some(it=> byTid[it.tid] && (byTid[it.tid].task.blockedBy||[]).length)) lg.insertAdjacentHTML("beforeend", rmlDepLegend());
+  wrap.appendChild(lg);
+}
+/* drag a bar sideways to move it, or its grip to change the end date */
+function rmwBarDrag(bar, lab, it, pxd, onClick){
+  bar.addEventListener("pointerdown", e=>{
+    if(e.button!==0) return;
+    const resize = e.target.classList.contains("rmw-grip");
+    const sx = e.clientX, l0 = parseFloat(bar.style.left), w0 = parseFloat(bar.style.width);
+    let dd = 0, moved = false;
+    bar.setPointerCapture(e.pointerId); bar.classList.add("drag");
+    const mv = ev=>{
+      const dx = ev.clientX - sx; if(Math.abs(dx) > 3) moved = true;
+      dd = Math.round(dx / pxd);
+      if(resize){ const w = Math.max(pxd, w0 + dd*pxd); bar.style.width = w + "px"; lab.style.left = (l0 + w + 6) + "px"; }
+      else { bar.style.left = (l0 + dd*pxd) + "px"; lab.style.left = (l0 + dd*pxd + w0 + 6) + "px"; }
+    };
+    const up = ()=>{
+      bar.removeEventListener("pointermove", mv); bar.removeEventListener("pointerup", up); bar.classList.remove("drag");
+      if(!moved){ onClick(); return; }
+      if(!dd) return;
+      const s = dNum(it.start||it.end||todayISO()), en = dNum(it.end||it.start||todayISO());
+      if(resize) it.end = dISO(Math.max(s, en + dd));
+      else { it.start = dISO(s + dd); it.end = dISO(en + dd); }
+      saveRmaps();
+    };
+    bar.addEventListener("pointermove", mv); bar.addEventListener("pointerup", up);
+  });
+}
+
+/* ---- item dialog: lane, due date, owner, team, progress, next, blockers, rule ---- */
+/* owner is free text; suggest team members' names and owners already used on this chart */
+function rmlOwnerSuggestions(m){
+  const out = [];
+  const add = x=>{ x = (x||"").trim(); if(x && out.indexOf(x)<0) out.push(x); };
+  (m.items||[]).forEach(it=> add(it.owner));
+  assigneeMembers().forEach(u=> add(userDisplayName(u)));
+  return out;
+}
+function rmlEditItem(m, it, en){
+  const own = en.kind==="own";
+  const r = it.rule || {};
+  const fields = [];
+  if(own) fields.push({ k:"title", label:"Title", type:"text", value: en.task.title||"" });
+  fields.push(
+    { k:"lane", label: {gantt:"Phase", swimlane:"Swimlane", wbs:"Group"}[m.view] || "Lane", type:"select", value: rmlLaneOf(m, it).id, opts: m.lanes.map(l=>[l.id, (m.view==="wbs" || m.view==="gantt" ? rmwLanePath(m, l) : l.name) + (l.kind==="ongoing" ? " (ongoing)" : "")]) },
+    { k:"start", label:"Starts", type:"date", value: it.start || todayISO(), half:true },
+    { k:"end", label:"Done by", type:"date", value: it.end || it.start || todayISO(), half:true },
+    { k:"owner", label:"Owner", type:"text", value: it.owner || "", ph:"Type a name, e.g. Shivam", list: rmlOwnerSuggestions(m) },
+    { k:"team", label: m.view==="gantt" ? "Team (sets the colour)" : m.view==="swimlane" ? "Owner / team" : "Team involved", type:"text", value: it.team || "", ph:"e.g. Product + Marketing, Shivam" },
+    { k:"pct", label:"% complete", type:"number", value: it.pct ?? 0, show: ()=> m.view==="wbs" },
+    { k:"progress", label:"What’s done so far", type:"area", value: it.progress || "" },
+    { k:"next", label:"Next steps", type:"area", value: it.next || "" },
+    { k:"color", label:"Bar colour", type:"color", value: it.color || "", autoTip: m.view==="swimlane" ? "Use the swimlane colour" : m.view==="wbs" ? "Blue" : "Use the team colour", show: ()=> rmgIsGrid(m) || m.view==="wbs" },
+    { k:"rule", label:"Health rule (turns the card red)", type:"select", value: r.type || "", opts: RML_RULES.map(x=>[x.key, x.label]), show: ()=> !rmgIsGrid(m) && m.view!=="wbs" },
+    { k:"days", label:"N days", type:"number", value: r.days || (r.type==="blogs" ? 5 : r.type==="notif" ? 2 : 7), show: v=> RML_RULES.some(x=>x.key===v.rule && x.days) },
+    { k:"red", label:"Status", type:"select", value: r.red ? "red" : "green", opts:[["green","Green — on track"],["red","Red — needs attention"]], show: v=> v.rule==="manual" },
+    { k:"why", label:"Why red? (optional)", type:"text", value: r.why || "", show: v=> v.rule==="manual" }
+  );
+  if(own) fields.splice(1, 0, { k:"status", label:"Status", type:"select", value: en.task.status || "planned", opts: Object.keys(STATUS_LABEL).map(k=>[k, STATUS_LABEL[k]]) });
+  rmlModal(own ? "Edit item" : (en.task.title||"Item"), fields, v=>{
+    if(v.start && v.end && dNum(v.end) < dNum(v.start)){ toast("“Done by” is before the start date"); return false; }
+    if(own){ const nm=(v.title||"").trim(); if(!nm){ toast("Give it a title"); return false; } en.task.title = nm; en.task.status = v.status || "planned"; }
+    it.lane = v.lane; if(v.start) it.start = v.start; if(v.end) it.end = v.end;
+    ["owner","team","progress","next"].forEach(k=>{ const s=(v[k]||"").trim(); if(s) it[k]=s; else delete it[k]; });
+    if(rmgIsGrid(m) || m.view==="wbs"){ if(v.color) it.color = v.color; else delete it.color; }
+    if(m.view==="wbs"){ const pc = Math.max(0, Math.min(100, Math.round(Number(v.pct)||0))); if(pc) it.pct = pc; else delete it.pct; }
+    if(v.rule){
+      it.rule = { type:v.rule };
+      if(RML_RULES.some(x=>x.key===v.rule && x.days)) it.rule.days = Math.max(1, Number(v.days)||7);
+      if(v.rule==="manual"){ if(v.red==="red") it.rule.red = true; const w=(v.why||"").trim(); if(w) it.rule.why = w; }
+    } else delete it.rule;
+    saveRmaps();
+  }, {
+    sub: en.path,
+    extra: [
+      ["🔒 Blocked by…", "Pick what this one is waiting on — tasks on this chart first, or cards on any board", ()=> rmlBlockers(en, m)],
+      ["Remove", own ? "Delete this item" : "Remove from this roadmap (the card itself stays)", ()=>{
+        if(!confirm(own ? "Delete “"+(en.task.title||"")+"”?" : "Remove “"+(en.task.title||"")+"” from this roadmap? The card itself is not deleted.")) return false;
+        m.items.splice(m.items.indexOf(it),1);
+        if(own && m.own) m.own = m.own.filter(x=>x.tid!==en.tid);
+        saveRmaps();
+      }, true],
+    ],
+  });
+}
+/* blockers live on the card itself, so every board shows the same 🔒 */
+function rmlBlockers(en, m){
+  const t = en.task;
+  if(m) return rmlChartBlockers(en, m);
+  openDialog("Blocked by — “"+(t.title||"")+"”", { title:t.title, tid:t.tid, blockedBy:t.blockedBy||[] }, v=>{
+    if(v.blockedBy && v.blockedBy.length) t.blockedBy = v.blockedBy; else delete t.blockedBy;
+    saveRmaps(); pushAll();
+  }, { deps:true, hideTitle:true, hideExtras:true, noOwner:true });
+}
+
+/* "Blocked by" for a chart task: pick from the tasks on this chart (by phase / lane / group), or open
+   the full picker for cards on other boards. Blockers still live on the card, so every board shows the 🔒. */
+function rmlChartBlockers(en, m){
+  const t = en.task, reg = allTasks(), byTid = {};
+  reg.forEach(x=> byTid[x.tid] = x);
+  const cur = new Set(t.blockedBy || []);
+  /* anything already waiting on this task (directly or further down) can't also block it */
+  const waits = new Set(), grow = tid=>{ reg.forEach(x=>{ if((x.task.blockedBy||[]).includes(tid) && !waits.has(x.tid)){ waits.add(x.tid); grow(x.tid); } }); };
+  grow(t.tid);
+  const word = {gantt:"Phase", swimlane:"Swimlane", wbs:"Group"}[m.view] || "Lane";
+  const ov = document.createElement("div"); ov.className = "overlay show";
+  const dg = document.createElement("div"); dg.className = "dialog"; dg.style.maxWidth = "520px";
+  dg.innerHTML = '<h3>🔒 Blocked by — “'+mtEsc(t.title||"")+'”</h3><div class="hint" style="margin:-6px 0 10px">Tick what this task depends on, then pick how: <b>Finish → start</b> waits till it’s done · <b>Start → start</b> can begin once it has begun · <b>Finish → finish</b> can’t end before it ends · <b>Start → finish</b> can’t end until it begins.</div>';
+  const search = document.createElement("input"); search.type = "text"; search.placeholder = "Search this chart…"; search.className = "rmb-search";
+  const list = document.createElement("div"); list.className = "rmb-list";
+  const sel = new Set([...cur].filter(x=> m.items.some(it=> it.tid===x)));
+  const types = Object.assign({}, t.depType || {});
+  const draw = ()=>{
+    const q = search.value.trim().toLowerCase();
+    list.innerHTML = "";
+    let any = false;
+    (m.lanes && m.lanes.length ? m.lanes : [{id:null, name:""}]).forEach(ln=>{
+      const its = m.items.filter(it=> it.tid!==t.tid && byTid[it.tid] && (!m.lanes || !m.lanes.length || rmlLaneOf(m, it)===ln))
+        .filter(it=> !q || (byTid[it.tid].task.title||"").toLowerCase().includes(q))
+        .sort((a,b)=> dNum(a.start||todayISO()) - dNum(b.start||todayISO()));
+      if(!its.length) return;
+      any = true;
+      if(ln.name){ const h = document.createElement("div"); h.className = "rmb-grp"; h.textContent = word + " · " + ln.name; list.appendChild(h); }
+      its.forEach(it=>{
+        const b = byTid[it.tid], st = effStatus(b.task), loop = waits.has(it.tid);
+        const row = document.createElement("label"); row.className = "rmb-row" + (loop ? " off" : "") + (st==="done" ? " done" : "");
+        const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = sel.has(it.tid); cb.disabled = loop;
+        const tx = document.createElement("span"); tx.className = "rmb-t"; tx.textContent = b.task.title || "(untitled)";
+        const meta = document.createElement("span"); meta.className = "rmb-m";
+        meta.textContent = loop ? "waits on this one" : (rmlFmt(it.start) + " → " + rmlFmt(it.end) + " · " + (STATUS_LABEL[st] || st || ""));
+        /* how the two are linked — the four Gantt dependency types */
+        const ty = document.createElement("select"); ty.className = "rmb-type";
+        DEP_TYPES.forEach(([k, lbl, why])=>{ const o = document.createElement("option"); o.value = k; o.textContent = lbl; o.title = "This task " + why; ty.appendChild(o); });
+        ty.value = types[it.tid] || "FS"; ty.style.visibility = cb.checked ? "" : "hidden";
+        ty.title = "How this task depends on it";
+        ty.onclick = e=> e.stopPropagation();
+        ty.onchange = ()=>{ types[it.tid] = ty.value; };
+        cb.onchange = ()=>{ if(cb.checked) sel.add(it.tid); else sel.delete(it.tid); ty.style.visibility = cb.checked ? "" : "hidden"; };
+        row.append(cb, tx, meta, ty); list.appendChild(row);
+      });
+    });
+    if(!any){ const e = document.createElement("div"); e.className = "rmb-empty"; e.textContent = q ? "Nothing on this chart matches." : "No other tasks on this chart yet."; list.appendChild(e); }
+  };
+  search.oninput = draw; draw();
+  const others = [...cur].filter(x=> !m.items.some(it=> it.tid===x));
+  const foot = document.createElement("div"); foot.className = "hint"; foot.style.marginTop = "8px";
+  foot.textContent = others.length ? "Also waiting on " + others.length + " card(s) on other boards: " + others.map(x=> byTid[x] ? byTid[x].task.title : "(deleted)").join(", ") : "";
+  dg.append(search, list, foot);
+  const btns = document.createElement("div"); btns.className = "btns";
+  const close = ()=> ov.remove();
+  const save = ()=>{
+    const next = [...sel].concat(others.filter(x=> byTid[x]));
+    if(next.length) t.blockedBy = next; else delete t.blockedBy;
+    const dt = {}; next.forEach(x=>{ if(types[x] && types[x]!=="FS") dt[x] = types[x]; });
+    if(Object.keys(dt).length) t.depType = dt; else delete t.depType;
+    saveRmaps(); pushAll();
+  };
+  const more = document.createElement("button"); more.className = "btn"; more.textContent = "Cards on other boards…";
+  more.title = "Open the full picker — any task, dev card or bug in the app";
+  more.onclick = ()=>{ save(); close(); rmlBlockers(en); };
+  const sp = document.createElement("span"); sp.style.flex = "1";
+  const cancel = document.createElement("button"); cancel.className = "btn"; cancel.textContent = "Cancel"; cancel.onclick = close;
+  const ok = document.createElement("button"); ok.className = "btn save"; ok.textContent = "Save";
+  ok.onclick = ()=>{ save(); close(); toast(sel.size || others.length ? "Blockers saved" : "No blockers"); };
+  btns.append(more, sp, cancel, ok); dg.appendChild(btns);
+  ov.appendChild(dg); ov.addEventListener("mousedown", e=>{ if(e.target===ov) close(); });
+  document.body.appendChild(ov); setTimeout(()=> search.focus(), 30);
+}
+
+/* small form modal built on the app's .overlay/.dialog look */
+function rmlModal(title, fields, onSave, o){
+  o = o || {};
+  const ov = document.createElement("div"); ov.className = "overlay show";
+  const dg = document.createElement("div"); dg.className = "dialog"; dg.setAttribute("role","dialog"); dg.style.maxWidth = "480px";
+  const h = document.createElement("h3"); h.textContent = title; dg.appendChild(h);
+  if(o.sub){ const s = document.createElement("div"); s.className = "hint"; s.style.margin = "-6px 0 8px"; s.textContent = o.sub; dg.appendChild(s); }
+  const body = document.createElement("div"); body.className = "dlg-body"; dg.appendChild(body);
+  const inputs = {};
+  const read = ()=>{ const v={}; fields.forEach(f=>{ v[f.k] = inputs[f.k].value; }); return v; };
+  const wraps = {};
+  let rowEl = null;
+  fields.forEach(f=>{
+    const w = document.createElement("div"); w.className = "field";
+    const lb = document.createElement("label"); lb.textContent = f.label;
+    let el;
+    if(f.type==="select"){ el = document.createElement("select"); f.opts.forEach(([val,txt])=>{ const op=document.createElement("option"); op.value=val; op.textContent=txt; el.appendChild(op); }); el.value = f.value; }
+    else if(f.type==="area"){ el = document.createElement("textarea"); el.rows = 2; el.value = f.value; }
+    else if(f.type==="color"){
+      /* swatches + "Auto"; the value lives on a hidden input so read() stays the same */
+      el = document.createElement("input"); el.type = "hidden"; el.value = f.value || "";
+      const row = document.createElement("div"); row.className = "rml-sw";
+      const paint = ()=> row.querySelectorAll("button").forEach(b=> b.classList.toggle("on", b.dataset.c === el.value));
+      [""].concat(RMG_COLORS).forEach(c=>{
+        const b = document.createElement("button"); b.type = "button"; b.dataset.c = c;
+        if(c) b.style.background = c; else { b.textContent = "Auto"; b.className = "auto"; }
+        b.title = c ? c : (f.autoTip || "Automatic colour");
+        b.onclick = ()=>{ el.value = c; paint(); };
+        row.appendChild(b);
+      });
+      const pick = document.createElement("input"); pick.type = "color"; pick.title = "Any colour";
+      pick.value = /^#[0-9a-f]{6}$/i.test(el.value) ? el.value : "#7a5cff";
+      pick.oninput = ()=>{ el.value = pick.value; paint(); };
+      row.appendChild(pick);
+      paint();
+      w.append(lb, row, el); inputs[f.k] = el; wraps[f.k] = w;
+      body.appendChild(w);
+      return;
+    }
+    else { el = document.createElement("input"); el.type = f.type==="number" ? "number" : f.type; el.value = f.value; if(f.ph) el.placeholder = f.ph; }
+    inputs[f.k] = el; wraps[f.k] = w;
+    w.append(lb, el);
+    if(f.list && f.list.length){ /* suggestions, but any text is fine */
+      const dl = document.createElement("datalist"); dl.id = "rml-dl-" + f.k + "-" + Date.now().toString(36);
+      f.list.forEach(x=>{ const op = document.createElement("option"); op.value = x; dl.appendChild(op); });
+      el.setAttribute("list", dl.id); el.autocomplete = "off"; w.appendChild(dl);
+    }
+    if(f.half){
+      if(!rowEl){ rowEl = document.createElement("div"); rowEl.className = "field-row"; body.appendChild(rowEl); rowEl.appendChild(w); }
+      else { rowEl.appendChild(w); rowEl = null; }
+    } else body.appendChild(w);
+  });
+  const refresh = ()=>{ const v = read(); fields.forEach(f=>{ if(f.show) wraps[f.k].style.display = f.show(v) ? "" : "none"; }); };
+  Object.values(inputs).forEach(el=> el.addEventListener("change", refresh));
+  refresh();
+  const btns = document.createElement("div"); btns.className = "btns";
+  const close = ()=> ov.remove();
+  (o.extra||[]).forEach(([txt, tip, fn, danger])=>{
+    const b = document.createElement("button"); b.className = "btn"; b.textContent = txt; b.title = tip;
+    if(danger){ b.style.color = "var(--blocked)"; }
+    b.onclick = ()=>{ const keep = fn(); if(danger && keep!==false) close(); else if(!danger) close(); };
+    btns.appendChild(b);
+  });
+  const sp = document.createElement("span"); sp.style.flex = "1"; btns.appendChild(sp);
+  const cancel = document.createElement("button"); cancel.className = "btn"; cancel.textContent = "Cancel"; cancel.onclick = close;
+  const save = document.createElement("button"); save.className = "btn save"; save.textContent = "Save";
+  save.onclick = ()=>{ if(onSave(read())===false) return; close(); };
+  btns.append(cancel, save);
+  dg.appendChild(btns);
+  ov.appendChild(dg);
+  ov.addEventListener("mousedown", e=>{ if(e.target===ov) close(); });
+  document.body.appendChild(ov);
+  const first = body.querySelector("input,select,textarea"); if(first) setTimeout(()=> first.focus(), 30);
+}
+
+/* rules that read live data from other spaces */
+function rmlSourceHealth(r, today){
+  if(r.type==="videos"){
+    const spaces = (CSPACES.list||[]).filter(x=>x.type==="social");
+    if(!spaces.length) return { state:"unknown", text:"No Social Media space to check" };
+    const READY = { approved:1, published:1 };
+    let due = 0, notReady = [];
+    spaces.forEach(cs=>{
+      const sx = (window.SX && SX.normalize) ? SX.normalize(cs) : cs.sx;
+      ((sx && sx.cards) || []).forEach(c=>{
+        if(!c.scheduled) return;
+        const d = dNum(c.scheduled) - today;
+        if(d < 0 || d > 7) return;
+        due++;
+        if(!READY[c.stage]) notReady.push(((c.pre && c.pre.title) || c.idea || "Untitled") + " (" + rmlFmt(c.scheduled) + ")");
+      });
+    });
+    if(notReady.length) return { state:"bad", text: notReady.length + " of " + due + " videos in the next 7 days not ready: " + notReady.slice(0,3).join(", ") + (notReady.length>3 ? "…" : "") };
+    return { state:"ok", text: due ? "All " + due + " videos for the next 7 days are ready" : "No videos scheduled in the next 7 days" };
+  }
+  if(r.type==="blogs"){
+    /* no blog tracker in the app yet: newest Blog-channel calendar entry, or a ✓ Done tick */
+    const n = Math.max(1, Number(r.days)||5);
+    let last = null;
+    (CSPACES.list||[]).filter(x=>x.type==="social").forEach(cs=>{
+      (cs.events||[]).forEach(ev=>{ if(ev.channel==="Blog" && ev.date && dNum(ev.date) <= today && (!last || ev.date > last)) last = ev.date; });
+      (cs.cards||[]).forEach(c=>{ if(c.channel==="Blog" && c.col==="done" && c.due && dNum(c.due) <= today && (!last || c.due > last)) last = c.due; });
+    });
+    const it = r._it;
+    if(it && it.lastDone && (!last || it.lastDone > last)) last = it.lastDone;
+    if(!last) return { state:"bad", text:"No blog found — tick ✓ Done when one goes out" };
+    const ago = today - dNum(last);
+    return ago > n ? { state:"bad", text:"No blog for " + ago + " days (limit " + n + ")" } : { state:"ok", text:"Last blog " + (ago ? ago + " day" + (ago>1?"s":"") + " ago" : "today") };
+  }
+  if(r.type==="notif"){
+    if(typeof NTF==="undefined" || typeof ntfCanSend!=="function" || !ntfCanSend()) return { state:"unknown", text:"Only people who can send notifications can check this" };
+    if(!NTF.loaded) return { state:"unknown", text:"Loading notifications…" };
+    const n = Math.max(1, Number(r.days)||2);
+    const auto = (NTF.list||[]).filter(x=> !x.created_by && x.created_at);
+    if(!auto.length) return { state:"bad", text:"No automatic notification in the last 90 days" };
+    const last = auto.map(x=> x.created_at).sort().pop();
+    const ago = today - dNum(String(last).slice(0,10));
+    return ago > n ? { state:"bad", text:"No automatic send for " + ago + " days (limit " + n + ")" } : { state:"ok", text:"Last automatic send " + (ago ? ago + " day" + (ago>1?"s":"") + " ago" : "today") };
+  }
+  return null;
+}
+
 function currentRmap(){ return RMAPS.maps.find(m=>m.id===activeRmap) || null; }
 
 let PXD = 3.4;                       // pixels per day (varies with zoom)
@@ -12587,6 +13990,9 @@ function renderContentRmap(extMap, extOpts){
   reg.forEach(x=> byTid[x.tid] = x);
   const live = m.items.filter(it=> byTid[it.tid]);
   if(live.length !== m.items.length){ m.items = live; }
+  if(!extMap && !tlDiscMode && rmapViewOf(m)==="lanes"){ renderRmapLanes(m, wrap, byTid); return; }
+  if(!extMap && !tlDiscMode && rmgIsGrid(m)){ renderRmapGantt(m, wrap, byTid); return; }
+  if(!extMap && !tlDiscMode && rmapViewOf(m)==="wbs"){ renderRmapWbs(m, wrap, byTid); return; }
 
   const head = document.createElement("section");
   head.className = "module-block";
@@ -13111,14 +14517,17 @@ function openRmapSettings(m, o){
   $("rms-name").value = m ? m.name : "";
   $("rms-start").value = (m && m.rangeStart) || "";
   $("rms-end").value = (m && m.rangeEnd) || "";
+  $("rms-view-wrap").style.display = o.rangeOnly ? "none" : "";
+  $("rms-view").value = rmapViewOf(m);
   $("rms-save").onclick = ()=>{
+    const vw = $("rms-view").value;
     const name = o.rangeOnly ? (m && m.name) || "Timeline" : $("rms-name").value.trim();
     if(!name){ $("rms-name").focus(); return; }
     const rs = $("rms-start").value, re = $("rms-end").value;
     if((rs && !re) || (!rs && re)){ toast("Set both months, or leave both empty for auto-fit"); return; }
     if(rs && re && ymIdx(re) < ymIdx(rs)){ toast("The end month is before the start month"); return; }
     if(m){
-      if(!o.rangeOnly) m.name = name;
+      if(!o.rangeOnly){ m.name = name; m.view = vw; if(vw!=="timeline") rmlEnsureLanes(m, vw); }
       if(rs && re){ m.rangeStart = rs; m.rangeEnd = re; } else { delete m.rangeStart; delete m.rangeEnd; }
       $("rms-overlay").classList.remove("show");
       saveRmaps();
@@ -13126,7 +14535,8 @@ function openRmapSettings(m, o){
       $("rms-overlay").classList.remove("show");
       // pick access (open/limited/private) + bring team members, exactly like spaces
       chooseAccess(name, (access, members)=>{
-        const nm = { id:"rm-"+Date.now().toString(36), name, items:[], access, members: members||{} };
+        const nm = { id:"rm-"+Date.now().toString(36), name, items:[], access, members: members||{}, view: vw };
+        if(vw!=="timeline") rmlEnsureLanes(nm, vw);
         if(rs && re){ nm.rangeStart = rs; nm.rangeEnd = re; }
         RMAPS.maps.push(nm);
         view = "rmap"; activeRmap = nm.id;
@@ -14953,6 +16363,7 @@ function renderAll(){
         const menu = document.createElement("span");
         menu.className = "ws-menu-btn"; menu.textContent = "\u22ef"; menu.title = "More";
         menu.onclick = e=>{ e.stopPropagation(); openRowMenu(menu, [
+          {label:"\u270F\uFE0F Rename / change type", onClick:()=> openRmapSettings(m)},
           {label:"Settings", onClick:()=> openSpaceSettings(rmapRef(m))},
           {label:"Set background", onClick:()=> openBgPicker(rmapRef(m))},
           {label:"\uD83D\uDE48 Hide from my sidebar", onClick:()=> setHiddenForMe("rm:"+m.id, true, m.name)},
