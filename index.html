@@ -2425,6 +2425,26 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .okr-modetg{display:inline-flex;gap:4px;background:var(--card);border:1px solid var(--line-strong);border-radius:99px;padding:3px;margin-bottom:16px}
 .okr-modetg .okr-mode{border:none;background:none;border-radius:99px;padding:6px 15px;font-weight:600;font-size:12.5px;color:var(--muted);cursor:pointer;font-family:var(--disp)}
 .okr-modetg .okr-mode.on{background:var(--indigo);color:#fff}
+.rmg-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--card);margin-bottom:12px}
+.rmg-grid{display:grid;min-width:max-content;grid-auto-rows:minmax(44px,auto)}
+.rmg-corner{grid-row:1;grid-column:1;border-bottom:1px solid var(--line);position:sticky;left:0;background:var(--card);z-index:3}
+.rmg-wk{grid-row:1;text-align:center;font-family:var(--mono);font-size:11px;font-weight:700;color:var(--muted);padding:9px 4px 7px;border-bottom:1px solid var(--line);border-left:1px solid var(--line)}
+.rmg-wk small{display:block;font-weight:500;font-size:10px;opacity:.8}
+.rmg-wk.now{color:var(--indigo);background:var(--indigo-soft)}
+.rmg-phase{grid-column:1;display:flex;align-items:center;justify-content:space-between;gap:6px;padding:8px 12px;font-weight:700;font-size:13px;border-bottom:1px solid var(--line);position:sticky;left:0;background:var(--paper);z-index:2}
+.rmg-phase .rml-mini{opacity:0}
+.rmg-phase:hover .rml-mini{opacity:1}
+.rmg-cell{border-left:1px solid var(--line)}
+.rmg-cell.last{border-bottom:1px solid var(--line)}
+.rmg-cell.now{background:var(--indigo-soft)}
+.rmg-blk{margin:5px 3px;border-radius:6px;color:#fff;font-size:12px;font-weight:600;padding:7px 9px;display:flex;align-items:center;cursor:pointer;z-index:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+.rmg-blk:hover{filter:brightness(1.08);box-shadow:0 3px 10px rgba(0,0,0,.18)}
+.rmg-blk.done{opacity:.55}
+.rmg-blk.locked{outline:2px dashed var(--blocked);outline-offset:1px}
+.rmg-legend{display:flex;flex-wrap:wrap;gap:14px;align-items:center;font-size:12px;color:var(--muted);margin:0 0 16px}
+.rmg-legend b{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em}
+.rmg-legend span{display:inline-flex;align-items:center;gap:6px}
+.rmg-legend i{display:inline-block;width:14px;height:10px;border-radius:3px}
 /* roadmap · lanes view */
 .rml-lane{background:var(--card);border:1px solid var(--line);border-radius:14px;margin:0 0 14px;display:flex;overflow:hidden}
 .rml-lane.ongoing{border-left:4px solid var(--progress)}
@@ -4443,7 +4463,7 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
         <div class="field"><label for="rms-end">Board ends</label><input id="rms-end" type="month"></div>
       </div>
       <div class="hint" style="margin:-4px 0 4px">The timeline shows exactly this window and scrolls left ↔ right inside it. Leave both empty to auto-fit around your items.</div>
-      <div class="field" id="rms-view-wrap"><label for="rms-view">Roadmap type</label><select id="rms-view"><option value="timeline">Timeline — Gantt bars across months</option><option value="lanes">Lanes — horizontal lines of projects &amp; ongoing work</option></select></div>
+      <div class="field" id="rms-view-wrap"><label for="rms-view">Roadmap type</label><select id="rms-view"><option value="timeline">Timeline — Gantt bars across months</option><option value="lanes">Lanes — horizontal lines of projects &amp; ongoing work</option><option value="gantt">Simple Gantt — weeks × phases, coloured by team</option></select></div>
     </div>
     <div class="btns">
       <button class="btn" onclick="document.getElementById('rms-overlay').classList.remove('show')">Cancel</button>
@@ -7709,7 +7729,7 @@ function workTabs(){
   if(view==="campaign" && window.CX) return campTabs(currentCampaign()).map(([key,label])=>({key, label}));
   if(view==="watch" && window.WX) return WX.tabs.map(([key,label])=>({key, label}));
   if(view==="horizon" && window.HX) return HX.tabs.map(([key,label])=>({key, label}));
-  const l = view==="rmap" ? (rmapViewOf(currentRmap())==="lanes" ? "Lanes" : "Timeline") : view==="okr" ? "Objectives"
+  const l = view==="rmap" ? ({lanes:"Lanes", gantt:"Gantt"}[rmapViewOf(currentRmap())] || "Timeline") : view==="okr" ? "Objectives"
     : (view==="bugs"||view==="cbugs") ? "Board" : view==="content" ? "Board"
     : view==="ideas" ? "Ideas" : view==="admin" ? "Admin" : "Board";
   return [{key:"work",label:l}];
@@ -7781,7 +7801,9 @@ function renderHeader(){
     : view==="ideas"
     ? "Anyone on the team can pitch an idea \u2014 name on it, points for it, and a clear stage so nothing disappears."
     : view==="rmap"
-    ? (rmapViewOf(currentRmap())==="lanes"
+    ? (rmapViewOf(currentRmap())==="gantt"
+      ? "Weeks across the top, phases down the side \u2014 each task a block over the weeks it runs, coloured by team."
+      : rmapViewOf(currentRmap())==="lanes"
       ? "Lines of work across every space \u2014 projects with a due date, and ongoing work that turns red when it slips."
       : "A timeline across every space \u2014 pull in tasks, dev cards, and bugs from anywhere and schedule them.")
     : (DATA.subtitle||"");
@@ -12449,9 +12471,9 @@ function openStoryImport(spaceId){
    and on each item:       it.lane, it.team, it.progress (done so far),
                            it.next (next steps), it.rule {type, days}, it.lastDone
    ================================================================ */
-function rmapViewOf(m){ return m && m.view==="lanes" ? "lanes" : "timeline"; }
-function rmlEnsureLanes(m){
-  if(!Array.isArray(m.lanes) || !m.lanes.length) m.lanes = [{ id:"ln-"+Date.now().toString(36), name:"Projects", kind:"project" }];
+function rmapViewOf(m){ return m && (m.view==="lanes" || m.view==="gantt") ? m.view : "timeline"; }
+function rmlEnsureLanes(m, vw){
+  if(!Array.isArray(m.lanes) || !m.lanes.length) m.lanes = [{ id:"ln-"+Date.now().toString(36), name: (vw||m.view)==="gantt" ? "Planning" : "Projects", kind:"project" }];
   return m.lanes;
 }
 function rmlLaneOf(m, it){ return m.lanes.find(l=>l.id===it.lane) || m.lanes[0]; }
@@ -12632,15 +12654,131 @@ function rmlNewOwn(m, laneId){
 
 /* ---- lane dialog: name + project/ongoing ---- */
 function rmlEditLane(m, ln){
-  rmlModal(ln ? "Edit lane" : "New lane", [
-    { k:"name", label:"Lane name", type:"text", value: ln ? ln.name : "", ph:"e.g. Product launch, Blogs, Social media" },
-    { k:"kind", label:"Type", type:"select", value: ln ? ln.kind : "project", opts:[["project","Project — things with a due date"],["ongoing","Ongoing — running work with health rules"]] },
-  ], v=>{
-    const name = (v.name||"").trim(); if(!name){ toast("Give the lane a name"); return false; }
-    if(ln){ ln.name = name; ln.kind = v.kind; }
-    else m.lanes.push({ id:"ln-"+Date.now().toString(36), name, kind:v.kind });
+  const g = m.view==="gantt", word = g ? "phase" : "lane";
+  const fields = [{ k:"name", label:(g ? "Phase" : "Lane")+" name", type:"text", value: ln ? ln.name : "", ph: g ? "e.g. Brainstorming, Research, Design, Testing" : "e.g. Product launch, Blogs, Social media" }];
+  if(!g) fields.push({ k:"kind", label:"Type", type:"select", value: ln ? ln.kind : "project", opts:[["project","Project — things with a due date"],["ongoing","Ongoing — running work with health rules"]] });
+  const extra = (ln && m.lanes.length>1) ? [["Delete "+word, "Its items move to the first "+word, ()=>{
+    if(!confirm("Delete the "+word+" “"+ln.name+"”? Its items move to “"+m.lanes.find(l=>l!==ln).name+"”.")) return false;
+    m.lanes.splice(m.lanes.indexOf(ln),1);
+    m.items.forEach(it=>{ if(it.lane===ln.id) it.lane = m.lanes[0].id; });
     saveRmaps();
+  }, true]] : [];
+  rmlModal(ln ? "Edit "+word : "New "+word, fields, v=>{
+    const name = (v.name||"").trim(); if(!name){ toast("Give the "+word+" a name"); return false; }
+    const kind = g ? "project" : v.kind;
+    if(ln){ ln.name = name; ln.kind = kind; }
+    else m.lanes.push({ id:"ln-"+Date.now().toString(36), name, kind });
+    saveRmaps();
+  }, { extra });
+}
+
+/* ================================================================
+   ROADMAP · SIMPLE GANTT
+   Weeks across the top, phases down the side (the roadmap's lanes), and
+   each item as a block over the weeks it runs, coloured by its team.
+   ================================================================ */
+const RMG_COLORS = ["#C8473B","#D9A030","#2F6DB5","#2E9466","#8A55C2","#D9682B","#3A9CA8","#B5487F"];
+function rmgWeekStart(n){ const dow = (new Date(n*86400000).getUTCDay()+6)%7; return n - dow; }   /* Monday */
+function renderRmapGantt(m, wrap, byTid){
+  rmlEnsureLanes(m);
+  const live = m.items.filter(it=> byTid[it.tid]);
+  const today = dNum(todayISO());
+  /* week range: the roadmap's board months if set, else around the items */
+  let a, b;
+  if(m.rangeStart && m.rangeEnd){ a = dNum(monthStartISO(m.rangeStart)); b = dNum(monthEndISO(m.rangeEnd)); }
+  else {
+    const ns = live.flatMap(it=> [it.start, it.end].filter(Boolean).map(dNum));
+    a = ns.length ? Math.min(...ns) : today; b = ns.length ? Math.max(...ns) : today + 55;
+    b = Math.max(b, a + 55);
+  }
+  const w0 = rmgWeekStart(a), nW = Math.min(104, Math.floor((rmgWeekStart(b) - w0)/7) + 1);
+  const wkOf = n => Math.max(0, Math.min(nW-1, Math.floor((n - w0)/7)));
+  /* one colour per team, in first-seen order */
+  const teams = [];
+  live.forEach(it=>{ const t=(it.team||"").trim(); if(t && teams.indexOf(t)<0) teams.push(t); });
+  const colorOf = t => { const i = teams.indexOf((t||"").trim()); return i<0 ? "#8C95A3" : RMG_COLORS[i % RMG_COLORS.length]; };
+
+  const head = document.createElement("section");
+  head.className = "module-block"; head.style.marginBottom = "12px";
+  const row = document.createElement("div"); row.className = "module-head";
+  const h2 = document.createElement("h2"); h2.textContent = m.name;
+  const pc = document.createElement("span"); pc.className = "pct";
+  const done = live.filter(it=> effStatus(byTid[it.tid].task)==="done").length;
+  pc.textContent = live.length + " task(s) · " + done + " done · " + nW + " weeks";
+  row.append(h2, pc);
+  if(editMode){
+    const spx = document.createElement("span"); spx.className = "spacer"; row.appendChild(spx);
+    const addL = document.createElement("button"); addL.className = "tool"; addL.textContent = "＋ Phase";
+    addL.title = "Add a row — Brainstorming, Research, Design, Testing…";
+    addL.onclick = ()=> rmlEditLane(m, null);
+    row.appendChild(addL);
+    const addB = document.createElement("button"); addB.className = "tool primary"; addB.textContent = "＋ Add items from any space";
+    addB.onclick = ()=> openRmapPicker(m);
+    row.appendChild(addB);
+    const ownB = document.createElement("button"); ownB.className = "tool"; ownB.textContent = "✏️ Write a task";
+    ownB.onclick = ()=> rmlNewOwn(m, m.lanes[0].id);
+    row.appendChild(ownB);
+    const acts = document.createElement("div"); acts.className = "acts";
+    acts.appendChild(actBtn("pencil", "Roadmap settings — name, type and weeks shown", false, ()=> openRmapSettings(m)));
+    row.appendChild(acts); acts.style.opacity = 1;
+  }
+  head.appendChild(row); wrap.appendChild(head);
+
+  const scroll = document.createElement("div"); scroll.className = "rmg-scroll";
+  const grid = document.createElement("div"); grid.className = "rmg-grid";
+  grid.style.gridTemplateColumns = "170px repeat("+nW+", minmax(74px, 1fr))";
+  const corner = document.createElement("div"); corner.className = "rmg-corner"; grid.appendChild(corner);
+  const tw = wkOf(today), inRange = today >= w0 && today < w0 + nW*7;
+  for(let w=0; w<nW; w++){
+    const c = document.createElement("div"); c.className = "rmg-wk" + (inRange && w===tw ? " now" : "");
+    c.innerHTML = "Week " + (w+1) + "<small>" + rmlFmt(dISO(w0 + w*7)) + "</small>";
+    grid.appendChild(c);
+  }
+  let rIdx = 2;
+  m.lanes.forEach(ln=>{
+    const items = live.filter(it=> rmlLaneOf(m, it)===ln)
+      .sort((x,y)=> dNum(x.start||todayISO()) - dNum(y.start||todayISO()));
+    /* pack overlapping tasks into sub-rows */
+    const rowsEnd = [];
+    const placed = items.map(it=>{
+      const s = wkOf(dNum(it.start || it.end || todayISO())), e = Math.max(s, wkOf(dNum(it.end || it.start || todayISO())));
+      let r = rowsEnd.findIndex(end=> end < s); if(r<0){ r = rowsEnd.length; rowsEnd.push(e); } else rowsEnd[r] = e;
+      return { it, s, e, r };
+    });
+    const span = Math.max(1, rowsEnd.length);
+    const lab = document.createElement("div"); lab.className = "rmg-phase";
+    lab.style.gridRow = rIdx + " / span " + span;
+    lab.textContent = ln.name;
+    if(editMode){
+      const ed = document.createElement("button"); ed.className = "rml-mini"; ed.textContent = "✎"; ed.title = "Rename / delete phase";
+      ed.onclick = ()=> rmlEditLane(m, ln);
+      lab.appendChild(ed);
+    }
+    grid.appendChild(lab);
+    for(let r=0; r<span; r++) for(let w=0; w<nW; w++){
+      const bg = document.createElement("div"); bg.className = "rmg-cell" + (inRange && w===tw ? " now" : "") + (r===span-1 ? " last" : "");
+      bg.style.gridRow = String(rIdx + r); bg.style.gridColumn = String(w + 2);
+      grid.appendChild(bg);
+    }
+    placed.forEach(({it, s, e, r})=>{
+      const en = byTid[it.tid], st = effStatus(en.task);
+      const blk = document.createElement("div");
+      blk.className = "rmg-blk" + (st==="done" ? " done" : "") + (isLocked(en.task) ? " locked" : "");
+      blk.style.gridRow = String(rIdx + r); blk.style.gridColumn = (s + 2) + " / " + (e + 3);
+      blk.style.background = colorOf(it.team);
+      blk.textContent = (st==="done" ? "✓ " : isLocked(en.task) ? "🔒 " : "") + (en.task.title || "(untitled)");
+      blk.title = (en.task.title||"") + "\n" + rmlFmt(it.start) + " → " + rmlFmt(it.end) + (it.team ? "\nTeam: " + it.team : "") + "\n" + en.path;
+      if(editMode) blk.onclick = ()=> rmlEditItem(m, it, en); else blk.style.cursor = "default";
+      grid.appendChild(blk);
+    });
+    rIdx += span;
   });
+  scroll.appendChild(grid); wrap.appendChild(scroll);
+
+  const lg = document.createElement("div"); lg.className = "rmg-legend";
+  lg.innerHTML = '<b>Legend</b>' + (teams.length ? teams.map(t=> '<span><i style="background:'+colorOf(t)+'"></i>'+mtEsc(t)+'</span>').join("") : '<span class="muted">Give tasks a “Team involved” to colour them by team</span>')
+    + (live.some(it=>!(it.team||"").trim()) && teams.length ? '<span><i style="background:#8C95A3"></i>No team</span>' : '');
+  wrap.appendChild(lg);
 }
 
 /* ---- item dialog: lane, due date, team, progress, next, blockers, rule ---- */
@@ -12650,13 +12788,13 @@ function rmlEditItem(m, it, en){
   const fields = [];
   if(own) fields.push({ k:"title", label:"Title", type:"text", value: en.task.title||"" });
   fields.push(
-    { k:"lane", label:"Lane", type:"select", value: rmlLaneOf(m, it).id, opts: m.lanes.map(l=>[l.id, l.name + (l.kind==="ongoing" ? " (ongoing)" : "")]) },
+    { k:"lane", label: m.view==="gantt" ? "Phase" : "Lane", type:"select", value: rmlLaneOf(m, it).id, opts: m.lanes.map(l=>[l.id, l.name + (l.kind==="ongoing" ? " (ongoing)" : "")]) },
     { k:"start", label:"Starts", type:"date", value: it.start || todayISO(), half:true },
     { k:"end", label:"Done by", type:"date", value: it.end || it.start || todayISO(), half:true },
-    { k:"team", label:"Team involved", type:"text", value: it.team || "", ph:"e.g. Product + Marketing, Shivam" },
+    { k:"team", label: m.view==="gantt" ? "Team (sets the colour)" : "Team involved", type:"text", value: it.team || "", ph:"e.g. Product + Marketing, Shivam" },
     { k:"progress", label:"What’s done so far", type:"area", value: it.progress || "" },
     { k:"next", label:"Next steps", type:"area", value: it.next || "" },
-    { k:"rule", label:"Health rule (turns the card red)", type:"select", value: r.type || "", opts: RML_RULES.map(x=>[x.key, x.label]) },
+    { k:"rule", label:"Health rule (turns the card red)", type:"select", value: r.type || "", opts: RML_RULES.map(x=>[x.key, x.label]), show: ()=> m.view!=="gantt" },
     { k:"days", label:"N days", type:"number", value: r.days || (r.type==="blogs" ? 5 : r.type==="notif" ? 2 : 7), show: v=> RML_RULES.some(x=>x.key===v.rule && x.days) },
     { k:"red", label:"Status", type:"select", value: r.red ? "red" : "green", opts:[["green","Green — on track"],["red","Red — needs attention"]], show: v=> v.rule==="manual" },
     { k:"why", label:"Why red? (optional)", type:"text", value: r.why || "", show: v=> v.rule==="manual" }
@@ -12871,6 +13009,7 @@ function renderContentRmap(extMap, extOpts){
   const live = m.items.filter(it=> byTid[it.tid]);
   if(live.length !== m.items.length){ m.items = live; }
   if(!extMap && !tlDiscMode && rmapViewOf(m)==="lanes"){ renderRmapLanes(m, wrap, byTid); return; }
+  if(!extMap && !tlDiscMode && rmapViewOf(m)==="gantt"){ renderRmapGantt(m, wrap, byTid); return; }
 
   const head = document.createElement("section");
   head.className = "module-block";
@@ -13405,7 +13544,7 @@ function openRmapSettings(m, o){
     if((rs && !re) || (!rs && re)){ toast("Set both months, or leave both empty for auto-fit"); return; }
     if(rs && re && ymIdx(re) < ymIdx(rs)){ toast("The end month is before the start month"); return; }
     if(m){
-      if(!o.rangeOnly){ m.name = name; m.view = vw; if(vw==="lanes") rmlEnsureLanes(m); }
+      if(!o.rangeOnly){ m.name = name; m.view = vw; if(vw!=="timeline") rmlEnsureLanes(m, vw); }
       if(rs && re){ m.rangeStart = rs; m.rangeEnd = re; } else { delete m.rangeStart; delete m.rangeEnd; }
       $("rms-overlay").classList.remove("show");
       saveRmaps();
@@ -13414,7 +13553,7 @@ function openRmapSettings(m, o){
       // pick access (open/limited/private) + bring team members, exactly like spaces
       chooseAccess(name, (access, members)=>{
         const nm = { id:"rm-"+Date.now().toString(36), name, items:[], access, members: members||{}, view: vw };
-        if(vw==="lanes") rmlEnsureLanes(nm);
+        if(vw!=="timeline") rmlEnsureLanes(nm, vw);
         if(rs && re){ nm.rangeStart = rs; nm.rangeEnd = re; }
         RMAPS.maps.push(nm);
         view = "rmap"; activeRmap = nm.id;
