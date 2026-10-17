@@ -524,6 +524,21 @@ window.PIPE = {
     await putFile(data.url, f, onProgress);
     return { file: data.file, name: f.name, size: f.size };
   },
+  // 🔗 copy the raw video from a Google Drive / OneDrive / Dropbox link: the videos the link holds, then the copy itself
+  async linkFiles(cardId, link){ return (await call("/api/pipeline/import", { team: team(), job: cardId, op: "list", link })).data.files; },
+  async importLink(cardId, pick, onProgress, isCancelled){
+    let r = (await call("/api/pipeline/import", { team: team(), job: cardId, op: "start", pick })).data;
+    while(!r.file){
+      if(isCancelled && isCancelled()){ await call("/api/pipeline/import", { team: team(), job: cardId, op: "cancel", state: r.state }).catch(()=>{}); throw new Error("Copy stopped"); }
+      onProgress && onProgress(r.done, r.size);
+      let tries = 0;
+      for(;;){ try{ r = (await call("/api/pipeline/import", { team: team(), job: cardId, op: "step", state: r.state })).data; break; }
+        catch(e){ if(++tries >= 3 || /expired|free plan|Wrong card|isn't open/.test(e.message)) throw e; await new Promise(ok => setTimeout(ok, 3000)); } }
+    }
+    onProgress && onProgress(r.size, r.size);
+    await call("/api/pipeline/storage", { team: team(), job: cardId, op: "delete_raw", keep: r.file }).catch(() => {});   // e.g. an older raw.mov
+    return { file: r.file, name: r.name, size: r.size };
+  },
   async deleteClean(cardId){ return (await call("/api/pipeline/storage", { team: team(), job: cardId, op: "delete_clean" })).data; },
   // play / download links for the card's raw video and audio: { video?, audio?, clean? }
   async rawLinks(cardId){ return (await call("/api/pipeline/storage?team=" + encodeURIComponent(team()) + "&job=" + encodeURIComponent(cardId))).data; },

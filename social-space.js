@@ -2214,6 +2214,33 @@ let OPEN=null;   // what the window shows ({kind:"card"|"idea", id}), so a refre
 let CLOSE_GUARD=null;   // the open card's "discard unsaved changes?" check
 // raw video audio: a job in progress per card ("Pulling out the audio…"), and short-lived play/download links
 const AUDIOJOB={}, RAWLINKS={}, CLEANJOB={};
+const IMPORTJOB={};   // card id → { msg, stop, files? }: a link being copied into storage (survives redraws)
+// where a pasted link can be watched inside the app: Drive's own player, a plain video, or only in a new tab
+function watchOf(link){
+  let u; try{ u=new URL(link); }catch(_){ return null; }
+  const h=u.hostname, folder=/\/folders\/([\w-]{10,})/.exec(u.pathname), id=(/\/(?:file\/)?d\/([\w-]{10,})/.exec(u.pathname)||[])[1]||u.searchParams.get("id");
+  if(/google\.com$/.test(h)){ if(folder) return { frame:"https://drive.google.com/embeddedfolderview?id="+folder[1]+"#grid" };
+    if(id) return { frame:"https://drive.google.com/file/d/"+id+"/preview" }; }
+  if(/dropbox\.com$/.test(h)) return { video: link.replace(/([?&])dl=[01]/,"$1raw=1")+(/[?&](dl|raw)=/.test(link)?"":(link.includes("?")?"&":"?")+"raw=1") };
+  if(/\.(mp4|mov|m4v|webm)(\?|$)/i.test(u.pathname)) return { video: link };
+  return { tab: link };   // OneDrive / others: their own page
+}
+// a simple full-screen player over the card
+function watchVideo(w, title){
+  if(w.tab){ window.open(w.tab,"_blank","noopener"); return; }
+  const o=document.createElement("div");
+  o.setAttribute("style","position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.82);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px");
+  o.innerHTML=`<div style="width:min(980px,100%);display:flex;align-items:center;gap:10px;color:#fff;margin-bottom:10px">
+      <b style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">▶ ${esc(title||"Raw video")}</b>
+      ${w.open?`<a href="${esc(w.open)}" target="_blank" rel="noopener" style="color:#fff;font-size:13px">Open ↗</a>`:""}
+      <button type="button" data-x style="background:#fff;color:#111;border:0;border-radius:8px;padding:6px 12px;font-weight:600;cursor:pointer">Close ✕</button></div>
+    ${w.frame?`<iframe src="${esc(w.frame)}" allow="autoplay; fullscreen" allowfullscreen style="width:min(980px,100%);height:min(78vh,620px);border:0;border-radius:10px;background:#000"></iframe>`
+      :`<video src="${esc(w.video)}" controls autoplay playsinline style="max-width:min(980px,100%);max-height:78vh;border-radius:10px;background:#000"></video>`}`;
+  const close=()=>{ const v=o.querySelector("video"); if(v) v.pause(); o.remove(); document.removeEventListener("keydown",key); };
+  const key=e=>{ if(e.key==="Escape") close(); };
+  o.onclick=e=>{ if(e.target===o||e.target.closest("[data-x]")) close(); };
+  document.addEventListener("keydown",key); R.appendChild(o);
+}
 // a deleted card: remove its raw video, audio, Claude edit files and finished videos from storage
 function freeCardFiles(id, after){
   if(!window.PIPE || PIPE.mode()==="off") return;
@@ -2587,11 +2614,19 @@ function openCard(id,showGate){
         <div class="block-h"><h4>${r?"✓ ":""}Raw video</h4><span class="hint">the footage before editing — a link or the file${useClaude?" · Claude edits it":""}</span></div>
         <div class="seg rawseg" data-w="1"><button type="button" data-rawmode="link" class="${mode==="link"?"on":""}">🔗 Paste a link</button>
           <button type="button" data-rawmode="file" class="${mode==="file"?"on":""}">⬆ Upload the file</button></div>
-        ${mode==="link"?`<div class="fld" style="margin:0"><input id="raw-url" value="${esc(link)}" placeholder="Google Drive, Dropbox or WeTransfer link to the raw clip">
-            <p class="hint" style="margin:5px 0 0">${okUrl?`<a href="${esc(link)}" target="_blank" rel="noopener">Open the raw video ↗</a> · `:""}Set the link so anyone in the team can open it.</p></div>`
+        ${mode==="link"?`<div class="fld" style="margin:0"><input id="raw-url" value="${esc(link)}" placeholder="Google Drive or OneDrive link — a video, or a folder with the video in it">
+            <div class="pp-row" style="margin-top:7px;gap:6px;display:flex;flex-wrap:wrap;align-items:center">
+              <button type="button" class="btn sm" data-rawwatch ${okUrl?"":"disabled"}>▶ Watch the video</button>
+              ${isNew||off?"":IMPORTJOB[c.id]?`<button type="button" class="btn sm danger" data-rawimpstop data-w="1">Stop copying</button>`
+                :`<button type="button" class="btn sm pri" data-rawimport data-w="1" ${okUrl?"":"disabled"}>⬇ Copy the video into storage</button>`}
+              ${okUrl?`<a class="hint" href="${esc(link)}" target="_blank" rel="noopener">Open the link ↗</a>`:""}</div>
+            <div class="hint" data-rawimp-st style="margin:6px 0 0">${IMPORTJOB[c.id]?esc(IMPORTJOB[c.id].msg):isNew?"Create the card first, then copy the video into storage.":"Share the link as “Anyone with the link”. Copying puts the file in storage, makes the audio, and Claude edit can use it."}</div>
+            ${IMPORTJOB[c.id]&&IMPORTJOB[c.id].files?`<div class="rawpick" style="display:flex;flex-direction:column;gap:5px;margin-top:6px">${IMPORTJOB[c.id].files.map((f,i)=>`<button type="button" class="btn sm" data-rawpick="${i}" data-w="1" style="justify-content:flex-start;text-align:left">🎞️ ${esc(f.name)} <span class="hint" style="margin-left:auto">${mb(f.size)}</span></button>`).join("")}</div>`:""}
+            <div class="pp-bar" data-rawimpbar ${IMPORTJOB[c.id]&&IMPORTJOB[c.id].pc!=null?"":"hidden"}><i style="width:${(IMPORTJOB[c.id]&&IMPORTJOB[c.id].pc)||0}%"></i></div></div>`
         :r&&r.kind==="file"?`<div class="drop has"><span style="font-size:22px">🎞️</span>
             <div style="flex:1;min-width:0"><div class="lbl" style="margin:0 0 2px">Raw video · uploaded</div>
-              <div class="nm">${esc(r.name)}</div><div class="sz">${mb(r.size)}${r.by?" · by "+esc(r.by):""}${r.at?" · "+esc(dmy(r.at)):""}</div></div>
+              <div class="nm">${esc(r.name)}</div><div class="sz">${mb(r.size)}${r.by?" · by "+esc(r.by):""}${r.at?" · "+esc(dmy(r.at)):""}${r.link?` · <a href="${esc(r.link)}" target="_blank" rel="noopener">from a link ↗</a>`:""}</div></div>
+            <button type="button" class="btn sm pri" data-rawwatch>▶ Watch</button>
             <label class="btn sm" data-w="1" style="cursor:pointer">Replace<input type="file" accept="video/*" data-rawfile hidden></label>
             <button type="button" class="btn sm danger" data-rawdel data-w="1">Delete</button></div>
             <div class="rawaudio">
@@ -2878,6 +2913,43 @@ function openCard(id,showGate){
         read(); c.raw=null; RAWMODE[c.id]="file"; delete RAWLINKS[c.id]; if(save()){ dirty=false; opened=snap(); }
         toast(r.deleted.length?`Deleted from storage: ${r.deleted.join(", ")} (checked, it's gone)`:"Nothing was in storage — removed from the card"); draw(c.pre.keywords); }
       catch(e){ toast("Couldn't delete: "+e.message); rdel.disabled=false; rdel.textContent="Delete"; } };
+    // ▶ watch the raw video: the stored file, or the pasted link (Drive's player / a new tab for OneDrive)
+    $("#drawer").querySelectorAll("[data-rawwatch]").forEach(b=>b.onclick=async()=>{
+      const title=c.pre.title||c.idea||"Raw video", ru=$("#raw-url");
+      if(ru){ const w=watchOf(ru.value.trim()); if(!w){ toast("Paste a full link (https://…)"); return; } watchVideo(Object.assign({ open: ru.value.trim() }, w), title); return; }
+      try{ b.disabled=true; const l=await PIPE.rawLinks(c.id); b.disabled=false;
+        if(!l.video){ toast("The video isn't in storage any more"); return; } watchVideo({ video:l.video }, title); }
+      catch(e){ b.disabled=false; toast("Couldn't open the video: "+e.message); } });
+    // ⬇ copy the video behind the link into storage (a folder: pick which video), then make its audio
+    const impSt=m=>{ const id=c.id; IMPORTJOB[id]=Object.assign(IMPORTJOB[id]||{}, typeof m==="string"?{ msg:m }:m);
+      if(OPEN&&OPEN.id===id){ const el=$("#drawer").querySelector("[data-rawimp-st]"); if(el) el.textContent=IMPORTJOB[id].msg;
+        const bar=$("#drawer").querySelector("[data-rawimpbar]"); if(bar&&IMPORTJOB[id].pc!=null){ bar.hidden=false; bar.firstChild.style.width=IMPORTJOB[id].pc+"%"; } } };
+    const redraw=()=>{ if(OPEN&&OPEN.id===c.id){ if(dirty) read(); draw(c.pre.keywords); } };
+    const runImport=async(f, link)=>{ const id=c.id;
+      IMPORTJOB[id]={ msg:"Starting the copy of "+f.name+"…", pc:0 }; redraw();
+      try{ const up=await PIPE.importLink(id, f.pick, (done,size)=>impSt({ pc:Math.floor(done/size*100), msg:`Copying ${f.name}… ${Math.floor(done/size*100)}% (${mb(done)} of ${mb(size)})` }), ()=>IMPORTJOB[id]&&IMPORTJOB[id].stop);
+        delete IMPORTJOB[id]; delete RAWLINKS[id];
+        if(OPEN&&OPEN.id===id){ keepRaw(Object.assign(up,{ link })); getAudio(null); }
+        else { const card=CARDS.find(x=>x.id===id); if(card){ card.raw=Object.assign({ kind:"file" }, up, { link, at:today(), by:meName() }); RAWMODE[id]="file"; save(); } }
+        toast("Video copied into storage ✓"); }
+      catch(e){ delete IMPORTJOB[id]; toast("Copy didn't work: "+e.message); redraw(); } };
+    const imp=$("#drawer").querySelector("[data-rawimport]");
+    if(imp) imp.onclick=async()=>{ const link=$("#raw-url").value.trim();
+      read(); persist(); if(save()){ dirty=false; opened=snap(); }   // keep the link on the card either way
+      IMPORTJOB[c.id]={ msg:"Looking at the link…" }; redraw();
+      try{ const files=await PIPE.linkFiles(c.id, link);
+        if(files.length===1) return runImport(files[0], link);
+        IMPORTJOB[c.id]={ msg:`This folder has ${files.length} videos — pick the raw one:`, files, link }; redraw(); }
+      catch(e){ delete IMPORTJOB[c.id]; toast(e.message); redraw(); } };
+    $("#drawer").querySelectorAll("[data-rawpick]").forEach(b=>b.onclick=()=>{ const j=IMPORTJOB[c.id]; if(j&&j.files) runImport(j.files[+b.dataset.rawpick], j.link); });
+    const impStop=$("#drawer").querySelector("[data-rawimpstop]");
+    if(impStop) impStop.onclick=()=>{ const j=IMPORTJOB[c.id]; if(!j) return;
+      if(j.files){ delete IMPORTJOB[c.id]; redraw(); return; }
+      j.stop=true; impSt("Stopping after this piece…"); };
+    // the Watch / Copy buttons switch on as soon as a link is typed
+    const ruIn=$("#raw-url");
+    if(ruIn) ruIn.addEventListener("input",()=>{ const ok=/^https?:\/\//i.test(ruIn.value.trim());
+      $("#drawer").querySelectorAll("[data-rawwatch],[data-rawimport]").forEach(b=>b.disabled=!ok); });
     const rawUpload=async f=>{
       if(!window.PIPE || PIPE.mode()==="off"){ toast("Uploading needs the video storage set up first — paste a link for now"); return; }
       if(!(/^video\//.test(f.type) || /\.(mp4|mov|m4v|mkv)$/i.test(f.name))){ toast("Pick a video file (.mp4 / .mov)"); return; }
