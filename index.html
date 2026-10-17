@@ -2486,6 +2486,17 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .rms-band.rmg-drop{box-shadow:inset 0 0 0 2px var(--indigo)}
 .rml-lane.rmg-drop{box-shadow:0 0 0 2px var(--indigo)!important;background:var(--indigo-soft)!important}
 .rmw-row.rmg-drop,.rmw-row.rmg-drop .rmw-name{background:var(--indigo-soft)!important}
+.rmb-search{width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);font:inherit;margin-bottom:8px}
+.rmb-list{max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.rmb-grp{position:sticky;top:0;background:var(--paper);font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:6px 12px;border-bottom:1px solid var(--line)}
+.rmb-row{display:flex;align-items:center;gap:9px;padding:8px 12px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px}
+.rmb-row:hover{background:var(--indigo-soft)}
+.rmb-row input{width:15px;height:15px;accent-color:var(--indigo);flex:none;margin:0}
+.rmb-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rmb-m{font-family:var(--mono);font-size:10.5px;color:var(--muted);white-space:nowrap}
+.rmb-row.done .rmb-t{color:var(--muted);text-decoration:line-through}
+.rmb-row.off{opacity:.5;cursor:not-allowed}
+.rmb-empty{padding:18px;text-align:center;color:var(--muted);font-size:13px}
 .rml-sw{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
 .rml-sw button{width:28px;height:28px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;box-shadow:inset 0 0 0 1px rgba(0,0,0,.1)}
 .rml-sw button.auto{width:auto;border-radius:99px;padding:0 10px;font-size:11.5px;font-weight:600;background:var(--paper);color:var(--muted);border-color:var(--line-strong)}
@@ -13405,7 +13416,7 @@ function rmlEditItem(m, it, en){
   }, {
     sub: en.path,
     extra: [
-      ["🔒 Blocked by…", "Pick the cards (on any board) this one is waiting on", ()=> rmlBlockers(en)],
+      ["🔒 Blocked by…", "Pick what this one is waiting on — tasks on this chart first, or cards on any board", ()=> rmlBlockers(en, m)],
       ["Remove", own ? "Delete this item" : "Remove from this roadmap (the card itself stays)", ()=>{
         if(!confirm(own ? "Delete “"+(en.task.title||"")+"”?" : "Remove “"+(en.task.title||"")+"” from this roadmap? The card itself is not deleted.")) return false;
         m.items.splice(m.items.indexOf(it),1);
@@ -13416,12 +13427,77 @@ function rmlEditItem(m, it, en){
   });
 }
 /* blockers live on the card itself, so every board shows the same 🔒 */
-function rmlBlockers(en){
+function rmlBlockers(en, m){
   const t = en.task;
+  if(m) return rmlChartBlockers(en, m);
   openDialog("Blocked by — “"+(t.title||"")+"”", { title:t.title, tid:t.tid, blockedBy:t.blockedBy||[] }, v=>{
     if(v.blockedBy && v.blockedBy.length) t.blockedBy = v.blockedBy; else delete t.blockedBy;
     saveRmaps(); pushAll();
   }, { deps:true, hideTitle:true, hideExtras:true, noOwner:true });
+}
+
+/* "Blocked by" for a chart task: pick from the tasks on this chart (by phase / lane / group), or open
+   the full picker for cards on other boards. Blockers still live on the card, so every board shows the 🔒. */
+function rmlChartBlockers(en, m){
+  const t = en.task, reg = allTasks(), byTid = {};
+  reg.forEach(x=> byTid[x.tid] = x);
+  const cur = new Set(t.blockedBy || []);
+  /* anything already waiting on this task (directly or further down) can't also block it */
+  const waits = new Set(), grow = tid=>{ reg.forEach(x=>{ if((x.task.blockedBy||[]).includes(tid) && !waits.has(x.tid)){ waits.add(x.tid); grow(x.tid); } }); };
+  grow(t.tid);
+  const word = {gantt:"Phase", swimlane:"Swimlane", wbs:"Group"}[m.view] || "Lane";
+  const ov = document.createElement("div"); ov.className = "overlay show";
+  const dg = document.createElement("div"); dg.className = "dialog"; dg.style.maxWidth = "520px";
+  dg.innerHTML = '<h3>🔒 Blocked by — “'+mtEsc(t.title||"")+'”</h3><div class="hint" style="margin:-6px 0 10px">Tick what has to finish before this can start. Tasks on this chart:</div>';
+  const search = document.createElement("input"); search.type = "text"; search.placeholder = "Search this chart…"; search.className = "rmb-search";
+  const list = document.createElement("div"); list.className = "rmb-list";
+  const sel = new Set([...cur].filter(x=> m.items.some(it=> it.tid===x)));
+  const draw = ()=>{
+    const q = search.value.trim().toLowerCase();
+    list.innerHTML = "";
+    let any = false;
+    (m.lanes && m.lanes.length ? m.lanes : [{id:null, name:""}]).forEach(ln=>{
+      const its = m.items.filter(it=> it.tid!==t.tid && byTid[it.tid] && (!m.lanes || !m.lanes.length || rmlLaneOf(m, it)===ln))
+        .filter(it=> !q || (byTid[it.tid].task.title||"").toLowerCase().includes(q))
+        .sort((a,b)=> dNum(a.start||todayISO()) - dNum(b.start||todayISO()));
+      if(!its.length) return;
+      any = true;
+      if(ln.name){ const h = document.createElement("div"); h.className = "rmb-grp"; h.textContent = word + " · " + ln.name; list.appendChild(h); }
+      its.forEach(it=>{
+        const b = byTid[it.tid], st = effStatus(b.task), loop = waits.has(it.tid);
+        const row = document.createElement("label"); row.className = "rmb-row" + (loop ? " off" : "") + (st==="done" ? " done" : "");
+        const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = sel.has(it.tid); cb.disabled = loop;
+        cb.onchange = ()=>{ if(cb.checked) sel.add(it.tid); else sel.delete(it.tid); };
+        const tx = document.createElement("span"); tx.className = "rmb-t"; tx.textContent = b.task.title || "(untitled)";
+        const meta = document.createElement("span"); meta.className = "rmb-m";
+        meta.textContent = loop ? "waits on this one" : (rmlFmt(it.start) + " → " + rmlFmt(it.end) + " · " + (STATUS_LABEL[st] || st || ""));
+        row.append(cb, tx, meta); list.appendChild(row);
+      });
+    });
+    if(!any){ const e = document.createElement("div"); e.className = "rmb-empty"; e.textContent = q ? "Nothing on this chart matches." : "No other tasks on this chart yet."; list.appendChild(e); }
+  };
+  search.oninput = draw; draw();
+  const others = [...cur].filter(x=> !m.items.some(it=> it.tid===x));
+  const foot = document.createElement("div"); foot.className = "hint"; foot.style.marginTop = "8px";
+  foot.textContent = others.length ? "Also waiting on " + others.length + " card(s) on other boards: " + others.map(x=> byTid[x] ? byTid[x].task.title : "(deleted)").join(", ") : "";
+  dg.append(search, list, foot);
+  const btns = document.createElement("div"); btns.className = "btns";
+  const close = ()=> ov.remove();
+  const save = ()=>{
+    const next = [...sel].concat(others.filter(x=> byTid[x]));
+    if(next.length) t.blockedBy = next; else delete t.blockedBy;
+    saveRmaps(); pushAll();
+  };
+  const more = document.createElement("button"); more.className = "btn"; more.textContent = "Cards on other boards…";
+  more.title = "Open the full picker — any task, dev card or bug in the app";
+  more.onclick = ()=>{ save(); close(); rmlBlockers(en); };
+  const sp = document.createElement("span"); sp.style.flex = "1";
+  const cancel = document.createElement("button"); cancel.className = "btn"; cancel.textContent = "Cancel"; cancel.onclick = close;
+  const ok = document.createElement("button"); ok.className = "btn save"; ok.textContent = "Save";
+  ok.onclick = ()=>{ save(); close(); toast(sel.size || others.length ? "Blockers saved" : "No blockers"); };
+  btns.append(more, sp, cancel, ok); dg.appendChild(btns);
+  ov.appendChild(dg); ov.addEventListener("mousedown", e=>{ if(e.target===ov) close(); });
+  document.body.appendChild(ov); setTimeout(()=> search.focus(), 30);
 }
 
 /* small form modal built on the app's .overlay/.dialog look */
