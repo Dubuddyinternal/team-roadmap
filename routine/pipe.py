@@ -15,6 +15,13 @@
     python3 pipe.py refs                   downloads the "Files for Claude" on the card into <W>/refs
     python3 pipe.py restore                after a pause, if the work folder is gone: downloads raw + edit again
 
+  The card chat (the owner writes to you from the card, and reads your answers there):
+    python3 pipe.py listen [minutes]       wait for the owner's next card message (default 9 min; prints it, files in <W>/refs)
+    python3 pipe.py inbox                  any card messages right now? (doesn't wait)
+    python3 pipe.py say "<text>"           your answer, shown in the card chat
+    python3 pipe.py heard "<text>"         copy what the owner typed here in claude.ai into the card chat
+    python3 pipe.py sleep                  stop listening; the owner's next card message starts a fresh session with the chat
+
 The work folder is $PIPE_WORK (default /tmp/dubuddy/job). It always has the same layout, so files
 written by one step are where the next step expects them:
     <W>/payload.json        this run's payload
@@ -170,6 +177,13 @@ def start(src):
     if "clean_audio" in got and "raw" in got:
         notes["clean_audio"] = use_clean_audio(p)
     os.makedirs(os.path.join(W, "out"), exist_ok=True)
+    hist = p.get("history") or []
+    if hist:   # the card chat so far (a new session picks the conversation up)
+        with open(os.path.join(W, "CHAT_HISTORY.md"), "w") as f:
+            for m in hist:
+                who = "Claude" if m.get("from") == "claude" else (m.get("by") or "Owner")
+                f.write(f"**{who}** ({m.get('at', '')[:16]}): {m.get('text') or ''}" + (f"  [files: {', '.join(m.get('files') or [])}]" if m.get("files") else "") + "\n\n")
+        notes["chat_history"] = os.path.join(W, "CHAT_HISTORY.md") + f" ({len(hist)} messages — read it first)"
     report("progress", f"{p['step']}: inputs ready")
     print(json.dumps({"step": p["step"], "work": W, "edit_folder": ed(), "raw": os.path.join(W, "raw"),
                       "inputs": got, "out": os.path.join(W, "out"), "targets": targets(), "chat": bool(p.get("chat")),
@@ -356,6 +370,27 @@ def restore():
     print(json.dumps({"restored": True, "edit_folder": ed(), "got": sorted(L), "targets": d.get("targets")}, indent=1))
 
 
+def inbox(listening=True):
+    msgs = (post({"event": "inbox", "listening": listening}).get("data") or {}).get("msgs") or []
+    for m in msgs:   # files attached to a card message: into <W>/refs, the same place as "Files for Claude"
+        paths = []
+        for f in m.get("files") or []:
+            dest = os.path.join(W, "refs", f["name"])
+            try: download(f["url"], dest); paths.append(dest)
+            except RuntimeError as e: paths.append(f"{f['name']} (download failed: {e})")
+        m["files"] = paths
+    return msgs
+
+
+def listen(minutes):
+    end = time.time() + minutes * 60
+    while True:
+        msgs = inbox(True)
+        if msgs or time.time() > end:
+            print(json.dumps({"msgs": msgs, "timeout": not msgs}, indent=1, ensure_ascii=False)); return
+        time.sleep(15)
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     if cmd == "start" and len(sys.argv) > 2: start(sys.argv[2])
@@ -367,4 +402,9 @@ if __name__ == "__main__":
     elif cmd == "stage" and len(sys.argv) > 2: stage(sys.argv[2])
     elif cmd == "refs": refs()
     elif cmd == "restore": restore()
+    elif cmd == "listen": listen(min(9.5, float(sys.argv[2]) if len(sys.argv) > 2 else 9))
+    elif cmd == "inbox": print(json.dumps({"msgs": inbox(False)}, indent=1, ensure_ascii=False))
+    elif cmd == "say" and len(sys.argv) > 2: post({"event": "say", "message": " ".join(sys.argv[2:])}); print("ok")
+    elif cmd == "heard" and len(sys.argv) > 2: post({"event": "say", "from": "you", "message": " ".join(sys.argv[2:])}); print("ok")
+    elif cmd == "sleep": post({"event": "sleep"}); print("ok — the next card message starts a fresh session with this chat")
     else: print(__doc__); sys.exit(1)

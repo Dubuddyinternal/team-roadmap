@@ -40,12 +40,12 @@ window.__timelines["main"] = tl;</script></body></html>`);
 const sleep = s => execFileSync("sleep", [String(s)]);
 const json = (f, o) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, JSON.stringify(o, null, 1)); };
 
-// ---- chat runs (the edit chat): stay alive, act on what "the owner says". Locally there's no claude.ai chat, so a test
-// writes the message to <runs>/<card>.say ("build" / "render" / anything else = change the plan).
+// ---- chat runs: stay alive and act on the owner's card-chat messages (pipe.py listen), like the real session does:
+// "ok"/"build" → build · "render" (or the Render button) → render · "plan…" → a new plan · anything else → change the edit.
+// After FAKE_IDLE seconds without a message it goes to sleep (pipe.py sleep); the next card message starts a new run.
 if (p.chat) {
   try {
     const info = JSON.parse(pipe("start", fire)); const ED = info.edit_folder, OUT = info.out, tv = info.targets;
-    const SAY = path.join(path.dirname(fire), `${p.job}.say`);
     const proposal = notes => { fs.mkdirSync(ED, { recursive: true }); fs.writeFileSync(path.join(ED, "plan.json"), JSON.stringify({ fake: true, draft: true }));
       json(path.join(OUT, "proposal.json"), { summary: (notes ? `[changed: ${notes}] ` : "") + `Fake plan for “${p.card.title || p.card.idea || "card"}” — versions: ${tv.join(" + ")}.`,
         hook: { text: "SRCC cutoff *gira*?", why: "The number is the surprise." }, length: "32 s (from 47 s)", cuts: [{ what: "2 false starts", why: "repeats" }],
@@ -67,13 +67,22 @@ if (p.chat) {
         ff(["-f", "lavfi", "-i", (v === "yt" ? "testsrc2" : "smptebars") + "=s=540x960:d=4", "-f", "lavfi", "-i", "sine=d=4", "-shortest", "-pix_fmt", "yuv420p", path.join(ED, "output", dir[v], `final_${v}.mp4`)]); });
       json(path.join(OUT, "render_result.json"), { qc: tv.map(v => v + " ok").join(" · ") + " (fake)" });
       pipe("stage", "rendered"); };
-    if (p.step === "chat") proposal(""); else pipe("waiting", "What should change? (fake)");
-    const end = Date.now() + 15 * 60e3;
-    while (Date.now() < end) {
-      sleep(1); if (!fs.existsSync(SAY)) continue;
-      const msg = fs.readFileSync(SAY, "utf8").trim(); fs.rmSync(SAY, { force: true });
-      if (/render/i.test(msg)) render(); else if (/^(ok|go|build)/i.test(msg)) build(msg); else if (/plan/i.test(msg)) proposal(msg); else build(msg);
+    const say = t => pipe("say", t);
+    if (p.step === "chat") { proposal(""); say("Here's the plan (fake): hook on the number, 2 false starts cut, one falling-arrow scene. OK to build?"); }
+    else { say(`Back again (fake) — I read the chat so far (${(p.history || []).length} messages).`); }
+    let idle = Date.now();
+    while (Date.now() - idle < Number(process.env.FAKE_IDLE || 900) * 1000) {
+      sleep(1);
+      for (const m of JSON.parse(pipe("listen", "0")).msgs) {
+        idle = Date.now(); const msg = m.text || "";
+        if (m.files.length) say(`Got ${m.files.length} file(s): ${m.files.map(f => path.basename(f)).join(", ")}`);
+        if (m.cmd === "render" || /render/i.test(msg)) { tv.splice(0, tv.length, ...(m.targets || tv)); render(); say("Rendered (fake): " + tv.join(" + ")); }
+        else if (/^(ok|go|build)/i.test(msg)) { build(msg); say("Built it (fake) — watch it above."); }
+        else if (/plan/i.test(msg)) { proposal(msg); say("Changed the plan (fake)."); }
+        else { if (m.targets) tv.splice(0, tv.length, ...m.targets); build(msg); say("Changed it (fake): " + msg.slice(0, 80)); }
+      }
     }
+    pipe("sleep");
   } catch (e) { try { pipe("fail", "Fake chat: " + String(e.message).slice(0, 300)); } catch {} }
   process.exit(0);
 }

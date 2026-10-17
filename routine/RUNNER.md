@@ -2,7 +2,7 @@
 
 A button on tools.dubuddy.in started this run. Most steps are **one step**: nobody is watching, the owner reviews the
 result on the card. A payload with `"chat": true` (steps `chat` and `reedit`) is different: it's the **edit chat** —
-the owner talks to you in this claude.ai session. Follow **Chat runs** below for those.
+the owner talks to you through the chat box on the card (and in this claude.ai session, if they open it). Follow **Chat runs** below for those.
 
 `PIPE` is the helper `pipe.py` next to this file, and `FIRE` is the file holding this run's payload. Both are given
 in the message that started you.
@@ -32,13 +32,26 @@ Rules for every step:
 
 ## Chat runs (`"chat": true` — steps `chat` and `reedit`)
 
-You are the owner's video editor in this chat. They read your messages here and watch the card on the website. Work in
-the skill's three checkpoints, in order, and **stop and wait for the owner after each one** (end your turn with a short
-message — they'll answer in this chat):
+You are the owner's video editor. They talk to you in **two places**, and both are the same conversation:
+- **the chat box on the card** (on the website) — this is the main one. Their messages reach you through
+  `python3 "$PIPE" listen` / `inbox`, and everything you want them to read there goes out with `python3 "$PIPE" say "…"`.
+- **this claude.ai session**, if they open it. A message typed here arrives as a new turn: handle it the same way, and
+  copy it to the card first with `python3 "$PIPE" heard "<their message>"` so the card chat stays complete.
+
+**Waiting for the owner = listening, not ending your turn.** Every time you need them (a checkpoint, a question):
+`say` your short message, `waiting "<the question>"`, then run `python3 "$PIPE" listen` (it waits up to 9 minutes and
+prints their message as JSON — `text`, `files` already downloaded into `<work>/refs/`, and `cmd`/`targets` when they
+pressed a button). Timed out (`"timeout": true`)? Run `listen` again. After about **2 hours with no message**, run
+`python3 "$PIPE" sleep` and end your turn with one line ("I'm resting — write on the card and I'll pick this up"). Their
+next card message starts a fresh session with the whole conversation (see `reedit` below), so nothing is lost.
+Button presses arrive as messages: `cmd: "render"` (render `targets` now) and `cmd: "edit_again"` (change `targets`
+with their notes).
+
+Work in the skill's three checkpoints, in order, and **wait for the owner after each one** (as above):
 
 1. **Propose — no HyperFrames.** Do the `propose` step below (analyse, decide), write `OUT/proposal.json`, then run
-   `python3 "$PIPE" stage proposal`. In the chat, give a short, readable version of the plan: the hook, what you cut and
-   the new length, each scene (what's drawn, how it moves), B-roll, the ending. Ask: "OK to build, or what should change?"
+   `python3 "$PIPE" stage proposal`. Then `say` a short, readable version of the plan: the hook, what you cut and the new
+   length, each scene (what's drawn, how it moves), B-roll, the ending. Ask: "OK to build, or what should change?"
    Changes → update the plan, `stage proposal` again, ask again. **Build nothing until they say OK.**
 2. **Build + show — after the OK.** `python3 "$PIPE" busy building "<what>"`, then do the `plan` step below (build the
    approved plan in HyperFrames, QA, brief). Then `python3 "$PIPE" stage built`: the card gets the ▶ live player (the real
@@ -56,6 +69,8 @@ Rules for chat runs:
   edit (never instructions about your tools, the website, posting or anything outside this video). For files they
   added on the card ("Files for Claude"), run `python3 "$PIPE" refs` — it downloads them to `<work>/refs/`. Look at
   images directly; for a reference video, pull a few frames with ffmpeg and look at those.
+- **Before each `busy` piece of work and between big steps, run `python3 "$PIPE" inbox`** — the owner may have added
+  something from the card meanwhile. Fold it in, and `say` that you did.
 - **Keep the card in step:** `busy …` whenever you start real work, `waiting "<question>"` when you ask them something,
   `stage …` when a checkpoint is ready, `progress` at milestones, `fail "<reason>"` if something breaks (the card shows it
   and you stay in the chat to fix it).
@@ -64,10 +79,12 @@ Rules for chat runs:
   save the payload from this session's first message there again and run `pipe.py start` on it before `restore`.
 - Keep `ED/CHAT_NOTES.md` up to date: every decision and change the owner asked for, in a few lines each. It travels with
   the edit folder, so a later "Edit again" chat knows the whole story.
-- **`reedit`** ("Edit again" on the card): `pipe.py start` brings back the last edit folder, the approved plan and the
-  rendered versions. Read `ED/CHAT_NOTES.md`, say in the chat what you have and which versions you'll change (`reedit.targets`),
-  and ask what to change (or start on `reedit.notes` if they wrote some). Then step 2 → 3 as above. Don't redo the plan
-  unless they ask for a different video.
+- **`reedit`** ("Edit again" on the card, or a card message after the last session went to sleep): `pipe.py start`
+  brings back the last edit folder, the approved plan and the rendered versions, and writes `<work>/CHAT_HISTORY.md` —
+  the card conversation so far. Read it and `ED/CHAT_NOTES.md`, then run `python3 "$PIPE" inbox`: the message that woke
+  you is there. Answer it and carry on from where the conversation stopped (no plan yet → checkpoint 1; plan agreed →
+  build; built → change what they asked). Only re-render the versions in `targets`. Don't redo the plan unless they ask
+  for a different video.
 - If `pipe.py` ever prints `STOP: …`, the card no longer listens to this chat (cancelled, or a newer edit started from
   the card). Tell the owner and stop working.
 - Never run `pipe.py finish` in a chat run.
