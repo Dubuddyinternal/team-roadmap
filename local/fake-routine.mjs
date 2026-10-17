@@ -33,7 +33,7 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 <video id="aroll" src="assets/cut.mp4" data-start="0" data-duration="6" muted playsinline></video>
 <div class="card clip" id="hook" data-start="0.5" data-duration="3">${label} hook</div>
 <audio id="aroll-audio" src="assets/cut.mp4" data-start="0" data-duration="6" data-volume="1"></audio>
-</div><script>window.__timelines = window.__timelines || {}; const tl = gsap.timeline({ paused: true });
+</div><script>const tl = gsap.timeline({ paused: true });   // like build.py: no __timelines setup (the runtime does it)
 tl.fromTo("#hook", { scale: .5, rotation: -8 }, { scale: 1, rotation: 0, duration: .6, ease: "back.out(2)" }, 0.5);
 window.__timelines["main"] = tl;</script></body></html>`);
 }
