@@ -210,6 +210,7 @@ const CSS = `<style>
 .pp .gchip{font-family:var(--mono);font-size:10.5px;padding:3px 8px;border-radius:99px;border:1px solid var(--line)}
 .pp .gchip.ok{color:var(--good);background:var(--good-soft);border-color:color-mix(in srgb,var(--good) 30%,var(--line))}
 .pp .gchip.no{color:var(--crit);background:var(--crit-soft);border-color:color-mix(in srgb,var(--crit) 25%,var(--line))}
+.pp .pp-rawline{margin:0 0 12px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:13px}
 .pp .pp-drop{display:flex;gap:12px;align-items:center;border:1.5px dashed var(--line-2);border-radius:10px;padding:12px;background:var(--surface);transition:border-color .15s,background .15s}
 .pp .pp-drop.over{border-color:var(--accent);background:var(--accent-soft)}
 .pp .pp-drop.has{border-style:solid;border-color:color-mix(in srgb,var(--good) 35%,var(--line))}
@@ -256,15 +257,8 @@ function startView(c, canRun, m){
       title, description and hook, then waits for a check. Nothing renders without an owner's click.</p>
     <div class="pp-ready">${ready.map(([l,ok])=>`<span class="gchip ${ok?"ok":"no"}">${ok?"✓":"✗"} ${l}</span>`).join("")}</div>
     ${missing.length?`<p class="hint" style="margin:6px 0 12px">Claude can start without the ${esc(missing.join(", "))}, but the hook and SEO get weaker — fill ${missing.length>1?"them":"it"} in on the left first if you can.</p>`:`<div style="height:10px"></div>`}
-    <div class="fld" style="margin-bottom:10px"><label>Raw video</label>
-      <div class="pp-drop ${r?"has":""}" data-pp-drop>
-        ${r&&r.thumb?`<img class="pp-thumb" src="${r.thumb}" alt="">`:`<div class="pp-dropic">🎞️</div>`}
-        <div style="flex:1;min-width:0">
-          <div data-pp-up>${r?`<b>✓ ${esc(r.name)}</b> <span class="hint">${(r.size/1e6).toFixed(0)} MB${r.duration?" · "+mmss(r.duration):""} · uploaded</span>`
-            :`<b>Drop the raw clip here</b> <span class="hint">or</span>`}</div>
-          <label class="filebtn" style="margin-top:6px">${r?"Choose another file":"Choose file"}<input type="file" accept="video/*" data-pp-file ${canRun?"":"disabled"}></label>
-          <span class="hint" style="margin-left:6px">MP4 or MOV, straight from the phone/camera</span>
-          <div class="pp-bar" data-pp-bar hidden><i></i></div></div></div></div>
+    <div class="pp-rawline">${r?`🎞️ <b>${esc(r.name)}</b> <span class="hint">${(r.size/1e6).toFixed(0)} MB · the raw video in the step above</span>`
+      :`<span class="hint">Add the raw video in the <b>Raw video</b> step above first — then Claude can start.</span>`}</div>
     <div class="pp-row"><button class="btn pri" data-pp="start" ${canRun&&r?"":"disabled"}>🤖 Edit with Claude</button>
       ${canRun?"":`<span class="hint">Your role can view this, not run it.</span>`}</div>`;
 }
@@ -559,7 +553,8 @@ window.PIPE = {
     const keep = S.mounted && S.mounted.card.id===card.id ? S.mounted : {};
     // a raw video already uploaded in the card's Raw video box is the one Claude edits
     const cr = helpers && helpers.raw && helpers.raw();
-    const raw = keep.raw || (cr && cr.kind === "file" && cr.file ? { file: cr.file, name: cr.name, size: cr.size } : undefined);
+    // always the card's own raw file (it can change in the card's Raw video step); keep the preview thumb if it's the same file
+    const raw = cr && cr.kind === "file" && cr.file ? Object.assign({}, keep.raw && keep.raw.file === cr.file ? keep.raw : {}, { file: cr.file, name: cr.name, size: cr.size }) : undefined;
     S.mounted = { host, card, h: helpers||{}, raw, draft: keep.draft, rsig: keep.rsig, studioCmd: keep.studioCmd, pv: keep.pv };
     ensurePolling(); render(); poll();     // fresh status as soon as a card opens
   },
