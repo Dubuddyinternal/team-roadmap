@@ -182,6 +182,10 @@ def start(src):
         try: notes["brief_files"] = fetch_refs() or "none"
         except (RuntimeError, SystemExit) as e: notes["brief_files"] = f"couldn't fetch: {e}"
     os.makedirs(os.path.join(W, "out"), exist_ok=True)
+    ctx = card_context(p.get("card") or {})
+    if ctx:
+        with open(os.path.join(W, "CARD_CONTEXT.md"), "w") as f: f.write(ctx)
+        notes["card_context"] = os.path.join(W, "CARD_CONTEXT.md") + " (the edit brief + every box on the card and its idea — read it first)"
     hist = p.get("history") or []
     if hist:   # the card chat so far (a new session picks the conversation up)
         with open(os.path.join(W, "CHAT_HISTORY.md"), "w") as f:
@@ -193,6 +197,26 @@ def start(src):
     print(json.dumps({"step": p["step"], "work": W, "edit_folder": ed(), "raw": os.path.join(W, "raw"),
                       "inputs": got, "out": os.path.join(W, "out"), "targets": targets(), "chat": bool(p.get("chat")),
                       "reedit": p.get("reedit"), **notes}, indent=1))
+
+
+def card_context(card):
+    """the owner's package, readable: the edit brief, then every box on the card (by step) and on its idea, by label"""
+    out = []
+    if (card.get("edit_brief") or "").strip():
+        out += ["# Edit brief (the owner, for this edit)", card["edit_brief"].strip(), ""]
+    sec = card.get("sections") or {}
+    for g in sec.get("card") or []:
+        out.append(f"# Card → {g.get('step', '')}")
+        out += [f"- **{b.get('box', '')}**: {b.get('value', '')}" for b in g.get("boxes") or []]
+        out.append("")
+    if sec.get("idea"):
+        out.append("# The idea this card came from")
+        out += [f"- **{b.get('box', '')}**: {b.get('value', '')}" for b in sec["idea"]]
+        out.append("")
+    if not sec:   # an older page: the fixed fields
+        keep = ["idea", "title", "description", "hashtags", "hook", "talking_points", "cta", "shooting_notes", "keywords", "why"]
+        out += ["# Card"] + [f"- **{k}**: {card[k]}" for k in keep if card.get(k)]
+    return "\n".join(out).strip() + "\n" if out else ""
 
 
 def use_clean_audio(p):

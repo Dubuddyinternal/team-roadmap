@@ -207,7 +207,9 @@ function cardInfo(c, h){
     video_type:c.vtype, scheduled:c.scheduled, time:c.time||null,
     hook: (c.shoot && c.shoot.hook) || (idea ? P(idea.hook) : ""), cta: (c.shoot && c.shoot.cta) || (idea ? P(idea.cta) : ""),
     talking_points: c.shoot ? P(c.shoot.points||"") : "", shooting_notes: c.shoot ? P(c.shoot.tips||"") : "",
-    edit_brief: P(h.brief ? h.brief() : c.editBrief || "") };
+    edit_brief: P(h.brief ? h.brief() : c.editBrief || ""),
+    // everything written on the card and its idea, box by box with the box's own label (new boxes come along by themselves)
+    sections: h.context ? h.context() : null };
 }
 // the skill's hook markup: *word* = orange, | = new line
 const hookHtml = t => esc(t).replace(/\*([^*]+)\*/g, '<span class="pp-em">$1</span>').replace(/\s*\|\s*/g, " / ");
@@ -359,9 +361,8 @@ function render(){
   host.innerHTML = CSS + `<div class="block pp">
     <div class="block-h"><h4>🤖 Claude edit</h4><span class="badge ${cls==="accent"?"warn":cls}">${ic} ${esc(lbl)}</span>
       <span style="margin-left:auto">${modePill()}</span></div>
-    ${S.mode==="off"||(S.err&&!S.me)||job?"":refsBox(c, me)}
     ${body}
-    ${S.mode==="off"||(S.err&&!S.me)?"":showChat(job)?chatBox(job, me):job&&["failed","cancelled"].includes(st)?refsBox(c, me):""}
+    ${S.mode==="off"||(S.err&&!S.me)?"":showChat(job)?chatBox(job, me):""}
     ${job&&(job.history||[]).length?`<details style="margin-top:10px"><summary>History (${job.history.length})</summary><table>
       ${job.history.slice().reverse().map(x=>`<tr><td style="width:90px" class="hint">${esc(new Date(x.at).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}))}</td><td>${esc(x.msg||x.status)}</td></tr>`).join("")}</table></details>`:""}
   </div>`;
@@ -545,23 +546,48 @@ function paintChat(job){
   if(d) d.classList.toggle("on", on); if(st) st.textContent = txt;
 }
 
-// 📎 Files for Claude: screenshots, reference videos and docs the edit chat can fetch (pipe.py refs)
+// 📎 the edit brief's files: screenshots, reference videos, docs — in the card's refs folder; Claude gets them when the
+// edit starts (pipe.py start → <work>/refs) and they open the card chat. Drawn inside the card's 📝 Edit brief box.
 S.refs = {};
-function refsBox(c, me){
-  const r = S.refs[c.id];
-  if(!r){ S.refs[c.id] = { list: null }; call("/api/pipeline/storage?team=" + encodeURIComponent(team()) + "&job=" + encodeURIComponent(c.id) + "&refs=1")
-    .then(j => { S.refs[c.id] = { list: j.data || [] }; if(S.mounted && S.mounted.card.id === c.id) render(); }).catch(() => { S.refs[c.id] = { list: [] }; }); }
-  const list = (r && r.list) || [], up = r && r.up;
-  const kb = n => n >= 1e6 ? (n/1e6).toFixed(1) + " MB" : Math.max(1, Math.round(n/1e3)) + " KB";
-  const ic = f => /\.(jpe?g|png|gif|webp|heic)$/i.test(f) ? "🖼️" : /\.(mp4|mov|m4v|webm)$/i.test(f) ? "🎞️" : "📄";
-  return `<details class="pp-refs${S.jobs[c.id]?"":" top"}" ${list.length||up||!S.jobs[c.id]?"open":""}><summary>📎 Files for Claude${list.length?` (${list.length})`:""} <span class="hint">— inspiration, screenshots, reference videos</span></summary>
-    ${S.jobs[c.id]?"":`<p class="hint" style="margin:6px 0 0">Part of your edit brief above: the comment screenshot, a reference video, anything Claude should use or look at.</p>`}
-    <div class="pp-refdrop" data-refdrop>${me.canRun?`<label class="btn sm" style="cursor:pointer">Add files<input type="file" multiple data-reffile hidden></label>
-      <span class="hint">or drop them here — screenshots, reference videos, anything for the edit brief. Claude gets them when the edit starts.</span>`:`<span class="hint">Only editors can add files.</span>`}</div>
-    ${up?`<div class="hint" style="margin:6px 0">${esc(up)}</div>`:""}
-    ${list.length?`<ul class="pp-reflist">${list.map(f=>`<li>${ic(f.file)} <a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.file.replace(/^[a-z0-9]+-/,""))}</a> <span class="hint">${kb(f.size)}</span>
-      ${me.canRun?`<button class="linkbtn" data-refdel="${esc(f.file)}">remove</button>`:""}</li>`).join("")}</ul>`:""}
-  </details>`;
+const kbOf = n => n >= 1e6 ? (n/1e6).toFixed(1) + " MB" : Math.max(1, Math.round(n/1e3)) + " KB";
+const icOf = f => /\.(jpe?g|png|gif|webp|heic)$/i.test(f) ? "🖼️" : /\.(mp4|mov|m4v|webm)$/i.test(f) ? "🎞️" : "📄";
+function loadRefs(id){
+  return call("/api/pipeline/storage?team=" + encodeURIComponent(team()) + "&job=" + encodeURIComponent(id) + "&refs=1")
+    .then(j => { S.refs[id] = { list: j.data || [] }; }).catch(() => { S.refs[id] = { list: [] }; }).then(paintBrief);
+}
+function paintBrief(){
+  const b = S.brief; if(!b || !b.host.isConnected) return;
+  const { host, card:c, h } = b, me = S.me || {}, r = S.refs[c.id] || {}, list = r.list || [], up = r.up || [];
+  const can = me.canRun !== false && S.mode !== "off";
+  host.innerHTML = `<div class="bf-drop" data-bfdrop>${can?`<label class="btn sm" style="cursor:pointer">📎 Add photos, videos or files<input type="file" multiple data-bffile hidden></label>
+      <span class="hint">or drop / paste them here</span>`:`<span class="hint">Only editors can add files.</span>`}</div>
+    ${r.list ? "" : `<div class="hint" style="margin:6px 0">Loading the files…</div>`}
+    ${up.length||list.length?`<ul class="bf-list">${up.map(u=>`<li>${icOf(u.name)} ${esc(u.name)} <span class="hint">${u.err?esc(u.err):"uploading… "+(u.pct||0)+"%"}</span></li>`).join("")}
+      ${list.map(f=>`<li>${icOf(f.file)} <a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.file.replace(/^[a-z0-9]+-/,""))}</a> <span class="hint">${kbOf(f.size)}</span>
+      ${can?`<button type="button" class="linkbtn" data-bfdel="${esc(f.file)}">remove</button>`:""}</li>`).join("")}</ul>`:""}`;
+  const add = async files => {
+    const box = S.refs[c.id] = S.refs[c.id] || { list: [] }; box.up = box.up || [];
+    for(const f of files){
+      const u = { name: f.name || "pasted-image.png", pct: 0 }; box.up.push(u); paintBrief();
+      try{ const { data } = await call("/api/pipeline/upload-url", { team: team(), job: c.id, kind: "ref", name: u.name, size: f.size });
+        await putFile(data.url, f, pc => { u.pct = pc; paintBrief(); });
+        box.up.splice(box.up.indexOf(u), 1); }
+      catch(e){ u.err = e.message; paintBrief(); }
+    }
+    await loadRefs(c.id);
+  };
+  b.add = add;
+  const fi = host.querySelector("[data-bffile]"); if(fi) fi.onchange = () => { if(fi.files.length) add([...fi.files]); };
+  const dz = host.querySelector("[data-bfdrop]");
+  if(dz && can){
+    dz.ondragover = e => { e.preventDefault(); e.stopPropagation(); dz.classList.add("over"); };
+    dz.ondragleave = () => dz.classList.remove("over");
+    dz.ondrop = e => { e.preventDefault(); e.stopPropagation(); dz.classList.remove("over"); const fs = [...(e.dataTransfer.files||[])]; if(fs.length) add(fs); };
+  }
+  host.querySelectorAll("[data-bfdel]").forEach(x => x.onclick = async () => {
+    if(!confirm("Remove this file from the edit brief?")) return;
+    try{ await call("/api/pipeline/storage", { team: team(), job: c.id, op: "delete_ref", file: x.dataset.bfdel }); await loadRefs(c.id); }
+    catch(e){ (h.toast || alert)(e.message); } });
 }
 
 /* ------------------------------------------------------------ events */
@@ -622,28 +648,6 @@ function wire(){
     box.ondragleave = e => { if(!box.contains(e.relatedTarget)) box.classList.remove("over"); };
     box.ondrop = e => { e.preventDefault(); e.stopPropagation(); box.classList.remove("over"); const fs = [...(e.dataTransfer.files||[])]; if(fs.length) addFiles(fs); };
   }
-  // 📎 Files for Claude
-  const refUp = async files => {
-    const box = S.refs[c.id] = S.refs[c.id] || { list: [] };
-    for(const f of files){
-      try{ box.up = `Uploading ${f.name}…`; render();
-        const { data } = await call("/api/pipeline/upload-url", { team: team(), job: c.id, kind: "ref", name: f.name, size: f.size });
-        await putFile(data.url, f, pc => { const el = host.querySelector(".pp-refs .hint[style]"); if(el) el.textContent = `Uploading ${f.name}… ${pc}%`; });
-      }catch(e){ toast(`“${f.name}”: ${e.message}`); }
-    }
-    box.up = ""; S.refs[c.id] = null; render();
-  };
-  const rf = q("[data-reffile]"); if(rf) rf.onchange = () => { if(rf.files.length) refUp([...rf.files]); };
-  const rd = q("[data-refdrop]");
-  if(rd && (S.me||{}).canRun){
-    rd.ondragover = e => { e.preventDefault(); e.stopPropagation(); rd.classList.add("over"); };
-    rd.ondragleave = () => rd.classList.remove("over");
-    rd.ondrop = e => { e.preventDefault(); e.stopPropagation(); rd.classList.remove("over"); const fs = [...(e.dataTransfer.files||[])]; if(fs.length) refUp(fs); };
-  }
-  host.querySelectorAll("[data-refdel]").forEach(b=>b.onclick=async()=>{
-    if(!confirm("Remove this file from the card's Files for Claude?")) return;
-    try{ await call("/api/pipeline/storage", { team: team(), job: c.id, op: "delete_ref", file: b.dataset.refdel }); S.refs[c.id] = null; render(); }
-    catch(e){ toast(e.message); } });
   host.querySelectorAll("[data-copy]").forEach(b=>b.onclick=async()=>{
     try{ await navigator.clipboard.writeText(b.dataset.copy); b.textContent="Copied"; setTimeout(()=>b.textContent="Copy",1400); }catch(_){ }
   });
@@ -774,6 +778,14 @@ window.PIPE = {
   async script(card, h){ await action(card.id + "__s", "script", { card_info: cardInfo(card, h||{}) }); poll(); },
   // "🔎 Fill with vidIQ": a small research job of its own (<card>__r)
   async research(card, h){ await action(card.id + "__r", "research", { card_info: cardInfo(card, h||{}) }); poll(); },
+  // 📝 the edit brief's files, drawn into the card's brief box; paste: a file pasted anywhere in the brief box
+  briefFiles(host, card, helpers){
+    if(!host) return;
+    S.brief = { host, card, h: helpers||{} };
+    if(!S.refs[card.id] || !S.refs[card.id].list){ S.refs[card.id] = S.refs[card.id] || {}; loadRefs(card.id); }
+    paintBrief();
+  },
+  addBriefFiles(files){ if(S.brief && S.brief.add) S.brief.add(files); },
   badge(cardId){ return `<span data-pipe-badge="${esc(cardId)}">${badgeHtml(S.jobs[cardId])}</span>`; },
   mount(host, card, helpers){
     if(!host) return;

@@ -104,17 +104,22 @@ The owner's first check is your **plan**, before anything is built. Watch and an
 describe it so clearly that the owner can say "yes" or "change X" without seeing any graphics. **Don't open or build
 HyperFrames in this step**: no scenes.py, no build.py, no brief.py, no snapshots, no B-roll downloads.
 - **Start from the owner's package** — everything they gave you before you plan, all in the payload / work folder:
-  - `card.edit_brief` — **the owner's edit brief**: what they already want in this edit (a comment screenshot to show, a
-    moment to keep or cut, scene ideas, mood, references). It outranks your own ideas: build your plan around it.
-  - `brief_files` (printed by `pipe.py start`, saved in `<work>/refs/`) — the photos, videos and files that go with the
-    brief. Look at every image; for a video pull a few frames with ffmpeg. Use each one where the brief says (e.g. the
-    comment screenshot on screen while that comment is read out), or where it clearly fits.
-  - the idea and the shoot plan from the card: `card.idea`, `title`, `description`, `hook`, `talking_points`, `cta`
-    (the planned closing line), `shooting_notes`, `keywords`.
+  - **`<work>/CARD_CONTEXT.md`** (written by `pipe.py start`; the raw data is `card.edit_brief` and `card.sections`):
+    - **Edit brief** — what the owner already wants in this edit (a comment screenshot to show, a moment to keep or cut,
+      scene ideas, mood, references). It outranks your own ideas: build the plan around it.
+    - **every box on the card, step by step, and every box on its idea, each under its own label** (title, description,
+      hook, talking points, closing line, shooting notes, why students should watch, keywords, custom boxes the team
+      added…). Boxes get added and renamed over time, so don't look for fixed names: read each label and the step it's in,
+      work out what that box is for (a closing line is what the video should end on; shooting notes say what was on
+      screen while recording; a "why should students watch" box is the promise the hook must make; a description is for
+      the post, not the edit) and use it for what it is.
+  - `brief_files` (printed by `pipe.py start`, saved in `<work>/refs/`) — the photos, videos and files of the edit brief.
+    Look at every image; for a video pull a few frames with ffmpeg. Use each one where the brief says (e.g. the comment
+    screenshot on screen while that comment is read out), or where it clearly fits.
   - `clean_audio`: `swapped in…` → the raw video already carries the owner's cleaned voice (use it — it's what you hear);
     `none uploaded` → camera audio; `NOT used…` → camera audio, and put that line in `precautions`.
-- **Check the package against the video** (after transcribing) and list every mismatch in `precautions`, plainly — e.g.
-  the planned hook or closing line was never said (quote what was said instead), a talking point is missing, the brief
+- **Check the package against the video** (after transcribing): go through every box that describes what the video
+  should say or show, and list every mismatch in `precautions`, plainly — e.g. the planned hook or closing line was never said (quote what was said instead), a talking point is missing, the brief
   mentions a screenshot / file that wasn't attached, a brief instruction can't be done with this footage (and what you'd
   do instead), the clean audio didn't match. Don't silently work around them: say what you did about each.
 - Run the skill's analyse step (prep.py) and read `analysis.md` and the face frames. Read `references/animation-lessons.md`

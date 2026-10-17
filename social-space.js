@@ -337,7 +337,11 @@ details.isec .hint{font-size:12px}
 .pre-n{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:var(--surface-2);border:1px solid var(--line-2);color:var(--ink-2)}
 .pre-n.ok{background:var(--good);border-color:var(--good);color:#fff}
 .pre-note{margin:-4px 0 10px;font-size:12px}
-.ebrief{margin:0 0 12px}.ebrief>summary{cursor:pointer;font-size:13.5px}.ebrief textarea{width:100%;box-sizing:border-box}
+.ebrief{margin:0 0 12px}
+.bf-drop{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px;border:1.5px dashed var(--line-2);border-radius:10px}
+.bf-drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.bf-list{list-style:none;margin:8px 0 0;padding:0;font-size:13px}.bf-list li{display:flex;gap:8px;align-items:center;padding:3px 0}
+.bf-list a{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ebrief>summary{cursor:pointer;font-size:13.5px}.ebrief textarea{width:100%;box-sizing:border-box}
 details.srcd>summary{cursor:pointer;font-size:12px;color:var(--ink-2);list-style:none}
 details.srcd>summary::-webkit-details-marker{display:none}
 .srcd-ch{color:var(--accent-ink);font-weight:600;margin-left:6px;text-decoration:underline;text-underline-offset:2px}
@@ -592,6 +596,43 @@ function ownBoxes(list){
         <button type="button" class="linkbtn" data-xdel="${k}" data-w="1" style="margin-left:auto">remove</button></label>
       <textarea id="xb-${k}">${esc(x.value||"")}</textarea></div>`).join("")}
     <button type="button" class="btn sm" data-xadd data-w="1">+ Add a box</button></div>`;
+}
+// 🤖 what Claude gets from a card: every box on it, by step, with the box's own label, plus every box of its idea.
+// Read from the open card itself (and the idea's fields + own boxes), so boxes added or renamed later come along too.
+const IDEA_BOX = { idea:"Idea", studentWhy:"Why should students watch this video?", hook:"Hook", cta:"CTA (call to action)",
+  title:"Title", desc:"Description", hashtags:"Hashtags", why:"Why this topic (research)", source:"Research source", tool:"Research tool",
+  keywords:"Keywords", platform:"Post on", platforms:"Post on", vtype:"Video type", format:"Format" };
+const IDEA_SKIP = ["id","by","created","status","comments","extra","cardId","card","updated","at"];
+function boxValue(el){
+  if(el.tagName === "SELECT"){ const o = el.selectedOptions && el.selectedOptions[0]; return o ? o.textContent.trim() : el.value; }
+  if(/^(file|checkbox|radio|hidden|button|submit)$/i.test(el.type || "")) return "";
+  return String(el.value || "").trim();
+}
+function cardContext(c){
+  const out = { card: [], idea: [] }, D = $("#drawer");
+  if(D){
+    const groups = [...D.querySelectorAll("details.stp")].map(st => ({ step: (st.querySelector("summary b")||{}).textContent || st.dataset.step, el: st.querySelector(".stp-b") }));
+    const side = D.querySelector(".cv-side"); if(side) groups.push({ step: "Details (side panel)", el: side });
+    groups.forEach(g => {
+      if(!g.el) return; const boxes = [];
+      g.el.querySelectorAll(".fld").forEach(f => {
+        if(f.closest("#pipePanel,.ebrief,[data-cmthost]")) return;
+        const l = f.querySelector("label"), inp = f.querySelector("textarea,input,select"); if(!l || !inp) return;
+        const label = (f.dataset.label || l.textContent || "").replace(/✕/g, "").trim(), v = boxValue(inp);
+        if(label && v) boxes.push({ box: label, value: v.slice(0, 4000) });
+      });
+      if(boxes.length) out.card.push({ step: g.step.trim(), boxes });
+    });
+  }
+  const i = c.ideaId ? IDEAS.find(x => x.id === c.ideaId) : null;
+  if(i){
+    Object.keys(i).forEach(k => { if(IDEA_SKIP.includes(k)) return; let v = i[k];
+      if(Array.isArray(v)) v = v.map(x => typeof x === "string" ? x : x && (x.kw || x.keyword || x.term || x.text)).filter(Boolean).join(", ");
+      if(typeof v !== "string" && typeof v !== "number") return; v = String(v).trim();
+      if(v) out.idea.push({ box: IDEA_BOX[k] || k, value: v.slice(0, 4000) }); });
+    (i.extra || []).forEach(x => { if(x.value && String(x.value).trim()) out.idea.push({ box: x.label, value: String(x.value).trim().slice(0, 4000) }); });
+  }
+  return out;
 }
 const readOwn = () => [...$("#drawer").querySelectorAll("[data-xbox]")].map(el=>({ label:el.dataset.label, value:el.querySelector("textarea").value.trim() }));
 function wireOwn(obj, read, markDirty, redraw){
@@ -2822,8 +2863,9 @@ function openCard(id,showGate){
     // 📝 what you already know about the edit, before Claude plans it (goes to Claude with the idea, shoot plan and files)
     const briefBlock=isNew?"":`<details class="block ebrief" ${started&&!c.editBrief?"":"open"}><summary><b>📝 Your edit brief</b> <span class="hint">— Claude reads this first, before it plans</span></summary>
         <p class="hint" style="margin:8px 0">Anything you already have in mind: a comment screenshot that must appear, a moment to cut, a scene idea, the mood, a reference video.
-          Add the photos / videos / files with <b>📎 Files for Claude</b> below. Claude also gets the idea, the shoot plan and the clean audio (if there is one) — and tells you if anything planned is missing from the video.</p>
+          Add the photos, videos and files right here. Claude also gets everything written on this card and its idea (every box, with its name) and the clean audio if there is one — and tells you if anything planned is missing from the video.</p>
         <textarea id="e-brief" rows="4" placeholder="e.g. Put the comment screenshot (attached) on screen when I read the question · keep the joke at 0:40 · end on the CUET form">${esc(c.editBrief||"")}</textarea>
+        <div id="briefFiles" style="margin-top:8px"></div>
         ${started?`<p class="hint" style="margin:6px 0 0">Claude got this when the edit started. Changes now → say them in the chat.</p>`:""}</details>`;
     const editBody=useClaude?`<div style="height:12px"></div>${isNew?`<p class="hint pre-note">Create the card first.</p>`:briefBlock+`<div id="pipePanel"></div>`}${claudeVids}
         <details class="manual" ${c.post.reel?"open":""}><summary>${claudeDone?"Use my own edit instead":c.post.reel?"Your own edit":"I edited it myself"}</summary>
@@ -3141,11 +3183,16 @@ function openCard(id,showGate){
     // anything dropped elsewhere on the card doesn't open the file in the browser tab
     const dr=$("#drawer"); if(!dr._nodrop){ dr._nodrop=1; dr.addEventListener("dragover",e=>e.preventDefault()); dr.addEventListener("drop",e=>{ e.preventDefault(); toast("Drop the raw video on “Raw video”, the cleaned audio on “Clean the voice”"); }); }
     // Claude pipeline (pipeline.js): raw video → edit → your checks → post
+    if(window.PIPE && $("#briefFiles")){ PIPE.briefFiles($("#briefFiles"), c, { toast });
+      // a screenshot pasted anywhere in the brief box becomes one of its files
+      $("#drawer").querySelector(".ebrief").addEventListener("paste", e=>{ const fs=[...((e.clipboardData&&e.clipboardData.files)||[])];
+        if(fs.length){ e.preventDefault(); e.stopPropagation(); PIPE.addBriefFiles(fs); } }, true); }
     if(window.PIPE && $("#pipePanel")) PIPE.mount($("#pipePanel"), c, {
       raw: ()=>c.raw, onRaw: (up,f)=>{ delete RAWLINKS[c.id]; keepRaw(up); getAudio(f); },
       canEdit, toast, idea: x=>x.ideaId?IDEAS.find(i=>i.id===x.ideaId):null,
       beforeStart: ()=>{ read(); persist(); if(save()){ dirty=false; opened=snap(); } },
       brief: ()=>{ const e=$("#e-brief"); return e ? e.value.trim() : (c.editBrief||""); },
+      context: ()=>cardContext(c),
       slot: ()=>slotOf(c),
       onJob: ()=>{ const a=R.activeElement;               // the job moved on: redraw the card, unless someone is typing in it
         if(!$("#drawer").classList.contains("on") || !CARDS.includes(c)) return true;   // closed or deleted: nothing to redraw
