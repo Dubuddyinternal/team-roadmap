@@ -435,6 +435,7 @@ details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var
 .aload.bad{color:var(--crit);background:var(--crit-soft);height:auto;min-height:34px;padding:6px 12px}.aload.bad .aspin{display:none}
 .aspin{width:13px;height:13px;flex:0 0 13px;border-radius:50%;border:2px solid color-mix(in srgb,var(--accent) 25%,transparent);border-top-color:var(--accent);animation:aspin .8s linear infinite;display:inline-block}
 @keyframes aspin{to{transform:rotate(360deg)}}
+.rawbin{display:flex;gap:10px;align-items:center;margin:12px 0 4px;padding:10px 12px;border-radius:var(--r-s);border:1px dashed color-mix(in srgb,var(--crit) 45%,var(--line));background:var(--crit-soft);font-size:13px}
 .rawaudio{margin-top:8px;padding:9px 11px;border:1px solid var(--line);border-radius:var(--r-s);background:var(--surface)}
 .rawclean{margin-top:10px;padding-top:9px;border-top:1px dashed var(--line)}
 .rawaudio-h{display:flex;align-items:center;gap:8px;font-size:12.5px;flex-wrap:wrap}
@@ -2708,7 +2709,12 @@ function openCard(id,showGate){
     // the raw footage, before any edit: a shared link, or the file itself uploaded to the video storage (the one Claude edits)
     const rawBox=()=>{ const r=c.raw||null, mode=RAWMODE[c.id]||(r&&r.kind)||"link", link=r&&r.kind==="link"?r.url:"";
       const off=!window.PIPE||PIPE.mode()==="off", okUrl=/^https?:\/\//i.test(link);
-      return `<div class="rawbox">
+      const bin=c.rawBin&&new Date(c.rawBin.due)>Date.now()?c.rawBin:null;
+      const binLine=bin?`<div class="rawbin"><span style="font-size:18px">🗑</span><div style="flex:1;min-width:0">
+          <b>${esc((bin.raw&&bin.raw.name)||"The raw video")}</b> was deleted${bin.by?" by "+esc(bin.by):""}.
+          <div class="hint">It stays in storage until <b>${esc(new Date(bin.due).toLocaleTimeString([], { hour:"numeric", minute:"2-digit" }))}</b> (${Math.max(1,Math.round((new Date(bin.due)-Date.now())/60000))} min) — restore it until then. Uploading a new video deletes it for good straight away.</div></div>
+          <button type="button" class="btn sm pri" data-rawrestore data-w="1">↩ Restore</button></div>`:"";
+      return `<div class="rawbox">${binLine}
         <div class="seg rawseg" data-w="1"><button type="button" data-rawmode="link" class="${mode==="link"?"on":""}">🔗 Paste a link</button>
           <button type="button" data-rawmode="file" class="${mode==="file"?"on":""}">⬆ Upload the file</button></div>
         ${mode==="link"?`<div class="fld" style="margin:0"><input id="raw-url" value="${esc(link)}" placeholder="Google Drive or OneDrive link — a video, or a folder with the video in it">
@@ -2724,8 +2730,7 @@ function openCard(id,showGate){
             <div style="flex:1;min-width:0"><div class="lbl" style="margin:0 0 2px">Raw video · uploaded</div>
               <div class="nm">${esc(r.name)}</div><div class="sz">${mb(r.size)}${r.by?" · by "+esc(r.by):""}${r.at?" · "+esc(dmy(r.at)):""}${r.link?` · <a href="${esc(r.link)}" target="_blank" rel="noopener">from a link ↗</a>`:""}</div></div>
             <button type="button" class="btn sm pri" data-rawwatch>▶ Watch</button>
-            <label class="btn sm" data-w="1" style="cursor:pointer">Replace<input type="file" accept="video/*" data-rawfile hidden></label>
-            <button type="button" class="btn sm danger" data-rawdel data-w="1">Delete</button></div>
+            <button type="button" class="btn sm danger" data-rawdel data-w="1" title="Moves it to the bin for an hour — restore it until then">Delete</button></div>
             <div class="rawaudio">
               ${r.audio?`<div class="rawaudio-h">🎵 <b>Audio (WAV)</b> <span class="hint">${mb(r.audio.size)}${r.audio.seconds?" · "+Math.floor(r.audio.seconds/60)+":"+String(r.audio.seconds%60).padStart(2,"0"):""}</span>
                   <a class="hint" data-rawaudio-dl style="margin-left:auto" hidden>⬇ Download</a></div>
@@ -3035,16 +3040,28 @@ function openCard(id,showGate){
         read(); delete c.raw.clean; delete RAWLINKS[c.id]; if(save()){ dirty=false; opened=snap(); }
         toast("Cleaned audio deleted from storage (checked)"); draw(c.pre.keywords); }
       catch(e){ toast("Couldn't delete: "+e.message); } };
-    // delete the raw video + its audio from storage (checked: the answer says what's really gone)
+    // 🗑 Delete: the raw video + its audio go to the bin for an hour (still in storage, restorable), then leave storage for good
     const rdel=$("#drawer").querySelector("[data-rawdel]");
     if(rdel) rdel.onclick=async()=>{
-      if(!confirm("Delete the raw video"+(c.raw&&c.raw.audio?" and its audio":"")+" from storage? This can't be undone.")) return;
+      if(!confirm("Delete the raw video"+(c.raw&&c.raw.audio?" and its audio":"")+"?\n\nIt goes to the bin: you can restore it for 1 hour, then it's deleted from storage for good.")) return;
       rdel.disabled=true; rdel.textContent="Deleting…";
-      try{ const r=await PIPE.deleteRaw(c.id);
-        if(r.still_there&&r.still_there.length){ toast("Storage still has: "+r.still_there.join(", ")+" — try again"); rdel.disabled=false; rdel.textContent="Delete"; return; }
-        read(); c.raw=null; RAWMODE[c.id]="file"; delete RAWLINKS[c.id]; if(save()){ dirty=false; opened=snap(); }
-        toast(r.deleted.length?`Deleted from storage: ${r.deleted.join(", ")} (checked, it's gone)`:"Nothing was in storage — removed from the card"); draw(c.pre.keywords); }
+      try{ const r=await PIPE.binRaw(c.id);
+        read(); c.rawBin=r.due?{ raw:c.raw, due:r.due, by:meName(), at:new Date().toISOString() }:null; c.raw=null; RAWMODE[c.id]="file"; delete RAWLINKS[c.id];
+        if(save()){ dirty=false; opened=snap(); }
+        toast(r.due?"Moved to the bin — restore it within the hour":"Nothing was in storage — removed from the card"); draw(c.pre.keywords); }
       catch(e){ toast("Couldn't delete: "+e.message); rdel.disabled=false; rdel.textContent="Delete"; } };
+    const rres=$("#drawer").querySelector("[data-rawrestore]");
+    if(rres) rres.onclick=async()=>{
+      rres.disabled=true; rres.textContent="Restoring…";
+      try{ await PIPE.restoreRaw(c.id);
+        read(); c.raw=c.rawBin.raw; delete c.rawBin; RAWMODE[c.id]="file"; delete RAWLINKS[c.id];
+        if(save()){ dirty=false; opened=snap(); } toast("Raw video restored ✓"); draw(c.pre.keywords); }
+      catch(e){ toast(e.message); if(/too late/i.test(e.message)){ read(); delete c.rawBin; if(save()){ dirty=false; opened=snap(); } draw(c.pre.keywords); }
+        else { rres.disabled=false; rres.textContent="↩ Restore"; } } };
+    // a new raw video while one is in the bin: the bin is emptied for good (the server does it before the upload)
+    const binOk=()=>{ if(!(c.rawBin&&new Date(c.rawBin.due)>Date.now())) return true;
+      return confirm("The deleted video in the bin will be removed from storage for good now. Upload the new one?"); };
+    const binDone=()=>{ const card=CARDS.find(x=>x.id===c.id); if(card) delete card.rawBin; delete c.rawBin; };
     // ▶ watch the raw video: the stored file, or the pasted link (Drive's player / a new tab for OneDrive)
     $("#drawer").querySelectorAll("[data-rawwatch]").forEach(b=>b.onclick=async()=>{
       const title=c.pre.title||c.idea||"Raw video", ru=$("#raw-url");
@@ -3060,13 +3077,13 @@ function openCard(id,showGate){
     const runImport=async(f, link)=>{ const id=c.id;
       IMPORTJOB[id]={ msg:"Starting the copy of "+f.name+"…", pc:0 }; redraw();
       try{ const up=await PIPE.importLink(id, f.pick, (done,size)=>impSt({ pc:Math.floor(done/size*100), msg:`Copying ${f.name}… ${Math.floor(done/size*100)}% (${mb(done)} of ${mb(size)})` }), ()=>IMPORTJOB[id]&&IMPORTJOB[id].stop);
-        delete IMPORTJOB[id]; delete RAWLINKS[id];
+        delete IMPORTJOB[id]; delete RAWLINKS[id]; { const cd=CARDS.find(x=>x.id===id); if(cd) delete cd.rawBin; if(c.id===id) delete c.rawBin; }
         if(OPEN&&OPEN.id===id){ keepRaw(Object.assign(up,{ link })); getAudio(null); }
         else { const card=CARDS.find(x=>x.id===id); if(card){ card.raw=Object.assign({ kind:"file" }, up, { link, at:today(), by:meName() }); RAWMODE[id]="file"; save(); } }
         toast("Video copied into storage ✓"); }
       catch(e){ delete IMPORTJOB[id]; toast("Copy didn't work: "+e.message); redraw(); } };
     const imp=$("#drawer").querySelector("[data-rawimport]");
-    if(imp) imp.onclick=async()=>{ const link=$("#raw-url").value.trim();
+    if(imp) imp.onclick=async()=>{ const link=$("#raw-url").value.trim(); if(!binOk()) return;
       read(); persist(); if(save()){ dirty=false; opened=snap(); }   // keep the link on the card either way
       IMPORTJOB[c.id]={ msg:"Looking at the link…" }; redraw();
       try{ const files=await PIPE.linkFiles(c.id, link);
@@ -3085,10 +3102,11 @@ function openCard(id,showGate){
     const rawUpload=async f=>{
       if(!window.PIPE || PIPE.mode()==="off"){ toast("Uploading needs the video storage set up first — paste a link for now"); return; }
       if(!(/^video\//.test(f.type) || /\.(mp4|mov|m4v|mkv)$/i.test(f.name))){ toast("Pick a video file (.mp4 / .mov)"); return; }
+      if(!binOk()) return;
       const st=$("#drawer").querySelector("[data-rawup]"), bar=$("#drawer").querySelector("[data-rawbar]");
       if(bar) bar.hidden=false; if(st) st.textContent="Getting an upload link…";
       try{ const up=await PIPE.uploadRaw(c.id, f, pc=>{ if(bar) bar.firstChild.style.width=pc+"%"; if(st) st.textContent=`Uploading ${f.name}… ${pc}%`; });
-        delete RAWLINKS[c.id]; keepRaw(up); getAudio(f); }
+        delete RAWLINKS[c.id]; binDone(); keepRaw(up); getAudio(f); }
       catch(e){ if(st) st.textContent=e.message; if(bar) bar.hidden=true; toast("Upload didn't work: "+e.message); } };
     $("#drawer").querySelectorAll("[data-rawfile]").forEach(inp=>inp.onchange=()=>{ if(inp.files[0]) rawUpload(inp.files[0]); });
     const rd=$("#drawer").querySelector("[data-rawdrop]");

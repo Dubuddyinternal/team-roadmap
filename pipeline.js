@@ -537,6 +537,9 @@ window.PIPE = {
   // play / download links for the card's raw video and audio: { video?, audio?, clean? }
   async rawLinks(cardId){ return (await call("/api/pipeline/storage?team=" + encodeURIComponent(team()) + "&job=" + encodeURIComponent(cardId))).data; },
   // delete the raw video + audio from storage; the answer says what is gone and what (if anything) is still there
+  // 🗑 Delete on the card: the raw video + audio go to the bin for an hour (restorable), then leave storage
+  async binRaw(cardId){ return (await call("/api/pipeline/storage", { team: team(), job: cardId, op: "bin_raw" })).data; },
+  async restoreRaw(cardId){ return (await call("/api/pipeline/storage", { team: team(), job: cardId, op: "restore_raw" })).data; },
   async deleteRaw(cardId){ return (await call("/api/pipeline/storage", { team: team(), job: cardId, op: "delete_raw" })).data; },
   // a deleted card: all its files and Claude jobs
   async purge(cardId){ return (await call("/api/pipeline/storage", { team: team(), job: cardId, op: "purge" })).data; },
