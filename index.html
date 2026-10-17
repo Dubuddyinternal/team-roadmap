@@ -5245,7 +5245,9 @@ function cmtTabPlace(){
     view === "dev" ? "d=" + (devSpace || "core") : "", view === "rmap" ? "r=" + activeRmap : "", "t=" + k].filter(Boolean).join("|");
   const title = ($("rm-title") && $("rm-title").textContent) || "This tab";
   const tl = t ? String(t.label).replace(/\s*·\s*\d+$/, "") : "";
-  return { key, label: title + (tl && tl !== title && tabs.length > 1 ? " → " + tl : ""), nav };
+  // 🕘 History: Social Media records every card / idea change (social-space.js); the tab shows its space's
+  return { key, label: title + (tl && tl !== title && tabs.length > 1 ? " → " + tl : ""), nav,
+    history: view === "social" && activeCspace ? { scope: "cs:" + activeCspace } : null };
 }
 function cmtAdminPlace(sec){
   const nav = Object.assign(placeSnapshot(), { y: 0, sxOpen: null, page: "admin", adminView: sec.k });
@@ -5255,7 +5257,8 @@ function cmtAdminPlace(sec){
 window.cmtCardPlace = function(kind, id, title){
   const nav = Object.assign(placeSnapshot(), { y: 0, page: "", sxOpen: { kind, id } });
   const sp = (typeof currentSocial === "function" && currentSocial()) || {};
-  return { key: "card:" + kind + ":" + id, label: (sp.name || "Social Media") + " → " + (kind === "idea" ? "idea" : "card") + " “" + String(title || id).slice(0, 80) + "”", nav };
+  const key = "card:" + kind + ":" + id;
+  return { key, label: (sp.name || "Social Media") + " → " + (kind === "idea" ? "idea" : "card") + " “" + String(title || id).slice(0, 80) + "”", nav, history: { place: key } };
 };
 function mountTabComments(){
   const host = $("tab-comments"); if(!host || !window.CMT) return;

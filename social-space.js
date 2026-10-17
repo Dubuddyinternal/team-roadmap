@@ -637,8 +637,40 @@ function toast(m){ const t=$("#toast"); if(!t) return; t.textContent=m; t.classL
 // every change goes through here: the app re-draws and saves for the team
 function save(){
   if(!canEdit()){ toast("You can view this space but not edit it"); return false; }
+  try{ histDiff(); }catch(e){ console.warn("history", e); }
   if(OPT.save) OPT.save();
   return true;
+}
+/* ---- 🕘 History: every saved change to a card or idea — who, which field, old → new (team_activity; comments.js shows it) ---- */
+const at=(o,p)=>p.split(".").reduce((x,k)=>x==null?x:x[k],o);
+const H_CARD=[["stage","Status",v=>(STAGES.find(x=>x.id===v)||{}).label||v],["idea","Idea"],["pre.title","Title"],["pre.desc","Description"],
+  ["pre.hashtags","Hashtags"],[x=>plats(x),"Post on",v=>v.map(k=>regLabel("platform",k)||k).join(", ")],["vtype","Video type",v=>regLabel("vtype",v)||v],
+  ["scheduled","Goes live on",v=>v?dmy(v):""],["time","Time"],["shoot.hook","Hook"],["shoot.points","Talking points"],["shoot.cta","Closing line"],
+  ["shoot.tips","Shooting notes"],["raw","Raw video",v=>!v?"":v.kind==="link"?v.url:v.name],["raw.audio","Audio (WAV)",v=>v?"made":""],
+  ["raw.clean","Cleaned audio",v=>v?v.name:""],["post.reel","Edited video",v=>v?v.name:""],["post.thumb","Thumbnail",v=>v?v.name:""],
+  ["post.postUrl","Post link"],["extra","Own boxes",v=>(v||[]).map(x=>x.label+": "+(x.value||"")).join(" · ")]];
+const H_IDEA=[["status","Status",v=>(STATUS_UI[v]||{}).label||v],["idea","Idea"],["by","Reported by"],["hook","Hook"],["cta","CTA"],["title","Title"],
+  ["desc","Description"],["hashtags","Hashtags"],["why","Why this idea"],[x=>plats(x),"Post on",v=>v.map(k=>regLabel("platform",k)||k).join(", ")],
+  ["vtype","Video type",v=>regLabel("vtype",v)||v],["extra","Own boxes",v=>(v||[]).map(x=>x.label+": "+(x.value||"")).join(" · ")]];
+const HIST={ src:null, card:new Map(), idea:new Map() };
+const hSnap=(o,spec)=>{ const out={}; spec.forEach(([g,l,f])=>{ const v=typeof g==="function"?g(o):at(o,g);
+  let t=f?f(v):v; t=t==null?"":typeof t==="object"?JSON.stringify(t):String(t); out[l]=t.slice(0,600); }); return out; };
+function histBase(){ HIST.src=S; HIST.card=new Map(CARDS.map(c=>[c.id,hSnap(c,H_CARD)])); HIST.idea=new Map(IDEAS.map(i=>[i.id,hSnap(i,H_IDEA)])); }
+function histDiff(){
+  if(!window.CMT || !CMT.log || !SPACE) return;
+  if(HIST.src!==S){ histBase(); return; }
+  const ev=[], scope="cs:"+SPACE.id;
+  [["card",CARDS,H_CARD,c=>c.pre&&c.pre.title||c.idea],["idea",IDEAS,H_IDEA,i=>i.idea]].forEach(([kind,list,spec,name])=>{
+    const base=HIST[kind], seen=new Set();
+    list.forEach(o=>{ seen.add(o.id); const now=hSnap(o,spec), old=base.get(o.id), place="card:"+kind+":"+o.id, label=(kind==="idea"?"idea":"card")+" “"+String(name(o)||o.id).slice(0,80)+"”";
+      if(!old){ ev.push({ place, scope, place_label:label, field:"created", old_val:"", new_val:String(name(o)||"") }); }
+      else Object.keys(now).forEach(l=>{ if(now[l]!==old[l]) ev.push({ place, scope, place_label:label, field:l, old_val:old[l], new_val:now[l] }); });
+      base.set(o.id, now); });
+    [...base.keys()].filter(id=>!seen.has(id)).forEach(id=>{ const old=base.get(id);
+      ev.push({ place:"card:"+kind+":"+id, scope, place_label:(kind==="idea"?"idea":"card")+" “"+String(old.Title||old.Idea||id).slice(0,80)+"”", field:"deleted", old_val:"", new_val:"" });
+      base.delete(id); });
+  });
+  if(ev.length) CMT.log(ev.slice(0,200));
 }
 const slug = s => "x_"+String(s).toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,28);
 function regAdd(kind,label){
@@ -3239,6 +3271,7 @@ window.SX = {
     OPT = opt || {};
     if(SPACE!==space){ SPACE=space; if(R) closeDrawer(true); }
     S = normalize(space); IDEAS=S.ideas; CARDS=S.cards; REG=S.reg;
+    if(HIST.src!==S) histBase();   // fresh data (opened, or teammates' changes): the starting point for 🕘 History
     // targets: their own saved copy, or (before anyone has saved one) what the space held
     const tRaw = (OPT.targets && OPT.targets(space)) || { targets:S.targets, goals:S.goals };
     const tKey = JSON.stringify(tRaw);
