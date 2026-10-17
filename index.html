@@ -2433,6 +2433,7 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .rml-lh.rml-draggable::before{position:absolute;right:10px;top:12px;margin:0}
 .rmg-phase.rml-draggable{justify-content:flex-start}
 .rmg-phase .rml-mini{margin-left:auto}
+.rmg-phase .rml-mini + .rml-mini{margin-left:0}
 .rml-drop-above{box-shadow:inset 0 3px 0 var(--indigo)!important}
 .rml-drop-below{box-shadow:inset 0 -3px 0 var(--indigo)!important}
 .rmw-scroll{overflow:auto;max-height:78vh;border:1px solid var(--line);border-radius:14px;background:var(--card);margin-bottom:12px;position:relative}
@@ -2569,6 +2570,9 @@ body.rm-chart #pane-work > .controls{display:none}
 .rmg-blk{margin:5px 3px;border-radius:6px;color:#fff;font-size:12px;font-weight:600;padding:7px 9px;display:flex;align-items:center;cursor:pointer;z-index:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
 .rmg-blk{contain:inline-size;min-width:0}
 .rmg-days .rmg-phase{background:var(--paper)}
+.rmg-days .rmg-phase.sub{background:var(--card);position:sticky}
+.rmg-phase.sub .rmg-pname{font-weight:600;font-size:12.5px}
+.rmg-phase.sub.d2 .rmg-pname{font-weight:500;font-style:italic}
 .rmg-pname{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rmg-pct{font-family:var(--mono);font-size:10.5px;color:var(--muted);font-weight:600}
 .rmg-cell.phase{background:var(--paper)}
@@ -12904,14 +12908,24 @@ function rmlTreeLines(cell, lvl, guides, last, pad, step){
   (guides||[]).forEach((on, j)=>{ if(on){ const v = document.createElement("i"); v.className = "rml-tv"; v.style.left = x(j); cell.appendChild(v); } });
   const e = document.createElement("i"); e.className = "rml-te" + (last ? "" : " more"); e.style.left = x(lvl-1); cell.appendChild(e);
 }
+/* Simple Gantt phases nest: phase › sub-phase › sub-sub-phase */
+const RMG_MAX_DEPTH = 2;
+function rmlLaneDepth(m, ln){ let d = 0, cur = ln; while(cur && cur.parent && d < 12){ cur = m.lanes.find(x=>x.id===cur.parent); if(cur) d++; } return d; }
 function rmlEditLane(m, ln, preset){
-  const wbs = m.view==="wbs";
+  const wbs = m.view==="wbs", nest = m.view==="gantt";
   const g = rmgIsGrid(m) || wbs, word = wbs ? "group" : m.view==="swimlane" ? "swimlane" : g ? "phase" : "lane";
   const fields = [{ k:"name", label: word[0].toUpperCase()+word.slice(1)+" name", type:"text", value: ln ? ln.name : "", ph: m.view==="swimlane" ? "e.g. Product, Marketing, Engineering" : g ? "e.g. Brainstorming, Research, Design, Testing" : "e.g. Product launch, Blogs, Social media" }];
   if(wbs){
     const banned = new Set(ln ? rmwDescLanes(m, ln).map(l=>l.id) : []);
     fields.push({ k:"parent", label:"Inside group", type:"select", value: ln ? (ln.parent || "") : ((preset && preset.parent) || ""), opts: [["","— top level —"]].concat(m.lanes.filter(l=> !banned.has(l.id)).map(l=>[l.id, rmwLanePath(m, l)])) });
     fields.push({ k:"color", label:"Summary bar colour", type:"color", value: ln && ln.color || "", autoTip:"Red for top-level groups, green inside" });
+  }
+  if(nest){
+    /* a phase can sit inside another, up to sub-sub-phase; its own sub-phases move with it */
+    const banned = new Set(ln ? rmwDescLanes(m, ln).map(l=>l.id) : []);
+    const below = ln ? Math.max(...rmwDescLanes(m, ln).map(l=> rmlLaneDepth(m, l))) - rmlLaneDepth(m, ln) : 0;
+    const ok = m.lanes.filter(l=> !banned.has(l.id) && rmlLaneDepth(m, l) + 1 + below <= RMG_MAX_DEPTH);
+    fields.push({ k:"parent", label:"Inside phase", type:"select", value: ln ? (ln.parent || "") : ((preset && preset.parent) || ""), opts: [["","— top level —"]].concat(ok.map(l=>[l.id, rmwLanePath(m, l)])) });
   }
   if(m.view==="swimlane") fields.push({ k:"color", label:"Swimlane colour", type:"color", value: ln && ln.color || "", autoTip:"Next colour in the palette" });
   if(!g) fields.push({ k:"kind", label:"Type", type:"select", value: ln ? ln.kind : "project", opts:[["project","Project — things with a due date"],["ongoing","Ongoing — running work with health rules"]] });
@@ -12927,13 +12941,13 @@ function rmlEditLane(m, ln, preset){
     m.items.forEach(it=>{ if(it.lane===ln.id) it.lane = to.id; });
     saveRmaps();
   }, true]);
-  rmlModal(ln ? "Edit "+word : (preset && preset.parent ? "New sub-group" : "New "+word), fields, v=>{
+  rmlModal(ln ? "Edit "+word : (preset && preset.parent ? "New sub-"+word+" in “"+((m.lanes.find(l=>l.id===preset.parent)||{}).name||"")+"”" : "New "+word), fields, v=>{
     const name = (v.name||"").trim(); if(!name){ toast("Give the "+word+" a name"); return false; }
     const kind = g ? "project" : v.kind;
     const target = ln || { id:"ln-"+Date.now().toString(36) };
     target.name = name; target.kind = kind;
     if(m.view==="swimlane" || wbs){ if(v.color) target.color = v.color; else delete target.color; }
-    if(wbs){ if(v.parent) target.parent = v.parent; else delete target.parent; }
+    if(wbs || nest){ if(v.parent) target.parent = v.parent; else delete target.parent; }
     if(!ln) m.lanes.push(target);
     saveRmaps();
   }, { extra });
@@ -13041,29 +13055,41 @@ function renderRmapGantt(m, wrap, byTid){
   };
   let rIdx = 2;
   const barEls = {};
-  /* left column reads like a task list: phase header, its tasks, then "＋ Add task…" */
-  m.lanes.forEach(ln=>{
-    const items = live.filter(it=> rmlLaneOf(m, it)===ln)
-      .filter(it=>{ /* in a window, drop tasks entirely outside it */
-        const s0 = dayOf(dNum(it.start || it.end || todayISO())), e0 = dayOf(dNum(it.end || it.start || todayISO()));
-        return !(e0 < 0 || s0 > nD-1);
-      })
-      .sort((x,y)=> dNum(x.start||todayISO()) - dNum(y.start||todayISO()));
-    const lab = document.createElement("div"); lab.className = "rmg-phase"; lab.style.gridRow = String(rIdx); lab.dataset.lane = ln.id;
+  /* left column reads like a task list: phase header, its tasks, "＋ Add task…", then its
+     sub-phases (and their sub-phases) the same way, indented */
+  const laneItems = ln => live.filter(it=> rmlLaneOf(m, it)===ln)
+    .filter(it=>{ /* in a window, drop tasks entirely outside it */
+      const s0 = dayOf(dNum(it.start || it.end || todayISO())), e0 = dayOf(dNum(it.end || it.start || todayISO()));
+      return !(e0 < 0 || s0 > nD-1);
+    })
+    .sort((x,y)=> dNum(x.start||todayISO()) - dNum(y.start||todayISO()));
+  const order = [];
+  const walk = (pid, d)=> rmwLaneKids(m, pid).forEach(l=>{ order.push([l, d]); walk(l.id, d+1); });
+  walk(null, 0);
+  order.forEach(([ln, depth])=>{
+    const items = laneItems(ln);
+    const all = rmwDescLanes(m, ln).flatMap(laneItems);   /* this phase and everything inside it */
+    const lab = document.createElement("div"); lab.className = "rmg-phase" + (depth ? " sub d" + Math.min(depth, 2) : ""); lab.style.gridRow = String(rIdx); lab.dataset.lane = ln.id;
+    if(depth){ lab.style.paddingLeft = (12 + depth*18) + "px"; rmlTreeLines(lab, depth, [], false, 6, 18); }
     const lt = document.createElement("span"); lt.className = "rmg-pname"; lt.textContent = ln.name; lab.appendChild(lt);
-    const ct = document.createElement("span"); ct.className = "rmg-pct"; ct.textContent = items.length || ""; lab.appendChild(ct);
+    const ct = document.createElement("span"); ct.className = "rmg-pct"; ct.textContent = all.length || ""; lab.appendChild(ct);
     if(editMode){
-      const ed = document.createElement("button"); ed.className = "rml-mini"; ed.textContent = "✎"; ed.title = "Rename / delete phase";
+      if(depth < RMG_MAX_DEPTH){
+        const sb = document.createElement("button"); sb.className = "rml-mini"; sb.textContent = "＋ Sub"; sb.title = "Add a sub-phase inside “"+ln.name+"”";
+        sb.onclick = e=>{ e.stopPropagation(); rmlEditLane(m, null, { parent: ln.id }); };
+        lab.appendChild(sb);
+      }
+      const ed = document.createElement("button"); ed.className = "rml-mini"; ed.textContent = "✎"; ed.title = "Rename / move / delete phase";
       ed.onclick = ()=> rmlEditLane(m, ln);
       lab.appendChild(ed);
     }
     rmlLaneDrag(lab, m, ln);
     grid.appendChild(lab);
     cellsRow(rIdx, ln.id, "phase");
-    /* thin summary line over the phase's tasks */
-    if(items.length){
-      const s0 = Math.max(0, Math.min(...items.map(it=> dayOf(dNum(it.start||it.end||todayISO())))));
-      const e0 = Math.min(nD-1, Math.max(...items.map(it=> dayOf(dNum(it.end||it.start||todayISO())))));
+    /* thin summary line over the phase's tasks, sub-phases included */
+    if(all.length){
+      const s0 = Math.max(0, Math.min(...all.map(it=> dayOf(dNum(it.start||it.end||todayISO())))));
+      const e0 = Math.min(nD-1, Math.max(...all.map(it=> dayOf(dNum(it.end||it.start||todayISO())))));
       const sm = document.createElement("div"); sm.className = "rmg-sum"; sm.style.gridRow = String(rIdx); sm.style.gridColumn = (s0+2) + " / " + (e0+3);
       grid.appendChild(sm);
     }
@@ -13078,7 +13104,8 @@ function renderRmapGantt(m, wrap, byTid){
       nm.lastChild.textContent = rmlFmt(it.start) + (it.end && it.end!==it.start ? " → " + rmlFmt(it.end) : "") + (it.owner ? " · 👤 " + it.owner : "");
       nm.title = (en.task.title||"") + (it.owner ? "\nOwner: " + it.owner : "") + (it.team ? "\nTeam: " + it.team : "") + "\n" + en.path;
       if(editMode){ nm.onclick = ()=> rmlEditItem(m, it, en); nm.style.cursor = "pointer"; }
-      rmlTreeLines(nm, 1, [], !editMode && ii===items.length-1, 6, 18);
+      if(depth) nm.style.paddingLeft = (26 + depth*18) + "px";
+      rmlTreeLines(nm, depth+1, [], !editMode && ii===items.length-1, 6, 18);
       grid.appendChild(nm);
       cellsRow(rIdx, ln.id, "");
       const blk = document.createElement("div");
@@ -13094,11 +13121,12 @@ function renderRmapGantt(m, wrap, byTid){
     if(editMode){
       const add = rmlQuickAddInput(m, ln, "rmg-task rmg-add");
       add.style.gridRow = String(rIdx); add.dataset.lane = ln.id;
-      rmlTreeLines(add, 1, [], true, 6, 18);
+      if(depth) add.style.paddingLeft = (26 + depth*18) + "px";
+      rmlTreeLines(add, depth+1, [], true, 6, 18);
       grid.appendChild(add);
       cellsRow(rIdx, ln.id, "addrow");
       rIdx++;
-    } else if(!items.length){
+    } else if(!items.length && !rmwLaneKids(m, ln.id).length){
       const e = document.createElement("div"); e.className = "rmg-task muted"; e.style.gridRow = String(rIdx); e.textContent = "No tasks";
       grid.appendChild(e); cellsRow(rIdx, ln.id, ""); rIdx++;
     }
@@ -13601,7 +13629,7 @@ function rmlEditItem(m, it, en){
   const fields = [];
   if(own) fields.push({ k:"title", label:"Title", type:"text", value: en.task.title||"" });
   fields.push(
-    { k:"lane", label: {gantt:"Phase", swimlane:"Swimlane", wbs:"Group"}[m.view] || "Lane", type:"select", value: rmlLaneOf(m, it).id, opts: m.lanes.map(l=>[l.id, (m.view==="wbs" ? rmwLanePath(m, l) : l.name) + (l.kind==="ongoing" ? " (ongoing)" : "")]) },
+    { k:"lane", label: {gantt:"Phase", swimlane:"Swimlane", wbs:"Group"}[m.view] || "Lane", type:"select", value: rmlLaneOf(m, it).id, opts: m.lanes.map(l=>[l.id, (m.view==="wbs" || m.view==="gantt" ? rmwLanePath(m, l) : l.name) + (l.kind==="ongoing" ? " (ongoing)" : "")]) },
     { k:"start", label:"Starts", type:"date", value: it.start || todayISO(), half:true },
     { k:"end", label:"Done by", type:"date", value: it.end || it.start || todayISO(), half:true },
     { k:"owner", label:"Owner", type:"text", value: it.owner || "", ph:"Type a name, e.g. Shivam", list: rmlOwnerSuggestions(m) },
