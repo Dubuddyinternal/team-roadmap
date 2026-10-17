@@ -27,6 +27,7 @@ cd ~/Developer/video-use && uv run python $S/prep.py "<video>"
 ```
 Read `$ED/analysis.md` (`i:word`; `*` auto-removed filler · `~` soft filler · `?` check spelling · `!` low confidence · `#` key info) and `frames/raw_2.jpg` (face position).
 Then **tell the user what you will do**, in chat, and **wait**:
+- the edit brief, its files and the card's idea / shoot boxes are for **this video only** — never copy them into this skill. Only when the user explicitly says "remember this" / "for every video" does a rule go into the skill (in the cloud: `pipe.py remember`; on the Mac: add it here)
 - start from the user's **edit brief** + its files (screenshots / clips to use, moments, ideas) and the card's idea + shoot plan; build the plan around them
 - **precautions**: everything planned that doesn't match the video (planned hook / closing line not said, missing talking point, a file the brief mentions but didn't attach, clean audio that didn't fit) and what you'll do about each
 - the **whole transcript** of the raw clip, start to end, word for word as spoken (timestamps per sentence/phrase), with every part you plan to cut marked

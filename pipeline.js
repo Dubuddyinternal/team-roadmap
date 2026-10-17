@@ -130,6 +130,7 @@ const sigOf = job => [S.mode, S.me&&S.me.role, S.err?1:0].join("/") + "|" + (job
 async function poll(){
   try{ const j = await call("/api/pipeline/jobs?team=" + encodeURIComponent(team()));
     S.jobs = j.data || {}; S.mode = j.mode; S.me = j.me; S.err = "";
+    const sk = JSON.stringify(j.skill_notes || []); if(sk !== S.skillSig){ S.skillSig = sk; S.skill = j.skill_notes || []; if(S.mounted) S.mounted.sig = ""; }
     if(S.hooks.onJobs) S.hooks.onJobs(S.jobs); }
   catch(e){ S.err = e.message; }
   paintBadges();
@@ -363,6 +364,7 @@ function render(){
       <span style="margin-left:auto">${modePill()}</span></div>
     ${body}
     ${S.mode==="off"||(S.err&&!S.me)?"":showChat(job)?chatBox(job, me):""}
+    ${skillBox(me)}
     ${job&&(job.history||[]).length?`<details style="margin-top:10px"><summary>History (${job.history.length})</summary><table>
       ${job.history.slice().reverse().map(x=>`<tr><td style="width:90px" class="hint">${esc(new Date(x.at).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}))}</td><td>${esc(x.msg||x.status)}</td></tr>`).join("")}</table></details>`:""}
   </div>`;
@@ -387,6 +389,18 @@ function briefView(job, me){
     ${me.canApprove?"":`<p class="hint" style="margin:8px 0 0">Only an owner or admin can render.</p>`}`;
 }
 
+// 🧠 what Claude remembers for every video: only what you told it to remember in the chat ("remember this")
+function skillBox(me){
+  const n = S.skill || [];
+  if(S.mode === "off") return "";
+  return `<details class="pp-skill" style="margin-top:10px"><summary>🧠 Skill notes (${n.length}) <span class="hint">— what Claude remembers for every video</span></summary>
+    <p class="hint" style="margin:6px 0">Only what you tell Claude to remember in the chat (“remember this for every video”) lands here. Your edit brief and the card's boxes are for one video and never go into the skill.</p>
+    ${n.length?`<ul class="pp-reflist">${n.map(x=>`<li><span style="flex:1;white-space:normal">${esc(x.text)} <span class="hint">· ${esc(new Date(x.at).toLocaleDateString("en-GB",{day:"numeric",month:"short"}))}</span></span>
+      ${me.canApprove?`<button class="linkbtn" data-forget="${esc(x.id)}">remove</button>`:""}</li>`).join("")}</ul>
+      <div class="pp-row" style="margin:6px 0 0"><button class="btn sm" data-copy="${esc(n.map(x=>"- "+x.text).join("\n"))}">Copy all</button>
+        <span class="hint">to paste into the skill on your Mac</span></div>`:`<p class="hint" style="margin:0">Nothing yet.</p>`}
+  </details>`;
+}
 // the newest checkpoint this edit reached (a chat that's waiting on you keeps showing it)
 function lastStage(job){
   const t = [["proposal", job.proposal&&job.proposal.at], ["built", job.brief&&job.brief.at], ["rendered", job.rendered&&job.rendered.at]].filter(x=>x[1]);
@@ -648,6 +662,10 @@ function wire(){
     box.ondragleave = e => { if(!box.contains(e.relatedTarget)) box.classList.remove("over"); };
     box.ondrop = e => { e.preventDefault(); e.stopPropagation(); box.classList.remove("over"); const fs = [...(e.dataTransfer.files||[])]; if(fs.length) addFiles(fs); };
   }
+  host.querySelectorAll("[data-forget]").forEach(b=>b.onclick=async()=>{
+    if(!confirm("Remove this from the skill notes? Claude stops following it from the next edit.")) return;
+    try{ const j = await call("/api/pipeline/action", { team: team(), job: "_skill", action: "forget_note", id: b.dataset.forget });
+      S.skill = j.data.notes; S.skillSig = JSON.stringify(S.skill); render(); }catch(e){ toast(e.message); } });
   host.querySelectorAll("[data-copy]").forEach(b=>b.onclick=async()=>{
     try{ await navigator.clipboard.writeText(b.dataset.copy); b.textContent="Copied"; setTimeout(()=>b.textContent="Copy",1400); }catch(_){ }
   });

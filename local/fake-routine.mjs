@@ -80,6 +80,7 @@ if (p.chat) {
       for (const m of JSON.parse(pipe("listen", "0")).msgs) {
         idle = Date.now(); const msg = m.text || "";
         if (m.files.length) say(`Got ${m.files.length} file(s): ${m.files.map(f => path.basename(f)).join(", ")}`);
+        if (/^remember\b/i.test(msg)) { pipe("remember", msg.replace(/^remember\W*/i, "")); say("Saved to the skill (fake)."); continue; }
         if (m.cmd === "render" || /render/i.test(msg)) { tv.splice(0, tv.length, ...(m.targets || tv)); render(); say("Rendered (fake): " + tv.join(" + ")); }
         else if (/^(ok|go|build)/i.test(msg)) { build(msg); say("Built it (fake) — watch it above."); }
         else if (/plan/i.test(msg)) { proposal(msg); say("Changed the plan (fake)."); }

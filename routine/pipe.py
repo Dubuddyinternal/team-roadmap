@@ -20,6 +20,8 @@
     python3 pipe.py inbox                  any card messages right now? (doesn't wait)
     python3 pipe.py say "<text>"           your answer, shown in the card chat
     python3 pipe.py heard "<text>"         copy what the owner typed here in claude.ai into the card chat
+    python3 pipe.py remember "<rule>"      ONLY when the owner says "remember this" / "for every video": saves the rule
+                                           to the team's skill notes (every later run gets them)
     python3 pipe.py sleep                  stop listening; the owner's next card message starts a fresh session with the chat
 
 The work folder is $PIPE_WORK (default /tmp/dubuddy/job). It always has the same layout, so files
@@ -182,6 +184,11 @@ def start(src):
         try: notes["brief_files"] = fetch_refs() or "none"
         except (RuntimeError, SystemExit) as e: notes["brief_files"] = f"couldn't fetch: {e}"
     os.makedirs(os.path.join(W, "out"), exist_ok=True)
+    sn = [x for x in (p.get("skill_notes") or []) if str(x).strip()]
+    if sn:   # rules the owner asked to remember for every video: part of the skill
+        with open(os.path.join(W, "SKILL_NOTES.md"), "w") as f:
+            f.write("# Skill notes — the owner's standing rules for EVERY video (newest last; a newer note wins)\n\n" + "\n".join(f"- {x}" for x in sn) + "\n")
+        notes["skill_notes"] = os.path.join(W, "SKILL_NOTES.md") + f" ({len(sn)} rules — part of the skill, read with SKILL.md)"
     ctx = card_context(p.get("card") or {})
     if ctx:
         with open(os.path.join(W, "CARD_CONTEXT.md"), "w") as f: f.write(ctx)
@@ -440,5 +447,6 @@ if __name__ == "__main__":
     elif cmd == "inbox": print(json.dumps({"msgs": inbox(False)}, indent=1, ensure_ascii=False))
     elif cmd == "say" and len(sys.argv) > 2: post({"event": "say", "message": " ".join(sys.argv[2:])}); print("ok")
     elif cmd == "heard" and len(sys.argv) > 2: post({"event": "say", "from": "you", "message": " ".join(sys.argv[2:])}); print("ok")
+    elif cmd == "remember" and len(sys.argv) > 2: post({"event": "remember", "message": " ".join(sys.argv[2:])}); print("saved to the skill notes")
     elif cmd == "sleep": post({"event": "sleep"}); print("ok — the next card message starts a fresh session with this chat")
     else: print(__doc__); sys.exit(1)
