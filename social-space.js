@@ -339,8 +339,8 @@ details.srcd[open] .srcd-ch{display:none}
 .ttl-chip{border:1px solid var(--line-2);background:var(--surface);border-radius:99px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--ink);font-family:inherit}
 .ttl-chip b{font-family:var(--mono);color:var(--accent-ink);margin-left:4px}
 .ttl-chip:hover,.ttl-chip.on{border-color:var(--accent);background:var(--accent-soft)}
-.dr-foot{position:sticky;bottom:0;z-index:5;margin:18px -28px -28px;padding:14px 28px;background:var(--bg);border-top:1px solid var(--line);align-items:center}
-@media(max-width:700px){.dr-foot{margin:18px -16px -28px;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px))}}
+.dr-foot{position:sticky;bottom:-28px;z-index:5;margin:18px -28px -28px;padding:14px 28px;background:var(--bg);border-top:1px solid var(--line);align-items:center}
+@media(max-width:700px){.dr-foot{bottom:calc(-28px - env(safe-area-inset-bottom,0px));margin:18px -16px calc(-28px - env(safe-area-inset-bottom,0px));padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px))}}
 .dirty{font-size:12px;font-weight:600;color:var(--warn)}
 .rs{margin:-2px 0 16px;padding:12px;border:1px solid color-mix(in srgb,var(--accent) 25%,var(--line));border-radius:var(--r-s);background:var(--surface)}
 .rs-empty{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
