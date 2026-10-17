@@ -183,7 +183,7 @@ def main():
             "music": None,
             "broll_needed": [],
             "sfx": True,
-            "layout": {"face_x": 540, "face_y": 740, "split_shift": 520, "split_panel": 840, "split_caption_y": 905,
+            "layout": {"face_x": 540, "face_y": 740, "split_shift": 460, "split_panel": 840,
                        "float_side": "right", "float_y": 1060, "hook_y": 230},
         }
         plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2))

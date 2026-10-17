@@ -106,9 +106,9 @@ def main():
     end_mode = cta.get("url") and cta.get("mode", "end") == "end"
     TT = round(T + float(cta.get("dur", 3.0)), 3) if end_mode else round(T + float(cta.get("tail", 0)), 3)   # composition length (tail = hold last frame)
     W = {w["i"]: w for w in tl["words"]}
-    lay = {"split_shift": 520, "split_panel": 840, "split_caption_y": 905, "float_side": "right", "float_y": 1060,
-           "hook_y": 900, "cta_y": 1050, **plan.get("layout", {})}
     cap_y = plan.get("captions", {}).get("y", 1440)
+    lay = {"split_shift": 460, "split_panel": 840, "split_caption_y": cap_y, "float_side": "right", "float_y": 1060,
+           "hook_y": 900, "cta_y": 1050, **plan.get("layout", {})}
     sfx_on = plan.get("sfx", True)
 
     body, J, audio = [], [], []
