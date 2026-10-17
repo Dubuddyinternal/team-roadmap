@@ -506,6 +506,10 @@ const DEFAULT_FORMATS = [
 ];
 let FORMATS=DEFAULT_FORMATS;
 const fmtOf = x => FORMATS.find(f=>f.key===(x&&x.format)) || FORMATS[0];
+// a live session / stream: planned, then streamed — nothing to upload or edit (types marked live, or named "… Live …", or a live video type)
+// the type's own "It's live" switch decides; types made before the switch existed go by their name
+const isLiveFmt = F => !!F && (F.live!==undefined ? !!F.live : /\blive\b/i.test(F.name||""));
+const isLive = x => isLiveFmt(fmtOf(x)) || (x&&x.vtype)==="live";
 // older records had no type: work it out from the video type
 function guessFormat(vtype){ return vtype==="long"||vtype==="live" ? "long" : vtype==="image"||vtype==="carousel" ? "post"
   : (FORMATS.find(f=>(f.vtypes||[]).includes(vtype))||FORMATS[0]).key; }
@@ -731,9 +735,11 @@ function gResearch(p){ const k=p.keywords||[]; const prim=k.find(x=>x.rank==="pr
   return !!(p.source && p.tool && prim && prim.kw && prim.vol!=null && p.why); }
 function gCopy(p){ return !!(p.title && p.desc && p.hashtags); }
 function gEdited(c){   // an edited video (Claude's or your own) + a thumbnail where YouTube needs one
+  if(isLive(c)) return true;   // a live session has no edit
   const j=window.PIPE&&PIPE.job(c.id), byClaude=!!(j&&j.media&&(j.media.yt||j.media.ig));
   return !!((c.post?.reel||byClaude) && (!plats(c).includes("yt") || c.vtype!=="long" || c.post?.thumb)); }
 function gAssets(c){
+  if(isLive(c)) return !!c.post?.postUrl;
   const j=window.PIPE&&PIPE.job(c.id), byClaude=!!(j&&j.media&&(j.media.yt||j.media.ig));   // Claude's render counts as the edited file
   return !!((c.post?.reel||byClaude) && c.post?.postUrl && (!plats(c).includes("yt") || c.vtype!=="long" || c.post?.thumb)); }
 // Ideas → To shoot → Editing are free (the research block is off for now) · leaving Editing needs the edited video ·
@@ -2023,6 +2029,8 @@ function openFormats(editKey, back){
     <div class="fld"><label for="f-hint">One-line description</label><input id="f-hint" value="${esc(f.hint||"")}" placeholder="Shown when someone picks a type"></div>
     <div class="fld"><label class="pp-chk ${f.video?"on":""}"><input type="checkbox" id="f-video" ${f.video?"checked":""}> It's a video (gets a Shoot plan)</label></div>
     <div class="fld"><label class="pp-chk ${f.claude?"on":""}"><input type="checkbox" id="f-claude" ${f.claude?"checked":""}> 🤖 Claude can edit it (vertical video for Shorts / Reels only)</label></div>
+    <div class="fld"><label class="pp-chk ${isLiveFmt(f)?"on":""}"><input type="checkbox" id="f-live" ${isLiveFmt(f)?"checked":""}> 🔴 It's live (a stream / session — planned, no raw video or edit)</label></div>
+    <p class="hint" style="margin:-4px 0 12px">The card shows only the steps that fit: <b>video</b> → Shoot, Raw video, Edit, Publish · <b>live</b> → Plan the session, Go live · <b>neither</b> (image, poster, carousel) → Design, Publish.</p>
     ${f0?`<div class="fld"><label class="pp-chk ${f.hidden?"on":""}"><input type="checkbox" id="f-hidden" ${f.hidden?"checked":""}> Hide this type from "+ New idea" (ideas already made keep it)</label></div>`:""}
     <div class="row" style="margin-top:14px"><button class="btn pri" id="f-save">${f0?"Save type":"Add type"}</button>
       <button class="btn" id="f-back">Back</button></div>`);
@@ -2038,7 +2046,7 @@ function openFormats(editKey, back){
     const pl=[...$("#f-plats").querySelectorAll("input:checked")].map(x=>x.value); if(!pl.length){ toast("Pick at least one platform"); return; }
     const key=f0?f0.key:("f_"+name.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,20)+"_"+Date.now().toString(36).slice(-3));
     const out=Object.assign({}, f, { key, name, icon:$("#f-icon").value.trim()||"✨", plats:pl, defPlats:f.defPlats.filter(x=>pl.includes(x)).length?f.defPlats.filter(x=>pl.includes(x)):[pl[0]],
-      hint:$("#f-hint").value.trim(), video:$("#f-video").checked, claude:$("#f-claude").checked, hidden:!!($("#f-hidden")&&$("#f-hidden").checked) });
+      hint:$("#f-hint").value.trim(), video:$("#f-video").checked||$("#f-live").checked, claude:$("#f-claude").checked&&!$("#f-live").checked, live:$("#f-live").checked, hidden:!!($("#f-hidden")&&$("#f-hidden").checked) });
     if(!isBuiltin && !f0){ REG.vtype[key]=name; out.vtypes=[key]; }   // its own video type, so the numbers can tell it apart
     const list=(S.formats||[]).filter(x=>x.key!==key); list.push(out);
     S.formats=DEFAULT_FORMATS.map(d=>list.find(x=>x.key===d.key)||d).concat(list.filter(x=>!DEFAULT_FORMATS.some(d=>d.key===x.key)));
@@ -2746,12 +2754,13 @@ function openCard(id,showGate){
             <div class="hint" style="margin-top:7px">${note}</div>`}</div>`; };
 
     // ---- the layout: the work as numbered steps on the left (only the ones this type needs), the card's facts on the right
-    const kind=!F.video?"post":useClaude?"short":"long";
+    const live=isLive(c);
     const nextSt=idx<STAGES.length-1?STAGES[idx+1]:null, nextOk=nextSt?canMove(c,nextSt.id):{ok:true};
     const shot=!["todo","draft"].includes(c.stage);
     const copyMiss=[!c.pre.title&&"title",!c.pre.desc&&"description",!c.pre.hashtags&&"hashtags"].filter(Boolean);
     const linksMiss=plats(c).filter(pl=>!linkOf(c,pl));
-    const CUR=({todo:["copy"],draft:[F.video?"shoot":"design"],inprogress:F.video?["raw","edit"]:["design"],
+    const CUR=live?({todo:["copy"],draft:["shoot"],inprogress:["shoot","publish"]})[c.stage]||["publish"]
+      :({todo:["copy"],draft:[F.video?"shoot":"design"],inprogress:F.video?["raw","edit"]:["design"],
       inreview:F.video?["edit"]:["design"],approved:["publish"],published:["publish"]})[c.stage]||["copy"];
     if(reviewing&&useClaude&&!CUR.includes("edit")) CUR.push("edit");
     const chip=(t,cls)=>`<span class="badge ${cls||"mute"}">${esc(t)}</span>`;
@@ -2767,7 +2776,13 @@ function openCard(id,showGate){
       <div class="fld" style="margin-bottom:0"><label for="r-hashtags">Hashtags</label>
         <input id="r-hashtags" value="${esc(c.pre.hashtags)}" placeholder="#cuet #du"></div>
       ${useClaude?`<p class="hint" style="margin:8px 0 0">Claude polishes these at the final check.</p>`:""}`;
-    const shootBody=`<p class="hint pre-note" style="margin:12px 0 10px">${slot?`Goes live <b>${esc(slot.label)}</b> — the posting slot. Shoot two days before so the edit has time.`
+    const shootBody=live?`<p class="hint pre-note" style="margin:12px 0 10px">${slot?`Goes live <b>${esc(slot.label)}</b>.`:`Set the “Goes live on” date on the right.`} Plan what you'll say — it's live, so there's no edit afterwards.</p>
+      <div class="fld"><label for="s-hook">Opening (first minute)</label><input id="s-hook" value="${esc(c.shoot.hook)}" placeholder="Who you are, what this session answers"></div>
+      <div class="fld"><label for="s-points">Run of show — one point per line</label><textarea id="s-points" rows="5">${esc(c.shoot.points)}</textarea></div>
+      <div class="grid2">
+        <div class="fld" style="margin-bottom:0"><label for="s-cta">Closing / call to action</label><input id="s-cta" value="${esc(c.shoot.cta)}" placeholder="Join the next session 👇"></div>
+        <div class="fld" style="margin-bottom:0"><label for="s-tips">Setup notes</label><input id="s-tips" value="${esc(c.shoot.tips)}" placeholder="e.g. mic, screen share, Q&A at the end"></div></div>`
+    :`<p class="hint pre-note" style="margin:12px 0 10px">${slot?`Goes live <b>${esc(slot.label)}</b> — the posting slot. Shoot two days before so the edit has time.`
         :`Set the “Goes live on” date on the right to book a posting slot.`}</p>
       ${!isNew&&window.PIPE?`<div class="pp-row" style="margin-bottom:10px">
         <button class="btn sm" data-script data-w="1" ${sBusy?"disabled":""}>${sBusy?"Claude is writing…":"✍️ Draft hook & talking points"}</button>
@@ -2798,6 +2813,7 @@ function openCard(id,showGate){
       <p class="hint" style="margin:0">${lp?`<b style="color:var(--good)">Linked</b> to “${esc(lp.title)}” — its views, likes and watch time update every morning.`
         :c.post.postUrl?`Linked. The views, likes and watch time show up here after the next morning sync.`
         :useClaude?`Filled in by itself when Claude posts. Posted it yourself? Paste the link — the views and likes on this card come from it.`
+        :live?`Paste the live link (or the recording once it ends) — the views and likes on this card come from it.`
         :`Paste the link once it's live — the views and likes on this card come from it.`}</p>
       ${lp?`<div class="lbl" style="margin:14px 0 6px">Performance · live from ${c.platform==="ig"?"Instagram":"YouTube"}</div>
         <div class="livegrid">
@@ -2822,19 +2838,22 @@ function openCard(id,showGate){
       { k:"copy", t:F.video?"Idea & copy":"Idea & caption", done:!copyMiss.length&&!!c.idea, body:copyBody,
         sum:(c.idea?`“${c.idea}”`:"the idea in one line")+(copyMiss.length?` · needs ${copyMiss.join(", ")}`:` · ${F.video?"title, description":"title, caption"}, hashtags`),
         chip:copyMiss.length?chip(copyMiss.length===3?"To write":"Needs "+copyMiss.length,"warn"):chip("Done","good") },
-      F.video&&{ k:"shoot", t:"Shoot", done:shot, body:shootBody,
+      live&&{ k:"shoot", t:"Plan the session", done:!!(c.shoot.points||c.shoot.hook), body:shootBody,
+        sum:c.shoot.hook?`opening: “${c.shoot.hook}”`:"opening, run of show, closing",
+        chip:(c.shoot.points||c.shoot.hook)?chip("Planned","good"):later("raw")?chip("Later"):chip("To plan","warn") },
+      F.video&&!live&&{ k:"shoot", t:"Shoot", done:shot, body:shootBody,
         sum:shot?(c.shoot.hook?`hook: “${c.shoot.hook}”`:"shot"):c.shoot.hook?`hook: “${c.shoot.hook}”`:"hook, talking points, closing line",
         chip:shot?chip("Shot","good"):slot?chip("Shoot by "+dmy(due),due<today()?"crit":"warn"):chip("No slot yet") },
-      F.video&&{ k:"raw", t:"Raw video", done:!!c.raw, body:rawBox(),
+      F.video&&!live&&{ k:"raw", t:"Raw video", done:!!c.raw, body:rawBox(),
         sum:c.raw?(c.raw.kind==="file"?`${c.raw.name} · ${mb(c.raw.size)} in storage${c.raw.audio?" · audio ready":""}`:"a link to the footage"):"the footage before editing — a Drive / OneDrive link or the file",
         chip:c.raw?chip(c.raw.kind==="file"?"Uploaded":"Link","good"):later("raw")?chip("Later"):chip("Needed","crit") },
-      F.video&&{ k:"edit", t:"Edit", done:editDone, body:editBody,
+      F.video&&!live&&{ k:"edit", t:"Edit", done:editDone, body:editBody,
         sum:claudeDone?"edited by Claude":c.post.reel?`your own edit: ${c.post.reel.name}`:useClaude?"🤖 Claude edit, or upload your own edit":"the editor's final cut"+(needThumb?" + the thumbnail":""),
         chip:editDone?chip("Done","good"):useClaude&&job?`<span data-stp-pipe>${PIPE.badge(c.id)}</span>`:!c.raw&&useClaude?chip("Waiting for raw video"):later("edit")?chip("Later"):chip(needThumb&&edited?"Needs thumbnail":"Needed","crit") },
       !F.video&&{ k:"design", t:"Design", done:!!c.post.reel, body:designBody,
         sum:c.post.reel?c.post.reel.name:"the finished image or carousel slides",
         chip:c.post.reel?chip("Done","good"):later("design")?chip("Later"):chip("Needed","crit") },
-      { k:"publish", t:"Publish", done:!linksMiss.length, body:publishBody,
+      { k:"publish", t:live?"Go live":"Publish", done:!linksMiss.length, body:publishBody,
         sum:lp?`${fmt(lp.views)} views · ${fmt(lp.likes)} likes`:c.post.postUrl?"linked":`${plats(c).map(pl=>regLabel("platform",pl)||pl).join(" + ")} link once it's live`,
         chip:!linksMiss.length?chip(c.stage==="published"?"Live":"Linked","good"):later("publish")?chip("Later"):chip("Needed","crit") },
     ].filter(Boolean);
@@ -2846,8 +2865,9 @@ function openCard(id,showGate){
     // the checklist: what each stage needs, in order — the one blocking the next move in red
     const blockTxt=nextOk.ok?"":String(nextOk.msg||"").toLowerCase();
     const CK=[[F.video?"Title, description, hashtags":"Title, caption, hashtags", !copyMiss.length, /title|description|hashtag/.test(blockTxt)],
-      F.video&&["Shot", shot, false], F.video&&["Raw video", !!c.raw, false],
-      [F.video?"Edited video":"Finished design", edited, /edited|design/.test(blockTxt)],
+      live&&["Session plan", !!(c.shoot.points||c.shoot.hook), false],
+      F.video&&!live&&["Shot", shot, false], F.video&&!live&&["Raw video", !!c.raw, false],
+      !live&&[F.video?"Edited video":"Finished design", edited, /edited|design/.test(blockTxt)],
       needThumb&&["Thumbnail", !!c.post.thumb, /thumbnail/.test(blockTxt)],
       ...plats(c).map(pl=>[`${regLabel("platform",pl)||pl} link`, !!linkOf(c,pl), /link/.test(blockTxt)])].filter(Boolean);
     const kv=(k,v)=>`<div class="kv"><span>${k}</span><span>${v}</span></div>`;
@@ -2867,7 +2887,7 @@ function openCard(id,showGate){
           <div class="fld"><label for="c-sched">Goes live on</label><input id="c-sched" type="date" value="${c.scheduled||""}"></div>
           <div class="fld"><label for="c-time">At</label><input id="c-time" type="time" value="${esc(c.time||slotPlan(c.platform).time)}"></div></div>
         <div class="kvs">${kv("Type",esc(F.icon+" "+F.name))}
-          ${F.video&&slot&&!shot?kv("Shoot by",`<b style="color:${due<today()?"var(--crit)":"inherit"}">${esc(dow(due).slice(0,3))} ${esc(dmy(due))}</b>`):""}
+          ${F.video&&!live&&slot&&!shot?kv("Shoot by",`<b style="color:${due<today()?"var(--crit)":"inherit"}">${esc(dow(due).slice(0,3))} ${esc(dmy(due))}</b>`):""}
           ${srcIdea?kv("From idea",`<button type="button" class="linkbtn" data-openidea>${esc(String(srcIdea.idea||"the idea").slice(0,40))} ↗</button>`):""}
           ${c.acceptedOn?kv("Accepted",esc(dmy(c.acceptedOn))):""}</div></div>
       ${isNew?"":`<div class="sbox ck-box"><h5>Checklist</h5><ul class="cvck">${CK.map(([l,ok,bl])=>`<li class="${ok?"ok":bl?"bl":""}"><span class="i">${ok?"✓":"○"}</span>${esc(l)}</li>`).join("")}</ul></div>`}

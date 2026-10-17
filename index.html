@@ -13995,7 +13995,7 @@ function campEnsureFormat(soc, name, icon, plats){
   if(f) return f;
   const pl = plats || [];
   f = { key, name, icon: icon || "\uD83D\uDCCC", plats:["yt","ig"], defPlats:[pl.includes("YouTube") && !pl.includes("Instagram") ? "yt" : "ig"],
-    vtypes:[key], video: /live|story|video/i.test(name), claude:false, hint:"Made from campaign pieces (" + name + ")" };
+    vtypes:[key], video: /live|story|video/i.test(name), live: /\blive\b/i.test(name), claude:false, hint:"Made from campaign pieces (" + name + ")" };
   soc.sx.formats.push(f);
   soc.sx.reg = soc.sx.reg || {}; soc.sx.reg.vtype = soc.sx.reg.vtype || {}; soc.sx.reg.vtype[key] = name;
   return f;
