@@ -70,7 +70,7 @@ if (p.chat) {
       json(path.join(OUT, "render_result.json"), { qc: tv.map(v => v + " ok").join(" · ") + " (fake)" });
       pipe("stage", "rendered"); };
     const say = t => pipe("say", t);
-    if (p.step === "chat") { proposal(""); say("Here's the plan (fake): hook on the number, 2 false starts cut, one falling-arrow scene. OK to build?"); }
+    if (p.step === "chat") { proposal(""); say("Plan's ready (fake): hook on the number, 32 s, one scene. The full plan is on the card — OK to build?"); pipe("waiting", "OK to build, or what should change?"); }
     else { say(`Back again (fake) — I read the chat so far (${(p.history || []).length} messages).`); }
     let idle = Date.now();
     while (Date.now() - idle < Number(process.env.FAKE_IDLE || 900) * 1000) {

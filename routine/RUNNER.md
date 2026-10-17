@@ -50,8 +50,10 @@ with their notes).
 Work in the skill's three checkpoints, in order, and **wait for the owner after each one** (as above):
 
 1. **Propose — no HyperFrames.** Do the `propose` step below (analyse, decide), write `OUT/proposal.json`, then run
-   `python3 "$PIPE" stage proposal`. Then `say` a short, readable version of the plan: the hook, what you cut and the new
-   length, each scene (what's drawn, how it moves), B-roll, the ending. Ask: "OK to build, or what should change?"
+   `python3 "$PIPE" stage proposal`. The card shows the whole plan (hook, cuts, scenes, B-roll, captions, ending, audio,
+   transcript) in its own sections, so your `say` stays **short — 2–4 lines**: the hook, the new length, how many scenes,
+   anything you need them to decide. Then: "The full plan is on the card. OK to build, or what should change?" Never paste
+   the whole plan into the chat. (Same for the other checkpoints: a few lines, the details are on the card.)
    Changes → update the plan, `stage proposal` again, ask again. **Build nothing until they say OK.**
 2. **Build + show — after the OK.** `python3 "$PIPE" busy building "<what>"`, then do the `plan` step below (build the
    approved plan in HyperFrames, QA, brief). Then `python3 "$PIPE" stage built`: the card gets the ▶ live player (the real

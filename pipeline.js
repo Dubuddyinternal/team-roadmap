@@ -28,7 +28,7 @@ const team = () => (typeof TEAM!=="undefined" && TEAM) || new URLSearchParams(lo
 const LABEL = {
   proposing:["Claude is watching the video","warn","👀"], proposal_ready:["Plan ready — answer in the chat","accent","✋"],
   planning:["Claude is building the edit","warn","🧠"], brief_ready:["Edit built — watch it","accent","✋"],
-  chat_open:["Waiting for you in the edit chat","accent","💬"],
+  chat_open:["Waiting for you — answer in the chat","accent","💬"],
   rendering:["Rendering YT + IG","warn","🎬"], seo_running:["vidIQ SEO running","warn","🔎"],
   final_review:["Videos ready","good","🎬"], scheduled:["Scheduled","good","🗓"], posting:["Posting","warn","🚀"], posted:["Posted","good","✅"],
   paused:["Paused — free limit reached","warn","⏸"], post_failed:["Posting needs a look","crit","⚠️"], failed:["Stopped — needs a look","crit","⚠️"], cancelled:["Cancelled","mute","⏹"],
@@ -329,7 +329,11 @@ function render(){
       ${job.media&&(job.media.preview_yt||job.media.preview_ig)&&st!=="proposing"?`<details style="margin:0 0 10px"><summary>▶ The edit so far</summary>${livePlayer(job.media)}</details>`:""}
       <div class="pp-row">${job.run&&job.run.chat?"":watchLink(job)}${st!=="posting"&&me.canRun?`<button class="btn sm" data-pp="cancel" style="margin-left:auto">Cancel</button>`:""}</div>`;
   }
-  else if(st==="proposal_ready") body = proposalView(job, me);
+  else if(st==="proposal_ready") body = (job.error?`<div class="pp-note crit"><b>Something went wrong:</b> ${esc(job.error)} <span class="hint">— Claude is still in the chat to fix it.</span></div>`:"") + proposalView(job, me);
+  else if(st==="chat_open" && lastStage(job)){ const ls = lastStage(job);
+    body = `${job.progress?`<div class="pp-note"><b>💬 Claude asks:</b> ${esc(job.progress)} <span class="hint">— answer in the chat below.</span></div>`:""}
+      ${job.error?`<div class="pp-note crit"><b>Something went wrong:</b> ${esc(job.error)} <span class="hint">— Claude is still in the chat to fix it.</span></div>`:""}
+      ${ls==="proposal"?proposalView(job, me):ls==="built"?briefView(job, me):finalView(job, c, me)}`; }
   else if(st==="chat_open") body = `<div class="pp-note"><b>💬 Claude is waiting for you — answer in the chat below.</b>${job.progress?` <span class="hint">“${esc(job.progress)}”</span>`:""}</div>
       ${job.error?`<div class="pp-note crit"><b>Something went wrong:</b> ${esc(job.error)} <span class="hint">— Claude is still in the chat to fix it.</span></div>`:""}
       ${job.media&&(job.media.preview_yt||job.media.preview_ig)?livePlayer(job.media):""}
@@ -379,6 +383,11 @@ function briefView(job, me){
     ${me.canApprove?"":`<p class="hint" style="margin:8px 0 0">Only an owner or admin can render.</p>`}`;
 }
 
+// the newest checkpoint this edit reached (a chat that's waiting on you keeps showing it)
+function lastStage(job){
+  const t = [["proposal", job.proposal&&job.proposal.at], ["built", job.brief&&job.brief.at], ["rendered", job.rendered&&job.rendered.at]].filter(x=>x[1]);
+  return t.length ? t.sort((a,b)=>a[1]<b[1]?1:-1)[0][0] : null;
+}
 // ✋ Check 1: what Claude will do with the clip — nothing is built yet
 function proposalView(job, me){
   const p = job.proposal || {}, list = a => (a&&a.length)?`<ul>${a.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:"";
