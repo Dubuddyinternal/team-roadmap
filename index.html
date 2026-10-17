@@ -16,7 +16,7 @@
 <script src="richtext.js"></script><!-- rich text + "Show all" in every multi-line text box (load before the spaces) -->
 <script src="social-space.js"></script>
 <script src="pipeline.js"></script><!-- Claude edit & post panel on Content Process cards -->
-<script src="comments.js"></script><!-- 💬 comments at the bottom of every tab and card, with @tags by email -->
+<script src="comments.js"></script><!-- 💬 comments + history at the bottom of every Social Media card and idea, with @tags by email -->
 <script src="hinglish.js"></script><script src="dictate.js"></script><!-- 🎤 dictation in every text box -->
 <script src="wiki-utm.js"></script>
 <!-- Notifications: the 🔔 bell and pop-ups (notifications.js) -->
@@ -4141,7 +4141,6 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
     </div>
         <div id="content"></div>
       </section>
-      <div id="tab-comments" style="padding:0 2px 10px"></div>
     </div>
     <footer id="foot">
     </footer>
@@ -5237,22 +5236,7 @@ window.cmtGo = function(b64, cm){
     if(cm && window.CMT) setTimeout(()=> CMT.focus(cm), 450);
   }catch(e){ toast("Couldn't open that comment"); }
 };
-/* ---- 💬 comments: which thread belongs to this tab / card (comments.js draws it) ---- */
-function cmtTabPlace(){
-  const nav = Object.assign(placeSnapshot(), { y: 0, sxOpen: null, page: "" });
-  const tabs = workTabs(), k = workTabActiveKey(), t = tabs.find(x=> x.key === k) || (tabs.length === 1 ? tabs[0] : null);
-  const key = "tab:" + ["v=" + view, activeCspace ? "cs=" + activeCspace : "", view === "roadmap" ? "m=" + activeModule : "",
-    view === "dev" ? "d=" + (devSpace || "core") : "", view === "rmap" ? "r=" + activeRmap : "", "t=" + k].filter(Boolean).join("|");
-  const title = ($("rm-title") && $("rm-title").textContent) || "This tab";
-  const tl = t ? String(t.label).replace(/\s*·\s*\d+$/, "") : "";
-  // 🕘 History: Social Media records every card / idea change (social-space.js); the tab shows its space's
-  return { key, label: title + (tl && tl !== title && tabs.length > 1 ? " → " + tl : ""), nav,
-    history: view === "social" && activeCspace ? { scope: "cs:" + activeCspace } : null };
-}
-function cmtAdminPlace(sec){
-  const nav = Object.assign(placeSnapshot(), { y: 0, sxOpen: null, page: "admin", adminView: sec.k });
-  return { key: "tab:admin=" + sec.k, label: "Administration → " + (sec.crumb || sec.lbl), nav };
-}
+/* ---- 💬 comments on Social Media cards and ideas: which thread is which (comments.js draws it) ---- */
 // a Social Media card or idea (social-space.js asks for it when a card opens)
 window.cmtCardPlace = function(kind, id, title){
   const nav = Object.assign(placeSnapshot(), { y: 0, page: "", sxOpen: { kind, id } });
@@ -5260,11 +5244,6 @@ window.cmtCardPlace = function(kind, id, title){
   const key = "card:" + kind + ":" + id;
   return { key, label: (sp.name || "Social Media") + " → " + (kind === "idea" ? "idea" : "card") + " “" + String(title || id).slice(0, 80) + "”", nav, history: { place: key } };
 };
-function mountTabComments(){
-  const host = $("tab-comments"); if(!host || !window.CMT) return;
-  if(!db || !TEAM || view === "admin"){ host.innerHTML = ""; host._cmt = null; return; }
-  try{ CMT.mount(host, cmtTabPlace()); }catch(e){ console.warn("comments", e); }
-}
 window.addEventListener("pagehide", savePlace);
 window.addEventListener("beforeunload", savePlace);
 document.addEventListener("visibilitychange", function(){ if(document.hidden) savePlace(); });
@@ -15327,7 +15306,6 @@ function renderAll(){
   }
   applySpaceBg();
   noteRecent();
-  mountTabComments();
 }
 
 /* ================= Our Product (hub + editable flow) ================= */
@@ -20817,8 +20795,6 @@ function renderAdminPage(){
   crumb.textContent = "⚙️ Administration › " + (cur.group ? ADMIN_GROUPS[cur.group].lbl + " › " : "") + (cur.crumb || cur.lbl);
   main.appendChild(crumb);
   cur.render(main);
-  // 💬 the page's own comments, at the bottom
-  if(window.CMT && db){ const ch = document.createElement("div"); ch.id = "admin-comments"; main.appendChild(ch); CMT.mount(ch, cmtAdminPlace(cur)); }
 }
 /* ---------- 📊 System stats: how full the free storage is (Cloudflare R2 for videos, Supabase for data) ---------- */
 function sysEsc(t){ return String(t==null?"":t).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }

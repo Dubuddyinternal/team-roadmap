@@ -1,5 +1,5 @@
 /* =====================================================================
-   💬 ACTIVITY at the bottom of every tab and every card (tools.dubuddy.in)
+   💬 ACTIVITY at the bottom of every Social Media card and idea (tools.dubuddy.in)
    Comments + History, like a Jira issue: "Show: All · Comments · History",
    newest or oldest first, "Add a comment…" that opens into a rich-text box
    with a ＋ for photos, videos and files, Reply · Edit · Delete, and @ to tag
@@ -255,7 +255,7 @@ function mount(host, place){
     if(show !== "comments" && hasHist) items = items.concat(C.hist.map(h => ({ at: h.created_at, html: () => histHtml(h) })));
     items.sort((a, b) => newest ? (a.at < b.at ? 1 : -1) : (a.at > b.at ? 1 : -1));
     const nC = C.rows.length;
-    const empty = show === "history" ? (hasHist ? "No changes recorded yet." : "History is kept for Social Media cards and ideas — this page has comments only.")
+    const empty = show === "history" ? (hasHist ? "No changes recorded yet." : "No history kept here.")
       : show === "comments" ? "No comments yet." : "Nothing here yet.";
     el.innerHTML = `<div class="cmt2-title">Activity</div>
       <div class="cmt2-bar"><span class="cmt2-lbl">Show:</span>
