@@ -325,6 +325,7 @@ details.isec .hint{font-size:12px}
 .pp-mini{display:flex;gap:10px;margin:0 0 10px}
 .pp-mini>div{width:118px}.pp-mini video{width:118px;aspect-ratio:9/16;background:#000;border-radius:8px;display:block}
 .pp-mini .lbl{margin-bottom:3px}
+.pp-dl{display:inline-block;margin-top:4px;font-size:12px;color:var(--accent-ink)}
 .pub-list{margin:0 0 10px}
 .pub-row{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px;min-width:0}
 .pub-row a{color:var(--accent-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
@@ -2079,7 +2080,7 @@ function openFormats(editKey, back){
     <div class="fld"><label class="pp-chk ${f.video?"on":""}"><input type="checkbox" id="f-video" ${f.video?"checked":""}> It's a video (gets a Shoot plan)</label></div>
     <div class="fld"><label class="pp-chk ${f.claude?"on":""}"><input type="checkbox" id="f-claude" ${f.claude?"checked":""}> 🤖 Claude can edit it (vertical video for Shorts / Reels only)</label></div>
     <div class="fld"><label class="pp-chk ${isLiveFmt(f)?"on":""}"><input type="checkbox" id="f-live" ${isLiveFmt(f)?"checked":""}> 🔴 It's live (a stream / session — planned, no raw video or edit)</label></div>
-    <p class="hint" style="margin:-4px 0 12px">The card shows only the steps that fit: <b>video</b> → Shoot, Raw video, Edit, Publish · <b>live</b> → Plan the session, Go live · <b>neither</b> (image, poster, carousel) → Design, Publish.</p>
+    <p class="hint" style="margin:-4px 0 12px">The card shows only the steps that fit: <b>video</b> → Shoot, Raw video, Edit, Post Production · <b>live</b> → Plan the session, Go live · <b>neither</b> (image, poster, carousel) → Design, Post Production.</p>
     ${f0?`<div class="fld"><label class="pp-chk ${f.hidden?"on":""}"><input type="checkbox" id="f-hidden" ${f.hidden?"checked":""}> Hide this type from "+ New idea" (ideas already made keep it)</label></div>`:""}
     <div class="row" style="margin-top:14px"><button class="btn pri" id="f-save">${f0?"Save type":"Add type"}</button>
       <button class="btn" id="f-back">Back</button></div>`);
@@ -2856,9 +2857,11 @@ function openCard(id,showGate){
       <div class="grid2">
         <div class="fld" style="margin-bottom:0"><label for="s-cta">Closing line</label><input id="s-cta" value="${esc(c.shoot.cta)}" placeholder="Comment your doubt 👇"></div>
         <div class="fld" style="margin-bottom:0"><label for="s-tips">Shooting notes</label><input id="s-tips" value="${esc(c.shoot.tips)}" placeholder="e.g. show the form on screen"></div></div>`;
-    const claudeVids=claudeDone?`<div class="pp-mini">
-        ${jobM.yt?`<div><div class="lbl">YouTube</div><video controls preload="metadata" src="${esc(jobM.yt)}"></video></div>`:""}
-        ${jobM.ig?`<div><div class="lbl">Instagram</div><video controls preload="metadata" src="${esc(jobM.ig)}"></video></div>`:""}</div>`:"";
+    // 🎬 the edited videos live in Post Production (to watch, download and post); the Edit step keeps making them
+    const vid=(k,l)=>jobM[k]?`<div><div class="lbl">${l}</div><video controls playsinline preload="metadata" src="${esc(jobM[k])}"></video>
+        <a class="pp-dl" href="${esc(jobM[k])}" download="final_${k}.mp4" target="_blank" rel="noopener">⬇ Download</a></div>`:"";
+    const editedVids=claudeDone?`<div class="lbl" style="margin:0 0 6px">Edited video${jobM.yt&&jobM.ig?"s":""}</div><div class="pp-mini">${vid("yt","YouTube")}${vid("ig","Instagram")}</div>`
+      :c.post.reel?`<p class="hint" style="margin:0 0 10px">Edited video: <b>${esc(c.post.reel.name||"your own edit")}</b> (from the Edit step).</p>`:"";
     const started=!!job;
     // 📝 what you already know about the edit, before Claude plans it (goes to Claude with the idea, shoot plan and files)
     const briefBlock=isNew?"":`<details class="block ebrief" ${started&&!c.editBrief?"":"open"}><summary><b>📝 Your edit brief</b> <span class="hint">— Claude reads this first, before it plans</span></summary>
@@ -2867,7 +2870,7 @@ function openCard(id,showGate){
         <textarea id="e-brief" rows="4" placeholder="e.g. Put the comment screenshot (attached) on screen when I read the question · keep the joke at 0:40 · end on the CUET form">${esc(c.editBrief||"")}</textarea>
         <div id="briefFiles" style="margin-top:8px"></div>
         ${started?`<p class="hint" style="margin:6px 0 0">Claude got this when the edit started. Changes now → say them in the chat.</p>`:""}</details>`;
-    const editBody=useClaude?`<div style="height:12px"></div>${isNew?`<p class="hint pre-note">Create the card first.</p>`:briefBlock+`<div id="pipePanel"></div>`}${claudeVids}
+    const editBody=useClaude?`<div style="height:12px"></div>${isNew?`<p class="hint pre-note">Create the card first.</p>`:briefBlock+`<div id="pipePanel"></div>`}
         <details class="manual" ${c.post.reel?"open":""}><summary>${claudeDone?"Use my own edit instead":c.post.reel?"Your own edit":"I edited it myself"}</summary>
           ${fileSlot("reel","Edited reel","video/*","Pick the final cut. Its name and size are noted on the card — the file itself stays on your computer.")}
           ${plats(c).includes("yt")&&c.vtype==="short"?fileSlot("thumb","Thumbnail (optional)","image/*","Optional for Shorts — YouTube picks a frame if you skip it."):""}</details>`
@@ -2875,7 +2878,7 @@ function openCard(id,showGate){
         ${needThumb?fileSlot("thumb","Thumbnail","image/*","Needed for long YouTube videos. A small preview is kept on the card."):
           plats(c).includes("yt")&&c.vtype==="short"?fileSlot("thumb","Thumbnail (optional)","image/*","Optional for Shorts — YouTube picks a frame if you skip it."):""}`;
     const designBody=`<div style="height:12px"></div>${fileSlot("reel","Image / slides","image/*,application/pdf","Pick the finished image (or a PDF of the slides). A small preview is kept on the card.")}`;
-    const publishBody=`<div style="height:10px"></div>
+    const publishBody=`<div style="height:10px"></div>${live?"":editedVids}
       ${posts.length?`<div class="pub-list">${posts.map(x=>`<div class="pub-row"><span class="pub-pl">${x.pl}</span>
           <span class="badge ${x.status==="posted"?"good":"crit"}">${esc(x.status)}</span>
           ${x.url?`<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.url.replace(/^https?:\/\//,""))}</a>`:`<span class="hint">${esc(x.error||"")}</span>`}</div>`).join("")}</div>`:""}
@@ -2924,8 +2927,8 @@ function openCard(id,showGate){
       !F.video&&{ k:"design", t:"Design", done:!!c.post.reel, body:designBody,
         sum:c.post.reel?c.post.reel.name:"the finished image or carousel slides",
         chip:c.post.reel?chip("Done","good"):later("design")?chip("Later"):chip("Needed","crit") },
-      { k:"publish", t:live?"Go live":"Publish", done:!linksMiss.length, body:publishBody,
-        sum:lp?`${fmt(lp.views)} views · ${fmt(lp.likes)} likes`:c.post.postUrl?"linked":`${plats(c).map(pl=>regLabel("platform",pl)||pl).join(" + ")} link once it's live`,
+      { k:"publish", t:live?"Go live":"Post Production", done:!linksMiss.length, body:publishBody,
+        sum:lp?`${fmt(lp.views)} views · ${fmt(lp.likes)} likes`:c.post.postUrl?"linked":claudeDone&&!live?`edited video ready · ${plats(c).map(pl=>regLabel("platform",pl)||pl).join(" + ")} link once it's live`:`${plats(c).map(pl=>regLabel("platform",pl)||pl).join(" + ")} link once it's live`,
         chip:!linksMiss.length?chip(c.stage==="published"?"Live":"Linked","good"):later("publish")?chip("Later"):chip("Needed","crit") },
     ].filter(Boolean);
     const SO=STEPOPEN[c.id]||(STEPOPEN[c.id]={});
