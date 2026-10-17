@@ -55,6 +55,7 @@ const STYLE = `
 .cmt2-when{color:var(--muted,#8C7F75);font-size:12.5px}
 .cmt2-body{margin-top:4px;line-height:1.55;word-wrap:break-word}.cmt2-body p{margin:0 0 4px}.cmt2-body ul,.cmt2-body ol{margin:2px 0 4px;padding-left:20px}
 .cmt2-at{background:color-mix(in srgb,var(--accent,#E8622B) 14%,transparent);color:var(--accent,#E8622B);border-radius:5px;padding:0 3px;font-weight:600}
+.rt-ed .cmt2-at{display:inline-block;padding:0 5px;border-radius:12px;background:color-mix(in srgb,var(--accent,#E8622B) 16%,#fff);border:1px solid color-mix(in srgb,var(--accent,#E8622B) 35%,transparent);line-height:1.35;cursor:default;user-select:all}
 .cmt2-files{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .cmt2-files img{height:110px;max-width:200px;object-fit:cover;border-radius:8px;border:1px solid var(--line,#E7E1DA);cursor:zoom-in;background:var(--bg,#F3EEE9)}
 .cmt2-files video{height:160px;max-width:100%;border-radius:8px;background:#000}
@@ -92,6 +93,7 @@ const STYLE = `
 .cmt2-pop .cmt2-av{width:24px;height:24px;flex-basis:24px;font-size:11px}
 .cmt2-lb{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;padding:16px;cursor:zoom-out}
 .cmt2-lb img{max-width:100%;max-height:92vh;border-radius:8px}
+@media (hover:none),(pointer:coarse){ .cmt2-tip{display:none} }
 @media (max-width:600px){ .cmt2{padding:14px 12px} .cmt2-tip,.cmt2-empty{margin-left:0;padding-left:0} .cmt2-new{gap:8px} }
 `;
 const STYLED = new WeakSet();
@@ -270,7 +272,7 @@ function mount(host, place){
       ${C.error ? `<div class="cmt2-empty">${esc(C.error)}</div>` : `
       ${show === "history" ? "" : `<div class="cmt2-new">${av(m.name, m.photo)}${C.open ? `<div class="cmt2-main" data-compfor=""></div>`
           : `<button type="button" class="cmt2-fake" data-start>Add a comment…</button>`}</div>
-        ${C.open ? "" : `<div class="cmt2-tip"><b>Pro tip:</b> press <kbd>M</kbd> to comment</div>`}`}
+        ${C.open ? "" : `<div class="cmt2-tip"><b>Tip:</b> press <kbd>M</kbd> to start a comment (when you're not typing in a box)</div>`}`}
       <div class="cmt2-list">${!C.at ? `<div class="cmt2-empty">Loading…</div>` : items.length ? items.map(x => x.html()).join("") : `<div class="cmt2-empty">${esc(empty)}</div>`}</div>`}`;
     el.querySelectorAll("[data-compfor]").forEach(slot => composer(slot, slot.dataset.compfor));
     el.querySelectorAll("[data-show]").forEach(b => b.onclick = () => { setPref("show", b.dataset.show); THREADS.forEach(t => t.redraw()); });
@@ -323,6 +325,21 @@ function mount(host, place){
     const drawChips = () => { chips.innerHTML = d.files.map((f, i) => `<span class="cmt2-chip">${isImg(f) && f.prev ? `<img src="${esc(f.prev)}" alt="">` : `<span class="ph">${isImg(f) ? "🖼️" : isVid(f) ? "▶" : fileIcon(f.name)}</span>`}<span>${esc(f.name)}</span><button type="button" data-rm="${i}" title="Remove">×</button></span>`).join("");
       chips.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { const f = d.files.splice(+b.dataset.rm, 1)[0]; if(f && f.prev) URL.revokeObjectURL(f.prev); drawChips(); }); };
     drawChips(); showTags();
+    // tagged names already in the text (a draft, or a comment being edited) show highlighted too
+    function decorate(){
+      if(ed === ta) return;
+      const names = Object.values(d.tags).filter(Boolean).sort((a, b) => b.length - a.length); if(!names.length) return;
+      const walker = document.createTreeWalker(ed, NodeFilter.SHOW_TEXT), nodes = [];
+      while(walker.nextNode()) if(!walker.currentNode.parentElement.closest(".cmt2-at")) nodes.push(walker.currentNode);
+      nodes.forEach(n => { let node = n;
+        for(;;){ const t = node.nodeValue; let hit = null;
+          names.forEach(nm => { const i = t.indexOf("@" + nm); if(i >= 0 && (!hit || i < hit.i)) hit = { i, nm }; });
+          if(!hit) break;
+          const rest = node.splitText(hit.i), after = rest.splitText(hit.nm.length + 1);
+          const sp = document.createElement("span"); sp.className = "cmt2-at"; sp.contentEditable = "false"; sp.textContent = rest.nodeValue;
+          rest.replaceWith(sp); node = after; } });
+    }
+    decorate();
     // ＋ → photo / video, or any file
     plus.onclick = e => { e.stopPropagation(); menu.style.left = plus.offsetLeft + "px"; menu.style.top = (plus.offsetTop + plus.offsetHeight + 4) + "px"; menu.hidden = !menu.hidden; };
     comp.addEventListener("click", e => { if(!menu.hidden && !e.target.closest(".cmt2-menu,[data-plus]")) menu.hidden = true; });
@@ -368,7 +385,10 @@ function mount(host, place){
     function pick(p){
       const cq = caretQuery() || q; if(!cq || !p) return;
       const s = selOf(), r = document.createRange(); r.setStart(cq.node, cq.start); r.setEnd(cq.node, cq.end);
-      s.removeAllRanges(); s.addRange(r); document.execCommand("insertText", false, "@" + p.name + " ");
+      s.removeAllRanges(); s.addRange(r);
+      // the name goes in as one highlighted piece (Backspace removes it whole); the saved text is still "@Name"
+      if(ed !== ta) document.execCommand("insertHTML", false, `<span class="cmt2-at" contenteditable="false">@${esc(p.name)}</span>&nbsp;`);
+      else document.execCommand("insertText", false, "@" + p.name + " ");
       d.tags[p.id] = p.name; q = null; drawPop(); ed.dispatchEvent(new Event("input")); showTags();
     }
     ed.addEventListener("keyup", e => { if(["ArrowDown","ArrowUp","Enter","Tab","Escape"].includes(e.key) && !pop.hidden) return; const nq = caretQuery(); if(!nq || !q || nq.text !== q.text) on = 0; q = nq; drawPop(); });
@@ -451,7 +471,9 @@ async function log(events){
 document.addEventListener("keydown", e => {
   if((e.key !== "m" && e.key !== "M") || e.ctrlKey || e.metaKey || e.altKey) return;
   const t = (e.composedPath && e.composedPath()[0]) || e.target;
-  if(t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ""))) return;
+  const typing = el => el && (el.isContentEditable || /^(TEXTAREA|SELECT)$/.test(el.tagName || "")
+    || (el.tagName === "INPUT" && !/^(checkbox|radio|button|submit|reset|file|range|color)$/i.test(el.type || "")));
+  if(typing(t)) return;
   const vis = [...THREADS].filter(T => T.el.isConnected && T.el.getClientRects().length);
   const T = vis.find(x => x.el.getRootNode() !== document) || vis[0];
   if(T){ e.preventDefault(); T.openComposer(); }
