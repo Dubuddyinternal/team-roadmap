@@ -2423,34 +2423,36 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .okr-modetg{display:inline-flex;gap:4px;background:var(--card);border:1px solid var(--line-strong);border-radius:99px;padding:3px;margin-bottom:16px}
 .okr-modetg .okr-mode{border:none;background:none;border-radius:99px;padding:6px 15px;font-weight:600;font-size:12.5px;color:var(--muted);cursor:pointer;font-family:var(--disp)}
 .okr-modetg .okr-mode.on{background:var(--indigo);color:#fff}
-.okrflow{position:relative;overflow:hidden;border:1px solid var(--line);border-radius:14px;background:var(--bg);height:min(74vh,760px);min-height:430px;margin:8px 0 14px;touch-action:none;cursor:default}
-.okrflow.panning{cursor:grabbing}
-.okrflow-canvas{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
-.okrflow-links{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
-.okrflow-node{position:absolute!important;width:230px;min-width:230px;max-width:230px;cursor:grab;user-select:none;transition:opacity .16s,box-shadow .16s,border-color .16s;z-index:2}
-.okrflow-node.dragging{cursor:grabbing;z-index:9;box-shadow:0 12px 28px rgba(0,0,0,.18)}
-.okrflow-node.dim{opacity:.22}
-.okrflow-node.lit{border-color:var(--indigo);box-shadow:0 4px 16px rgba(0,0,0,.09)}
-.okrflow-node.pick{box-shadow:0 0 0 2px var(--indigo),0 6px 20px rgba(0,0,0,.12)}
-.okrflow-node button,.okrflow-node input{cursor:pointer}
-.okrflow-bar{position:absolute;top:12px;right:12px;display:flex;gap:6px;z-index:20}
-.okrflow-zb{border:1px solid var(--line-strong);background:var(--card);color:inherit;border-radius:99px;width:32px;height:32px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--disp);display:flex;align-items:center;justify-content:center;padding:0}
-.okrflow-zb.wide{width:auto;padding:0 14px;font-size:12px;font-weight:600}
-.okrflow-zb:hover{background:rgba(0,0,0,.05)}
-.okrflow-hint{position:absolute;left:12px;bottom:10px;font-size:11.5px;color:var(--muted);background:var(--card);border:1px solid var(--line);border-radius:99px;padding:5px 13px;z-index:20;pointer-events:none;opacity:.92}
-.okrtree-scroll{overflow-x:auto;padding:8px 0 16px}
+.okrtree-scroll{overflow-x:auto;padding:10px 6px 18px;margin:8px 0 6px}
 .okrtree{display:inline-block;min-width:100%;text-align:center}
-.okrtree ul{display:flex;justify-content:center;gap:18px;list-style:none;margin:0;padding:26px 0 0;position:relative}
+.okrtree ul{display:flex;justify-content:center;list-style:none;margin:0;padding:26px 0 0;position:relative}
 .okrtree > ul{padding-top:0}
-.okrtree li{position:relative;padding:26px 8px 0;text-align:center}
-.okrtree li::before,.okrtree li::after{content:"";position:absolute;top:0;height:26px;width:50%;border-top:2px solid var(--line-strong)}
-.okrtree li::before{right:50%;border-right:2px solid var(--line-strong)}
-.okrtree li::after{left:50%}
-.okrtree li:only-child::before,.okrtree li:only-child::after{width:50%}
-.okrtree li:first-child::before,.okrtree li:last-child::after{border:0}
-.okrtree li:last-child::before{border-right:2px solid var(--line-strong)}
-.okrtree ul ul::before{content:"";position:absolute;top:0;left:50%;height:26px;border-left:2px solid var(--line-strong)}
+.okrtree li{list-style:none;position:relative;padding:26px 8px 0;text-align:center}
+.okrtree li::before,.okrtree li::after{content:"";position:absolute;top:0;right:50%;width:50%;height:26px;border-top:2px solid var(--line-strong)}
+.okrtree li::after{right:auto;left:50%;border-left:2px solid var(--line-strong)}
+.okrtree li:first-child::before,.okrtree li:last-child::after{border:0 none}
+.okrtree li:last-child::before{border-right:2px solid var(--line-strong);border-radius:0 7px 0 0}
+.okrtree li:first-child::after{border-radius:7px 0 0 0}
+.okrtree li:only-child::before{display:none}
+.okrtree li:only-child::after{border:0 none;border-left:2px solid var(--line-strong);border-radius:0}
+.okrtree ul ul::before{content:"";position:absolute;top:0;left:50%;width:0;height:26px;border-left:2px solid var(--line-strong)}
+.okrtree > ul > li{padding-top:0}
 .okrtree > ul > li::before,.okrtree > ul > li::after{display:none}
+.okrtree-node[data-oid]{width:220px;min-width:220px;max-width:220px}
+.okrtree-node.dim{opacity:.3}
+.okrtree-node.lit{border-color:var(--indigo)}
+.okrtree-node.pick{box-shadow:0 0 0 2px var(--indigo),0 6px 20px rgba(0,0,0,.12)}
+.okrtree-node[data-oid]{cursor:pointer;transition:opacity .16s,box-shadow .16s,border-color .16s}
+.okrtree-ns{min-width:280px;max-width:360px;border:1.5px solid var(--indigo);border-top:4px solid var(--indigo);background:linear-gradient(180deg,var(--indigo-soft),var(--card));text-align:center;padding:14px 18px 15px}
+.okrtree-ns.empty{border-style:dashed;background:var(--card)}
+.okrtree-ns-lv{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--indigo);font-weight:700;margin-bottom:6px}
+.okrtree-ns-t{font-family:var(--disp);font-weight:800;font-size:17px;line-height:1.3;margin-bottom:8px}
+.okrtree-ns.empty .okrtree-ns-t{font-weight:600;font-size:13px;color:var(--muted)}
+.okrtree-ns-note{font-size:12px;color:var(--muted);margin-bottom:8px}
+.okrtree-ns-fig{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.okrtree-ns-fig b{color:var(--ink,#172B4D);font-size:14px}
+.okrtree-ns .okrtree-acts{justify-content:center}
+.okrtree-hint{font-size:11.5px;color:var(--muted);text-align:center;margin:0 0 12px}
 .okrtree-node{display:inline-block;min-width:196px;max-width:250px;background:var(--card);border:1px solid var(--line);border-top:3px solid var(--indigo);border-radius:12px;padding:12px 14px 13px;text-align:left;position:relative;vertical-align:top}
 .okrtree-lv{font-family:var(--mono);font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--indigo);margin-bottom:5px}
 .okrtree-mine{color:var(--done)}
@@ -10063,73 +10065,10 @@ function okrEditNode(ob, cyc){
   }, {level:true, alignTo:true, alignOptions:okrAlignOptions(cyc, ob.id), owners:true});
 }
 
-/* ================= OKR flow canvas (Org tree): movable nodes, arrows pointing up ================= */
-var okrFlowSel = null;                 /* objective id whose lineage is lit */
-var okrFlowView = {x:40, y:24, k:1};   /* pan + zoom */
-var _okrFlowSaveT = null;
-var okrFlowFitKey = "";                /* which cycle the view has been fitted to */
-function okrFlowSaveSoon(){
-  if(_okrFlowSaveT) clearTimeout(_okrFlowSaveT);
-  _okrFlowSaveT=setTimeout(function(){ _okrFlowSaveT=null; OKRS.updated=todayStr(); pushAll(); }, 900);
-}
-/* scale + centre so the whole chart is on screen */
-function okrFlowFit(host, cv, objs){
-  var minL=null,minT=null,maxR=0,maxB=0;
-  objs.forEach(function(o){
-    var el=cv.querySelector('[data-fid="'+o.id+'"]'); if(!el) return;
-    var x=parseFloat(el.style.left)||0, y=parseFloat(el.style.top)||0;
-    var wd=el.offsetWidth||230, ht=el.offsetHeight||132;
-    if(minL===null||x<minL) minL=x;
-    if(minT===null||y<minT) minT=y;
-    if(x+wd>maxR) maxR=x+wd;
-    if(y+ht>maxB) maxB=y+ht;
-  });
-  if(minL===null){ okrFlowView={x:40,y:44,k:1}; okrFlowApplyView(cv); return; }
-  var W=host.clientWidth||1100, H=host.clientHeight||470;
-  var cw=Math.max(1,maxR-minL), ch=Math.max(1,maxB-minT);
-  var k=Math.min(1, (W-56)/cw, (H-112)/ch);
-  k=Math.max(0.45, k);
-  okrFlowView.k=k;
-  okrFlowView.x=Math.round((W-cw*k)/2 - minL*k);
-  okrFlowView.y=Math.round(Math.max(48, (H-ch*k)/2) - minT*k);
-  okrFlowApplyView(cv);
-}
-/* tidy top-down layout: children side by side, parent centred over them */
-function okrFlowLayout(objs, sizes){
-  var byId={}; objs.forEach(function(o){ byId[o.id]=o; });
-  var kids={}; objs.forEach(function(o){
-    var p=(o.alignsTo && byId[o.alignsTo]) ? o.alignsTo : "__root";
-    (kids[p]=kids[p]||[]).push(o);
-  });
-  var GAPX=36, GAPY=66;
-  var depth={};
-  objs.forEach(function(o){ var d=0,cur=o,g=0; while(cur && cur.alignsTo && byId[cur.alignsTo] && g++<24){ d++; cur=byId[cur.alignsTo]; } depth[o.id]=d; });
-  var maxd=0; objs.forEach(function(o){ if(depth[o.id]>maxd) maxd=depth[o.id]; });
-  var rowH=[], i;
-  for(i=0;i<=maxd;i++) rowH[i]=0;
-  objs.forEach(function(o){ var h=(sizes[o.id]&&sizes[o.id].h)||132; if(h>rowH[depth[o.id]]) rowH[depth[o.id]]=h; });
-  var rowY=[], acc=0;
-  for(i=0;i<=maxd;i++){ rowY[i]=acc; acc+=rowH[i]+GAPY; }
-  var pos={}, cursor=0, seen={};
-  function place(o){
-    if(seen[o.id]) return; seen[o.id]=1;
-    var w=(sizes[o.id]&&sizes[o.id].w)||224;
-    var ch=kids[o.id]||[];
-    if(!ch.length){ pos[o.id]={x:cursor, y:rowY[depth[o.id]], w:w}; cursor+=w+GAPX; return; }
-    ch.forEach(place);
-    var l=pos[ch[0].id], r=pos[ch[ch.length-1].id];
-    var cx=(l.x + r.x + r.w)/2;
-    pos[o.id]={x:Math.round(cx-w/2), y:rowY[depth[o.id]], w:w};
-    if(pos[o.id].x+w+GAPX > cursor) cursor = pos[o.id].x+w+GAPX;
-  }
-  (kids["__root"]||[]).forEach(function(r){ place(r); cursor+=GAPX; });
-  objs.forEach(function(o){ if(!pos[o.id]) pos[o.id]={x:cursor, y:rowY[depth[o.id]]||0, w:224}, cursor+=260; });
-  var minx=null; objs.forEach(function(o){ if(minx===null || pos[o.id].x<minx) minx=pos[o.id].x; });
-  if(minx) objs.forEach(function(o){ pos[o.id].x-=minx; });
-  return pos;
-}
+/* ================= OKR Org tree: fixed top-down chart (like My Team), North Star on top ================= */
+var okrTreeSel = null;                 /* objective id whose line is lit */
 /* everything on this objective's line: its parents all the way up, and everything under it */
-function okrFlowLineage(id, objs){
+function okrTreeLineage(id, objs){
   var set={}, byId={}; objs.forEach(function(o){ byId[o.id]=o; });
   if(!id || !byId[id]) return set;
   set[id]=1;
@@ -10142,155 +10081,85 @@ function okrFlowLineage(id, objs){
   while(grew && guard++<24){ grew=false; objs.forEach(function(o){ if(!down[o.id] && o.alignsTo && down[o.alignsTo]){ down[o.id]=1; set[o.id]=1; grew=true; } }); }
   return set;
 }
-function okrFlowApplyView(cv){ cv.style.transform="translate("+okrFlowView.x+"px,"+okrFlowView.y+"px) scale("+okrFlowView.k+")"; }
-function okrFlowDrawLinks(host, objs){
-  var svg=host.querySelector(".okrflow-links"); if(!svg) return;
-  var byId={}; objs.forEach(function(o){ byId[o.id]=o; });
-  var lin = okrFlowSel ? okrFlowLineage(okrFlowSel, objs) : null;
-  var W=0,H=0;
-  objs.forEach(function(o){
-    var el=host.querySelector('[data-fid="'+o.id+'"]'); if(!el) return;
-    var x=parseFloat(el.style.left)||0, y=parseFloat(el.style.top)||0;
-    W=Math.max(W, x+(el.offsetWidth||224)+80); H=Math.max(H, y+(el.offsetHeight||132)+80);
+function okrTreePaint(host, objs){
+  var lin = okrTreeSel ? okrTreeLineage(okrTreeSel, objs) : null;
+  host.querySelectorAll(".okrtree-node[data-oid]").forEach(function(el){
+    var id=el.getAttribute("data-oid");
+    el.classList.toggle("lit", !!(lin && lin[id]));
+    el.classList.toggle("dim", !!(lin && !lin[id]));
+    el.classList.toggle("pick", okrTreeSel===id);
   });
-  svg.setAttribute("width",W); svg.setAttribute("height",H); svg.setAttribute("viewBox","0 0 "+W+" "+H);
-  var out='<defs>'
-   +'<marker id="okrflow-ar" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="var(--line-strong)"/></marker>'
-   +'<marker id="okrflow-arL" markerWidth="10" markerHeight="10" refX="7.5" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--indigo)"/></marker>'
-   +'</defs>';
-  objs.forEach(function(o){
-    if(!o.alignsTo || !byId[o.alignsTo]) return;
-    var ce=host.querySelector('[data-fid="'+o.id+'"]'), pe=host.querySelector('[data-fid="'+o.alignsTo+'"]');
-    if(!ce||!pe) return;
-    var cx=(parseFloat(ce.style.left)||0)+(ce.offsetWidth||224)/2, cy=(parseFloat(ce.style.top)||0);
-    var px=(parseFloat(pe.style.left)||0)+(pe.offsetWidth||224)/2, py=(parseFloat(pe.style.top)||0)+(pe.offsetHeight||132);
-    var mid=(cy+py)/2;
-    var lit = lin ? (lin[o.id] && lin[o.alignsTo]) : false;
-    var dim = lin && !lit;
-    /* drawn child -> parent, so the arrowhead lands on the objective above */
-    out+='<path d="M'+cx+','+cy+' C'+cx+','+mid+' '+px+','+mid+' '+px+','+py+'" fill="none"'
-      +' stroke="'+(lit?'var(--indigo)':'var(--line-strong)')+'" stroke-width="'+(lit?2.6:2)+'"'
-      +' opacity="'+(dim?0.18:(lit?1:0.7))+'" marker-end="url(#'+(lit?'okrflow-arL':'okrflow-ar')+')"/>';
-  });
-  svg.innerHTML=out;
 }
-function okrFlowPaintState(host, objs){
-  var lin = okrFlowSel ? okrFlowLineage(okrFlowSel, objs) : null;
-  objs.forEach(function(o){
-    var el=host.querySelector('[data-fid="'+o.id+'"]'); if(!el) return;
-    el.classList.toggle("lit", !!(lin && lin[o.id]));
-    el.classList.toggle("dim", !!(lin && !lin[o.id]));
-    el.classList.toggle("pick", okrFlowSel===o.id);
-  });
-  okrFlowDrawLinks(host, objs);
+/* North Star Metric — one per team, sits above every cycle's objectives */
+function okrNorthStarEdit(){
+  var ns=OKRS.northStar||{};
+  openDialog(ns.title?"Edit North Star Metric":"Set North Star Metric", {title:ns.title||"", current:ns.current??0, target:ns.target??"", unit:ns.unit||"", note:ns.note||""}, function(v){
+    if(!(v.title||"").trim()){ delete OKRS.northStar; saveOkrs(); toast("North Star removed"); return; }
+    OKRS.northStar={ title:v.title.trim(), current:Number(v.current)||0, target:Number(v.target)||0, unit:v.unit||"" };
+    if(v.note) OKRS.northStar.note=v.note;
+    saveOkrs(); toast("North Star saved");
+  }, {metric:true, titleLabel:"North Star Metric (clear it to remove)"});
+}
+function okrNorthStarNode(){
+  var ns=OKRS.northStar;
+  var card=document.createElement("div"); card.className="okrtree-node okrtree-ns";
+  if(!ns || !ns.title){
+    card.classList.add("empty");
+    card.innerHTML='<div class="okrtree-ns-lv">★ North Star Metric</div><div class="okrtree-ns-t">Set the one number every objective below should move</div>';
+    var b=document.createElement("button"); b.className="okrtree-mini"; b.textContent="＋ Set North Star"; b.onclick=function(e){ e.stopPropagation(); okrNorthStarEdit(); };
+    card.appendChild(b);
+    return card;
+  }
+  var tgt=Number(ns.target)||0, cur=Number(ns.current)||0;
+  var pc = tgt ? Math.max(0, Math.min(100, Math.round(cur/tgt*100))) : 0;
+  card.innerHTML='<div class="okrtree-ns-lv">★ North Star Metric</div>'
+    +'<div class="okrtree-ns-t">'+mtEsc(ns.title)+'</div>'
+    +(ns.note?'<div class="okrtree-ns-note">'+mtEsc(ns.note)+'</div>':'')
+    +(tgt?'<div class="okrtree-kr-bar"><i style="width:'+pc+'%;background:'+scoreColor(pc)+'"></i></div>'
+      +'<div class="okrtree-ns-fig"><b>'+fmt(cur)+'</b> / '+fmt(tgt)+' '+mtEsc(ns.unit||"")+' · '+pc+'%</div>'
+      :'<div class="okrtree-ns-fig"><b>'+fmt(cur)+'</b> '+mtEsc(ns.unit||"")+'</div>');
+  if(editMode){
+    var acts=document.createElement("div"); acts.className="okrtree-acts";
+    acts.appendChild(okrMini("✎ Edit","Edit the North Star Metric", okrNorthStarEdit));
+    card.appendChild(acts);
+  }
+  return card;
 }
 function renderOkrTree(cyc, wrap){
   var _scope = okrBoardScope(cyc);
   var objs = _scope ? cyc.objectives.filter(function(o){ return _scope[o.id]; }) : cyc.objectives;
+  var byId={}; objs.forEach(function(o){ byId[o.id]=o; });
+  /* anything whose parent isn't on screen (other cycle, filtered out) starts its own branch */
+  var roots=objs.filter(function(o){ return !(o.alignsTo && byId[o.alignsTo]); });
+  var hasNs = !!(OKRS.northStar && OKRS.northStar.title);
+  var scroll=document.createElement("div"); scroll.className="okrtree-scroll";
+  var tree=document.createElement("div"); tree.className="okrtree";
+  var top=document.createElement("ul");
+  if(hasNs || editMode){
+    var nsLi=document.createElement("li");
+    nsLi.appendChild(okrNorthStarNode());
+    if(roots.length){ var ul=document.createElement("ul"); roots.forEach(function(r){ ul.appendChild(okrTreeNode(r, cyc, objs)); }); nsLi.appendChild(ul); }
+    top.appendChild(nsLi);
+  } else {
+    roots.forEach(function(r){ top.appendChild(okrTreeNode(r, cyc, objs)); });
+  }
+  tree.appendChild(top); scroll.appendChild(tree); wrap.appendChild(scroll);
   if(!objs.length){
     var e=document.createElement("div"); e.className="empty";
     e.textContent = okrBoardMine ? "Nothing owned by you in this cycle." : ("No objectives yet."+((editMode||SESSION)?" Add one below.":""));
     wrap.appendChild(e);
   } else {
-    var host=document.createElement("div"); host.className="okrflow";
-    var cv=document.createElement("div"); cv.className="okrflow-canvas";
-    var svg=document.createElementNS("http://www.w3.org/2000/svg","svg"); svg.setAttribute("class","okrflow-links");
-    cv.appendChild(svg); host.appendChild(cv);
-
-    var sizes={};
-    objs.forEach(function(o){
-      var card=okrTreeNode(o, cyc, objs, true);
-      card.setAttribute("data-fid", o.id);
-      card.classList.add("okrflow-node");
-      cv.appendChild(card);
+    okrTreePaint(tree, objs);
+    tree.addEventListener("click", function(ev){
+      if(ev.target.closest("button,input,a")) return;
+      var node=ev.target.closest(".okrtree-node[data-oid]");
+      var id=node ? node.getAttribute("data-oid") : null;
+      okrTreeSel = (!id || okrTreeSel===id) ? null : id;
+      okrTreePaint(tree, objs);
     });
-    wrap.appendChild(host);
-    objs.forEach(function(o){
-      var el=cv.querySelector('[data-fid="'+o.id+'"]');
-      sizes[o.id]={w:el.offsetWidth||224, h:el.offsetHeight||132};
-    });
-    var pos=okrFlowLayout(objs, sizes);
-    objs.forEach(function(o){
-      var el=cv.querySelector('[data-fid="'+o.id+'"]');
-      var hasSaved = (typeof o.fx==="number" && typeof o.fy==="number");
-      el.style.left = (hasSaved ? o.fx : pos[o.id].x) + "px";
-      el.style.top  = (hasSaved ? o.fy : pos[o.id].y) + "px";
-    });
-    if(okrFlowFitKey !== cyc.key){ okrFlowFitKey = cyc.key; okrFlowFit(host, cv, objs); }
-    else okrFlowApplyView(cv);
-    okrFlowPaintState(host, objs);
-
-    /* ---- drag a node ---- */
-    var drag=null;
-    host.addEventListener("pointerdown", function(e){
-      var node = e.target.closest ? e.target.closest(".okrflow-node") : null;
-      if(node && !(e.target.closest("button") || e.target.closest("input") || e.target.closest("a"))){
-        var id=node.getAttribute("data-fid");
-        drag={node:node, id:id, sx:e.clientX, sy:e.clientY, ox:parseFloat(node.style.left)||0, oy:parseFloat(node.style.top)||0, moved:false};
-        node.classList.add("dragging");
-        host.setPointerCapture && host.setPointerCapture(e.pointerId);
-        e.preventDefault();
-        return;
-      }
-      if(!node){
-        drag={pan:true, sx:e.clientX, sy:e.clientY, ox:okrFlowView.x, oy:okrFlowView.y, moved:false};
-        host.classList.add("panning");
-        host.setPointerCapture && host.setPointerCapture(e.pointerId);
-      }
-    });
-    host.addEventListener("pointermove", function(e){
-      if(!drag) return;
-      var dx=e.clientX-drag.sx, dy=e.clientY-drag.sy;
-      if(Math.abs(dx)>3 || Math.abs(dy)>3) drag.moved=true;
-      if(drag.pan){ okrFlowView.x=drag.ox+dx; okrFlowView.y=drag.oy+dy; okrFlowApplyView(cv); return; }
-      drag.node.style.left=Math.round(drag.ox+dx/okrFlowView.k)+"px";
-      drag.node.style.top =Math.round(drag.oy+dy/okrFlowView.k)+"px";
-      okrFlowDrawLinks(host, objs);
-    });
-    function endDrag(){
-      if(!drag) return;
-      host.classList.remove("panning");
-      if(drag.node){
-        drag.node.classList.remove("dragging");
-        if(drag.moved){
-          var ob=objs.filter(function(o){return o.id===drag.id;})[0];
-          if(ob){ ob.fx=parseFloat(drag.node.style.left)||0; ob.fy=parseFloat(drag.node.style.top)||0; okrFlowSaveSoon(); }
-        } else {
-          okrFlowSel = (okrFlowSel===drag.id) ? null : drag.id;
-          okrFlowPaintState(host, objs);
-        }
-      } else if(!drag.moved){
-        if(okrFlowSel){ okrFlowSel=null; okrFlowPaintState(host, objs); }
-      }
-      drag=null;
-    }
-    host.addEventListener("pointerup", endDrag);
-    host.addEventListener("pointercancel", endDrag);
-    host.addEventListener("wheel", function(e){
-      if(!(e.ctrlKey||e.metaKey)) return;     /* plain scroll still scrolls the page */
-      e.preventDefault();
-      var k=Math.min(1.6, Math.max(0.35, okrFlowView.k * (e.deltaY<0 ? 1.1 : 0.9)));
-      okrFlowView.k=k; okrFlowApplyView(cv);
-    }, {passive:false});
-
-    /* ---- canvas toolbar ---- */
-    var bar=document.createElement("div"); bar.className="okrflow-bar";
-    function zbtn(txt, title, fn){ var b=document.createElement("button"); b.className="okrflow-zb"; b.textContent=txt; b.title=title; b.onclick=fn; return b; }
-    function zoom(mul){ okrFlowView.k=Math.min(1.6, Math.max(0.35, okrFlowView.k*mul)); okrFlowApplyView(cv); }
-    bar.appendChild(zbtn("−","Zoom out", function(){ zoom(0.85); }));
-    bar.appendChild(zbtn("▣","Fit — show the whole chart", function(){ okrFlowFit(host, cv, objs); }));
-    bar.appendChild(zbtn("＋","Zoom in", function(){ zoom(1.18); }));
-    var rst=zbtn("↺ Tidy up","Snap every card back to the automatic layout", function(){
-      if(!window.confirm("Put every card back where it started? Any positions people have dragged are lost.")) return;
-      cyc.objectives.forEach(function(o){ delete o.fx; delete o.fy; });
-      okrFlowSel=null; okrFlowFitKey=""; saveOkrs();
-    });
-    rst.classList.add("wide"); bar.appendChild(rst);
-    host.appendChild(bar);
-
-    var hint=document.createElement("div"); hint.className="okrflow-hint";
-    hint.textContent="Drag a card to move it · drag the background to pan · click a card to light up its line to the top";
-    host.appendChild(hint);
+    var hint=document.createElement("div"); hint.className="okrtree-hint";
+    hint.textContent="Click a card to light up its line up to the North Star · lines follow “aligns to”, change it from ✎ on a card";
+    wrap.appendChild(hint);
   }
   if(editMode){
     var add=document.createElement("button"); add.className="addline"; add.style.padding="12px";
@@ -10301,7 +10170,7 @@ function renderOkrTree(cyc, wrap){
 }
 function okrTreeNode(ob, cyc, objs, flat){
   var li=document.createElement("li");
-  var card=document.createElement("div"); card.className="okrtree-node"; card.id="obj-"+ob.id;
+  var card=document.createElement("div"); card.className="okrtree-node"; card.id="obj-"+ob.id; card.setAttribute("data-oid", ob.id);
   var lv=(ob.level||"").trim();
   var p=objRollupPct(ob);
   var auto=ob.rollup==="auto";
