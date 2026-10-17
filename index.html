@@ -2479,6 +2479,13 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .rmw-lg-sum{width:22px!important;height:8px!important;background:#C8473B;border-radius:0!important}
 .rmw-lg-bar{width:22px!important;height:10px!important;background:linear-gradient(90deg,#2F55B5 55%,#B9C6EA 55%)}
 .rmw-lg-dep{width:22px!important;height:0!important;border-top:1.5px solid #2F55B5;border-radius:0!important}
+.rmg-blk{touch-action:none}
+.rmg-dragging{opacity:.35}
+.rmg-ghost{z-index:400;pointer-events:none;box-shadow:0 12px 30px rgba(0,0,0,.3)!important;opacity:.95;cursor:grabbing;box-sizing:border-box}
+.rmg-cell.rmg-drop,.rmg-phase.rmg-drop,.rms-task.rmg-drop{background:color-mix(in srgb,var(--indigo) 12%,transparent)!important}
+.rms-band.rmg-drop{box-shadow:inset 0 0 0 2px var(--indigo)}
+.rml-lane.rmg-drop{box-shadow:0 0 0 2px var(--indigo)!important;background:var(--indigo-soft)!important}
+.rmw-row.rmg-drop,.rmw-row.rmg-drop .rmw-name{background:var(--indigo-soft)!important}
 .rml-sw{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
 .rml-sw button{width:28px;height:28px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;box-shadow:inset 0 0 0 1px rgba(0,0,0,.1)}
 .rml-sw button.auto{width:auto;border-radius:99px;padding:0 10px;font-size:11.5px;font-weight:600;background:var(--paper);color:var(--muted);border-color:var(--line-strong)}
@@ -12627,6 +12634,7 @@ function renderRmapLanes(m, wrap, byTid){
     const items = live.filter(it=> rmlLaneOf(m, it)===ln)
       .sort((a,b)=> (dNum(a.end||a.start||todayISO()) - dNum(b.end||b.start||todayISO())));
     const sec = document.createElement("section"); sec.className = "rml-lane" + (ln.kind==="ongoing" ? " ongoing" : "");
+    sec.dataset.lane = ln.id;
     const lh = document.createElement("div"); lh.className = "rml-lh";
     const nm = document.createElement("div"); nm.className = "rml-lname"; nm.textContent = ln.name;
     const kd = document.createElement("span"); kd.className = "rml-kind"; kd.textContent = ln.kind==="ongoing" ? "Ongoing" : "Project";
@@ -12723,7 +12731,7 @@ function rmlCard(m, it, en, ln){
     b.onclick = e=>{ e.stopPropagation(); it.lastDone = todayISO(); saveRmaps(); toast("Logged for today"); };
     card.appendChild(b);
   }
-  card.onclick = ()=>{ if(editMode) rmlEditItem(m, it, en); };
+  if(editMode){ card.style.touchAction = "none"; card.title = "Click to edit · drag to another lane"; rmgItemDrag(card, m, it, ()=>1, 0, ()=> rmlEditItem(m, it, en)); }
   if(!editMode) card.style.cursor = "default";
   stop.append(date, dot, card);
   return stop;
@@ -12931,7 +12939,7 @@ function renderRmapGantt(m, wrap, byTid){
     });
     const span = Math.max(1, rowsEnd.length);
     const lab = document.createElement("div"); lab.className = "rmg-phase";
-    lab.style.gridRow = rIdx + " / span " + span;
+    lab.style.gridRow = rIdx + " / span " + span; lab.dataset.lane = ln.id;
     lab.textContent = ln.name;
     if(editMode){
       const ed = document.createElement("button"); ed.className = "rml-mini"; ed.textContent = "✎"; ed.title = "Rename / delete phase";
@@ -12941,7 +12949,7 @@ function renderRmapGantt(m, wrap, byTid){
     rmlLaneDrag(lab, m, ln);
     grid.appendChild(lab);
     for(let r=0; r<span; r++) for(let w=0; w<nW; w++){
-      const bg = document.createElement("div"); bg.className = "rmg-cell" + (inRange && w===tw ? " now" : "") + (r===span-1 ? " last" : "");
+      const bg = document.createElement("div"); bg.className = "rmg-cell" + (inRange && w===tw ? " now" : "") + (r===span-1 ? " last" : ""); bg.dataset.lane = ln.id;
       bg.style.gridRow = String(rIdx + r); bg.style.gridColumn = String(w + 2);
       grid.appendChild(bg);
     }
@@ -12953,7 +12961,7 @@ function renderRmapGantt(m, wrap, byTid){
       blk.style.background = it.color || colorOf(it.team);
       blk.textContent = (st==="done" ? "✓ " : isLocked(en.task) ? "🔒 " : "") + (en.task.title || "(untitled)");
       blk.title = (en.task.title||"") + "\n" + rmlFmt(it.start) + " → " + rmlFmt(it.end) + (it.team ? "\nTeam: " + it.team : "") + "\n" + en.path;
-      if(editMode) blk.onclick = ()=> rmlEditItem(m, it, en); else blk.style.cursor = "default";
+      if(editMode) rmgItemDrag(blk, m, it, ()=> (grid.querySelector(".rmg-wk")||{}).offsetWidth, 7, ()=> rmlEditItem(m, it, en)); else blk.style.cursor = "default";
       grid.appendChild(blk);
     });
     rIdx += span;
@@ -12966,6 +12974,50 @@ function renderRmapGantt(m, wrap, byTid){
   wrap.appendChild(lg);
 }
 
+/* drag a task block / bar to another phase or swimlane (the row under the pointer, via data-lane)
+   and sideways by whole units (a week in Simple Gantt, a day in Swimlane Gantt). A click still edits. */
+function rmgItemDrag(el, m, it, unitPx, unitDays, onClick){
+  el.addEventListener("pointerdown", e=>{
+    if(e.button!==0) return;
+    if(e.target.closest && e.target.closest("button,input,a")) return;
+    const sx = e.clientX, sy = e.clientY, host = el.closest(".rmg-grid") || document;
+    let moved = false, target = null, ghost = null;
+    const mark = id=>{ host.querySelectorAll(".rmg-drop").forEach(x=> x.classList.remove("rmg-drop")); if(id) host.querySelectorAll('[data-lane="'+id+'"]').forEach(x=> x.classList.add("rmg-drop")); };
+    const mv = ev=>{
+      const dx = ev.clientX - sx, dy = ev.clientY - sy;
+      if(!moved && Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
+      if(!moved){
+        moved = true;
+        /* a floating copy follows the pointer, so scroll boxes can't clip it */
+        const r = el.getBoundingClientRect();
+        ghost = el.cloneNode(true); ghost.classList.add("rmg-ghost");
+        Object.assign(ghost.style, { position:"fixed", left:r.left+"px", top:r.top+"px", width:r.width+"px", height:r.height+"px", margin:"0", background: getComputedStyle(el).background });
+        document.body.appendChild(ghost);
+        el.classList.add("rmg-dragging");
+      }
+      ghost.style.transform = "translate("+dx+"px,"+dy+"px)";
+      const under = document.elementFromPoint(ev.clientX, ev.clientY);
+      target = under && under.closest ? under.closest("[data-lane]") : null;
+      mark(target && target.dataset.lane);
+    };
+    const up = ev=>{
+      window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up);
+      mark(null); el.classList.remove("rmg-dragging"); if(ghost) ghost.remove();
+      if(!moved){ onClick(); return; }
+      const dx = ev.clientX - sx, u = unitPx() || 1;
+      const shift = unitDays ? Math.round(dx / u) * unitDays : 0;
+      const lane = target && target.dataset.lane;
+      let changed = false;
+      if(lane && lane !== rmlLaneOf(m, it).id){ it.lane = lane; changed = true; }
+      if(shift){
+        const s = dNum(it.start||it.end||todayISO()), en = dNum(it.end||it.start||todayISO());
+        it.start = dISO(s + shift); it.end = dISO(en + shift); changed = true;
+      }
+      if(changed){ saveRmaps(); toast("Moved"); }
+    };
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+  });
+}
 /* Swimlane Gantt: one band per swimlane (team / workstream), one row per task,
    bars placed on exact days; colour = the swimlane. */
 function rmgSwimlanes(m, wrap, byTid, live, w0, nW, today){
@@ -12983,9 +13035,9 @@ function rmgSwimlanes(m, wrap, byTid, live, w0, nW, today){
     grid.appendChild(c);
   }
   let r = 2;
-  const weekCells = (row, last)=>{
+  const weekCells = (row, last, laneId)=>{
     for(let w=0; w<nW; w++){
-      const bg = document.createElement("div"); bg.className = "rmg-cell" + (last ? " last" : "") + (inRange && w===tw ? " now" : "");
+      const bg = document.createElement("div"); bg.className = "rmg-cell" + (last ? " last" : "") + (inRange && w===tw ? " now" : ""); bg.dataset.lane = laneId;
       bg.style.gridRow = String(row); bg.style.gridColumn = (2 + w*7) + " / span 7";
       grid.appendChild(bg);
     }
@@ -12997,7 +13049,7 @@ function rmgSwimlanes(m, wrap, byTid, live, w0, nW, today){
       return !(e0 < 0 || s0 > nD-1);
     }).sort((x,y)=> dNum(x.start||todayISO()) - dNum(y.start||todayISO()));
     const band = document.createElement("div"); band.className = "rms-band";
-    band.style.gridRow = String(r); band.style.gridColumn = "1 / -1"; band.style.setProperty("--sw", col);
+    band.style.gridRow = String(r); band.style.gridColumn = "1 / -1"; band.style.setProperty("--sw", col); band.dataset.lane = ln.id;
     const done = items.filter(it=> effStatus(byTid[it.tid].task)==="done").length;
     band.innerHTML = '<span class="rms-name">'+mtEsc(ln.name)+'</span><span class="rms-cnt">'+items.length+' task'+(items.length===1?'':'s')+(items.length ? ' · '+done+' done' : '')+'</span>';
     if(editMode){
@@ -13009,24 +13061,24 @@ function rmgSwimlanes(m, wrap, byTid, live, w0, nW, today){
     grid.appendChild(band);
     r++;
     if(!items.length){
-      const e = document.createElement("div"); e.className = "rms-task muted"; e.style.gridRow = String(r); e.textContent = "No tasks in this window";
-      grid.appendChild(e); weekCells(r, true); r++;
+      const e = document.createElement("div"); e.className = "rms-task muted"; e.style.gridRow = String(r); e.textContent = "No tasks in this window"; e.dataset.lane = ln.id;
+      grid.appendChild(e); weekCells(r, true, ln.id); r++;
       return;
     }
     items.forEach((it, ii)=>{
       const en = byTid[it.tid], st = effStatus(en.task), locked = isLocked(en.task);
-      const lab = document.createElement("div"); lab.className = "rms-task"; lab.style.gridRow = String(r);
+      const lab = document.createElement("div"); lab.className = "rms-task"; lab.style.gridRow = String(r); lab.dataset.lane = ln.id;
       lab.innerHTML = '<span class="rms-t">'+mtEsc(en.task.title||"(untitled)")+'</span>'
         + '<span class="rms-sub">'+mtEsc([it.team || en.task.owner || "", rmlFmt(it.start)+" → "+rmlFmt(it.end)].filter(Boolean).join(" · "))+'</span>';
       grid.appendChild(lab);
-      weekCells(r, ii===items.length-1);
+      weekCells(r, ii===items.length-1, ln.id);
       const s = Math.max(0, dayOf(dNum(it.start || it.end || todayISO()))), e = Math.min(nD-1, Math.max(s, dayOf(dNum(it.end || it.start || todayISO()))));
       const bar = document.createElement("div");
       bar.className = "rmg-blk rms-bar" + (st==="done" ? " done" : "") + (locked ? " locked" : "");
       bar.style.gridRow = String(r); bar.style.gridColumn = (s + 2) + " / " + (e + 3); bar.style.background = it.color || col;
       bar.textContent = (st==="done" ? "✓ " : locked ? "🔒 " : "") + (STATUS_LABEL[st] || st || "");
       bar.title = (en.task.title||"") + "\n" + rmlFmt(it.start) + " → " + rmlFmt(it.end) + (it.team ? "\n" + it.team : "") + "\n" + en.path;
-      if(editMode){ bar.onclick = ()=> rmlEditItem(m, it, en); lab.onclick = ()=> rmlEditItem(m, it, en); lab.style.cursor = "pointer"; } else bar.style.cursor = "default";
+      if(editMode){ rmgItemDrag(bar, m, it, ()=> ((grid.querySelector(".rmg-wk")||{}).offsetWidth||0)/7, 1, ()=> rmlEditItem(m, it, en)); lab.onclick = ()=> rmlEditItem(m, it, en); lab.style.cursor = "pointer"; } else bar.style.cursor = "default";
       grid.appendChild(bar);
       r++;
     });
@@ -13191,6 +13243,7 @@ function renderRmapWbs(m, wrap, byTid){
   const barGeo = {};   /* tid -> {x1, x2, y} for arrows */
   rows.forEach((r, ri)=>{
     const rw = document.createElement("div"); rw.className = "rmw-row " + r.kind + (r.kind==="group" ? " lvl" + Math.min(r.lvl,3) : "");
+    rw.dataset.lane = r.kind==="group" ? r.ln.id : rmlLaneOf(m, r.it).id;   /* drop a dragged task here to move it into this group */
     const nm = document.createElement("div"); nm.className = "rmw-name"; nm.style.paddingLeft = (10 + r.lvl*18) + "px";
     const ln = document.createElement("div"); ln.className = "rmw-lane"; ln.style.width = W + "px";
     if(r.kind==="group"){
@@ -13237,6 +13290,7 @@ function renderRmapWbs(m, wrap, byTid){
       barGeo[it.tid] = { x1: X(s), x2: X(s) + Math.max(6, Math.round((e - s + 1)*pxd)), y: ri*RMW_ROW + RMW_ROW/2 };
       const open = ()=>{ if(editMode) rmlEditItem(m, it, en); };
       tt.onclick = open; if(editMode) tt.style.cursor = "pointer";
+      if(editMode){ tt.onclick = null; tt.style.touchAction = "none"; tt.title += "\nClick to edit · drag onto a group to move it there"; rmgItemDrag(tt, m, it, ()=>1, 0, open); }
       if(editMode) rmwBarDrag(bar, lab, it, pxd, open);
     }
     rw.append(nm, ln); body.appendChild(rw);
