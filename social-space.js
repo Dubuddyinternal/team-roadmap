@@ -435,6 +435,8 @@ details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var
 .aload.bad{color:var(--crit);background:var(--crit-soft);height:auto;min-height:34px;padding:6px 12px}.aload.bad .aspin{display:none}
 .aspin{width:13px;height:13px;flex:0 0 13px;border-radius:50%;border:2px solid color-mix(in srgb,var(--accent) 25%,transparent);border-top-color:var(--accent);animation:aspin .8s linear infinite;display:inline-block}
 @keyframes aspin{to{transform:rotate(360deg)}}
+.rawbox,.rawclean{transition:background .15s,box-shadow .15s;border-radius:var(--r-s)}
+.rawbox.dropon,.rawclean.dropon{background:var(--accent-soft,color-mix(in srgb,var(--accent) 10%,transparent));box-shadow:0 0 0 2px var(--accent) inset}
 .rawbin{display:flex;gap:10px;align-items:center;margin:12px 0 4px;padding:10px 12px;border-radius:var(--r-s);border:1px dashed color-mix(in srgb,var(--crit) 45%,var(--line));background:var(--crit-soft);font-size:13px}
 .rawaudio{margin-top:8px;padding:9px 11px;border:1px solid var(--line);border-radius:var(--r-s);background:var(--surface)}
 .rawclean{margin-top:10px;padding-top:9px;border-top:1px dashed var(--line)}
@@ -2723,7 +2725,7 @@ function openCard(id,showGate){
               ${isNew||off?"":IMPORTJOB[c.id]?`<button type="button" class="btn sm danger" data-rawimpstop data-w="1">Stop copying</button>`
                 :`<button type="button" class="btn sm pri" data-rawimport data-w="1" ${okUrl?"":"disabled"}>⬇ Copy the video into storage</button>`}
               ${okUrl?`<a class="hint" href="${esc(link)}" target="_blank" rel="noopener">Open the link ↗</a>`:""}</div>
-            <div class="hint" data-rawimp-st style="margin:6px 0 0">${IMPORTJOB[c.id]?esc(IMPORTJOB[c.id].msg):isNew?"Create the card first, then copy the video into storage.":"Share the link as “Anyone with the link”. Copying puts the file in storage and makes the audio"+(useClaude?", and Claude edit can use it.":" — the editor can download both from here.")}</div>
+            <div class="hint" data-rawimp-st style="margin:6px 0 0">${IMPORTJOB[c.id]?esc(IMPORTJOB[c.id].msg):isNew?"Create the card first, then copy the video into storage.":"Share the link as “Anyone with the link”. Copying puts the file in storage and makes the audio"+(useClaude?", and Claude edit can use it.":" — the editor can download both from here.")+" Have the file? Drop it on this box."}</div>
             ${IMPORTJOB[c.id]&&IMPORTJOB[c.id].files?`<div class="rawpick" style="display:flex;flex-direction:column;gap:5px;margin-top:6px">${IMPORTJOB[c.id].files.map((f,i)=>`<button type="button" class="btn sm" data-rawpick="${i}" data-w="1" style="justify-content:flex-start;text-align:left">🎞️ ${esc(f.name)} <span class="hint" style="margin-left:auto">${mb(f.size)}</span></button>`).join("")}</div>`:""}
             <div class="pp-bar" data-rawimpbar ${IMPORTJOB[c.id]&&IMPORTJOB[c.id].pc!=null?"":"hidden"}><i style="width:${(IMPORTJOB[c.id]&&IMPORTJOB[c.id].pc)||0}%"></i></div></div>`
         :r&&r.kind==="file"?`<div class="drop has"><span style="font-size:22px">🎞️</span>
@@ -2747,7 +2749,8 @@ function openCard(id,showGate){
                   :`<div class="rawaudio-h">✨ <b>Clean the voice</b> <span class="hint">${CLEANJOB[c.id]?esc(CLEANJOB[c.id]):"optional — Adobe Podcast removes background noise"}</span>${CLEANJOB[c.id]?`<span class="aspin"></span>`:""}</div>
                     <div class="pp-row" style="margin-top:6px;gap:6px;display:flex;flex-wrap:wrap">
                       <button type="button" class="btn sm" data-adobe data-w="1">1 · Clean in Adobe Podcast ↗</button>
-                      <label class="btn sm" data-w="1" style="cursor:pointer">2 · Upload cleaned audio<input type="file" accept="audio/*,.wav,.mp3,.m4a,.flac" data-rawcleanfile hidden></label></div>
+                      <label class="btn sm" data-w="1" style="cursor:pointer">2 · Upload cleaned audio<input type="file" accept="audio/*,.wav,.mp3,.m4a,.flac" data-rawcleanfile hidden></label>
+                      <span class="hint" data-w="1">or drop the audio file here</span></div>
                     <p class="hint" style="margin:6px 0 0">Step 1 downloads the WAV and opens Enhance Speech: drop the WAV in, then download Adobe's result. Step 2: upload that file here${useClaude?" — Claude's edit then uses the clean voice":" — it stays next to the video for the editor"}.</p>`}
                 </div>`
               :`<div class="rawaudio-h">🎵 <b>Audio (WAV)</b> ${AUDIOJOB[c.id]?`<span class="aspin"></span>`:""}<span class="hint">${AUDIOJOB[c.id]?esc(AUDIOJOB[c.id]):"not made yet"}</span>
@@ -2758,7 +2761,7 @@ function openCard(id,showGate){
         :off?`<p class="hint pre-note">Uploading needs the video storage switched on (an owner sets it up once — <b>routine/SETUP.md</b>). Paste a link for now.</p>`
         :`<div class="drop" data-rawdrop><div class="lbl">Raw video</div>
             <label class="filebtn" data-w="1">Choose file<input type="file" accept="video/*" data-rawfile></label>
-            <div class="hint" style="margin-top:7px" data-rawup>MP4 or MOV, straight from the phone or camera. It's stored for the team${useClaude?" and Claude edit uses it":""}.</div>
+            <div class="hint" style="margin-top:7px" data-rawup>Drop the video here, or choose it. MP4 or MOV, straight from the phone or camera. It's stored for the team${useClaude?" and Claude edit uses it":""}.</div>
             <div class="pp-bar" data-rawbar hidden><i></i></div></div>`}
       </div>`; };
     const fileSlot=(key,label,accept,note)=>{ const f=c.post[key];
@@ -3023,15 +3026,17 @@ function openCard(id,showGate){
         toast("WAV downloaded — drop it into Adobe Podcast, then upload the result here"); }
       catch(e){ toast("Couldn't download the WAV: "+e.message); if(tab) tab.close(); }
       adb.disabled=false; adb.textContent="1 · Clean in Adobe Podcast ↗"; };
-    $("#drawer").querySelectorAll("[data-rawcleanfile]").forEach(inp=>inp.onchange=async()=>{
-      const f=inp.files[0]; if(!f) return; const id=c.id;
-      if(!(/^audio\//.test(f.type)||/\.(wav|mp3|m4a|aac|flac|ogg)$/i.test(f.name))){ toast("Pick an audio file (.wav / .mp3 / .m4a)"); return; }
+    const isAudio=f=>/^audio\//.test(f.type)||/\.(wav|mp3|m4a|aac|flac|ogg)$/i.test(f.name);
+    const isVideo=f=>/^video\//.test(f.type)||/\.(mp4|mov|m4v|mkv)$/i.test(f.name);
+    $("#drawer").querySelectorAll("[data-rawcleanfile]").forEach(inp=>inp.onchange=()=>{ if(inp.files[0]) cleanUpload(inp.files[0]); });
+    const cleanUpload=async f=>{ const id=c.id;
+      if(!isAudio(f)){ toast(isVideo(f)?"That's a video — drop it on the Raw video box":"Pick an audio file (.wav / .mp3 / .m4a)"); return; }
       const step=m=>{ CLEANJOB[id]=m; const el=$("#drawer").querySelector(".rawclean .hint"); if(el&&OPEN&&OPEN.id===id) el.textContent=m; };
       try{ step("Uploading…"); const up=await PIPE.uploadClean(id, f, pc=>step("Uploading… "+pc+"%"));
         const card=CARDS.find(x=>x.id===id); if(card&&card.raw){ card.raw.clean=Object.assign(up,{ at:today(), by:meName() }); save(); }
         delete RAWLINKS[id]; toast("Cleaned audio saved — Claude's edit will use it"); }
       catch(e){ toast("Upload didn't work: "+e.message); }
-      delete CLEANJOB[id]; if(OPEN&&OPEN.id===id){ if(dirty) read(); draw(c.pre.keywords); } });
+      delete CLEANJOB[id]; if(OPEN&&OPEN.id===id){ if(dirty) read(); draw(c.pre.keywords); } };
     const cdel=$("#drawer").querySelector("[data-rawcleandel]");
     if(cdel) cdel.onclick=async()=>{
       if(!confirm("Delete the cleaned audio from storage? Claude's edit goes back to the camera sound.")) return;
@@ -3109,9 +3114,23 @@ function openCard(id,showGate){
         delete RAWLINKS[c.id]; binDone(); keepRaw(up); getAudio(f); }
       catch(e){ if(st) st.textContent=e.message; if(bar) bar.hidden=true; toast("Upload didn't work: "+e.message); } };
     $("#drawer").querySelectorAll("[data-rawfile]").forEach(inp=>inp.onchange=()=>{ if(inp.files[0]) rawUpload(inp.files[0]); });
-    const rd=$("#drawer").querySelector("[data-rawdrop]");
-    if(rd){ rd.ondragover=e=>{ e.preventDefault(); rd.style.borderColor="var(--accent)"; }; rd.ondragleave=()=>{ rd.style.borderColor=""; };
-      rd.ondrop=e=>{ e.preventDefault(); rd.style.borderColor=""; const f=(e.dataTransfer.files||[])[0]; if(f) rawUpload(f); }; }
+    // a drop target: lights up while a file is over it (only the innermost box — Clean the voice sits inside Raw video)
+    const dropZone=(el,take)=>{ if(!el || !canEdit()) return;
+      const files=e=>[...(e.dataTransfer&&e.dataTransfer.types||[])].includes("Files");
+      el.addEventListener("dragover",e=>{ if(!files(e)) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect="copy";
+        el.classList.add("dropon"); clearTimeout(el._dt); el._dt=setTimeout(()=>el.classList.remove("dropon"),160); });
+      el.addEventListener("drop",e=>{ if(!files(e)) return; e.preventDefault(); e.stopPropagation(); el.classList.remove("dropon");
+        const f=(e.dataTransfer.files||[])[0]; if(f) take(f); }); };
+    // the cleaned audio: on the Clean the voice box (needs the raw video's audio first)
+    dropZone($("#drawer").querySelector(".rawclean"), f=>cleanUpload(f));
+    // the raw video: anywhere on the Raw video box (link or upload mode) while there's none
+    dropZone($("#drawer").querySelector(".rawbox"), f=>{
+      if(isAudio(f)){ toast(c.raw?"Drop the cleaned audio on “Clean the voice”":"Add the raw video first — then drop the cleaned audio on “Clean the voice”"); return; }
+      if(!isVideo(f)){ toast("Drop a video file (.mp4 / .mov)"); return; }
+      if(c.raw&&c.raw.kind==="file"){ toast("Delete the current video first (it goes to the bin), then drop the new one"); return; }
+      rawUpload(f); });
+    // anything dropped elsewhere on the card doesn't open the file in the browser tab
+    const dr=$("#drawer"); if(!dr._nodrop){ dr._nodrop=1; dr.addEventListener("dragover",e=>e.preventDefault()); dr.addEventListener("drop",e=>{ e.preventDefault(); toast("Drop the raw video on “Raw video”, the cleaned audio on “Clean the voice”"); }); }
     // Claude pipeline (pipeline.js): raw video → edit → your checks → post
     if(window.PIPE && $("#pipePanel")) PIPE.mount($("#pipePanel"), c, {
       raw: ()=>c.raw, onRaw: (up,f)=>{ delete RAWLINKS[c.id]; keepRaw(up); getAudio(f); },
