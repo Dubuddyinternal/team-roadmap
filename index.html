@@ -2437,6 +2437,15 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .okrtree li:only-child::after{border:0 none;border-left:2px solid var(--line-strong);border-radius:0}
 .okrtree ul ul::before{content:"";position:absolute;top:0;left:50%;width:0;height:26px;border-left:2px solid var(--line-strong)}
 .okrtree > ul > li{padding-top:0}
+.okrtree ul.okrtree-stack{flex-direction:column;align-items:center;gap:14px}
+.okrtree ul.okrtree-stack::before{height:100%;bottom:0;z-index:0}
+.okrtree ul.okrtree-stack > li{padding:0 8px;z-index:1}
+.okrtree li.okrtree-col > ul.okrtree-stack{padding-top:0}
+.okrtree ul.okrtree-stack > li::before,.okrtree ul.okrtree-stack > li::after{display:none}
+.okrtree-bar{display:flex;justify-content:flex-end;align-items:center;gap:6px;margin:4px 0 -4px}
+.okrtree-zb{border:1px solid var(--line-strong);background:var(--card);color:inherit;border-radius:99px;min-width:32px;height:30px;padding:0 10px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--disp)}
+.okrtree-zb:hover{border-color:var(--indigo);color:var(--indigo)}
+.okrtree-zl{font-family:var(--mono);font-size:11.5px;color:var(--muted);min-width:76px;text-align:center}
 .okrtree > ul > li::before,.okrtree > ul > li::after{display:none}
 .okrtree-node[data-oid]{width:220px;min-width:220px;max-width:220px}
 .okrtree-node.dim{opacity:.3}
@@ -10067,6 +10076,17 @@ function okrEditNode(ob, cyc){
 
 /* ================= OKR Org tree: fixed top-down chart (like My Team), North Star on top ================= */
 var okrTreeSel = null;                 /* objective id whose line is lit */
+var okrTreeZoom = "fit";               /* "fit" = shrink to the screen width, or a fixed scale */
+function okrTreeApplyZoom(scroll, tree, lbl){
+  tree.style.zoom=1;
+  var k = okrTreeZoom;
+  if(k==="fit"){ var w=tree.offsetWidth||1; k=Math.max(0.4, Math.min(1, (scroll.clientWidth-4)/w)); }
+  tree.style.zoom=k;
+  if(lbl) lbl.textContent=(okrTreeZoom==="fit"?"Fit · ":"")+Math.round(k*100)+"%";
+  /* keep the top of the chart (North Star) in the middle of the view */
+  scroll.scrollLeft=Math.max(0,(scroll.scrollWidth-scroll.clientWidth)/2);
+  return k;
+}
 /* everything on this objective's line: its parents all the way up, and everything under it */
 function okrTreeLineage(id, objs){
   var set={}, byId={}; objs.forEach(function(o){ byId[o.id]=o; });
@@ -10138,12 +10158,23 @@ function renderOkrTree(cyc, wrap){
   if(hasNs || editMode){
     var nsLi=document.createElement("li");
     nsLi.appendChild(okrNorthStarNode());
-    if(roots.length){ var ul=document.createElement("ul"); roots.forEach(function(r){ ul.appendChild(okrTreeNode(r, cyc, objs)); }); nsLi.appendChild(ul); }
+    if(roots.length) nsLi.appendChild(okrTreeKids(roots, cyc, objs));
     top.appendChild(nsLi);
   } else {
     roots.forEach(function(r){ top.appendChild(okrTreeNode(r, cyc, objs)); });
   }
-  tree.appendChild(top); scroll.appendChild(tree); wrap.appendChild(scroll);
+  tree.appendChild(top);
+  var bar=document.createElement("div"); bar.className="okrtree-bar";
+  var lbl=document.createElement("span"); lbl.className="okrtree-zl";
+  function zb(txt,title,fn){ var b=document.createElement("button"); b.className="okrtree-zb"; b.textContent=txt; b.title=title; b.onclick=fn; return b; }
+  var cur=1;
+  bar.appendChild(zb("−","Zoom out", function(){ okrTreeZoom=Math.max(0.4, Math.round((cur-0.1)*10)/10); cur=okrTreeApplyZoom(scroll, tree, lbl); }));
+  bar.appendChild(lbl);
+  bar.appendChild(zb("＋","Zoom in", function(){ okrTreeZoom=Math.min(1.4, Math.round((cur+0.1)*10)/10); cur=okrTreeApplyZoom(scroll, tree, lbl); }));
+  bar.appendChild(zb("⤢ Fit","Show the whole chart in one view", function(){ okrTreeZoom="fit"; cur=okrTreeApplyZoom(scroll, tree, lbl); }));
+  if(objs.length) wrap.appendChild(bar);
+  scroll.appendChild(tree); wrap.appendChild(scroll);
+  cur=okrTreeApplyZoom(scroll, tree, lbl);
   if(!objs.length){
     var e=document.createElement("div"); e.className="empty";
     e.textContent = okrBoardMine ? "Nothing owned by you in this cycle." : ("No objectives yet."+((editMode||SESSION)?" Add one below.":""));
@@ -10167,6 +10198,19 @@ function renderOkrTree(cyc, wrap){
     add.onclick=function(){ okrAddOwned(cyc, null); };
     wrap.appendChild(add);
   }
+}
+/* children row. Objectives with nothing under them are stacked in one column
+   (left of their siblings) so the chart stays narrow enough to read in one view. */
+function okrTreeKids(kids, cyc, objs){
+  var ul=document.createElement("ul");
+  var leaves=kids.filter(function(k){ return !objs.some(function(o){ return o.alignsTo===k.id; }); });
+  if(leaves.length<2){ kids.forEach(function(k){ ul.appendChild(okrTreeNode(k, cyc, objs)); }); return ul; }
+  var stack=document.createElement("ul"); stack.className="okrtree-stack";
+  leaves.forEach(function(k){ stack.appendChild(okrTreeNode(k, cyc, objs)); });
+  if(leaves.length===kids.length) return stack;
+  var col=document.createElement("li"); col.className="okrtree-col"; col.appendChild(stack); ul.appendChild(col);
+  kids.forEach(function(k){ if(leaves.indexOf(k)<0) ul.appendChild(okrTreeNode(k, cyc, objs)); });
+  return ul;
 }
 function okrTreeNode(ob, cyc, objs, flat){
   var li=document.createElement("li");
@@ -10224,7 +10268,7 @@ function okrTreeNode(ob, cyc, objs, flat){
   if(flat) return card;
   li.appendChild(card);
   var kids=objs.filter(function(o){return o.alignsTo===ob.id;});
-  if(kids.length){ var ul=document.createElement("ul"); kids.forEach(function(k){ ul.appendChild(okrTreeNode(k, cyc, objs)); }); li.appendChild(ul); }
+  if(kids.length) li.appendChild(okrTreeKids(kids, cyc, objs));
   return li;
 }
 /* ---- permissions modal ---- */
