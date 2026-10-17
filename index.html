@@ -4557,7 +4557,7 @@ let DATA = null, OKRS = null, CONTENT = null, TIDEAS = null, DEV = null, BUGS = 
 const KCOLS = [ {key:"todo",label:"To Do"}, {key:"progress",label:"In Progress"}, {key:"review",label:"In Review"}, {key:"done",label:"Done"} ];
 const OKR_LEVELS = [ {key:"company",label:"Company"}, {key:"department",label:"Department"}, {key:"team",label:"Team"}, {key:"subteam",label:"Sub-team"}, {key:"individual",label:"Individual"} ];
 let okrFilter = null;   // null = all levels; else a level key to focus
-let okrView2 = "board";   // "board" | "tree"  (List view retired)
+let okrView2 = "tree";    // "tree" (Org tree, the default) | "board"  (List view retired)
 let okrBoardMine = false;   // filter every OKR view to the ones I own (objective or key result)
 let okrTreeExpanded = {};
 let okrPermId = null;
@@ -10704,8 +10704,8 @@ function renderContentOkr(){
     return;
   }
   var _tg=document.createElement('div'); _tg.className='okr-modetg';
-  if(okrView2!=='tree' && okrView2!=='board') okrView2='board';   // old sessions may still hold "list"
-  [['board','Board'],['tree','Org tree']].forEach(function(m){ var b=document.createElement('button'); b.className='okr-mode'+(okrView2===m[0]?' on':''); b.textContent=m[1]; b.onclick=function(){ okrView2=m[0]; renderAll(); }; _tg.appendChild(b); });
+  if(okrView2!=='tree' && okrView2!=='board') okrView2='tree';   // old sessions may still hold "list"
+  [['tree','Org tree'],['board','Board']].forEach(function(m){ var b=document.createElement('button'); b.className='okr-mode'+(okrView2===m[0]?' on':''); b.textContent=m[1]; b.onclick=function(){ okrView2=m[0]; renderAll(); }; _tg.appendChild(b); });
   var _canImp = (typeof canEditHere==="function") ? canEditHere() : editMode;
   if(_canImp){
     var _imp=document.createElement('button'); _imp.className='okr-mode okr-imp'; _imp.textContent='\u2b06 Import OKRs';
