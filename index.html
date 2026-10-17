@@ -2486,6 +2486,9 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .rms-band.rmg-drop{box-shadow:inset 0 0 0 2px var(--indigo)}
 .rml-lane.rmg-drop{box-shadow:0 0 0 2px var(--indigo)!important;background:var(--indigo-soft)!important}
 .rmw-row.rmg-drop,.rmw-row.rmg-drop .rmw-name{background:var(--indigo-soft)!important}
+.rmg-grid{position:relative}
+.rml-deps{position:absolute;left:0;top:0;pointer-events:none;z-index:3;overflow:visible}
+.rmb-type{flex:none;font:inherit;font-size:11.5px;padding:3px 6px;border:1px solid var(--line-strong);border-radius:6px;background:var(--card);color:var(--ink,#172B4D);cursor:pointer}
 .rmb-search{width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--paper);font:inherit;margin-bottom:8px}
 .rmb-list{max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:10px}
 .rmb-grp{position:sticky;top:0;background:var(--paper);font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:6px 12px;border-bottom:1px solid var(--line)}
@@ -8315,11 +8318,22 @@ function blockerLabel(entry){
   return STATUS_LABEL[effStatus(t)] || effStatus(t);
 }
 // Returns the blockers that are NOT yet done. Empty array = task is unlocked.
+/* dependency type per blocker, kept on the waiting task: task.depType = { blockerTid: "SS"|"FF"|"SF" }
+   (missing = "FS"). FS: start after it finishes · SS: start once it has started ·
+   FF: finish only after it finishes · SF: finish only after it has started. Only FS / SS lock the start. */
+const DEP_TYPES = [["FS","Finish → start","starts when this finishes"],["SS","Start → start","starts once this has started"],["FF","Finish → finish","can finish only after this finishes"],["SF","Start → finish","can finish only after this starts"]];
+function depTypeOf(task, tid){ return (task && task.depType && task.depType[tid]) || "FS"; }
 function openBlockers(task){
   if(!task.blockedBy || !task.blockedBy.length) return [];
   return task.blockedBy
     .map(tid => taskByTid(tid))
-    .filter(b => b && effStatus(b.task) !== "done");
+    .filter(b => {
+      if(!b) return false;
+      const ty = depTypeOf(task, b.tid), st = effStatus(b.task);
+      if(ty==="SS") return st==="planned";
+      if(ty==="FF" || ty==="SF") return false;
+      return st !== "done";
+    });
 }
 function isLocked(task){ return openBlockers(task).length > 0; }
 
@@ -13004,6 +13018,7 @@ function renderRmapGantt(m, wrap, byTid){
     }
   };
   let rIdx = 2;
+  const barEls = {};
   /* left column reads like a task list: phase header, its tasks, then "＋ Add task…" */
   m.lanes.forEach(ln=>{
     const items = live.filter(it=> rmlLaneOf(m, it)===ln)
@@ -13048,6 +13063,7 @@ function renderRmapGantt(m, wrap, byTid){
       blk.style.gridRow = String(rIdx); blk.style.gridColumn = (s + 2) + " / " + (e + 3);
       blk.style.background = it.color || colorOf(it.team);
       blk.title = nm.title + "\n" + rmlFmt(it.start) + " → " + rmlFmt(it.end);
+      barEls[it.tid] = blk;
       if(editMode) rmgItemDrag(blk, m, it, ()=> weekPx()/7, 1, ()=> rmlEditItem(m, it, en)); else blk.style.cursor = "default";
       grid.appendChild(blk);
       rIdx++;
@@ -13069,13 +13085,72 @@ function renderRmapGantt(m, wrap, byTid){
     grid.appendChild(tl);
   }
   scroll.appendChild(grid); wrap.appendChild(scroll);
+  rmlDepOverlay(grid, barEls, byTid);
 
   const lg = document.createElement("div"); lg.className = "rmg-legend";
   lg.innerHTML = '<b>Legend</b>' + (teams.length ? teams.map(t=> '<span><i style="background:'+colorOf(t)+'"></i>'+mtEsc(t)+'</span>').join("") : '<span class="muted">Give tasks a “Team involved” to colour them by team</span>')
     + (live.some(it=>!(it.team||"").trim()) && teams.length ? '<span><i style="background:#8C95A3"></i>No team</span>' : '');
+  if(live.some(it=> byTid[it.tid] && (byTid[it.tid].task.blockedBy||[]).length)) lg.insertAdjacentHTML("beforeend", rmlDepLegend());
   wrap.appendChild(lg);
 }
 
+/* one dependency arrow between two bars, by type. fr / to = {x1, x2, y}; returns {d, bad} where
+   bad = the dates break the rule (drawn red) */
+function rmlDepPath(type, fr, to, half){
+  const g = 8, y0 = fr.y, y3 = to.y, mid = y3 > y0 ? y3 - half : y3 + half;
+  if(type==="SS"){
+    const x = Math.min(fr.x1, to.x1) - g;
+    return { d:"M"+fr.x1+","+y0+" H"+x+" V"+y3+" H"+(to.x1-2), bad: to.x1 < fr.x1 };
+  }
+  if(type==="FF"){
+    const x = Math.max(fr.x2, to.x2) + g;
+    return { d:"M"+fr.x2+","+y0+" H"+x+" V"+y3+" H"+(to.x2+2), bad: to.x2 < fr.x2 };
+  }
+  if(type==="SF"){
+    const d = (to.x2 + g <= fr.x1 - g)
+      ? "M"+fr.x1+","+y0+" H"+(fr.x1-g)+" V"+y3+" H"+(to.x2+2)
+      : "M"+fr.x1+","+y0+" H"+(fr.x1-g)+" V"+mid+" H"+(to.x2+g)+" V"+y3+" H"+(to.x2+2);
+    return { d, bad: to.x2 < fr.x1 };
+  }
+  const d = (to.x1 - 10 >= fr.x2 + g)
+    ? "M"+fr.x2+","+y0+" H"+(fr.x2+g)+" V"+y3+" H"+(to.x1-2)
+    : "M"+fr.x2+","+y0+" H"+(fr.x2+g)+" V"+mid+" H"+(to.x1-12)+" V"+y3+" H"+(to.x1-2);
+  return { d, bad: to.x1 < fr.x2 };
+}
+const RML_DEP_DEFS = '<defs><marker id="rml-ar" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#2F55B5"/></marker>'
+  + '<marker id="rml-arR" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#C8473B"/></marker></defs>';
+function rmlDepSvgPaths(pairs, half){
+  let out = RML_DEP_DEFS;
+  pairs.forEach(({type, fr, to})=>{
+    const p = rmlDepPath(type, fr, to, half);
+    out += '<path d="'+p.d+'" fill="none" stroke="'+(p.bad ? "#C8473B" : "#2F55B5")+'" stroke-width="1.4"'+(type!=="FS" ? ' stroke-dasharray="'+(type==="SS" ? "5 3" : type==="FF" ? "2 3" : "8 3 2 3")+'"' : '')+' marker-end="url(#'+(p.bad ? "rml-arR" : "rml-ar")+')"/>';
+  });
+  return out;
+}
+function rmlDepLegend(){
+  const sw = dash=> '<svg width="26" height="8" style="vertical-align:middle"><line x1="0" y1="4" x2="26" y2="4" stroke="#2F55B5" stroke-width="1.6"'+(dash ? ' stroke-dasharray="'+dash+'"' : '')+'/></svg>';
+  return '<span>'+sw("")+' Finish → start</span><span>'+sw("5 3")+' Start → start</span><span>'+sw("2 3")+' Finish → finish</span><span>'+sw("8 3 2 3")+' Start → finish</span><span><svg width="26" height="8" style="vertical-align:middle"><line x1="0" y1="4" x2="26" y2="4" stroke="#C8473B" stroke-width="1.6"/></svg> Dates break the link</span>';
+}
+/* arrows over a CSS-grid chart (Simple / Swimlane Gantt): measured from the bars once laid out */
+function rmlDepOverlay(grid, bars, byTid){
+  const draw = ()=>{
+    const old = grid.querySelector(":scope > .rml-deps"); if(old) old.remove();
+    const gr = grid.getBoundingClientRect(), geo = {};
+    Object.keys(bars).forEach(tid=>{ const r = bars[tid].getBoundingClientRect(); geo[tid] = { x1: r.left-gr.left, x2: r.right-gr.left, y: r.top-gr.top+r.height/2 }; });
+    const pairs = [];
+    Object.keys(bars).forEach(tid=>{
+      const t = byTid[tid] && byTid[tid].task;
+      (t && t.blockedBy || []).forEach(bt=>{ if(geo[bt]) pairs.push({ type: depTypeOf(t, bt), fr: geo[bt], to: geo[tid] }); });
+    });
+    if(!pairs.length) return;
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("class", "rml-deps");
+    svg.setAttribute("width", grid.scrollWidth); svg.setAttribute("height", grid.scrollHeight);
+    svg.innerHTML = rmlDepSvgPaths(pairs, 18);
+    grid.appendChild(svg);
+  };
+  draw();
+  if(window.ResizeObserver){ let w = grid.clientWidth; new ResizeObserver(()=>{ if(grid.clientWidth!==w){ w = grid.clientWidth; draw(); } }).observe(grid); }
+}
 /* drag a task block / bar to another phase or swimlane (the row under the pointer, via data-lane)
    and sideways by whole units (a week in Simple Gantt, a day in Swimlane Gantt). A click still edits. */
 function rmgItemDrag(el, m, it, unitPx, unitDays, onClick){
@@ -13137,6 +13212,7 @@ function rmgSwimlanes(m, wrap, byTid, live, w0, nW, today){
     grid.appendChild(c);
   }
   let r = 2;
+  const barEls = {};
   const weekCells = (row, last, laneId)=>{
     for(let w=0; w<nW; w++){
       const bg = document.createElement("div"); bg.className = "rmg-cell" + (last ? " last" : "") + (inRange && w===tw ? " now" : ""); bg.dataset.lane = laneId;
@@ -13187,6 +13263,7 @@ function rmgSwimlanes(m, wrap, byTid, live, w0, nW, today){
       bar.textContent = (st==="done" ? "✓ " : locked ? "🔒 " : "") + (STATUS_LABEL[st] || st || "");
       bar.title = (en.task.title||"") + "\n" + rmlFmt(it.start) + " → " + rmlFmt(it.end) + (it.team ? "\n" + it.team : "") + "\n" + en.path;
       if(editMode){ rmgItemDrag(bar, m, it, ()=> ((grid.querySelector(".rmg-wk")||{}).offsetWidth||0)/7, 1, ()=> rmlEditItem(m, it, en)); lab.onclick = ()=> rmlEditItem(m, it, en); lab.style.cursor = "pointer"; } else bar.style.cursor = "default";
+      barEls[it.tid] = bar;
       grid.appendChild(bar);
       r++;
     });
@@ -13198,9 +13275,11 @@ function rmgSwimlanes(m, wrap, byTid, live, w0, nW, today){
     grid.appendChild(tl);
   }
   scroll.appendChild(grid); wrap.appendChild(scroll);
+  rmlDepOverlay(grid, barEls, byTid);
   const lg = document.createElement("div"); lg.className = "rmg-legend";
   lg.innerHTML = '<b>Swimlanes</b>' + m.lanes.map((ln,li)=> '<span><i style="background:'+(ln.color || RMG_COLORS[li % RMG_COLORS.length])+'"></i>'+mtEsc(ln.name)+'</span>').join("")
     + '<span><i class="rms-lg-today"></i>Today</span>';
+  if(live.some(it=> byTid[it.tid] && (byTid[it.tid].task.blockedBy||[]).length)) lg.insertAdjacentHTML("beforeend", rmlDepLegend());
   wrap.appendChild(lg);
 }
 
@@ -13389,22 +13468,13 @@ function renderRmapWbs(m, wrap, byTid){
     rw.append(nm, ln); body.appendChild(rw);
   });
   /* dependency arrows: from the blocker's end to the waiting task's start */
-  let paths = '<defs><marker id="rmw-ar" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#2F55B5"/></marker>'
-    + '<marker id="rmw-arR" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#C8473B"/></marker></defs>';
+  const pairs = [];
   live.forEach(it=>{
     const t = byTid[it.tid].task, to = barGeo[it.tid];
     if(!to || !t.blockedBy) return;
-    t.blockedBy.forEach(bt=>{
-      const fr = barGeo[bt]; if(!fr) return;
-      const bad = to.x1 < fr.x2;   /* starts before its blocker ends */
-      const x0 = fr.x2, y0 = fr.y, x3 = to.x1, y3 = to.y, mid = y3 > y0 ? y3 - RMW_ROW/2 : y3 + RMW_ROW/2;
-      const d = (x3 - 10 >= x0 + 8)
-        ? "M"+x0+","+y0+" H"+(x0+8)+" V"+y3+" H"+(x3-2)
-        : "M"+x0+","+y0+" H"+(x0+8)+" V"+mid+" H"+(x3-12)+" V"+y3+" H"+(x3-2);
-      paths += '<path d="'+d+'" fill="none" stroke="'+(bad ? "#C8473B" : "#2F55B5")+'" stroke-width="1.4" marker-end="url(#'+(bad ? "rmw-arR" : "rmw-ar")+')"/>';
-    });
+    t.blockedBy.forEach(bt=>{ const fr = barGeo[bt]; if(fr) pairs.push({ type: depTypeOf(t, bt), fr, to }); });
   });
-  svg.innerHTML = paths;
+  svg.innerHTML = rmlDepSvgPaths(pairs, RMW_ROW/2);
   if(!rows.length){ const e = document.createElement("div"); e.className = "rmw-empty"; e.textContent = "No groups yet — ＋ Group to start."; body.appendChild(e); }
   inner.appendChild(body); scroll.appendChild(inner); wrap.appendChild(scroll);
 
@@ -13415,8 +13485,9 @@ function renderRmapWbs(m, wrap, byTid){
 
   const lg = document.createElement("div"); lg.className = "rmg-legend";
   lg.innerHTML = '<b>Legend</b><span><i class="rmw-lg-sum"></i>Group (summary)</span><span><i class="rmw-lg-bar"></i>Task — solid part is done</span>'
-    + '<span><i class="rmw-lg-dep"></i>Depends on (Blocked by)</span><span><i class="rms-lg-today"></i>Today</span>'
+    + '<span><i class="rms-lg-today"></i>Today</span>'
     + (editMode ? '<span class="muted">Drag a bar to move it, its right edge to stretch it</span>' : '');
+  if(live.some(it=> byTid[it.tid] && (byTid[it.tid].task.blockedBy||[]).length)) lg.insertAdjacentHTML("beforeend", rmlDepLegend());
   wrap.appendChild(lg);
 }
 /* drag a bar sideways to move it, or its grip to change the end date */
@@ -13515,10 +13586,11 @@ function rmlChartBlockers(en, m){
   const word = {gantt:"Phase", swimlane:"Swimlane", wbs:"Group"}[m.view] || "Lane";
   const ov = document.createElement("div"); ov.className = "overlay show";
   const dg = document.createElement("div"); dg.className = "dialog"; dg.style.maxWidth = "520px";
-  dg.innerHTML = '<h3>🔒 Blocked by — “'+mtEsc(t.title||"")+'”</h3><div class="hint" style="margin:-6px 0 10px">Tick what has to finish before this can start. Tasks on this chart:</div>';
+  dg.innerHTML = '<h3>🔒 Blocked by — “'+mtEsc(t.title||"")+'”</h3><div class="hint" style="margin:-6px 0 10px">Tick what this task depends on, then pick how: <b>Finish → start</b> waits till it’s done · <b>Start → start</b> can begin once it has begun · <b>Finish → finish</b> can’t end before it ends · <b>Start → finish</b> can’t end until it begins.</div>';
   const search = document.createElement("input"); search.type = "text"; search.placeholder = "Search this chart…"; search.className = "rmb-search";
   const list = document.createElement("div"); list.className = "rmb-list";
   const sel = new Set([...cur].filter(x=> m.items.some(it=> it.tid===x)));
+  const types = Object.assign({}, t.depType || {});
   const draw = ()=>{
     const q = search.value.trim().toLowerCase();
     list.innerHTML = "";
@@ -13534,11 +13606,18 @@ function rmlChartBlockers(en, m){
         const b = byTid[it.tid], st = effStatus(b.task), loop = waits.has(it.tid);
         const row = document.createElement("label"); row.className = "rmb-row" + (loop ? " off" : "") + (st==="done" ? " done" : "");
         const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = sel.has(it.tid); cb.disabled = loop;
-        cb.onchange = ()=>{ if(cb.checked) sel.add(it.tid); else sel.delete(it.tid); };
         const tx = document.createElement("span"); tx.className = "rmb-t"; tx.textContent = b.task.title || "(untitled)";
         const meta = document.createElement("span"); meta.className = "rmb-m";
         meta.textContent = loop ? "waits on this one" : (rmlFmt(it.start) + " → " + rmlFmt(it.end) + " · " + (STATUS_LABEL[st] || st || ""));
-        row.append(cb, tx, meta); list.appendChild(row);
+        /* how the two are linked — the four Gantt dependency types */
+        const ty = document.createElement("select"); ty.className = "rmb-type";
+        DEP_TYPES.forEach(([k, lbl, why])=>{ const o = document.createElement("option"); o.value = k; o.textContent = lbl; o.title = "This task " + why; ty.appendChild(o); });
+        ty.value = types[it.tid] || "FS"; ty.style.visibility = cb.checked ? "" : "hidden";
+        ty.title = "How this task depends on it";
+        ty.onclick = e=> e.stopPropagation();
+        ty.onchange = ()=>{ types[it.tid] = ty.value; };
+        cb.onchange = ()=>{ if(cb.checked) sel.add(it.tid); else sel.delete(it.tid); ty.style.visibility = cb.checked ? "" : "hidden"; };
+        row.append(cb, tx, meta, ty); list.appendChild(row);
       });
     });
     if(!any){ const e = document.createElement("div"); e.className = "rmb-empty"; e.textContent = q ? "Nothing on this chart matches." : "No other tasks on this chart yet."; list.appendChild(e); }
@@ -13553,6 +13632,8 @@ function rmlChartBlockers(en, m){
   const save = ()=>{
     const next = [...sel].concat(others.filter(x=> byTid[x]));
     if(next.length) t.blockedBy = next; else delete t.blockedBy;
+    const dt = {}; next.forEach(x=>{ if(types[x] && types[x]!=="FS") dt[x] = types[x]; });
+    if(Object.keys(dt).length) t.depType = dt; else delete t.depType;
     saveRmaps(); pushAll();
   };
   const more = document.createElement("button"); more.className = "btn"; more.textContent = "Cards on other boards…";
