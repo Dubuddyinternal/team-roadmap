@@ -2543,6 +2543,14 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .rmg-cell.now{background:var(--indigo-soft)}
 .rmg-blk{margin:5px 3px;border-radius:6px;color:#fff;font-size:12px;font-weight:600;padding:7px 9px;display:flex;align-items:center;cursor:pointer;z-index:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
 .rmg-blk{contain:inline-size;min-width:0}
+.rmg-days{grid-auto-rows:38px}
+.rmg-days .rmg-wk{grid-row:1}
+.rmg-blk.rmg-line{height:16px;margin:0 1px;padding:0;align-self:center;border-radius:99px;overflow:visible;contain:none;white-space:nowrap;position:relative;font-size:0}
+.rmg-blk.rmg-line.locked{outline-offset:2px}
+.rmg-name{position:absolute;left:calc(100% + 8px);top:50%;transform:translateY(-50%);font-size:12px;font-weight:600;color:var(--ink,#172B4D);pointer-events:none;white-space:nowrap}
+.rmg-name.left{left:auto;right:calc(100% + 8px)}
+.rmg-blk.rmg-line.done .rmg-name{color:var(--muted);text-decoration:line-through}
+
 .rm-rename{cursor:pointer;display:inline-flex;align-items:center;gap:8px;border-radius:8px;padding:2px 6px;margin-left:-6px}
 .rm-rename:hover{background:var(--indigo-soft)}
 .rm-rename-pen{font-size:14px;color:var(--muted);opacity:0;transition:opacity .12s}
@@ -12938,32 +12946,31 @@ function renderRmapGantt(m, wrap, byTid){
   head.appendChild(row); wrap.appendChild(head);
   if(m.view==="swimlane"){ rmgSwimlanes(m, wrap, byTid, live, w0, nW, today); return; }
 
+  /* day columns (7 per week) so a task covers exactly its own days; every task gets its own
+     slim line and its name sits beside the bar, so text never resizes the chart */
+  const nD = nW*7, dayOf = n => n - w0;
   const scroll = document.createElement("div"); scroll.className = "rmg-scroll";
-  const grid = document.createElement("div"); grid.className = "rmg-grid" + (nW<=5 ? " big" : nW<=9 ? " mid" : "");
-  grid.style.gridTemplateColumns = "170px repeat("+nW+", minmax(74px, 1fr))";
+  const grid = document.createElement("div"); grid.className = "rmg-grid rmg-days";
+  grid.style.gridTemplateColumns = "170px repeat("+nD+", minmax(0, 1fr))";
+  grid.style.minWidth = (170 + nW*(nW<=5 ? 0 : 84)) + "px";
   const corner = document.createElement("div"); corner.className = "rmg-corner"; grid.appendChild(corner);
-  const tw = wkOf(today), inRange = today >= w0 && today < w0 + nW*7;
+  const tw = wkOf(today), inRange = today >= w0 && today < w0 + nD;
   for(let w=0; w<nW; w++){
     const c = document.createElement("div"); c.className = "rmg-wk" + (inRange && w===tw ? " now" : "");
+    c.style.gridColumn = (2 + w*7) + " / span 7";
     c.innerHTML = "Week " + (w+1) + "<small>" + rmlFmt(dISO(w0 + w*7)) + (nW<=9 ? " – " + rmlFmt(dISO(w0 + w*7 + 6)) : "") + "</small>";
     grid.appendChild(c);
   }
+  const weekPx = ()=> (grid.querySelector(".rmg-wk")||{}).offsetWidth || 0;
   let rIdx = 2;
   m.lanes.forEach(ln=>{
     const items = live.filter(it=> rmlLaneOf(m, it)===ln)
       .filter(it=>{ /* in a window, drop tasks entirely outside it */
-        const s0 = wkRaw(dNum(it.start || it.end || todayISO())), e0 = wkRaw(dNum(it.end || it.start || todayISO()));
-        return !(e0 < 0 || s0 > nW-1);
+        const s0 = dayOf(dNum(it.start || it.end || todayISO())), e0 = dayOf(dNum(it.end || it.start || todayISO()));
+        return !(e0 < 0 || s0 > nD-1);
       })
       .sort((x,y)=> dNum(x.start||todayISO()) - dNum(y.start||todayISO()));
-    /* pack overlapping tasks into sub-rows */
-    const rowsEnd = [];
-    const placed = items.map(it=>{
-      const s = wkOf(dNum(it.start || it.end || todayISO())), e = Math.max(s, wkOf(dNum(it.end || it.start || todayISO())));
-      let r = rowsEnd.findIndex(end=> end < s); if(r<0){ r = rowsEnd.length; rowsEnd.push(e); } else rowsEnd[r] = e;
-      return { it, s, e, r };
-    });
-    const span = Math.max(1, rowsEnd.length);
+    const span = Math.max(1, items.length);
     const lab = document.createElement("div"); lab.className = "rmg-phase";
     lab.style.gridRow = rIdx + " / span " + span; lab.dataset.lane = ln.id;
     lab.textContent = ln.name;
@@ -12976,22 +12983,32 @@ function renderRmapGantt(m, wrap, byTid){
     grid.appendChild(lab);
     for(let r=0; r<span; r++) for(let w=0; w<nW; w++){
       const bg = document.createElement("div"); bg.className = "rmg-cell" + (inRange && w===tw ? " now" : "") + (r===span-1 ? " last" : ""); bg.dataset.lane = ln.id;
-      bg.style.gridRow = String(rIdx + r); bg.style.gridColumn = String(w + 2);
+      bg.style.gridRow = String(rIdx + r); bg.style.gridColumn = (2 + w*7) + " / span 7";
       grid.appendChild(bg);
     }
-    placed.forEach(({it, s, e, r})=>{
-      const en = byTid[it.tid], st = effStatus(en.task);
+    items.forEach((it, r)=>{
+      const en = byTid[it.tid], st = effStatus(en.task), locked = isLocked(en.task);
+      const s = Math.max(0, dayOf(dNum(it.start || it.end || todayISO())));
+      const e = Math.min(nD-1, Math.max(s, dayOf(dNum(it.end || it.start || todayISO()))));
       const blk = document.createElement("div");
-      blk.className = "rmg-blk" + (st==="done" ? " done" : "") + (isLocked(en.task) ? " locked" : "");
+      blk.className = "rmg-blk rmg-line" + (st==="done" ? " done" : "") + (locked ? " locked" : "");
       blk.style.gridRow = String(rIdx + r); blk.style.gridColumn = (s + 2) + " / " + (e + 3);
       blk.style.background = it.color || colorOf(it.team);
-      blk.textContent = (st==="done" ? "✓ " : isLocked(en.task) ? "🔒 " : "") + (en.task.title || "(untitled)");
+      const name = document.createElement("span");
+      name.className = "rmg-name" + (e > nD*0.72 ? " left" : "");
+      name.textContent = (st==="done" ? "✓ " : locked ? "🔒 " : "") + (en.task.title || "(untitled)");
+      blk.appendChild(name);
       blk.title = (en.task.title||"") + "\n" + rmlFmt(it.start) + " → " + rmlFmt(it.end) + (it.team ? "\nTeam: " + it.team : "") + "\n" + en.path;
-      if(editMode) rmgItemDrag(blk, m, it, ()=> (grid.querySelector(".rmg-wk")||{}).offsetWidth, 7, ()=> rmlEditItem(m, it, en)); else blk.style.cursor = "default";
+      if(editMode) rmgItemDrag(blk, m, it, ()=> weekPx()/7, 1, ()=> rmlEditItem(m, it, en)); else blk.style.cursor = "default";
       grid.appendChild(blk);
     });
     rIdx += span;
   });
+  if(inRange){
+    const tl = document.createElement("div"); tl.className = "rms-today"; tl.title = "Today";
+    tl.style.gridRow = "1 / " + rIdx; tl.style.gridColumn = String(dayOf(today) + 2);
+    grid.appendChild(tl);
+  }
   scroll.appendChild(grid); wrap.appendChild(scroll);
 
   const lg = document.createElement("div"); lg.className = "rmg-legend";
