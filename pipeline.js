@@ -206,7 +206,8 @@ function cardInfo(c, h){
     why:P(c.pre.why), platform:c.platform, platforms:(c.platforms&&c.platforms.length?c.platforms:[c.platform]),
     video_type:c.vtype, scheduled:c.scheduled, time:c.time||null,
     hook: (c.shoot && c.shoot.hook) || (idea ? P(idea.hook) : ""), cta: (c.shoot && c.shoot.cta) || (idea ? P(idea.cta) : ""),
-    talking_points: c.shoot ? P(c.shoot.points||"") : "", shooting_notes: c.shoot ? P(c.shoot.tips||"") : "" };
+    talking_points: c.shoot ? P(c.shoot.points||"") : "", shooting_notes: c.shoot ? P(c.shoot.tips||"") : "",
+    edit_brief: P(h.brief ? h.brief() : c.editBrief || "") };
 }
 // the skill's hook markup: *word* = orange, | = new line
 const hookHtml = t => esc(t).replace(/\*([^*]+)\*/g, '<span class="pp-em">$1</span>').replace(/\s*\|\s*/g, " / ");
@@ -230,6 +231,7 @@ const CSS = `<style>
 .pp .gchip.no{color:var(--crit);background:var(--crit-soft);border-color:color-mix(in srgb,var(--crit) 25%,var(--line))}
 .pp .pp-rawline{margin:0 0 12px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:13px}
 .pp .pp-refs{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.pp .pp-refs.top{margin:0 0 12px;border-top:0;padding-top:0}
 .pp .pp-refs summary{cursor:pointer;font-weight:600;font-size:13px}
 .pp .pp-refdrop{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;padding:10px;border:1.5px dashed var(--line-2);border-radius:10px}
 .pp .pp-refdrop.over{border-color:var(--accent);background:var(--accent-soft)}
@@ -357,8 +359,9 @@ function render(){
   host.innerHTML = CSS + `<div class="block pp">
     <div class="block-h"><h4>🤖 Claude edit</h4><span class="badge ${cls==="accent"?"warn":cls}">${ic} ${esc(lbl)}</span>
       <span style="margin-left:auto">${modePill()}</span></div>
+    ${S.mode==="off"||(S.err&&!S.me)||job?"":refsBox(c, me)}
     ${body}
-    ${S.mode==="off"||(S.err&&!S.me)?"":showChat(job)?chatBox(job, me):!job||["failed","cancelled"].includes(st)?refsBox(c, me):""}
+    ${S.mode==="off"||(S.err&&!S.me)?"":showChat(job)?chatBox(job, me):job&&["failed","cancelled"].includes(st)?refsBox(c, me):""}
     ${job&&(job.history||[]).length?`<details style="margin-top:10px"><summary>History (${job.history.length})</summary><table>
       ${job.history.slice().reverse().map(x=>`<tr><td style="width:90px" class="hint">${esc(new Date(x.at).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}))}</td><td>${esc(x.msg||x.status)}</td></tr>`).join("")}</table></details>`:""}
   </div>`;
@@ -394,9 +397,11 @@ function proposalView(job, me){
   const hook = p.hook && typeof p.hook === "object" ? p.hook : { text: p.hook };
   const tbl = (rows, cols) => `<table class="pp-at"><tr>${cols.map(c=>`<th>${c[1]}</th>`).join("")}</tr>${rows.map(r=>`<tr>${cols.map(c=>`<td>${esc(r[c[0]]||"")}</td>`).join("")}</tr>`).join("")}</table>`;
   return `<div class="pp-note"><b>✋ What Claude will do.</b> Nothing is built yet.</div>
+    ${(p.precautions||[]).length?`<div class="pp-note crit"><b>⚠️ Precautions — planned, but not in the video</b>${list(p.precautions)}</div>`:""}
     ${p.summary?`<p style="margin:0 0 8px;font-size:13px">${esc(p.summary)}</p>`:""}
     ${hook.text?`<p style="margin:0 0 4px;font-size:13px"><b>Hook:</b> ${hookHtml(hook.text)}</p>${hook.why?`<p class="hint" style="margin:0 0 8px">${esc(hook.why)}</p>`:""}`:""}
     ${p.length?`<p style="margin:0 0 8px;font-size:13px"><b>Length:</b> ${esc(p.length)}</p>`:""}
+    ${(p.brief_used||[]).length?`<details open><summary>📝 From your edit brief (${p.brief_used.length})</summary>${list(p.brief_used)}</details>`:""}
     ${(p.scenes||[]).length?`<details open><summary>Scenes — the animations (${p.scenes.length})</summary>${tbl(p.scenes,[["at","At"],["said","Said"],["scene","Scene"],["display","Display"]])}</details>`:""}
     ${(p.cuts||[]).length?`<details open><summary>Cuts (${p.cuts.length})</summary><ul style="margin:6px 0;padding-left:18px">${p.cuts.map(x=>typeof x==="string"?`<li>${esc(x)}</li>`:`<li><b>${esc(x.what||"")}</b>${x.why?` <span class="hint">— ${esc(x.why)}</span>`:""}</li>`).join("")}</ul></details>`:""}
     ${(p.broll||[]).length?`<details><summary>B-roll (${p.broll.length})</summary>${tbl(p.broll,[["at","At"],["what","What"],["display","Display"],["source","Source"]])}</details>`:""}
@@ -549,9 +554,10 @@ function refsBox(c, me){
   const list = (r && r.list) || [], up = r && r.up;
   const kb = n => n >= 1e6 ? (n/1e6).toFixed(1) + " MB" : Math.max(1, Math.round(n/1e3)) + " KB";
   const ic = f => /\.(jpe?g|png|gif|webp|heic)$/i.test(f) ? "🖼️" : /\.(mp4|mov|m4v|webm)$/i.test(f) ? "🎞️" : "📄";
-  return `<details class="pp-refs" ${list.length||up?"open":""}><summary>📎 Files for Claude${list.length?` (${list.length})`:""} <span class="hint">— inspiration, screenshots, reference videos</span></summary>
+  return `<details class="pp-refs${S.jobs[c.id]?"":" top"}" ${list.length||up||!S.jobs[c.id]?"open":""}><summary>📎 Files for Claude${list.length?` (${list.length})`:""} <span class="hint">— inspiration, screenshots, reference videos</span></summary>
+    ${S.jobs[c.id]?"":`<p class="hint" style="margin:6px 0 0">Part of your edit brief above: the comment screenshot, a reference video, anything Claude should use or look at.</p>`}
     <div class="pp-refdrop" data-refdrop>${me.canRun?`<label class="btn sm" style="cursor:pointer">Add files<input type="file" multiple data-reffile hidden></label>
-      <span class="hint">or drop them here. Then tell Claude in the chat — it fetches them.</span>`:`<span class="hint">Only editors can add files.</span>`}</div>
+      <span class="hint">or drop them here — screenshots, reference videos, anything for the edit brief. Claude gets them when the edit starts.</span>`:`<span class="hint">Only editors can add files.</span>`}</div>
     ${up?`<div class="hint" style="margin:6px 0">${esc(up)}</div>`:""}
     ${list.length?`<ul class="pp-reflist">${list.map(f=>`<li>${ic(f.file)} <a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.file.replace(/^[a-z0-9]+-/,""))}</a> <span class="hint">${kb(f.size)}</span>
       ${me.canRun?`<button class="linkbtn" data-refdel="${esc(f.file)}">remove</button>`:""}</li>`).join("")}</ul>`:""}

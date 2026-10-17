@@ -176,6 +176,11 @@ def start(src):
         got.append(name)
     if "clean_audio" in got and "raw" in got:
         notes["clean_audio"] = use_clean_audio(p)
+    elif "raw" in got:
+        notes["clean_audio"] = "none uploaded: edit with the camera audio"
+    if p.get("chat") or p["step"] == "propose":   # the edit brief's photos / videos / files ("Files for Claude")
+        try: notes["brief_files"] = fetch_refs() or "none"
+        except (RuntimeError, SystemExit) as e: notes["brief_files"] = f"couldn't fetch: {e}"
     os.makedirs(os.path.join(W, "out"), exist_ok=True)
     hist = p.get("history") or []
     if hist:   # the card chat so far (a new session picks the conversation up)
@@ -349,10 +354,15 @@ def downloads():
     return post({"event": "downloads"}).get("data") or {}
 
 
-def refs():
+def fetch_refs():
     d = downloads(); out = []
     for f in d.get("refs") or []:
         dest = os.path.join(W, "refs", f["name"]); download(f["url"], dest); out.append(dest)
+    return out
+
+
+def refs():
+    out = fetch_refs()
     print(json.dumps({"refs": out, "count": len(out)}, indent=1))
 
 

@@ -337,6 +337,7 @@ details.isec .hint{font-size:12px}
 .pre-n{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:var(--surface-2);border:1px solid var(--line-2);color:var(--ink-2)}
 .pre-n.ok{background:var(--good);border-color:var(--good);color:#fff}
 .pre-note{margin:-4px 0 10px;font-size:12px}
+.ebrief{margin:0 0 12px}.ebrief>summary{cursor:pointer;font-size:13.5px}.ebrief textarea{width:100%;box-sizing:border-box}
 details.srcd>summary{cursor:pointer;font-size:12px;color:var(--ink-2);list-style:none}
 details.srcd>summary::-webkit-details-marker{display:none}
 .srcd-ch{color:var(--accent-ink);font-weight:600;margin-left:6px;text-decoration:underline;text-underline-offset:2px}
@@ -2817,7 +2818,14 @@ function openCard(id,showGate){
     const claudeVids=claudeDone?`<div class="pp-mini">
         ${jobM.yt?`<div><div class="lbl">YouTube</div><video controls preload="metadata" src="${esc(jobM.yt)}"></video></div>`:""}
         ${jobM.ig?`<div><div class="lbl">Instagram</div><video controls preload="metadata" src="${esc(jobM.ig)}"></video></div>`:""}</div>`:"";
-    const editBody=useClaude?`<div style="height:12px"></div>${isNew?`<p class="hint pre-note">Create the card first.</p>`:`<div id="pipePanel"></div>`}${claudeVids}
+    const started=!!job;
+    // 📝 what you already know about the edit, before Claude plans it (goes to Claude with the idea, shoot plan and files)
+    const briefBlock=isNew?"":`<details class="block ebrief" ${started&&!c.editBrief?"":"open"}><summary><b>📝 Your edit brief</b> <span class="hint">— Claude reads this first, before it plans</span></summary>
+        <p class="hint" style="margin:8px 0">Anything you already have in mind: a comment screenshot that must appear, a moment to cut, a scene idea, the mood, a reference video.
+          Add the photos / videos / files with <b>📎 Files for Claude</b> below. Claude also gets the idea, the shoot plan and the clean audio (if there is one) — and tells you if anything planned is missing from the video.</p>
+        <textarea id="e-brief" rows="4" placeholder="e.g. Put the comment screenshot (attached) on screen when I read the question · keep the joke at 0:40 · end on the CUET form">${esc(c.editBrief||"")}</textarea>
+        ${started?`<p class="hint" style="margin:6px 0 0">Claude got this when the edit started. Changes now → say them in the chat.</p>`:""}</details>`;
+    const editBody=useClaude?`<div style="height:12px"></div>${isNew?`<p class="hint pre-note">Create the card first.</p>`:briefBlock+`<div id="pipePanel"></div>`}${claudeVids}
         <details class="manual" ${c.post.reel?"open":""}><summary>${claudeDone?"Use my own edit instead":c.post.reel?"Your own edit":"I edited it myself"}</summary>
           ${fileSlot("reel","Edited reel","video/*","Pick the final cut. Its name and size are noted on the card — the file itself stays on your computer.")}
           ${plats(c).includes("yt")&&c.vtype==="short"?fileSlot("thumb","Thumbnail (optional)","image/*","Optional for Shorts — YouTube picks a frame if you skip it."):""}</details>`
@@ -2941,6 +2949,7 @@ function openCard(id,showGate){
       c.pre.desc=$("#r-desc").value.trim(); c.pre.hashtags=$("#r-hashtags").value.trim();
       $("#drawer").querySelectorAll("[data-plink]").forEach(e=>{ c.post.links[e.dataset.plink]=e.value.trim(); });
       c.post.postUrl=c.post.links[c.platform]||Object.values(c.post.links).find(Boolean)||"";
+      if($("#e-brief")) c.editBrief=$("#e-brief").value.trim();
       if($("#s-hook")) c.shoot={ hook:$("#s-hook").value.trim(), points:$("#s-points").value.trim(), cta:$("#s-cta").value.trim(), tips:$("#s-tips").value.trim() };
       const ru=$("#raw-url"); if(ru){ const u=ru.value.trim(); c.raw = u ? { kind:"link", url:u } : (c.raw && c.raw.kind==="file" ? c.raw : null); }
       if(c.stage==="published" && $("#m-views")){ const n=s=>{const e=$(s); return !e||e.value===""?null:Number(e.value);};
@@ -3136,6 +3145,7 @@ function openCard(id,showGate){
       raw: ()=>c.raw, onRaw: (up,f)=>{ delete RAWLINKS[c.id]; keepRaw(up); getAudio(f); },
       canEdit, toast, idea: x=>x.ideaId?IDEAS.find(i=>i.id===x.ideaId):null,
       beforeStart: ()=>{ read(); persist(); if(save()){ dirty=false; opened=snap(); } },
+      brief: ()=>{ const e=$("#e-brief"); return e ? e.value.trim() : (c.editBrief||""); },
       slot: ()=>slotOf(c),
       onJob: ()=>{ const a=R.activeElement;               // the job moved on: redraw the card, unless someone is typing in it
         if(!$("#drawer").classList.contains("on") || !CARDS.includes(c)) return true;   // closed or deleted: nothing to redraw

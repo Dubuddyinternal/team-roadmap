@@ -49,6 +49,8 @@ if (p.chat) {
     const proposal = notes => { fs.mkdirSync(ED, { recursive: true }); fs.writeFileSync(path.join(ED, "plan.json"), JSON.stringify({ fake: true, draft: true }));
       json(path.join(OUT, "proposal.json"), { summary: (notes ? `[changed: ${notes}] ` : "") + `Fake plan for “${p.card.title || p.card.idea || "card"}” — versions: ${tv.join(" + ")}.`,
         hook: { text: "SRCC cutoff *gira*?", why: "The number is the surprise." }, length: "32 s (from 47 s)", cuts: [{ what: "2 false starts", why: "repeats" }],
+        brief_used: (p.card.edit_brief ? [`Your brief: “${p.card.edit_brief.slice(0, 60)}” → at 0:06`] : []),
+        precautions: ["Shoot plan said to close on “Comment your doubt 👇” — the video ends on “bye guys”; I end on the CTA card instead (fake)"],
         transcript: [{ at: "0:00", text: "Haan toh… ek second", cut: true }, { at: "0:02", text: "SRCC ka cutoff is baar gira hai kya?", cut: false },
           { at: "0:06", text: "2025 me 98.7 tha, aur is baar…", cut: false }, { at: "0:11", text: "sorry, phir se bolta hoon", cut: true }, { at: "0:13", text: "Comment karo apna doubt.", cut: false }],
         scenes: [{ at: "0:00", said: "SRCC ka cutoff…", scene: "Falling arrow over a college gate", display: "float" }], broll: [], captions: "Hinglish", cta: "Comment cards", audio: "-14 LUFS",

@@ -52,7 +52,7 @@ Work in the skill's three checkpoints, in order, and **wait for the owner after 
 1. **Propose — no HyperFrames.** Do the `propose` step below (analyse, decide), write `OUT/proposal.json`, then run
    `python3 "$PIPE" stage proposal`. The card shows the whole plan (hook, cuts, scenes, B-roll, captions, ending, audio,
    transcript) in its own sections, so your `say` stays **short — 2–4 lines**: the hook, the new length, how many scenes,
-   anything you need them to decide. Then: "The full plan is on the card. OK to build, or what should change?" Never paste
+   how many precautions (if any), anything you need them to decide. Then: "The full plan is on the card. OK to build, or what should change?" Never paste
    the whole plan into the chat. (Same for the other checkpoints: a few lines, the details are on the card.)
    Changes → update the plan, `stage proposal` again, ask again. **Build nothing until they say OK.**
 2. **Build + show — after the OK.** `python3 "$PIPE" busy building "<what>"`, then do the `plan` step below (build the
@@ -103,8 +103,20 @@ skill expects footage: `<work>/raw/raw.<ext>`, which makes the edit folder ED = 
 The owner's first check is your **plan**, before anything is built. Watch and analyse the clip, decide the edit, and
 describe it so clearly that the owner can say "yes" or "change X" without seeing any graphics. **Don't open or build
 HyperFrames in this step**: no scenes.py, no build.py, no brief.py, no snapshots, no B-roll downloads.
-- If `pipe.py start` prints `clean_audio: swapped in…`, the raw video already carries the owner's cleaned voice; if it
-  prints `NOT used…`, carry on with the camera audio and put that line in `warnings`.
+- **Start from the owner's package** — everything they gave you before you plan, all in the payload / work folder:
+  - `card.edit_brief` — **the owner's edit brief**: what they already want in this edit (a comment screenshot to show, a
+    moment to keep or cut, scene ideas, mood, references). It outranks your own ideas: build your plan around it.
+  - `brief_files` (printed by `pipe.py start`, saved in `<work>/refs/`) — the photos, videos and files that go with the
+    brief. Look at every image; for a video pull a few frames with ffmpeg. Use each one where the brief says (e.g. the
+    comment screenshot on screen while that comment is read out), or where it clearly fits.
+  - the idea and the shoot plan from the card: `card.idea`, `title`, `description`, `hook`, `talking_points`, `cta`
+    (the planned closing line), `shooting_notes`, `keywords`.
+  - `clean_audio`: `swapped in…` → the raw video already carries the owner's cleaned voice (use it — it's what you hear);
+    `none uploaded` → camera audio; `NOT used…` → camera audio, and put that line in `precautions`.
+- **Check the package against the video** (after transcribing) and list every mismatch in `precautions`, plainly — e.g.
+  the planned hook or closing line was never said (quote what was said instead), a talking point is missing, the brief
+  mentions a screenshot / file that wasn't attached, a brief instruction can't be done with this footage (and what you'd
+  do instead), the clean audio didn't match. Don't silently work around them: say what you did about each.
 - Run the skill's analyse step (prep.py) and read `analysis.md` and the face frames. Read `references/animation-lessons.md`
   and `references/scenes/README.md` so what you propose is something the skill can build well.
 - Decide, following every SKILL.md rule: the hook (≤ 6 words, never invented dialogue; teaser if the opening is weak),
@@ -124,7 +136,9 @@ HyperFrames in this step**: no scenes.py, no build.py, no brief.py, no snapshots
    "broll":[{"at":"0:12","what":"…","display":"…","source":"dubuddy.in capture|animation|Pexels|Openverse"}],
    "captions":"style + anything special","cta":"…","audio":"voice, SFX, music",
    "questions":["choices the owner may want to change"],"warnings":["…"],
-   "transcript":[{"at":"0:00","text":"exactly what's said, in the original Hinglish","cut":false}]}
+   "transcript":[{"at":"0:00","text":"exactly what's said, in the original Hinglish","cut":false}],
+   "brief_used":["each thing from the edit brief / files and where it goes in the plan"],
+   "precautions":["Shoot plan said to close on 'Comment your doubt 👇' — the video ends on 'bye guys'; I end on the CTA card instead"]}
   ```
   `transcript` is the **whole** transcription of the raw clip, start to end, one entry per sentence or phrase with its
   start time in the raw clip, word for word as spoken (no clean-up, no translation). Mark `"cut": true` on every part
