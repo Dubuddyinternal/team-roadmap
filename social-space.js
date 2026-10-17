@@ -2603,7 +2603,7 @@ function openReject(i){
 /* ---- Claude pipeline → board ----
    A card moves forward by itself as its Claude job does. Never backwards, and only once per job step,
    so a card moved back by hand stays there until the job moves on. */
-const PIPE_STAGE = { planning:"inprogress", brief_ready:"inprogress", rendering:"inprogress", seo_running:"inprogress",
+const PIPE_STAGE = { proposing:"inprogress", proposal_ready:"inprogress", planning:"inprogress", brief_ready:"inprogress", rendering:"inprogress", seo_running:"inprogress",
   final_review:"inreview", post_failed:"inreview", scheduled:"approved", posting:"approved", posted:"published" };
 let IDEA_JOBS_SIG="";
 function syncPipelineStages(jobs){
@@ -2680,7 +2680,7 @@ function openCard(id,showGate){
     // Claude pipeline (pipeline.js): at a check, the review takes the whole window and the card details fold away
     const F=fmtOf(c), useClaude=!!F.claude&&!!window.PIPE;   // Claude edits only types marked for it (Shorts / Reels)
     const job=(!isNew&&window.PIPE)?PIPE.job(c.id):null, jobM=(job&&job.media)||{}, claudeDone=!!(jobM.yt||jobM.ig);
-    const reviewing=!!job&&["brief_ready","final_review","post_failed"].includes(job.status);
+    const reviewing=!!job&&["proposal_ready","brief_ready","final_review","post_failed"].includes(job.status);
     const rjob=(!isNew&&window.PIPE)?PIPE.job(c.id+"__r"):null;   // "🔎 Fill with vidIQ" research
     const sjob=(!isNew&&window.PIPE)?PIPE.job(c.id+"__s"):null;   // "✍️ Draft hook & talking points"
     c.shoot=c.shoot||{hook:"",points:"",cta:"",tips:""};

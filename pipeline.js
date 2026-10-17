@@ -26,12 +26,13 @@ const ago = iso => { if(!iso) return ""; const s=Math.round((Date.now()-new Date
 const team = () => (typeof TEAM!=="undefined" && TEAM) || new URLSearchParams(location.search).get("team") || "";
 
 const LABEL = {
-  planning:["Claude is planning the edit","warn","🧠"], brief_ready:["Brief ready — your check","accent","✋"],
+  proposing:["Claude is watching the video","warn","👀"], proposal_ready:["Plan ready — your check","accent","✋"],
+  planning:["Claude is building the edit","warn","🧠"], brief_ready:["Edit built — your check","accent","✋"],
   rendering:["Rendering YT + IG","warn","🎬"], seo_running:["vidIQ SEO running","warn","🔎"],
   final_review:["Videos ready","good","🎬"], scheduled:["Scheduled","good","🗓"], posting:["Posting","warn","🚀"], posted:["Posted","good","✅"],
   paused:["Paused — free limit reached","warn","⏸"], post_failed:["Posting needs a look","crit","⚠️"], failed:["Stopped — needs a look","crit","⚠️"], cancelled:["Cancelled","mute","⏹"],
 };
-const BUSY = ["planning","rendering","seo_running","posting","researching","scripting"];
+const BUSY = ["proposing","planning","rendering","seo_running","posting","researching","scripting"];
 const MODE = { fire:["☁️ Cloud routine","good"], local:["💻 This Mac","warn"], fake:["🧪 Test mode (nothing real)","mute"], off:["Not set up yet","mute"] };
 
 /* ------------------------------------------------------------ server */
@@ -261,8 +262,8 @@ const mmss = s => s ? Math.floor(s/60) + ":" + String(Math.round(s%60)).padStart
 function startView(c, canRun, m){
   const ready = readiness(c), missing = ready.filter(x=>!x[1]).map(x=>x[0].toLowerCase());
   const r = m.raw;
-  return `<p class="hint" style="margin:0 0 10px">Give Claude the raw clip. It plans the edit with the <b>dubuddy-short</b> skill using this card's
-      title, description and hook, then waits for a check. Nothing renders without an owner's click.</p>
+  return `<p class="hint" style="margin:0 0 10px">Give Claude the raw clip. ① It watches it and tells you what it will do — hook, cuts, scenes, B-roll —
+      and waits. ② After your OK it builds the edit in HyperFrames and shows it to you. ③ Only after your second OK does it render.</p>
     <div class="pp-ready">${ready.map(([l,ok])=>`<span class="gchip ${ok?"ok":"no"}">${ok?"✓":"✗"} ${l}</span>`).join("")}</div>
     ${missing.length?`<p class="hint" style="margin:6px 0 12px">Claude can start without the ${esc(missing.join(", "))}, but the hook and SEO get weaker — fill ${missing.length>1?"them":"it"} in on the left first if you can.</p>`:`<div style="height:10px"></div>`}
     <div class="pp-rawline">${r?`🎞️ <b>${esc(r.name)}</b> <span class="hint">${(r.size/1e6).toFixed(0)} MB · the raw video in the step above</span>`
@@ -288,6 +289,7 @@ function render(){
       ${st==="posting"?`<div class="pp-note">Posting exactly what was approved to ${esc((job.post_request&&job.post_request.targets||[]).map(t=>t==="yt"?"YouTube":"Instagram").join(" + "))}.</div>`:""}
       <div class="pp-row">${watchLink(job)}${st!=="posting"&&me.canRun?`<button class="btn sm" data-pp="cancel" style="margin-left:auto">Cancel</button>`:""}</div>`;
   }
+  else if(st==="proposal_ready") body = proposalView(job, me);
   else if(st==="brief_ready") body = briefView(job, me);
   else if(st==="final_review") body = finalView(job, c, me);
   else if(st==="paused"){ const pz = job.paused || {};   // stopped so the free plan is never exceeded; starts again by itself
@@ -317,7 +319,7 @@ function render(){
 function briefView(job, me){
   const b = job.brief || {}, md = job.media || {};
   const list = a => (a&&a.length)?`<ul>${a.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:"";
-  return `<div class="pp-note"><b>✋ Check 1 — the edit plan.</b> Nothing is rendered yet. Approve it, or say what to change and Claude redoes the brief.</div>
+  return `<div class="pp-note"><b>✋ Check 2 — the built edit.</b> Watch it below. Approve to render, or say what to change and Claude rebuilds it. Nothing is rendered yet.</div>
     ${livePlayer(md)}
     ${md.brief_sheet?`<a href="${esc(md.brief_sheet)}" target="_blank"><img class="pp-sheet" src="${esc(md.brief_sheet)}" alt="Preview stills of every graphic"></a>`:""}
     ${b.summary?`<p style="margin:0 0 8px;font-size:13px">${esc(b.summary)}</p>`:""}
@@ -339,6 +341,31 @@ function briefView(job, me){
       <button class="btn" data-pp="request_changes" ${me.canRun?"":"disabled"}>✏️ Request changes</button>
       ${me.canRun?`<button class="btn sm" data-pp="cancel" style="margin-left:auto">Cancel job</button>`:""}</div>
     ${me.canApprove?"":`<p class="hint" style="margin:8px 0 0">Only an owner or admin can approve.</p>`}`;
+}
+
+// ✋ Check 1: what Claude will do with the clip — nothing is built yet
+function proposalView(job, me){
+  const p = job.proposal || {}, list = a => (a&&a.length)?`<ul>${a.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:"";
+  const hook = p.hook && typeof p.hook === "object" ? p.hook : { text: p.hook };
+  const tbl = (rows, cols) => `<table class="pp-at"><tr>${cols.map(c=>`<th>${c[1]}</th>`).join("")}</tr>${rows.map(r=>`<tr>${cols.map(c=>`<td>${esc(r[c[0]]||"")}</td>`).join("")}</tr>`).join("")}</table>`;
+  return `<div class="pp-note"><b>✋ Check 1 — what Claude will do.</b> Nothing is built yet. Say OK and it builds this in HyperFrames, or tell it what to change.</div>
+    ${p.summary?`<p style="margin:0 0 8px;font-size:13px">${esc(p.summary)}</p>`:""}
+    ${hook.text?`<p style="margin:0 0 4px;font-size:13px"><b>Hook:</b> ${hookHtml(hook.text)}</p>${hook.why?`<p class="hint" style="margin:0 0 8px">${esc(hook.why)}</p>`:""}`:""}
+    ${p.length?`<p style="margin:0 0 8px;font-size:13px"><b>Length:</b> ${esc(p.length)}</p>`:""}
+    ${(p.scenes||[]).length?`<details open><summary>Scenes — the animations (${p.scenes.length})</summary>${tbl(p.scenes,[["at","At"],["said","Said"],["scene","Scene"],["display","Display"]])}</details>`:""}
+    ${(p.cuts||[]).length?`<details open><summary>Cuts (${p.cuts.length})</summary><ul style="margin:6px 0;padding-left:18px">${p.cuts.map(x=>typeof x==="string"?`<li>${esc(x)}</li>`:`<li><b>${esc(x.what||"")}</b>${x.why?` <span class="hint">— ${esc(x.why)}</span>`:""}</li>`).join("")}</ul></details>`:""}
+    ${(p.broll||[]).length?`<details><summary>B-roll (${p.broll.length})</summary>${tbl(p.broll,[["at","At"],["what","What"],["display","Display"],["source","Source"]])}</details>`:""}
+    ${p.captions?`<details><summary>Captions</summary><p style="margin:4px 0">${esc(p.captions)}</p></details>`:""}
+    ${p.cta?`<details><summary>Ending / CTA</summary><p style="margin:4px 0">${esc(p.cta)}</p></details>`:""}
+    ${p.audio?`<details><summary>Audio</summary><p style="margin:4px 0">${esc(p.audio)}</p></details>`:""}
+    ${(p.questions||[]).length?`<div class="pp-note"><b>Claude decided these — change any you like:</b>${list(p.questions)}</div>`:""}
+    ${(p.warnings||[]).length?`<div class="pp-note crit"><b>Warnings</b>${list(p.warnings)}</div>`:""}
+    <div class="fld" style="margin-top:12px"><label>Anything to change? (needed for “Change the plan”, optional with “Looks good”)</label>
+      <textarea data-pp-notes placeholder="e.g. Use “Galti mat karna” as the hook · skip the road scene · keep the second example"></textarea></div>
+    <div class="pp-row"><button class="btn pri" data-pp="approve_plan" ${me.canRun?"":"disabled"}>✅ Looks good — build it</button>
+      <button class="btn" data-pp="change_plan" ${me.canRun?"":"disabled"}>✏️ Change the plan</button>
+      ${me.canRun?`<button class="btn sm" data-pp="cancel" style="margin-left:auto">Cancel job</button>`:""}</div>
+    <p class="hint" style="margin:8px 0 0">“Looks good” with notes: Claude builds the plan with your small changes. “Change the plan”: Claude shows you a new plan first.</p>`;
 }
 
 // ▶ live player: the edit itself, played in the browser (phone too) — no render, no Studio
@@ -476,7 +503,8 @@ function wire(){
       if(h.beforeStart) h.beforeStart();     // keeps the card's typed changes
       return run(b, "start", { raw_file: m.raw.file, raw_name: m.raw.name });
     }
-    if(act==="request_changes" || act==="back_to_edit"){
+    if(act==="approve_plan") return run(b, act, { notes: notes() });
+    if(act==="request_changes" || act==="back_to_edit" || act==="change_plan"){
       if(!notes()) return toast("Write what should change first");
       return run(b, act, { notes: notes() });
     }

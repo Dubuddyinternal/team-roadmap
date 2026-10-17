@@ -106,7 +106,7 @@ def start(src):
     with open(P, "w") as f:
         json.dump(p, f, indent=1)
     got = []
-    if p["step"] == "plan" and "edit" not in (p.get("inputs") or {}):
+    if p["step"] in ("propose", "plan") and "edit" not in (p.get("inputs") or {}):
         shutil.rmtree(os.path.join(W, "raw"), ignore_errors=True)   # a fresh edit: nothing left over from an earlier clip
     notes = {}
     for name, url in (p.get("inputs") or {}).items():
@@ -122,6 +122,8 @@ def start(src):
                 tf.extractall(os.path.join(W, "raw"), filter="data")
         elif name == "plan_result":
             download(url, os.path.join(W, "out", "plan_result.json"))
+        elif name == "proposal":   # the plan the owner approved at Check 1
+            download(url, os.path.join(W, "out", "proposal.json"))
         elif name in ("yt", "ig"):
             download(url, os.path.join(W, "in", f"final_{name}.mp4"))
         elif name == "clean_audio":
@@ -184,6 +186,7 @@ def upload_preview(E):
 def finish():
     p = load(); step = p["step"]; outs = p.get("outputs") or {}; E = ed(); O = os.path.join(W, "out")
     files = {
+        "propose": {"proposal": first(f"{O}/proposal.json")},
         "plan":   {"brief_sheet": first(f"{E}/brief/sheet.jpg"), "brief_md": first(f"{E}/brief/brief.md"),
                    "plan_result": first(f"{O}/plan_result.json")},
         "render": {"yt": first(f"{E}/output/youtube/final_yt.mp4", f"{E}/final_yt.mp4"),
@@ -194,7 +197,7 @@ def finish():
         "research": {"research": first(f"{O}/research.json")},
         "script": {"script": first(f"{O}/script.json")},
     }[step]
-    if step in ("plan", "render") and os.path.isdir(os.path.join(W, "raw", "edit")):
+    if step in ("propose", "plan", "render") and os.path.isdir(os.path.join(W, "raw", "edit")):
         # the whole edit folder travels to the next step (minus things that are rebuilt anyway)
         t = os.path.join(W, "in", "edit-out.tar.gz"); os.makedirs(os.path.dirname(t), exist_ok=True)
         skip = ("/node_modules", "/renders", "/.cache", "studio_backups")
@@ -212,7 +215,7 @@ def finish():
         if path and name in outs:
             report("progress", f"uploading {name}…") if name in ("yt", "ig", "edit") else None
             upload(outs[name], path); uploaded.append(name)
-    rf = {"plan": "plan_result", "render": "render_result", "seo": "seo", "post": "post_result", "research": "research", "script": "script"}[step]
+    rf = {"propose": "proposal", "plan": "plan_result", "render": "render_result", "seo": "seo", "post": "post_result", "research": "research", "script": "script"}[step]
     result = None
     if files.get(rf):
         with open(files[rf]) as f:

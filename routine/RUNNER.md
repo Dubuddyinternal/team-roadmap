@@ -34,44 +34,70 @@ and follow it, including the references it points to. Its commands use `~/.agent
 `~/Developer/video-use`, and the setup links both, so run them exactly as written. The raw clip is already where the
 skill expects footage: `<work>/raw/raw.<ext>`, which makes the edit folder ED = `<work>/raw/edit/raw`.
 
-## Step: `plan` (skill stages 0–2, no render)
+## Step: `propose` (skill stage 0 + 1: look at the video, say what you'll do — no HyperFrames)
 
-Run storyboard → analyse (prep.py) → plan.json → cut/build both variants → brief.py. **Stop before rendering**: the
-owner approves the storyboard and brief on the website after you finish. Never run finish.sh in this step.
+The owner's first check is your **plan**, before anything is built. Watch and analyse the clip, decide the edit, and
+describe it so clearly that the owner can say "yes" or "change X" without seeing any graphics. **Don't open or build
+HyperFrames in this step**: no scenes.py, no build.py, no brief.py, no snapshots, no B-roll downloads.
+- If `pipe.py start` prints `clean_audio: swapped in…`, the raw video already carries the owner's cleaned voice; if it
+  prints `NOT used…`, carry on with the camera audio and put that line in `warnings`.
+- Run the skill's analyse step (prep.py) and read `analysis.md` and the face frames. Read `references/animation-lessons.md`
+  and `references/scenes/README.md` so what you propose is something the skill can build well.
+- Decide, following every SKILL.md rule: the hook (≤ 6 words, never invented dialogue; teaser if the opening is weak),
+  what to cut (fillers, retakes, false starts, off-topic) and the new length, the **custom vector animation scenes**
+  (3–5 in a 30–45 s clip: what's drawn, how it moves, where it sits — full / split / float), phone mockups, other B-roll
+  and where it comes from (dubuddy.in capture, HyperFrames animation, Pexels, Openverse), captions (Hinglish, every word
+  pops), punch-ins on key lines, the CTA (comment cards + Subscribe/Follow), sound effects and music.
+- Use the card's title, hook and keywords to guide the hook and emphasis.
+- You may write a draft `plan.json` in ED for the build step to start from. Nothing else.
+- If `notes` is set, it's the owner's change request for your earlier plan (it's in `OUT/proposal.json` if this is a
+  re-plan): apply it and say what changed in `summary`.
+- Write `OUT/proposal.json`:
+  ```json
+  {"summary":"2–3 lines: what this video becomes","hook":{"text":"…","why":"…"},"length":"38 s (from 52 s)",
+   "cuts":[{"what":"the second take of the intro","why":"…"}],
+   "scenes":[{"at":"0:04","said":"…","scene":"what's drawn and how it moves","display":"full|split|float"}],
+   "broll":[{"at":"0:12","what":"…","display":"…","source":"dubuddy.in capture|animation|Pexels|Openverse"}],
+   "captions":"style + anything special","cta":"…","audio":"voice, SFX, music",
+   "questions":["choices the owner may want to change"],"warnings":["…"]}
+  ```
+- Milestones: "transcribed", "plan written".
+
+## Step: `plan` (build the approved plan in HyperFrames, skill stages 1–2, no render)
+
+The owner approved your plan (`OUT/proposal.json`). Build **exactly that plan** in HyperFrames, then show it. If
+`notes` is set, it's either a small tweak the owner added when approving, or (after Check 2) what to change in the
+built edit. Never run finish.sh in this step.
 - First check the animation library loads: `curl -fsI https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js`. If it
   fails, run `python3 "$PIPE" fail "The environment can't reach cdn.jsdelivr.net — add it to the network allowlist"` and stop:
   without it every animation renders frozen.
-- **This is the full Dubuddy edit, not a light one.** Nobody approves the storyboard mid-run, so the storyboard you put in
-  `plan_result.json` *is* stage 0's storyboard: decide it yourself, then build it. Follow every stage-0 rule in SKILL.md:
-  - Read `references/animation-lessons.md` and `references/scenes/README.md` before planning.
-  - Turn every moment that can be demonstrated into a **custom vector animation** (illustrated scene with depth, alive,
-    eased): write a `scenes.py` in ED that imports `references/scenes/common.py` and adapts the recipes in
-    `references/scenes/` (hook, calendar, study room, notebook, road, ending cards). Their hard-coded `/Users/adi/...`
-    paths are examples: point them at ED. Aim for 3–5 such scenes in a 30–45 s clip, never text pills alone.
+- **This is the full Dubuddy edit, not a light one.** Follow every stage-0/1/2 rule in SKILL.md:
+  - Every scene in the proposal becomes a **custom vector animation** (illustrated scene with depth, alive, eased): write
+    a `scenes.py` in ED that imports `references/scenes/common.py` and adapts the recipes in `references/scenes/` (hook,
+    calendar, study room, notebook, road, ending cards). Their hard-coded `/Users/adi/...` paths are examples: point
+    them at ED. Never text pills alone.
   - Any app, site or PYQ list shown on a phone uses `common.iphone()` — never a plain rounded rectangle.
   - The CTA is the default `common.comment_cards(...)` + `common.comment_cta(...)` from the "comment" line (set
     `cta.comment=false`), with the Subscribe/Follow card at the end. Run `sfx_lib.py` first.
   - Do the Animation QA (6–10 snapshots per scene) and fix what it finds before brief.py.
-  - In `storyboard`, describe each scene concretely (what's drawn, how it moves), so the owner can judge it on the card.
-- If `pipe.py start` prints `clean_audio: swapped in…`, the owner cleaned the voice in Adobe Podcast and the raw video
-  now carries that clean audio. Edit from it as usual, and on a re-plan re-run cut.py and every build step so the cut
-  video picks up the new sound. If it prints `NOT used…`, carry on with the camera audio and put that line in `warnings`.
+- If something in the proposal can't be built well (no good B-roll, a scene that doesn't read), build the closest thing
+  and say what you changed in `warnings` — don't silently drop it.
+- If `pipe.py start` prints `clean_audio: swapped in…`, re-run cut.py and every build step so the cut video picks up the
+  new sound. If it prints `NOT used…`, carry on with the camera audio and put that line in `warnings`.
 - `pipe.py start` puts the owner's whole SFX library where it lives on the Mac (`sfx_library` in its output says how
   many files). Run `sfx_lib.py` as the skill says; for a sound the house set lacks, pick one from that library
   (`ls -R`), trim and level it like `sfx_lib.py` does into `ED/sfx/<name>.mp3`, and use it by that name.
-- Use the card's title, hook and keywords to guide the hook and emphasis, but never invent dialogue.
 - If ED holds a `STUDIO_EDITS` file, the owner edited `hf*/index.html` in HyperFrames Studio. Keep those edits: change
   only what the notes ask for, directly in `hf_yt/index.html` and `hf_ig/index.html` where you can. Use
   `build.py --force` only if the notes need a rebuild from plan.json, and then say in `warnings` which Studio edits were redone.
-- If `notes` is set, it's the owner's change request for this clip. If ED already holds a plan.json (a re-plan), apply
-  the notes to it, re-run only the build steps that need it, then brief.py.
+- On a rebuild after Check 2 (notes set, ED already built), re-run only the build steps the notes need, then brief.py.
 - Fix every error brief.py reports, then write `OUT/plan_result.json`:
   ```json
   {"summary":"2–3 lines on the edit","hook":"the hook text","storyboard":[{"at":"0:03","said":"…","scene":"…","display":"full|split|float"}],
    "cuts":"what you cut and why","graphics":[{"at":"0:05","display":"…","text":"…","source":"…"}],
    "captions":"the full caption text","audio":"loudness, SFX, music","questions":["what you decided that the owner may want to change"],"warnings":["…"]}
   ```
-- Milestones: "transcribed", "plan written", "built", "brief ready".
+- Milestones: "building scenes", "built", "brief ready".
 
 ## Step: `render` (skill stage 3)
 

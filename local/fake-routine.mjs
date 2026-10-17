@@ -44,7 +44,18 @@ try {
   const info = JSON.parse(pipe("start", fire));
   const ED = info.edit_folder, OUT = info.out;
   sleep(2);
-  if (p.step === "plan") {
+  if (p.step === "propose") {
+    pipe("progress", "transcribed (fake)"); sleep(2);
+    fs.mkdirSync(ED, { recursive: true }); fs.writeFileSync(path.join(ED, "plan.json"), JSON.stringify({ fake: true, draft: true, notes: p.notes }));
+    json(path.join(OUT, "proposal.json"), { summary: (p.notes ? `[changed: ${p.notes}] ` : "") + "Fake plan for “" + (p.card.title || p.card.idea || "card") + "”: a 32 s short that opens on the key number.",
+      hook: { text: "SRCC cutoff *gira*?", why: "The number is the surprise — it stops the scroll." }, length: "32 s (from 47 s)",
+      cuts: [{ what: "2 false starts and the second take of the intro", why: "repeats" }],
+      scenes: [{ at: "0:00", said: "SRCC ka cutoff…", scene: "A falling arrow over a college gate, dust drifting", display: "float" },
+               { at: "0:08", said: "2025 me 98.7 tha", scene: "A counter rolling up to 98.7 on a notebook page", display: "split" }],
+      broll: [{ at: "0:15", what: "dubuddy.in predictor on a phone", display: "full", source: "dubuddy.in capture" }],
+      captions: "Hinglish, every word pops", cta: "Comment cards + Subscribe / Follow", audio: "-14 LUFS, pop on the number",
+      questions: ["Kept the teaser at the start"], warnings: [] });
+  } else if (p.step === "plan") {
     pipe("progress", "transcribed (fake)"); sleep(2);
     fs.mkdirSync(path.join(ED, "brief"), { recursive: true });
     ff(["-f", "lavfi", "-i", "testsrc2=s=1200x400:d=1", "-frames:v", "1", path.join(ED, "brief/sheet.jpg")]);
