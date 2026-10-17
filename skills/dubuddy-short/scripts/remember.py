@@ -4,6 +4,8 @@ skill gets it: the cloud edits (they start from main) and the Mac (its copy pull
 
     python3 remember.py add "<rule>"       add the rule to "Your rules" at the end of SKILL.md
     python3 remember.py remove "<rule>"    take it out again
+    python3 remember.py push "<what was learned>"   commit + push any other new learning in the skill folder
+                                           (glossary.json spellings, references/animation-lessons.md, scripts, scenes) to GitHub main
 
 Only for what the owner explicitly asked to remember for EVERY video — never for one video's brief or card boxes.
 Prints one JSON line: {"ok": true, "commit": "<sha>"} / {"ok": true, "note": "already there"} / {"ok": false, "error": "…"}.
@@ -87,7 +89,27 @@ def push(add=None, remove=None):
     return {"ok": False, "error": "push to main kept failing"}
 
 
+def push_changes(message):
+    """commit whatever changed inside the skill folder (not SKILL.md rules — those use add/remove) and push it to main"""
+    try:
+        root = git(["rev-parse", "--show-toplevel"], HERE)
+        if git(["rev-parse", "--abbrev-ref", "HEAD"], root) != "main":
+            return {"ok": False, "error": "this copy isn't on main, so it can't push"}
+        rel = os.path.relpath(HERE, root)
+        git(["pull", "-q", "--rebase", "--autostash", "origin", "main"], root)
+        git(["add", "-A", "--", rel], root)
+        if not git(["status", "--porcelain", "--", rel], root):
+            return {"ok": True, "note": "nothing new to push"}
+        git(["-c", "user.name=Dubuddy Claude", "-c", "user.email=noreply@anthropic.com", "commit", "-q", "-m", ("Skill learned: " + message)[:120]], root)
+        git(["push", "-q", "origin", "HEAD:main"], root)
+        return {"ok": True, "commit": git(["rev-parse", "--short", "HEAD"], root)}
+    except RuntimeError as e:
+        return {"ok": False, "error": str(e)}
+
+
 if __name__ == "__main__":
+    if len(sys.argv) >= 3 and sys.argv[1] == "push":
+        print(json.dumps(push_changes(" ".join(sys.argv[2:]).strip()), ensure_ascii=False)); sys.exit(0)
     if len(sys.argv) < 3 or sys.argv[1] not in ("add", "remove") or not " ".join(sys.argv[2:]).strip():
         print(__doc__); sys.exit(1)
     rule = " ".join(sys.argv[2:]).strip()
