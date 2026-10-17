@@ -41,9 +41,16 @@ async function headers(){
     if(data && data.session) h.authorization = "Bearer " + data.session.access_token; } }catch(_){ }
   return h;
 }
-async function call(path, body){
-  const r = await fetch(path, body ? { method:"POST", headers: await headers(), body: JSON.stringify(body) } : { headers: await headers() });
-  const j = await r.json().catch(()=>({ error:"The pipeline server didn't answer ("+r.status+")" }));
+async function call(path, body, tries){
+  let r;
+  try{ r = await fetch(path, body ? { method:"POST", headers: await headers(), body: JSON.stringify(body) } : { headers: await headers(), cache:"no-store" }); }
+  catch(e){
+    // the network dropped (or the preview's sign-in expired): reads are safe to try again once
+    if(!body && !tries){ await new Promise(ok=>setTimeout(ok,1200)); return call(path, body, 1); }
+    throw new Error("Couldn't reach the server — check the connection" + (location.hostname.endsWith(".vercel.app") ? ", or reload the page (the preview's sign-in may have expired)" : "") + " and try again");
+  }
+  const t = await r.text();
+  let j; try{ j = JSON.parse(t); }catch(_){ j = { error: `The server answered ${r.status}${r.status===504?" (it took too long)":""}${t&&!/^\s*</.test(t)?": "+t.slice(0,140):""} — try again` }; }
   if(j.error) throw new Error(j.error);
   return j;
 }
@@ -58,7 +65,8 @@ async function uploadRaw(cardId, f, onProgress){
     const x = new XMLHttpRequest(); x.open("PUT", data.url);
     x.upload.onprogress = e => { if(e.lengthComputable && onProgress) onProgress(Math.round(e.loaded/e.total*100)); };
     x.onload = () => x.status < 300 ? ok() : bad(new Error("Upload refused (" + x.status + ")"));
-    x.onerror = () => bad(new Error("Upload failed — check the connection"));
+    x.onerror = () => bad(new Error("The upload to storage was cut off — check the connection and try again"));
+    x.ontimeout = () => bad(new Error("The upload to storage timed out — try again"));
     x.send(f);
   });
   // a replacement with another file type (raw.mov → raw.mp4) must not leave the old one behind in storage
