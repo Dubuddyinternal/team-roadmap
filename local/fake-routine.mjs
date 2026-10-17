@@ -40,6 +40,44 @@ window.__timelines["main"] = tl;</script></body></html>`);
 const sleep = s => execFileSync("sleep", [String(s)]);
 const json = (f, o) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, JSON.stringify(o, null, 1)); };
 
+// ---- chat runs (the edit chat): stay alive, act on what "the owner says". Locally there's no claude.ai chat, so a test
+// writes the message to <runs>/<card>.say ("build" / "render" / anything else = change the plan).
+if (p.chat) {
+  try {
+    const info = JSON.parse(pipe("start", fire)); const ED = info.edit_folder, OUT = info.out, tv = info.targets;
+    const SAY = path.join(path.dirname(fire), `${p.job}.say`);
+    const proposal = notes => { fs.mkdirSync(ED, { recursive: true }); fs.writeFileSync(path.join(ED, "plan.json"), JSON.stringify({ fake: true, draft: true }));
+      json(path.join(OUT, "proposal.json"), { summary: (notes ? `[changed: ${notes}] ` : "") + `Fake plan for “${p.card.title || p.card.idea || "card"}” — versions: ${tv.join(" + ")}.`,
+        hook: { text: "SRCC cutoff *gira*?", why: "The number is the surprise." }, length: "32 s (from 47 s)", cuts: [{ what: "2 false starts", why: "repeats" }],
+        scenes: [{ at: "0:00", said: "SRCC ka cutoff…", scene: "Falling arrow over a college gate", display: "float" }], broll: [], captions: "Hinglish", cta: "Comment cards", audio: "-14 LUFS",
+        questions: [], warnings: [] });
+      pipe("stage", "proposal"); };
+    const build = msg => { pipe("busy", "building", "building (fake)"); sleep(1);
+      fs.mkdirSync(path.join(ED, "brief"), { recursive: true });
+      ff(["-f", "lavfi", "-i", "testsrc2=s=1200x400:d=1", "-frames:v", "1", path.join(ED, "brief/sheet.jpg")]);
+      fs.writeFileSync(path.join(ED, "brief/brief.md"), "# Brief (fake chat run)\n");
+      fs.appendFileSync(path.join(ED, "CHAT_NOTES.md"), `- ${new Date().toISOString()}: ${msg}\n`);
+      tv.forEach(v => demoComposition(path.join(ED, "hf_" + v), v === "yt" ? "YouTube" : "Instagram"));
+      const refs = JSON.parse(pipe("refs")).count;
+      json(path.join(OUT, "plan_result.json"), { summary: `Fake build (${msg}) · ${refs} file(s) from “Files for Claude”`, hook: "SRCC cutoff *gira*?", storyboard: [], captions: "…", questions: [], warnings: [] });
+      pipe("stage", "built"); };
+    const render = () => { pipe("busy", "rendering", "rendering (fake)"); sleep(1);
+      const dir = { yt: "youtube", ig: "instagram" };
+      tv.forEach(v => { fs.mkdirSync(path.join(ED, "output", dir[v]), { recursive: true });
+        ff(["-f", "lavfi", "-i", (v === "yt" ? "testsrc2" : "smptebars") + "=s=540x960:d=4", "-f", "lavfi", "-i", "sine=d=4", "-shortest", "-pix_fmt", "yuv420p", path.join(ED, "output", dir[v], `final_${v}.mp4`)]); });
+      json(path.join(OUT, "render_result.json"), { qc: tv.map(v => v + " ok").join(" · ") + " (fake)" });
+      pipe("stage", "rendered"); };
+    if (p.step === "chat") proposal(""); else pipe("waiting", "What should change? (fake)");
+    const end = Date.now() + 15 * 60e3;
+    while (Date.now() < end) {
+      sleep(1); if (!fs.existsSync(SAY)) continue;
+      const msg = fs.readFileSync(SAY, "utf8").trim(); fs.rmSync(SAY, { force: true });
+      if (/render/i.test(msg)) render(); else if (/^(ok|go|build)/i.test(msg)) build(msg); else if (/plan/i.test(msg)) proposal(msg); else build(msg);
+    }
+  } catch (e) { try { pipe("fail", "Fake chat: " + String(e.message).slice(0, 300)); } catch {} }
+  process.exit(0);
+}
+
 try {
   const info = JSON.parse(pipe("start", fire));
   const ED = info.edit_folder, OUT = info.out;
@@ -70,8 +108,9 @@ try {
     if (!fs.existsSync(path.join(ED, "plan.json"))) throw new Error("edit folder didn't come back from the plan step");
     pipe("progress", "rendering YouTube (fake)"); sleep(2);
     fs.mkdirSync(path.join(ED, "output/youtube"), { recursive: true }); fs.mkdirSync(path.join(ED, "output/instagram"), { recursive: true });
-    ff(["-f", "lavfi", "-i", "testsrc2=s=540x960:d=4", "-f", "lavfi", "-i", "sine=d=4", "-shortest", "-pix_fmt", "yuv420p", path.join(ED, "output/youtube/final_yt.mp4")]);
-    ff(["-f", "lavfi", "-i", "smptebars=s=540x960:d=4", "-f", "lavfi", "-i", "sine=d=4", "-shortest", "-pix_fmt", "yuv420p", path.join(ED, "output/instagram/final_ig.mp4")]);
+    const tv = p.targets || ["yt", "ig"];   // only the versions asked for
+    if (tv.includes("yt")) ff(["-f", "lavfi", "-i", "testsrc2=s=540x960:d=4", "-f", "lavfi", "-i", "sine=d=4", "-shortest", "-pix_fmt", "yuv420p", path.join(ED, "output/youtube/final_yt.mp4")]);
+    if (tv.includes("ig")) ff(["-f", "lavfi", "-i", "smptebars=s=540x960:d=4", "-f", "lavfi", "-i", "sine=d=4", "-shortest", "-pix_fmt", "yuv420p", path.join(ED, "output/instagram/final_ig.mp4")]);
     json(path.join(OUT, "render_result.json"), { qc: "yt ok · ig ok (fake)", duration_s: 4 });
   } else if (p.step === "seo") {
     if (!fs.existsSync(path.join(OUT, "plan_result.json"))) throw new Error("plan_result.json didn't arrive");
