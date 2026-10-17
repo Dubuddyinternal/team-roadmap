@@ -17,6 +17,11 @@ Extras (music, Devanagari, custom graphics, Codex, missing B-roll, troubleshooti
 - Brief changes apply to this video only. If a change sounds like a lasting style preference (caption size/colour, SFX, layout, pacing) and the user didn't say "save"/"always"/"from now on", ask: "just this video, or save as default?" A saved default → `python3 $S/remember.py add "<rule>"` ("Your rules" at the end of this file, pushed to GitHub main).
 - **No dead panels.** A full/split panel appears ≤ 0.5 s before its first content animates (never a title alone for 1–2 s), and when the next item is ≥ 3–4 s away it leaves → back to the anchor's face → returns just before the next item. Applies to custom animations too (their content must start at `{S}`+0.3, not later).
 - **Texture on what we create** (panels, cards, graphic text). Over the footage only where it adds mood for a short moment (e.g. a scary/glitch hook: grain + scanlines that leave with the hook) — never on the regular talking footage. Use judgment, not literal rules.
+- **Captions never move in split screens.** `split_caption_y` defaults to `captions.y` (YT 1440, IG 1380); `split_shift` ≈ 460 so the captions sit under the mouth.
+- **No empty space in scenes.** Every split/full scene fills its panel edge to edge.
+- **Labels move with their objects.** A pill/title and its object enter together as one group.
+- **Real news articles.** When a clip cites a report, show the real article (screenshot: masthead, headline, byline, summary) with lines highlighted as they're said — never a made-up newspaper.
+- **Big centred numbers that match what's said** (say 45 → show 45).
 - B-roll display by purpose: explains → `full` (steps/site/media) · small animation → `split` (stat/list/media) · text → `float` (text/stat/mark).
 - Sources, free only, in order: dubuddy.in capture → HyperFrames animation → Pexels video → Openverse/Wikimedia photo. No AI generation unless asked. Only claim what dubuddy.in actually shows.
 - Judgment: hook → info density → clarity → pacing → captions → variation → polish. Every cut/zoom/graphic/sound must improve retention or clarity, else skip it. Professional, not AI-looking; the speaker and the info stay the focus. Content beats rules.
