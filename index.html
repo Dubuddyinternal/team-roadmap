@@ -2531,6 +2531,11 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .rmg-cell.last{border-bottom:1px solid var(--line)}
 .rmg-cell.now{background:var(--indigo-soft)}
 .rmg-blk{margin:5px 3px;border-radius:6px;color:#fff;font-size:12px;font-weight:600;padding:7px 9px;display:flex;align-items:center;cursor:pointer;z-index:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+.rmg-blk{contain:inline-size;min-width:0}
+.rm-rename{cursor:pointer;display:inline-flex;align-items:center;gap:8px;border-radius:8px;padding:2px 6px;margin-left:-6px}
+.rm-rename:hover{background:var(--indigo-soft)}
+.rm-rename-pen{font-size:14px;color:var(--muted);opacity:0;transition:opacity .12s}
+.rm-rename:hover .rm-rename-pen{opacity:1;color:var(--indigo)}
 .rmg-blk:hover{filter:brightness(1.08);box-shadow:0 3px 10px rgba(0,0,0,.18)}
 .rmg-blk.done{opacity:.55}
 .rmg-blk.locked{outline:2px dashed var(--blocked);outline-offset:1px}
@@ -12568,6 +12573,16 @@ function openStoryImport(spaceId){
    and on each item:       it.lane, it.team, it.progress (done so far),
                            it.next (next steps), it.rule {type, days}, it.lastDone
    ================================================================ */
+/* roadmap name in the header of Lanes / Gantt views: click it (edit mode) to rename or change type */
+function rmapTitleEl(m){
+  const h2 = document.createElement("h2"); h2.textContent = m.name;
+  if(editMode){
+    h2.className = "rm-rename"; h2.title = "Click to rename, or change the roadmap type";
+    h2.onclick = ()=> openRmapSettings(m);
+    const pen = document.createElement("span"); pen.className = "rm-rename-pen"; pen.textContent = "\u270E"; h2.appendChild(pen);
+  }
+  return h2;
+}
 function rmapViewOf(m){ return m && (m.view==="lanes" || m.view==="gantt" || m.view==="swimlane" || m.view==="wbs") ? m.view : "timeline"; }
 /* "gantt" and "swimlane" share the week grid, window controls and rows = m.lanes */
 function rmgIsGrid(m){ return !!m && (m.view==="gantt" || m.view==="swimlane"); }
@@ -12607,7 +12622,7 @@ function renderRmapLanes(m, wrap, byTid){
   const head = document.createElement("section");
   head.className = "module-block"; head.style.marginBottom = "12px";
   const row = document.createElement("div"); row.className = "module-head";
-  const h2 = document.createElement("h2"); h2.textContent = m.name;
+  const h2 = rmapTitleEl(m);
   const pc = document.createElement("span"); pc.className = "pct";
   const done = live.filter(it=> effStatus(byTid[it.tid].task)==="done").length;
   const red = live.filter(it=> rmlIsRed(it, byTid[it.tid])).length;
@@ -12865,7 +12880,7 @@ function renderRmapGantt(m, wrap, byTid){
   const head = document.createElement("section");
   head.className = "module-block"; head.style.marginBottom = "12px";
   const row = document.createElement("div"); row.className = "module-head";
-  const h2 = document.createElement("h2"); h2.textContent = m.name;
+  const h2 = rmapTitleEl(m);
   const pc = document.createElement("span"); pc.className = "pct";
   const done = live.filter(it=> effStatus(byTid[it.tid].task)==="done").length;
   pc.textContent = live.length + " task(s) · " + done + " done · " + nW + " weeks";
@@ -12906,7 +12921,7 @@ function renderRmapGantt(m, wrap, byTid){
     ownB.onclick = ()=> rmlNewOwn(m, m.lanes[0].id);
     row.appendChild(ownB);
     const acts = document.createElement("div"); acts.className = "acts";
-    acts.appendChild(actBtn("pencil", "Roadmap settings — name, type and weeks shown", false, ()=> openRmapSettings(m)));
+    acts.appendChild(actBtn("pencil", "Rename · roadmap type · weeks shown", false, ()=> openRmapSettings(m)));
     row.appendChild(acts); acts.style.opacity = 1;
   }
   head.appendChild(row); wrap.appendChild(head);
@@ -13135,7 +13150,7 @@ function renderRmapWbs(m, wrap, byTid){
   const head = document.createElement("section");
   head.className = "module-block"; head.style.marginBottom = "12px";
   const row = document.createElement("div"); row.className = "module-head";
-  const h2 = document.createElement("h2"); h2.textContent = m.name;
+  const h2 = rmapTitleEl(m);
   const pc = document.createElement("span"); pc.className = "pct";
   const tot = live.reduce((s,it)=> s + Math.max(1, dNum(it.end||it.start||todayISO()) - dNum(it.start||it.end||todayISO()) + 1), 0);
   const doneW = live.reduce((s,it)=> s + Math.max(1, dNum(it.end||it.start||todayISO()) - dNum(it.start||it.end||todayISO()) + 1) * rmwPct(it, byTid[it.tid]) / 100, 0);
@@ -13163,7 +13178,7 @@ function renderRmapWbs(m, wrap, byTid){
     ownB.onclick = ()=> rmlNewOwn(m, m.lanes[0].id);
     row.appendChild(ownB);
     const acts = document.createElement("div"); acts.className = "acts";
-    acts.appendChild(actBtn("pencil", "Roadmap settings — name, type and months shown", false, ()=> openRmapSettings(m)));
+    acts.appendChild(actBtn("pencil", "Rename · roadmap type · months shown", false, ()=> openRmapSettings(m)));
     row.appendChild(acts); acts.style.opacity = 1;
   }
   head.appendChild(row); wrap.appendChild(head);
@@ -15978,6 +15993,7 @@ function renderAll(){
         const menu = document.createElement("span");
         menu.className = "ws-menu-btn"; menu.textContent = "\u22ef"; menu.title = "More";
         menu.onclick = e=>{ e.stopPropagation(); openRowMenu(menu, [
+          {label:"\u270F\uFE0F Rename / change type", onClick:()=> openRmapSettings(m)},
           {label:"Settings", onClick:()=> openSpaceSettings(rmapRef(m))},
           {label:"Set background", onClick:()=> openBgPicker(rmapRef(m))},
           {label:"\uD83D\uDE48 Hide from my sidebar", onClick:()=> setHiddenForMe("rm:"+m.id, true, m.name)},
