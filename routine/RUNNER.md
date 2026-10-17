@@ -121,8 +121,12 @@ HyperFrames in this step**: no scenes.py, no build.py, no brief.py, no snapshots
    "scenes":[{"at":"0:04","said":"…","scene":"what's drawn and how it moves","display":"full|split|float"}],
    "broll":[{"at":"0:12","what":"…","display":"…","source":"dubuddy.in capture|animation|Pexels|Openverse"}],
    "captions":"style + anything special","cta":"…","audio":"voice, SFX, music",
-   "questions":["choices the owner may want to change"],"warnings":["…"]}
+   "questions":["choices the owner may want to change"],"warnings":["…"],
+   "transcript":[{"at":"0:00","text":"exactly what's said, in the original Hinglish","cut":false}]}
   ```
+  `transcript` is the **whole** transcription of the raw clip, start to end, one entry per sentence or phrase with its
+  start time in the raw clip, word for word as spoken (no clean-up, no translation). Mark `"cut": true` on every part
+  your plan removes, so the owner reads exactly what stays and what goes.
 - Milestones: "transcribed", "plan written".
 
 ## Step: `plan` (build the approved plan in HyperFrames, skill stages 1–2, no render)

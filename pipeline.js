@@ -283,6 +283,10 @@ const CSS = `<style>
 .pp .pp-att{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 6px}
 .pp .pp-att span{font-size:11.5px;padding:3px 8px;border-radius:99px;background:var(--surface-2);border:1px solid var(--line)}
 .pp .pp-att button{border:0;background:none;cursor:pointer;color:var(--ink-3);padding:0 0 0 4px}
+.pp .pp-trlist{max-height:320px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--surface)}
+.pp .pp-trl{display:flex;gap:8px;padding:3px 0;font-size:13px;line-height:1.45}
+.pp .pp-trl .t{font-family:var(--mono);font-size:11px;color:var(--ink-3);flex:none;width:38px;padding-top:2px}
+.pp .pp-trl.cut span:last-child{text-decoration:line-through;color:var(--ink-3)}
 .pp .pp-quick{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 </style>`;
 
@@ -390,10 +394,23 @@ function proposalView(job, me){
     ${p.captions?`<details><summary>Captions</summary><p style="margin:4px 0">${esc(p.captions)}</p></details>`:""}
     ${p.cta?`<details><summary>Ending / CTA</summary><p style="margin:4px 0">${esc(p.cta)}</p></details>`:""}
     ${p.audio?`<details><summary>Audio</summary><p style="margin:4px 0">${esc(p.audio)}</p></details>`:""}
+    ${transcriptHtml(p.transcript)}
     ${(p.questions||[]).length?`<div class="pp-note"><b>Claude decided these — change any you like:</b>${list(p.questions)}</div>`:""}
     ${(p.warnings||[]).length?`<div class="pp-note crit"><b>Warnings</b>${list(p.warnings)}</div>`:""}
     <div class="pp-note"><b>Say OK or what to change in the chat below.</b> Paste or drop screenshots and files right into it.</div>
     <div class="pp-row">${chatBtn(job)}${me.canRun?`<button class="btn sm" data-pp="cancel" style="margin-left:auto">Cancel job</button>`:""}</div>`;
+}
+
+// 📝 the whole transcription of the raw clip; the parts the plan cuts are struck through
+function transcriptHtml(t){
+  if(typeof t === "string") t = t.trim() ? [{ text: t }] : [];
+  if(!Array.isArray(t) || !t.length) return "";
+  const cut = t.filter(x => x && x.cut).length;
+  return `<details class="pp-tr"><summary>📝 Full transcript (${t.length} lines${cut?` · ${cut} cut`:""})</summary>
+    ${cut?`<p class="hint" style="margin:4px 0 6px">Struck-through lines are what the plan cuts.</p>`:""}
+    <div class="pp-trlist">${t.map(x => `<div class="pp-trl${x.cut?" cut":""}">${x.at?`<span class="t">${esc(x.at)}</span>`:""}<span>${esc(x.text||"")}</span></div>`).join("")}</div>
+    <div class="pp-row" style="margin:6px 0 0"><button class="btn sm" data-copy="${esc(t.map(x => (x.at?x.at+"  ":"") + (x.text||"")).join("\n"))}">Copy</button></div>
+  </details>`;
 }
 
 // ▶ live player: the edit itself, played in the browser (phone too) — no render, no Studio
