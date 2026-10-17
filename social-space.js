@@ -2340,7 +2340,14 @@ function freeCardFiles(id, after){
 function closeDrawer(force){
   if(force!==true && CLOSE_GUARD && !CLOSE_GUARD()) return;
   CLOSE_GUARD=null; OPEN=null; $("#drawer").classList.remove("on"); $("#scrim").classList.remove("on"); }
-function openDrawer(h,wide){ const d=$("#drawer"); d.oninput=d.onchange=null; CLOSE_GUARD=null; d.innerHTML=h; d.classList.toggle("wide",!!wide); d.classList.add("on"); $("#scrim").classList.add("on"); d.scrollTop=0; }
+// key: what's in the drawer ("card:<id>", "idea:<id>"). Drawing the same thing again while it's open (a button that
+// redraws the card, Claude's status coming in) keeps the scroll exactly where it was; anything new starts at the top.
+let DRAWER_KEY=null;
+function openDrawer(h,wide,key){ const d=$("#drawer"), same=!!key&&key===DRAWER_KEY&&d.classList.contains("on"), y=same?d.scrollTop:0;
+  d.oninput=d.onchange=null; CLOSE_GUARD=null; d.innerHTML=h; d.classList.toggle("wide",!!wide); d.classList.add("on"); $("#scrim").classList.add("on");
+  DRAWER_KEY=key||null; d.scrollTop=y;
+  if(same) requestAnimationFrame(()=>{ if(Math.abs(d.scrollTop-y)>1) d.scrollTop=y; });   // rich-text boxes settle a frame later
+}
 // the team's members, from the app's user list (profiles + memberships)
 function teamNames(){ let l=[]; try{ l=(OPT.people && OPT.people()) || []; }catch(_){ }
   return [...new Set(l.filter(Boolean))].sort((a,b)=>a.localeCompare(b)); }
@@ -2497,7 +2504,7 @@ function openIdea(id,focusComments,fmtKey){
       <button class="btn pri" id="saveIdea" data-w="1">${isNew?"Log idea":"Save changes"}</button>
       <button class="btn" id="xClose2">${canEdit()?"Cancel":"Close"}</button>
       <span id="dirtyDot" class="dirty" ${dirty?"":"hidden"}>● Unsaved changes</span>
-      ${!isNew?`<button class="btn danger" id="delIdea" style="margin-left:auto" data-w="1">Delete</button>`:""}</div>`,true);
+      ${!isNew?`<button class="btn danger" id="delIdea" style="margin-left:auto" data-w="1">Delete</button>`:""}</div>`,true,"idea:"+(isNew?"new":i.id));
 
     const read=()=>{
       i.idea=$("#i-idea").value.trim(); i.studentWhy=$("#i-studentwhy").value.trim(); i.by=$("#i-by").value.trim(); i.created=$("#i-created").value||today();
@@ -2903,7 +2910,7 @@ function openCard(id,showGate){
       <button class="btn pri" id="saveCard" data-w="1">${isNew?"Create card":"Save changes"}</button>
       <button class="btn" id="xClose2">${canEdit()?"Cancel":"Close"}</button>
       <span id="dirtyDot" class="dirty" ${dirty?"":"hidden"}>● Unsaved changes</span>
-      ${!isNew&&canDeleteCards()?`<button class="btn danger" id="delCard" style="margin-left:auto" data-w="1">Delete</button>`:""}</div>`,true);
+      ${!isNew&&canDeleteCards()?`<button class="btn danger" id="delCard" style="margin-left:auto" data-w="1">Delete</button>`:""}</div>`,true,"card:"+(isNew?"new":c.id));
     // remember which steps are open / folded while the card is open
     $("#drawer").querySelectorAll("details.stp").forEach(d=>d.addEventListener("toggle",()=>{ SO[d.dataset.step]=d.open; }));
     const oi=$("#drawer").querySelector("[data-openidea]");
