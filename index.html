@@ -2576,6 +2576,9 @@ body.rm-chart #pane-work > .controls{display:none}
 .rmg-sum{align-self:center;height:5px;border-radius:99px;background:var(--line-strong);margin:0 1px;z-index:1;pointer-events:none}
 .rmg-task{grid-column:1;display:flex;flex-direction:column;justify-content:center;gap:1px;padding:4px 10px 4px 26px;border-bottom:1px solid var(--line);position:sticky;left:0;background:var(--card);z-index:2;min-width:0}
 .rmg-task.muted{color:var(--muted);font-size:12px;font-style:italic}
+.rmg-colrs{grid-column:1;justify-self:end;width:10px;margin-right:-5px;position:sticky;z-index:6;cursor:col-resize;touch-action:none}
+.rmg-colrs::after{content:"";position:absolute;top:0;bottom:0;left:4px;width:2px;border-radius:2px;background:transparent;transition:background .15s}
+.rmg-colrs:hover::after,.rmg-colrs.drag::after{background:var(--accent,#E8622C)}
 .rmg-tt{font-size:12.5px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rmg-td{font-family:var(--mono);font-size:9.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rmg-task.done .rmg-tt{color:var(--muted);text-decoration:line-through}
@@ -13017,8 +13020,9 @@ function renderRmapGantt(m, wrap, byTid){
   const nD = nW*7, dayOf = n => n - w0;
   const scroll = document.createElement("div"); scroll.className = "rmg-scroll";
   const grid = document.createElement("div"); grid.className = "rmg-grid rmg-days";
-  grid.style.gridTemplateColumns = "250px repeat("+nD+", minmax(0, 1fr))";
-  grid.style.minWidth = (250 + nW*(nW<=5 ? 0 : 84)) + "px";
+  const nameW = rmgNameW(m, 250), colsRest = "repeat("+nD+", minmax(0, 1fr))", minExtra = nW*(nW<=5 ? 0 : 84);
+  grid.style.gridTemplateColumns = nameW + "px " + colsRest;
+  grid.style.minWidth = (nameW + minExtra) + "px";
   const corner = document.createElement("div"); corner.className = "rmg-corner"; grid.appendChild(corner);
   const tw = wkOf(today), inRange = today >= w0 && today < w0 + nD;
   for(let w=0; w<nW; w++){
@@ -13104,6 +13108,7 @@ function renderRmapGantt(m, wrap, byTid){
     tl.style.gridRow = "1 / " + rIdx; tl.style.gridColumn = String(dayOf(today) + 2);
     grid.appendChild(tl);
   }
+  rmgColResizer(grid, m, nameW, 250, rIdx, colsRest, minExtra);
   scroll.appendChild(grid); wrap.appendChild(scroll);
   rmlDepOverlay(grid, barEls, byTid);
 
@@ -13217,12 +13222,43 @@ function rmgItemDrag(el, m, it, unitPx, unitDays, onClick){
 }
 /* Swimlane Gantt: one band per swimlane (team / workstream), one row per task,
    bars placed on exact days; colour = the swimlane. */
+/* task-name column width: drag its right edge to widen it so long names show in full,
+   double-click to reset. Kept per chart in this browser only (a personal view setting). */
+function rmgNameW(m, def){
+  try{ const v = Number(localStorage.getItem("rmgNameW:" + m.id)); if(v >= 150 && v <= 900) return v; }catch(e){}
+  return def;
+}
+function rmgColResizer(grid, m, w, def, rows, colsRest, minExtra){
+  const h = document.createElement("div"); h.className = "rmg-colrs";
+  h.title = "Drag to widen or narrow the task names · double-click to reset";
+  h.style.gridRow = "1 / " + rows; h.style.left = (w - 5) + "px";
+  const setW = x=>{
+    grid.style.gridTemplateColumns = x + "px " + colsRest; h.style.left = (x - 5) + "px";
+    if(minExtra !== null) grid.style.minWidth = (x + minExtra) + "px";
+  };
+  h.addEventListener("pointerdown", e=>{
+    e.preventDefault(); e.stopPropagation();
+    const sx = e.clientX, w0 = w;
+    h.setPointerCapture(e.pointerId); h.classList.add("drag");
+    const mv = ev=>{ w = Math.max(150, Math.min(900, Math.round(w0 + ev.clientX - sx))); setW(w); };
+    const up = ()=>{
+      h.removeEventListener("pointermove", mv); h.removeEventListener("pointerup", up); h.classList.remove("drag");
+      if(w === w0) return;
+      try{ localStorage.setItem("rmgNameW:" + m.id, String(w)); }catch(e){}
+      renderAll();   /* redraw so dependency arrows follow the bars */
+    };
+    h.addEventListener("pointermove", mv); h.addEventListener("pointerup", up);
+  });
+  h.ondblclick = ()=>{ try{ localStorage.removeItem("rmgNameW:" + m.id); }catch(e){} renderAll(); };
+  grid.appendChild(h);
+}
 function rmgSwimlanes(m, wrap, byTid, live, w0, nW, today){
   const nD = nW*7;
   const dayOf = n => n - w0;
   const scroll = document.createElement("div"); scroll.className = "rmg-scroll";
   const grid = document.createElement("div"); grid.className = "rmg-grid rms-grid" + (nW<=5 ? " big" : nW<=9 ? " mid" : "");
-  grid.style.gridTemplateColumns = "210px repeat("+nD+", minmax("+(nW<=5 ? 0 : 11)+"px, 1fr))";
+  const nameW = rmgNameW(m, 210), colsRest = "repeat("+nD+", minmax("+(nW<=5 ? 0 : 11)+"px, 1fr))";
+  grid.style.gridTemplateColumns = nameW + "px " + colsRest;
   const corner = document.createElement("div"); corner.className = "rmg-corner"; corner.textContent = "Task"; grid.appendChild(corner);
   const inRange = today >= w0 && today < w0 + nD, td = dayOf(today), tw = Math.floor(td/7);
   for(let w=0; w<nW; w++){
@@ -13294,6 +13330,7 @@ function rmgSwimlanes(m, wrap, byTid, live, w0, nW, today){
     tl.style.gridRow = "1 / " + r; tl.style.gridColumn = String(td + 2);
     grid.appendChild(tl);
   }
+  rmgColResizer(grid, m, nameW, 210, r, colsRest, null);
   scroll.appendChild(grid); wrap.appendChild(scroll);
   rmlDepOverlay(grid, barEls, byTid);
   const lg = document.createElement("div"); lg.className = "rmg-legend";
