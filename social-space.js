@@ -2288,6 +2288,9 @@ function wireKw(prefix,cb){
   if(add) add.onclick=()=>{ const l=readKw(prefix); l.push({kw:"",vol:null,rank:l.length?"secondary":"primary"}); cb(l); };
   $("#drawer").querySelectorAll("[data-kwdel]").forEach(b=>b.onclick=()=>{ const l=readKw(prefix); l.splice(Number(b.dataset.kwdel),1); cb(l); });
 }
+// 💬 the shared comment thread at the bottom of a card / idea (comments.js; the page says where it is, for email links)
+function mountComments(kind,id,title){ const h=$("#drawer").querySelector("[data-cmthost]");
+  if(h && window.CMT && window.cmtCardPlace) try{ CMT.mount(h, cmtCardPlace(kind,id,title)); }catch(e){ console.warn("comments",e); } }
 // viewers see the drawers but not the buttons that change anything
 function lockDrawer(){ if(canEdit()) return;
   $("#drawer").querySelectorAll("input,select,textarea").forEach(e=>e.disabled=true);
@@ -2359,14 +2362,10 @@ function openIdea(id,focusComments,fmtKey){
       <div class="fld" style="margin-bottom:0"><label for="i-cta">CTA</label>
         <input id="i-cta" value="${esc(i.cta)}" placeholder="What do they do next?"></div></div>
 
-    ${isNew?"":`<div class="block" id="cmtBlock">
-      <div class="block-h"><h4>Comments</h4><span class="hint">${i.comments.length} on this idea</span></div>
-      ${i.comments.map(c=>`<div class="cmt">${who(c.by)}<p style="margin-top:3px">${rich(c.text)}</p></div>`).join("")||`<p class="hint" style="margin:0">No comments yet.</p>`}
-      <div data-w="1"><div class="grid2" style="margin-top:12px">
-        <div class="fld" style="margin-bottom:0"><label for="i-cmtby">Comment as</label>${peopleSelect("i-cmtby",meName())}</div></div>
-      <div class="fld" style="margin-top:10px"><label for="i-newcmt">Add a comment</label>
-        <textarea id="i-newcmt" placeholder="Write a note…"></textarea></div>
-      <button class="btn sm" id="addCmt">Post comment</button></div></div>`}
+    ${isNew?"":`<div id="cmtBlock">${i.comments.length?`<div class="block">
+      <div class="block-h"><h4>Earlier comments</h4><span class="hint">from before the new comments below</span></div>
+      ${i.comments.map(c=>`<div class="cmt">${who(c.by)}<p style="margin-top:3px">${rich(c.text)}</p></div>`).join("")}</div>`:""}
+      <div data-cmthost></div></div>`}
     ${i.extra.length||canEdit()?ownBoxes(i.extra):""}
     </div><div class="dr-col">
 
@@ -2441,10 +2440,6 @@ function openIdea(id,focusComments,fmtKey){
       box.insertAdjacentHTML("beforeend", vtypeSelect("i-vtype",v,pl)); wireReg("i-vtype");
       $("#i-platform").querySelectorAll(".pp-chk").forEach(l=>l.classList.toggle("on", l.querySelector("input").checked)); };
     wireKw("i-", l=>{ read(); markDirty(); draw(l); });
-    const ac=$("#addCmt"); if(ac) ac.onclick=()=>{ const t=$("#i-newcmt").value.trim(); if(!t) return;
-      const n=$("#i-cmtby").value.trim()||meName()||"Someone";
-      read(); if(!i.idea){ toast("Give the idea a one-line summary first"); return; }
-      persist(); i.comments.push({by:n,text:t,on:today()}); if(save()){ saved(); openIdea(i.id,true); } };
     const si=$("#saveIdea"); if(si) si.onclick=()=>{ read(); if(!i.idea){toast("An idea needs a one-line summary");return;}
       if(!i.by){toast("Add who is reporting this idea");return;}
       persist(); if(save()){ saved(); closeDrawer(true); toast(isNew?"Idea logged — research it, then the head decides":"Saved"); } };
@@ -2477,6 +2472,7 @@ function openIdea(id,focusComments,fmtKey){
     $("#drawer").querySelectorAll("[data-rs-title]").forEach(b=>b.onclick=()=>{ read(); i.title=b.dataset.rsTitle; markDirty(); draw(i.keywords);
       toast("Title filled in — press Save to keep it"); });
     lockDrawer();
+    mountComments("idea", i.id, i.idea);
     if(focusComments) setTimeout(()=>{ const cb=$("#cmtBlock"); if(cb) cb.scrollIntoView({block:"center"}); },60);
   };
   draw(i.keywords||[]);
@@ -2792,6 +2788,7 @@ function openCard(id,showGate){
 
     </div></div>
     ${reviewing&&useClaude?"</details>":""}
+    ${isNew?"":`<div data-cmthost></div>`}
     <div class="row dr-foot">
       <button class="btn pri" id="saveCard" data-w="1">${isNew?"Create card":"Save changes"}</button>
       <button class="btn" id="xClose2">${canEdit()?"Cancel":"Close"}</button>
@@ -2818,7 +2815,7 @@ function openCard(id,showGate){
 
     $("#xClose").onclick=$("#xClose2").onclick=()=>closeDrawer();
     // typing anywhere in the card (not in the Claude panel) = unsaved changes; closing asks first
-    $("#drawer").oninput=$("#drawer").onchange=e=>{ if(!e.target.closest("#pipePanel")) markDirty(); };
+    $("#drawer").oninput=$("#drawer").onchange=e=>{ if(!e.target.closest("#pipePanel,[data-cmthost]")) markDirty(); };
     wireOwn(c, read, markDirty, ()=>draw(c.pre.keywords));
     CLOSE_GUARD=()=>{ if(!dirty || !canEdit()) return true;
       if(!confirm("Discard your unsaved changes to this card?")) return false;
@@ -3021,6 +3018,7 @@ function openCard(id,showGate){
       read(); if(!c.idea&&!c.pre.title){toast("A card needs an idea or a title");return;}
       persist(); const to=b.dataset.move; if(moveCard(c,to)){ dirty=false; closeDrawer(true); toast(`Moved to ${STAGES.find(s=>s.id===to).label}`); } });
     lockDrawer();
+    mountComments("card", c.id, c.pre.title||c.idea);   // 💬 after lockDrawer: viewers can comment too
   };
   draw(c.pre.keywords||[]);
   if(showGate) setTimeout(()=>{ const b=$("#drawer").querySelector('[data-gate="pre"]'); if(b) b.scrollIntoView({block:"start",behavior:"smooth"}); },80);

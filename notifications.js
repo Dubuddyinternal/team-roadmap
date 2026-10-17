@@ -285,6 +285,7 @@ function ntfRoute(n) {
   var myhr = function (step) { return has("openMyHrFile") ? function () { leave(); if (has("closeAdmin")) closeAdmin(); openMyHrFile(step && has("hrStepIx") ? hrStepIx(step) : undefined); } : null; };
   var hrPerson = function () { return admin("hr", function () { if (typeof HRA !== "undefined" && n.created_by) { HRA.open = n.created_by; HRA.rows = null; } }); };
   var isHr = has("hrIsAdmin") && hrIsAdmin();
+  if (/^place:/.test(ref) && has("cmtGo")) { var pp = ref.split(":"); return function () { leave(); cmtGo(pp[1], pp[2]); }; }   // 💬 tagged in a comment
   if (/^feedback:/.test(ref)) return admin("myfeedback");
   if (/^hr:/.test(ref)) { var st = ref.split(":")[1] || ""; return myhr(has("hrStepIx") && hrStepIx(st) >= 0 ? st : null); }
   if (/^admin:/.test(ref)) return admin(ref.slice(6));
