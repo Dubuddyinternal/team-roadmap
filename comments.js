@@ -85,7 +85,10 @@ const STYLE = `
 .cmt2-menu button,.cmt2-pop button{display:flex;gap:9px;align-items:center;width:100%;border:0;background:none;text-align:left;padding:8px 9px;border-radius:7px;font:inherit;font-size:13.5px;cursor:pointer;color:inherit}
 .cmt2-menu button:hover,.cmt2-pop button.on,.cmt2-pop button:hover{background:color-mix(in srgb,var(--accent,#E8622B) 12%,transparent)}
 .cmt2-menu small{display:block;color:var(--muted,#8C7F75);font-size:11.5px}
-.cmt2-pop{position:absolute;z-index:60;left:10px;background:var(--card,#fff);border:1px solid var(--line,#E7E1DA);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.14);min-width:220px;max-width:320px;padding:4px;max-height:240px;overflow:auto}
+.cmt2-pop{position:absolute;z-index:60;left:10px;background:var(--card,#fff);border:1px solid var(--line,#E7E1DA);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.16);min-width:240px;max-width:340px;padding:4px;max-height:280px;overflow:auto;
+  scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--ink,#1A1614) 20%,transparent) transparent}
+.cmt2-pop::-webkit-scrollbar{width:8px}.cmt2-pop::-webkit-scrollbar-track{background:transparent;margin:8px 0}
+.cmt2-pop::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--ink,#1A1614) 20%,transparent);border-radius:8px;border:2px solid transparent;background-clip:padding-box}
 .cmt2-pop .cmt2-av{width:24px;height:24px;flex-basis:24px;font-size:11px}
 .cmt2-lb{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;padding:16px;cursor:zoom-out}
 .cmt2-lb img{max-width:100%;max-height:92vh;border-radius:8px}
@@ -345,11 +348,21 @@ function mount(host, place){
     }
     function drawPop(){
       if(!q){ pop.hidden = true; return; }
-      hits = people().filter(p => p.id !== me().id && p.name.toLowerCase().split(/\s+/).concat(p.name.toLowerCase()).some(w => w.startsWith(q.text))).slice(0, 7);
+      // everyone in the team, you included (names, first names and usernames all match)
+      const meId = me().id;
+      hits = people().filter(p => !q.text || p.name.toLowerCase().split(/[\s._-]+/).concat(p.name.toLowerCase()).some(w => w.startsWith(q.text)));
       if(!hits.length){ pop.hidden = true; return; }
       on = Math.min(on, hits.length - 1);
-      pop.innerHTML = hits.map((p, i) => `<button type="button" class="${i === on ? "on" : ""}" data-i="${i}">${av(p.name, p.photo)}<span>${esc(p.name)}</span></button>`).join("");
-      pop.style.top = (wrap.offsetTop + wrap.offsetHeight + 2) + "px"; pop.hidden = false;
+      pop.innerHTML = hits.map((p, i) => `<button type="button" class="${i === on ? "on" : ""}" data-i="${i}">${av(p.name, p.photo)}<span>${esc(p.name)}${p.id === meId ? ` <small style="color:var(--muted,#8C7F75)">(you)</small>` : ""}</span></button>`).join("");
+      // open below the box, or above it when there isn't room below (near the bottom of a card)
+      pop.hidden = false; pop.style.top = pop.style.bottom = "";
+      const scroller = (() => { let n = comp.parentElement; while(n && n !== document.body){ const o = getComputedStyle(n).overflowY; if(/auto|scroll/.test(o)) return n; n = n.parentElement || (n.getRootNode() && n.getRootNode().host); } return null; })();
+      const lim = scroller ? scroller.getBoundingClientRect().bottom - 70 : innerHeight - 10;   // 70: the card's Save bar
+      const below = lim - wrap.getBoundingClientRect().bottom, above = wrap.getBoundingClientRect().top - (scroller ? scroller.getBoundingClientRect().top + 60 : 10);
+      const h = Math.min(pop.scrollHeight, 280);
+      if(below < h && above > below){ pop.style.bottom = (comp.offsetHeight - wrap.offsetTop + 4) + "px"; pop.style.maxHeight = Math.min(280, Math.max(120, above)) + "px"; }
+      else { pop.style.top = (wrap.offsetTop + wrap.offsetHeight + 4) + "px"; pop.style.maxHeight = Math.min(280, Math.max(120, below)) + "px"; }
+      const cur = pop.querySelector("button.on"); if(cur) cur.scrollIntoView({ block: "nearest" });
       pop.querySelectorAll("button").forEach(b => { b.onmousedown = e => e.preventDefault(); b.onclick = () => pick(hits[+b.dataset.i]); });
     }
     function pick(p){

@@ -10,7 +10,7 @@
 // Checked here, with the service key:
 //   - the caller is signed in and wrote the comment, in the last 15 minutes
 //   - it hasn't been mailed before (mailed_at), so each comment emails once
-//   - every tagged person is in the team (anyone else is skipped)
+//   - every tagged person is in the team (anyone else is skipped); you can tag yourself
 // app_url: the site the comment was written on (the live site, or a preview
 // link on vercel.app), so the button opens the same site. Anything else → APP_URL.
 //
@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
   if (Date.now() - new Date(c.created_at).getTime() > 15 * 60000) return json({ sent: 0, reason: "too old" });
   await admin.from("team_comments").update({ mailed_at: new Date().toISOString() }).eq("id", id);
 
-  const ids = [...new Set((c.mentions || []) as string[])].filter((u) => u !== me.id).slice(0, 25);
+  const ids = [...new Set((c.mentions || []) as string[])].slice(0, 25);   // tagging yourself emails you too (a reminder)
   if (!ids.length) return json({ sent: 0 });
   const { data: mem } = await admin.from("memberships").select("user_id").eq("team_slug", team).in("user_id", ids);
   const { data: profs } = await admin.from("profiles").select("id, email, name, profile, is_super").in("id", ids);
