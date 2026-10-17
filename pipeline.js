@@ -394,11 +394,10 @@ function skillBox(me){
   const n = S.skill || [];
   if(S.mode === "off") return "";
   return `<details class="pp-skill" style="margin-top:10px"><summary>🧠 Skill notes (${n.length}) <span class="hint">— what Claude remembers for every video</span></summary>
-    <p class="hint" style="margin:6px 0">Only what you tell Claude to remember in the chat (“remember this for every video”) lands here. Your edit brief and the card's boxes are for one video and never go into the skill.</p>
-    ${n.length?`<ul class="pp-reflist">${n.map(x=>`<li><span style="flex:1;white-space:normal">${esc(x.text)} <span class="hint">· ${esc(new Date(x.at).toLocaleDateString("en-GB",{day:"numeric",month:"short"}))}</span></span>
-      ${me.canApprove?`<button class="linkbtn" data-forget="${esc(x.id)}">remove</button>`:""}</li>`).join("")}</ul>
-      <div class="pp-row" style="margin:6px 0 0"><button class="btn sm" data-copy="${esc(n.map(x=>"- "+x.text).join("\n"))}">Copy all</button>
-        <span class="hint">to paste into the skill on your Mac</span></div>`:`<p class="hint" style="margin:0">Nothing yet.</p>`}
+    <p class="hint" style="margin:6px 0">Only what you tell Claude to remember in the chat (“remember this for every video”) lands here. It's written into the dubuddy-short skill on GitHub, so every copy of the skill — the cloud edits and your Mac — uses it. Your edit brief and the card's boxes are for one video and never go into the skill.</p>
+    ${n.length?`<ul class="pp-reflist">${n.map(x=>`<li><span style="flex:1;white-space:normal">${esc(x.text)} <span class="hint">· ${esc(new Date(x.at).toLocaleDateString("en-GB",{day:"numeric",month:"short"}))} ·
+        ${x.remove?"leaves the skill when the next edit starts":x.synced?"✓ in the skill":"⏳ not in the skill file yet"+(x.error?" ("+esc(x.error.slice(0,90))+") — the edits here still follow it":"")}</span></span>
+      ${me.canApprove&&!x.remove?`<button class="linkbtn" data-forget="${esc(x.id)}">remove</button>`:""}</li>`).join("")}</ul>`:`<p class="hint" style="margin:0">Nothing yet.</p>`}
   </details>`;
 }
 // the newest checkpoint this edit reached (a chat that's waiting on you keeps showing it)
@@ -663,7 +662,7 @@ function wire(){
     box.ondrop = e => { e.preventDefault(); e.stopPropagation(); box.classList.remove("over"); const fs = [...(e.dataTransfer.files||[])]; if(fs.length) addFiles(fs); };
   }
   host.querySelectorAll("[data-forget]").forEach(b=>b.onclick=async()=>{
-    if(!confirm("Remove this from the skill notes? Claude stops following it from the next edit.")) return;
+    if(!confirm("Remove this rule? It leaves the skill (on GitHub, so everywhere) when the next edit starts.")) return;
     try{ const j = await call("/api/pipeline/action", { team: team(), job: "_skill", action: "forget_note", id: b.dataset.forget });
       S.skill = j.data.notes; S.skillSig = JSON.stringify(S.skill); render(); }catch(e){ toast(e.message); } });
   host.querySelectorAll("[data-copy]").forEach(b=>b.onclick=async()=>{

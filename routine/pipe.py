@@ -184,7 +184,13 @@ def start(src):
         try: notes["brief_files"] = fetch_refs() or "none"
         except (RuntimeError, SystemExit) as e: notes["brief_files"] = f"couldn't fetch: {e}"
     os.makedirs(os.path.join(W, "out"), exist_ok=True)
-    sn = [x for x in (p.get("skill_notes") or []) if str(x).strip()]
+    gone = []
+    for rule in p.get("skill_forget") or []:   # removed from the 🧠 list on the website: out of the skill on main too
+        try:
+            if skill_rules("remove", rule).get("ok"): post({"event": "forgot", "message": rule}); gone.append(rule)
+        except SystemExit: pass
+    if gone: notes["skill_rules_removed"] = gone
+    sn = [x for x in (p.get("skill_notes") or []) if str(x).strip()]   # only rules that didn't reach the skill file
     if sn:   # rules the owner asked to remember for every video: part of the skill
         with open(os.path.join(W, "SKILL_NOTES.md"), "w") as f:
             f.write("# Skill notes — the owner's standing rules for EVERY video (newest last; a newer note wins)\n\n" + "\n".join(f"- {x}" for x in sn) + "\n")
@@ -411,6 +417,33 @@ def restore():
     print(json.dumps({"restored": True, "edit_folder": ed(), "got": sorted(L), "targets": d.get("targets")}, indent=1))
 
 
+def skill_rules(op, rule):
+    """the skill's remember.py: writes the rule into SKILL.md and pushes it to GitHub main (every copy of the skill)"""
+    if load().get("mode") == "fake":   # test runs never touch the real skill on GitHub
+        return {"ok": False, "error": "test mode: not written to the skill"}
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for d in (os.path.join(here, "skills", "dubuddy-short"), os.environ.get("DUBUDDY_SKILL", ""), os.path.expanduser("~/.agents/skills/dubuddy-short")):
+        sc = os.path.join(d, "scripts", "remember.py") if d else ""
+        if sc and os.path.isfile(sc):
+            r = subprocess.run(["python3", sc, op, rule], capture_output=True, text=True)
+            try: return json.loads(r.stdout.strip().splitlines()[-1])
+            except (ValueError, IndexError): return {"ok": False, "error": (r.stderr or r.stdout).strip()[-300:] or "remember.py failed"}
+    return {"ok": False, "error": "the skill's remember.py wasn't found"}
+
+
+def remember(rule):
+    res = skill_rules("add", rule)
+    post({"event": "remember", "message": rule, "synced": res.get("commit") or (res.get("note") if res.get("ok") else None),
+          "error": None if res.get("ok") else res.get("error")})
+    print(json.dumps({"rule": rule, **res, "card": "listed under 🧠 Skill notes"}, ensure_ascii=False))
+
+
+def forget(rule):
+    res = skill_rules("remove", rule)
+    if res.get("ok"): post({"event": "forgot", "message": rule})
+    print(json.dumps({"rule": rule, **res}, ensure_ascii=False))
+
+
 def inbox(listening=True):
     msgs = (post({"event": "inbox", "listening": listening}).get("data") or {}).get("msgs") or []
     for m in msgs:   # files attached to a card message: into <W>/refs, the same place as "Files for Claude"
@@ -447,6 +480,7 @@ if __name__ == "__main__":
     elif cmd == "inbox": print(json.dumps({"msgs": inbox(False)}, indent=1, ensure_ascii=False))
     elif cmd == "say" and len(sys.argv) > 2: post({"event": "say", "message": " ".join(sys.argv[2:])}); print("ok")
     elif cmd == "heard" and len(sys.argv) > 2: post({"event": "say", "from": "you", "message": " ".join(sys.argv[2:])}); print("ok")
-    elif cmd == "remember" and len(sys.argv) > 2: post({"event": "remember", "message": " ".join(sys.argv[2:])}); print("saved to the skill notes")
+    elif cmd == "remember" and len(sys.argv) > 2: remember(" ".join(sys.argv[2:]))
+    elif cmd == "forget" and len(sys.argv) > 2: forget(" ".join(sys.argv[2:]))
     elif cmd == "sleep": post({"event": "sleep"}); print("ok — the next card message starts a fresh session with this chat")
     else: print(__doc__); sys.exit(1)

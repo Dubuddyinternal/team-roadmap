@@ -89,9 +89,12 @@ Rules for chat runs:
   for a different video.
 - **"Remember this"**: only when the owner explicitly asks you to remember something for the future / for every video
   ("remember this", "always do this", "add this to the skill"), run `python3 "$PIPE" remember "<the rule, one clear
-  line, general — no details of this one video>"` and confirm in the chat. Nothing else ever goes into the skill: not
-  their edit brief, not the card's boxes, not a change they asked for in this edit, not what you learned yourself. Don't
-  edit SKILL.md or any skill file.
+  line, general — no details of this one video>"`. It writes the rule into the skill's "Your rules" section, pushes it to
+  GitHub `main` (every copy of the skill — the cloud edits and the owner's Mac — follows main), applies it in this session,
+  and lists it on the card. Tell them in the chat whether it reached GitHub (the JSON says `commit`, or `error`).
+  "Forget that rule" / "stop always doing X" → `python3 "$PIPE" forget "<the rule as saved>"`. These two are the only
+  pushes you ever make and the only way the skill changes. Nothing else goes into the skill: not their edit brief, not
+  the card's boxes, not a change they asked for in this edit, not what you learned yourself.
 - If `pipe.py` ever prints `STOP: …`, the card no longer listens to this chat (cancelled, or a newer edit started from
   the card). Tell the owner and stop working.
 - Never run `pipe.py finish` in a chat run.
@@ -125,9 +128,9 @@ HyperFrames in this step**: no scenes.py, no build.py, no brief.py, no snapshots
     `none uploaded` → camera audio; `NOT used…` → camera audio, and put that line in `precautions`.
 - **This video only.** The edit brief, its files and every box on the card / idea are about **this** video. Use them
   here and nowhere else: never write them into the skill, never treat them as rules for other videos.
-- **Skill notes** (`<work>/SKILL_NOTES.md`, if `pipe.py start` printed `skill_notes`): standing rules the owner asked you
-  to remember for every video. They're part of the skill — read them with SKILL.md; where one contradicts SKILL.md, the
-  note wins (it's newer).
+- **The owner's standing rules** are in the skill itself (the "Your rules" section at the end of SKILL.md). If `pipe.py
+  start` printed `skill_notes`, `<work>/SKILL_NOTES.md` has a few more that couldn't reach GitHub yet: they count the same.
+  A rule there beats anything above it in SKILL.md.
 - **Check the package against the video** (after transcribing): go through every box that describes what the video
   should say or show, and list every mismatch in `precautions`, plainly — e.g. the planned hook or closing line was never said (quote what was said instead), a talking point is missing, the brief
   mentions a screenshot / file that wasn't attached, a brief instruction can't be done with this footage (and what you'd
