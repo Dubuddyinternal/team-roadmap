@@ -2426,9 +2426,6 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .okr-modetg .okr-mode{border:none;background:none;border-radius:99px;padding:6px 15px;font-weight:600;font-size:12.5px;color:var(--muted);cursor:pointer;font-family:var(--disp)}
 .okr-modetg .okr-mode.on{background:var(--indigo);color:#fff}
 /* roadmap · lanes view */
-.rml-seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:99px;padding:2px;background:var(--card);margin-left:6px}
-.rml-seg button{border:0;background:none;border-radius:99px;padding:4px 12px;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--muted);font-family:var(--disp)}
-.rml-seg button.on{background:var(--indigo);color:#fff}
 .rml-lane{background:var(--card);border:1px solid var(--line);border-radius:14px;margin:0 0 14px;display:flex;overflow:hidden}
 .rml-lane.ongoing{border-left:4px solid var(--progress)}
 .rml-lh{flex:0 0 190px;padding:14px;border-right:1px dashed var(--line-strong);display:flex;flex-direction:column;gap:6px;background:var(--paper)}
@@ -4446,7 +4443,7 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
         <div class="field"><label for="rms-end">Board ends</label><input id="rms-end" type="month"></div>
       </div>
       <div class="hint" style="margin:-4px 0 4px">The timeline shows exactly this window and scrolls left ↔ right inside it. Leave both empty to auto-fit around your items.</div>
-      <div class="field" id="rms-view-wrap"><label for="rms-view">Opens as</label><select id="rms-view"><option value="timeline">Timeline — Gantt bars across months</option><option value="lanes">Lanes — horizontal lines of projects &amp; ongoing work</option></select></div>
+      <div class="field" id="rms-view-wrap"><label for="rms-view">Roadmap type</label><select id="rms-view"><option value="timeline">Timeline — Gantt bars across months</option><option value="lanes">Lanes — horizontal lines of projects &amp; ongoing work</option></select></div>
     </div>
     <div class="btns">
       <button class="btn" onclick="document.getElementById('rms-overlay').classList.remove('show')">Cancel</button>
@@ -7712,7 +7709,7 @@ function workTabs(){
   if(view==="campaign" && window.CX) return campTabs(currentCampaign()).map(([key,label])=>({key, label}));
   if(view==="watch" && window.WX) return WX.tabs.map(([key,label])=>({key, label}));
   if(view==="horizon" && window.HX) return HX.tabs.map(([key,label])=>({key, label}));
-  const l = view==="rmap" ? "Timeline" : view==="okr" ? "Objectives"
+  const l = view==="rmap" ? (rmapViewOf(currentRmap())==="lanes" ? "Lanes" : "Timeline") : view==="okr" ? "Objectives"
     : (view==="bugs"||view==="cbugs") ? "Board" : view==="content" ? "Board"
     : view==="ideas" ? "Ideas" : view==="admin" ? "Admin" : "Board";
   return [{key:"work",label:l}];
@@ -7784,7 +7781,9 @@ function renderHeader(){
     : view==="ideas"
     ? "Anyone on the team can pitch an idea \u2014 name on it, points for it, and a clear stage so nothing disappears."
     : view==="rmap"
-    ? "A timeline across every space \u2014 pull in tasks, dev cards, and bugs from anywhere and schedule them."
+    ? (rmapViewOf(currentRmap())==="lanes"
+      ? "Lines of work across every space \u2014 projects with a due date, and ongoing work that turns red when it slips."
+      : "A timeline across every space \u2014 pull in tasks, dev cards, and bugs from anywhere and schedule them.")
     : (DATA.subtitle||"");
   document.title = $("rm-title").textContent + " \u00b7 " + ((TEAMS[TEAM] && TEAMS[TEAM].name) || TEAM || "Cyberflow");
   (function(){
@@ -12445,23 +12444,11 @@ function openStoryImport(spaceId){
    project reads left → right like a milestone timeline. A lane can be a
    project ("by when") or ongoing work (blogs, social, notifications) whose
    card turns red when its health rule fails.
-   Stored on the roadmap:  m.view = "timeline" | "lanes"   (which view opens first)
+   Stored on the roadmap:  m.view = "timeline" | "lanes"   (picked in roadmap settings)
                            m.lanes = [{id, name, kind:"project"|"ongoing"}]
    and on each item:       it.lane, it.team, it.progress (done so far),
                            it.next (next steps), it.rule {type, days}, it.lastDone
    ================================================================ */
-function rmapViewToggle(m){
-  const seg = document.createElement("span"); seg.className = "rml-seg";
-  [["timeline","Timeline"],["lanes","Lanes"]].forEach(([k,lbl])=>{
-    const b = document.createElement("button");
-    b.textContent = lbl;
-    b.className = (rmapViewOf(m)===k ? "on" : "");
-    b.title = k==="lanes" ? "Horizontal lines of work — projects and ongoing work in one view" : "Gantt timeline with bars across months";
-    b.onclick = ()=>{ if(rmapViewOf(m)===k) return; m.view = k; if(k==="lanes") rmlEnsureLanes(m); saveRmaps(); };
-    seg.appendChild(b);
-  });
-  return seg;
-}
 function rmapViewOf(m){ return m && m.view==="lanes" ? "lanes" : "timeline"; }
 function rmlEnsureLanes(m){
   if(!Array.isArray(m.lanes) || !m.lanes.length) m.lanes = [{ id:"ln-"+Date.now().toString(36), name:"Projects", kind:"project" }];
@@ -12504,7 +12491,7 @@ function renderRmapLanes(m, wrap, byTid){
   const done = live.filter(it=> effStatus(byTid[it.tid].task)==="done").length;
   const red = live.filter(it=> rmlIsRed(it, byTid[it.tid])).length;
   pc.textContent = live.length + " item(s) · " + done + " done" + (red ? " · " + red + " need attention" : "");
-  row.append(h2, pc, rmapViewToggle(m));
+  row.append(h2, pc);
   if(editMode){
     const spx = document.createElement("span"); spx.className = "spacer"; row.appendChild(spx);
     const addL = document.createElement("button"); addL.className = "tool"; addL.textContent = "＋ Lane";
@@ -12925,7 +12912,6 @@ function renderContentRmap(extMap, extOpts){
   zoomWrap.appendChild(zl);
   zoomWrap.appendChild(mkZoom("\uFF0B", 1, "Zoom in \u2014 stretch the months for day-by-day dragging"));
   row.appendChild(zoomWrap);
-  if(!extMap && !tlDiscMode) row.appendChild(rmapViewToggle(m));
   if(editMode){
     const spx = document.createElement("span"); spx.className = "spacer"; row.appendChild(spx);
     if(!tlDiscMode){
