@@ -2577,7 +2577,7 @@ body.rm-chart #pane-work > .controls{display:none}
 .rmg-task{grid-column:1;display:flex;flex-direction:column;justify-content:center;gap:1px;padding:4px 10px 4px 26px;border-bottom:1px solid var(--line);position:sticky;left:0;background:var(--card);z-index:2;min-width:0}
 .rmg-task.muted{color:var(--muted);font-size:12px;font-style:italic}
 .rmg-tt{font-size:12.5px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rmg-td{font-family:var(--mono);font-size:9.5px;color:var(--muted);white-space:nowrap}
+.rmg-td{font-family:var(--mono);font-size:9.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rmg-task.done .rmg-tt{color:var(--muted);text-decoration:line-through}
 .rmg-days .rmg-cell{border-bottom:1px solid var(--line)}
 .rml-qadd{width:100%;box-sizing:border-box;border:1px dashed transparent;background:transparent;border-radius:6px;padding:4px 6px;font:inherit;font-size:12.5px;color:var(--ink,#172B4D)}
@@ -12643,7 +12643,7 @@ function openStoryImport(spaceId){
    card turns red when its health rule fails.
    Stored on the roadmap:  m.view = "timeline" | "lanes"   (picked in roadmap settings)
                            m.lanes = [{id, name, kind:"project"|"ongoing"}]
-   and on each item:       it.lane, it.team, it.progress (done so far),
+   and on each item:       it.lane, it.owner (free-text name), it.team, it.progress (done so far),
                            it.next (next steps), it.rule {type, days}, it.lastDone
    ================================================================ */
 /* the small buttons at the right of a chart's top bar: add from spaces · write a task · ＋ row */
@@ -12795,10 +12795,11 @@ function rmlCard(m, it, en, ln){
                              : (st==="done" ? "✓ " : "By ") + rmlFmt(it.end);
   const dot = document.createElement("div"); dot.className = "rml-dot";
   const card = document.createElement("div"); card.className = "rml-card";
-  const owner = it.team || t.owner || t.assignee || "";
+  const owner = it.team || (it.owner ? "" : t.owner || t.assignee) || "";
   let html = '<div class="rml-path">'+mtEsc(en.kind==="own" ? "Written on this roadmap" : en.path)+'</div>'
     + '<div class="rml-title">'+mtEsc(t.title||"(untitled)")+'</div>'
     + '<div class="rml-meta"><span class="rml-st st-'+mtEsc(st||"planned")+'">'+mtEsc(STATUS_LABEL[st]||st||"Planned")+'</span>'
+    + (it.owner ? '<span class="rml-team">👤 '+mtEsc(it.owner)+'</span>' : '')
     + (owner ? '<span class="rml-team">👥 '+mtEsc(owner)+'</span>' : '') + '</div>';
   if(h) html += '<div class="rml-health '+h.state+'">'+mtEsc(h.text)+'</div>';
   if(overdue) html += '<div class="rml-health bad">Past due — '+(dNum(todayISO())-dNum(it.end))+' day(s) late</div>';
@@ -13070,8 +13071,8 @@ function renderRmapGantt(m, wrap, byTid){
       const nm = document.createElement("div"); nm.className = "rmg-task" + (st==="done" ? " done" : ""); nm.style.gridRow = String(rIdx); nm.dataset.lane = ln.id;
       nm.innerHTML = '<span class="rmg-tt"></span><span class="rmg-td"></span>';
       nm.firstChild.textContent = (st==="done" ? "✓ " : locked ? "🔒 " : "") + (en.task.title || "(untitled)");
-      nm.lastChild.textContent = rmlFmt(it.start) + (it.end && it.end!==it.start ? " → " + rmlFmt(it.end) : "");
-      nm.title = (en.task.title||"") + (it.team ? "\nTeam: " + it.team : "") + "\n" + en.path;
+      nm.lastChild.textContent = rmlFmt(it.start) + (it.end && it.end!==it.start ? " → " + rmlFmt(it.end) : "") + (it.owner ? " · 👤 " + it.owner : "");
+      nm.title = (en.task.title||"") + (it.owner ? "\nOwner: " + it.owner : "") + (it.team ? "\nTeam: " + it.team : "") + "\n" + en.path;
       if(editMode){ nm.onclick = ()=> rmlEditItem(m, it, en); nm.style.cursor = "pointer"; }
       rmlTreeLines(nm, 1, [], !editMode && ii===items.length-1, 6, 18);
       grid.appendChild(nm);
@@ -13272,7 +13273,7 @@ function rmgSwimlanes(m, wrap, byTid, live, w0, nW, today){
       const en = byTid[it.tid], st = effStatus(en.task), locked = isLocked(en.task);
       const lab = document.createElement("div"); lab.className = "rms-task"; lab.style.gridRow = String(r); lab.dataset.lane = ln.id;
       lab.innerHTML = '<span class="rms-t">'+mtEsc(en.task.title||"(untitled)")+'</span>'
-        + '<span class="rms-sub">'+mtEsc([it.team || en.task.owner || "", rmlFmt(it.start)+" → "+rmlFmt(it.end)].filter(Boolean).join(" · "))+'</span>';
+        + '<span class="rms-sub">'+mtEsc([it.owner ? "👤 " + it.owner : "", it.team || (it.owner ? "" : en.task.owner) || "", rmlFmt(it.start)+" → "+rmlFmt(it.end)].filter(Boolean).join(" · "))+'</span>';
       grid.appendChild(lab);
       weekCells(r, ii===items.length-1, ln.id);
       const s = Math.max(0, dayOf(dNum(it.start || it.end || todayISO()))), e = Math.min(nD-1, Math.max(s, dayOf(dNum(it.end || it.start || todayISO()))));
@@ -13280,7 +13281,7 @@ function rmgSwimlanes(m, wrap, byTid, live, w0, nW, today){
       bar.className = "rmg-blk rms-bar" + (st==="done" ? " done" : "") + (locked ? " locked" : "");
       bar.style.gridRow = String(r); bar.style.gridColumn = (s + 2) + " / " + (e + 3); bar.style.background = it.color || col;
       bar.textContent = (st==="done" ? "✓ " : locked ? "🔒 " : "") + (STATUS_LABEL[st] || st || "");
-      bar.title = (en.task.title||"") + "\n" + rmlFmt(it.start) + " → " + rmlFmt(it.end) + (it.team ? "\n" + it.team : "") + "\n" + en.path;
+      bar.title = (en.task.title||"") + "\n" + rmlFmt(it.start) + " → " + rmlFmt(it.end) + (it.owner ? "\nOwner: " + it.owner : "") + (it.team ? "\n" + it.team : "") + "\n" + en.path;
       if(editMode){ rmgItemDrag(bar, m, it, ()=> ((grid.querySelector(".rmg-wk")||{}).offsetWidth||0)/7, 1, ()=> rmlEditItem(m, it, en)); lab.onclick = ()=> rmlEditItem(m, it, en); lab.style.cursor = "pointer"; } else bar.style.cursor = "default";
       barEls[it.tid] = bar;
       grid.appendChild(bar);
@@ -13479,7 +13480,7 @@ function renderRmapWbs(m, wrap, byTid){
       cb.title = canTick ? "Mark done / not done" : "Status comes from its own board";
       cb.onclick = e=>{ e.stopPropagation(); t.status = cb.checked ? "done" : "progress"; if(cb.checked) it.pct = 100; saveRmaps(); pushAll(); };
       const tt = document.createElement("span"); tt.className = "rmw-tname" + (st==="done" ? " done" : ""); tt.textContent = (locked ? "🔒 " : "") + (t.title || "(untitled)");
-      tt.title = (t.title||"") + "\n" + en.path + (it.team ? "\n" + it.team : "");
+      tt.title = (t.title||"") + "\n" + en.path + (it.owner ? "\nOwner: " + it.owner : "") + (it.team ? "\n" + it.team : "");
       nm.append(cb, tt);
       const s = dNum(it.start||it.end||todayISO()), e = Math.max(s, dNum(it.end||it.start||todayISO()));
       const bar = document.createElement("div"); bar.className = "rmw-bar" + (locked ? " locked" : "") + (st==="done" ? " done" : "");
@@ -13487,7 +13488,7 @@ function renderRmapWbs(m, wrap, byTid){
       bar.style.left = X(s) + "px"; bar.style.width = Math.max(6, Math.round((e - s + 1)*pxd)) + "px";
       bar.innerHTML = '<i style="width:'+pct+'%"></i>' + (editMode ? '<span class="rmw-grip" title="Drag to change the end date"></span>' : '');
       bar.title = (t.title||"") + "\n" + rmlFmt(it.start) + " → " + rmlFmt(it.end) + " · " + pct + "% complete" + (it.team ? "\n" + it.team : "");
-      const lab = document.createElement("span"); lab.className = "rmw-blab"; lab.textContent = pct + "%" + (it.team ? " · " + it.team : "");
+      const lab = document.createElement("span"); lab.className = "rmw-blab"; lab.textContent = pct + "%" + (it.owner ? " · 👤 " + it.owner : "") + (it.team ? " · " + it.team : "");
       lab.style.left = (X(s) + Math.max(6, Math.round((e - s + 1)*pxd)) + 6) + "px";
       ln.append(bar, lab);
       barGeo[it.tid] = { x1: X(s), x2: X(s) + Math.max(6, Math.round((e - s + 1)*pxd)), y: ri*RMW_ROW + RMW_ROW/2 };
@@ -13548,7 +13549,15 @@ function rmwBarDrag(bar, lab, it, pxd, onClick){
   });
 }
 
-/* ---- item dialog: lane, due date, team, progress, next, blockers, rule ---- */
+/* ---- item dialog: lane, due date, owner, team, progress, next, blockers, rule ---- */
+/* owner is free text; suggest team members' names and owners already used on this chart */
+function rmlOwnerSuggestions(m){
+  const out = [];
+  const add = x=>{ x = (x||"").trim(); if(x && out.indexOf(x)<0) out.push(x); };
+  (m.items||[]).forEach(it=> add(it.owner));
+  assigneeMembers().forEach(u=> add(userDisplayName(u)));
+  return out;
+}
 function rmlEditItem(m, it, en){
   const own = en.kind==="own";
   const r = it.rule || {};
@@ -13558,6 +13567,7 @@ function rmlEditItem(m, it, en){
     { k:"lane", label: {gantt:"Phase", swimlane:"Swimlane", wbs:"Group"}[m.view] || "Lane", type:"select", value: rmlLaneOf(m, it).id, opts: m.lanes.map(l=>[l.id, (m.view==="wbs" ? rmwLanePath(m, l) : l.name) + (l.kind==="ongoing" ? " (ongoing)" : "")]) },
     { k:"start", label:"Starts", type:"date", value: it.start || todayISO(), half:true },
     { k:"end", label:"Done by", type:"date", value: it.end || it.start || todayISO(), half:true },
+    { k:"owner", label:"Owner", type:"text", value: it.owner || "", ph:"Type a name, e.g. Shivam", list: rmlOwnerSuggestions(m) },
     { k:"team", label: m.view==="gantt" ? "Team (sets the colour)" : m.view==="swimlane" ? "Owner / team" : "Team involved", type:"text", value: it.team || "", ph:"e.g. Product + Marketing, Shivam" },
     { k:"pct", label:"% complete", type:"number", value: it.pct ?? 0, show: ()=> m.view==="wbs" },
     { k:"progress", label:"What’s done so far", type:"area", value: it.progress || "" },
@@ -13573,7 +13583,7 @@ function rmlEditItem(m, it, en){
     if(v.start && v.end && dNum(v.end) < dNum(v.start)){ toast("“Done by” is before the start date"); return false; }
     if(own){ const nm=(v.title||"").trim(); if(!nm){ toast("Give it a title"); return false; } en.task.title = nm; en.task.status = v.status || "planned"; }
     it.lane = v.lane; if(v.start) it.start = v.start; if(v.end) it.end = v.end;
-    ["team","progress","next"].forEach(k=>{ const s=(v[k]||"").trim(); if(s) it[k]=s; else delete it[k]; });
+    ["owner","team","progress","next"].forEach(k=>{ const s=(v[k]||"").trim(); if(s) it[k]=s; else delete it[k]; });
     if(rmgIsGrid(m) || m.view==="wbs"){ if(v.color) it.color = v.color; else delete it.color; }
     if(m.view==="wbs"){ const pc = Math.max(0, Math.min(100, Math.round(Number(v.pct)||0))); if(pc) it.pct = pc; else delete it.pct; }
     if(v.rule){
@@ -13721,6 +13731,11 @@ function rmlModal(title, fields, onSave, o){
     else { el = document.createElement("input"); el.type = f.type==="number" ? "number" : f.type; el.value = f.value; if(f.ph) el.placeholder = f.ph; }
     inputs[f.k] = el; wraps[f.k] = w;
     w.append(lb, el);
+    if(f.list && f.list.length){ /* suggestions, but any text is fine */
+      const dl = document.createElement("datalist"); dl.id = "rml-dl-" + f.k + "-" + Date.now().toString(36);
+      f.list.forEach(x=>{ const op = document.createElement("option"); op.value = x; dl.appendChild(op); });
+      el.setAttribute("list", dl.id); el.autocomplete = "off"; w.appendChild(dl);
+    }
     if(f.half){
       if(!rowEl){ rowEl = document.createElement("div"); rowEl.className = "field-row"; body.appendChild(rowEl); rowEl.appendChild(w); }
       else { rowEl.appendChild(w); rowEl = null; }
