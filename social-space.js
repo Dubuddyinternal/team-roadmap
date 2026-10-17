@@ -259,8 +259,14 @@ tr.rowlink:hover .td-idea{color:var(--accent-ink);text-decoration:underline;text
   transform:translate(-50%,-50%) scale(.97);opacity:0;pointer-events:none;transition:transform .18s ease,opacity .18s ease;
   overflow-y:auto;overscroll-behavior:contain;padding:0 28px 28px;font-family:var(--sans);font-size:14px;line-height:1.5;color:var(--ink)}
 .drawer.on{transform:translate(-50%,-50%);opacity:1;pointer-events:auto}
+/* rounded corners hold for everything inside, the scroll bar included; a slim bar that keeps clear of the corners */
+.drawer{clip-path:inset(0 round 16px);scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--ink) 22%,transparent) transparent}
+.drawer::-webkit-scrollbar{width:10px}
+.drawer::-webkit-scrollbar-track{background:transparent;margin:14px 0}
+.drawer::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--ink) 20%,transparent);border-radius:10px;border:3px solid transparent;background-clip:padding-box}
+.drawer::-webkit-scrollbar-thumb:hover{background-color:color-mix(in srgb,var(--ink) 35%,transparent)}
 .drawer.wide{width:min(1100px,calc(100% - 48px))}
-@media(max-width:700px){.drawer,.drawer.wide{top:0;left:0;width:100%;max-height:none;height:100%;border-radius:0;border:none;transform:translateY(12px);padding:0 16px calc(28px + env(safe-area-inset-bottom,0px))}
+@media(max-width:700px){.drawer,.drawer.wide{clip-path:none;top:0;left:0;width:100%;max-height:none;height:100%;border-radius:0;border:none;transform:translateY(12px);padding:0 16px calc(28px + env(safe-area-inset-bottom,0px))}
   .drawer.on{transform:none}}
 .dr-h{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin:0 -28px 18px;padding:20px 28px 14px;
   position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
@@ -339,8 +345,45 @@ details.srcd[open] .srcd-ch{display:none}
 .ttl-chip{border:1px solid var(--line-2);background:var(--surface);border-radius:99px;padding:4px 10px;font-size:12px;cursor:pointer;color:var(--ink);font-family:inherit}
 .ttl-chip b{font-family:var(--mono);color:var(--accent-ink);margin-left:4px}
 .ttl-chip:hover,.ttl-chip.on{border-color:var(--accent);background:var(--accent-soft)}
-.dr-foot{position:sticky;bottom:0;z-index:5;margin:18px -28px -28px;padding:14px 28px;background:var(--bg);border-top:1px solid var(--line);align-items:center}
-@media(max-width:700px){.dr-foot{margin:18px -16px -28px;padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px))}}
+/* card layout: the work as numbered steps (left), the card's facts + next move (right) */
+.cv{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:20px;align-items:start}
+.cv-side{display:flex;flex-direction:column;gap:12px;min-width:0}
+.sbox{border:1px solid var(--line);border-radius:var(--r);background:var(--surface-4);padding:12px 14px}
+.sbox h5{margin:0 0 10px;font-size:13px}
+.sbox .fld{margin-bottom:10px}
+.stat{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.stat-cur{background:var(--accent);color:#fff;border-radius:8px;padding:5px 11px;font-weight:700;font-size:13px}
+.stat-move{margin-top:10px;gap:6px;flex-wrap:wrap}
+.stat-miss{margin-top:10px;padding:8px 10px;border-radius:var(--r-s);background:var(--crit-soft);color:var(--crit);font-size:12px;line-height:1.45}
+.kvs .kv{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:7px 0;border-top:1px solid var(--line);font-size:12.5px}
+.kvs .kv>span:first-child{color:var(--ink-3);flex:0 0 auto}.kvs .kv>span:last-child{text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.cvck{list-style:none;margin:0;padding:0}.cvck li{display:flex;gap:8px;padding:4px 0;font-size:12.5px;color:var(--ink-2);line-height:1.4}
+.cvck .i{width:14px;flex:0 0 14px;text-align:center;color:var(--ink-3)}.cvck .ok .i{color:var(--good)}.cvck .ok{color:var(--ink-3)}
+.cvck .bl{color:var(--crit);font-weight:600}.cvck .bl .i{color:var(--crit)}
+.stp{border:1px solid var(--line);border-radius:var(--r);background:var(--surface-4);margin-bottom:12px}
+.stp>summary{list-style:none;display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none}
+.stp>summary::-webkit-details-marker{display:none}
+.stp>summary:hover b{color:var(--accent)}
+.stp-n{width:24px;height:24px;flex:0 0 24px;border-radius:50%;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font:600 11px var(--mono);color:var(--ink-2)}
+.stp.done .stp-n{background:var(--good-soft);color:var(--good)}
+.stp.now{border-color:color-mix(in srgb,var(--accent) 45%,var(--line));box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 8%,transparent)}
+.stp.now .stp-n{background:var(--accent);color:#fff}
+.stp>summary b{font-size:14px;white-space:nowrap}
+.stp-sum{flex:1;min-width:0;color:var(--ink-3);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stp[open]>summary .stp-sum{visibility:hidden}
+.stp-chev::before{content:"▸";color:var(--ink-3);font-size:11px}.stp[open]>summary .stp-chev::before{content:"▾"}
+.stp-b{padding:0 14px 14px;border-top:1px solid var(--line)}
+.stp-b>.fld:first-child{margin-top:12px}
+.stp-b .rawbox{padding-top:12px}
+.stgs{display:flex;flex-wrap:wrap;gap:2px 4px;margin-top:10px}
+.stg{display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 4px;border-radius:99px;font-size:12px;color:var(--ink-3)}
+.stg i{font-style:normal;width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font:600 10px var(--mono);background:var(--surface-2)}
+.stg.done{color:var(--good)}.stg.done i{background:var(--good-soft);color:var(--good)}
+.stg.now{color:var(--accent);font-weight:700;background:color-mix(in srgb,var(--accent) 9%,transparent)}.stg.now i{background:var(--accent);color:#fff}
+@media(max-width:900px){.cv{grid-template-columns:minmax(0,1fr)}.cv-side{position:static;order:-1}.ck-box{display:none}}
+@media(max-width:600px){.stp>summary{flex-wrap:wrap}.stp-sum{order:5;flex-basis:100%;white-space:normal;padding-left:34px}.stp[open]>summary .stp-sum{display:none}}
+.dr-foot{position:sticky;bottom:-28px;z-index:5;margin:18px -28px -28px;padding:14px 28px;background:var(--bg);border-top:1px solid var(--line);align-items:center}
+@media(max-width:700px){.dr-foot{bottom:calc(-28px - env(safe-area-inset-bottom,0px));margin:18px -16px calc(-28px - env(safe-area-inset-bottom,0px));padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px))}}
 .dirty{font-size:12px;font-weight:600;color:var(--warn)}
 .rs{margin:-2px 0 16px;padding:12px;border:1px solid color-mix(in srgb,var(--accent) 25%,var(--line));border-radius:var(--r-s);background:var(--surface)}
 .rs-empty{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
@@ -388,6 +431,13 @@ details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var
 .drop .lbl{margin-bottom:5px}
 .drop img{width:62px;height:35px;object-fit:cover;border-radius:5px;flex-shrink:0;border:1px solid var(--line)}
 .drop input[type=file]{display:none}
+.aload{display:flex;align-items:center;gap:8px;margin-top:6px;height:34px;padding:0 12px;border-radius:17px;background:var(--surface-2);font-size:12.5px;color:var(--ink-3)}
+.aload.bad{color:var(--crit);background:var(--crit-soft);height:auto;min-height:34px;padding:6px 12px}.aload.bad .aspin{display:none}
+.aspin{width:13px;height:13px;flex:0 0 13px;border-radius:50%;border:2px solid color-mix(in srgb,var(--accent) 25%,transparent);border-top-color:var(--accent);animation:aspin .8s linear infinite;display:inline-block}
+@keyframes aspin{to{transform:rotate(360deg)}}
+.rawbox,.rawclean{transition:background .15s,box-shadow .15s;border-radius:var(--r-s)}
+.rawbox.dropon,.rawclean.dropon{background:var(--accent-soft,color-mix(in srgb,var(--accent) 10%,transparent));box-shadow:0 0 0 2px var(--accent) inset}
+.rawbin{display:flex;gap:10px;align-items:center;margin:12px 0 4px;padding:10px 12px;border-radius:var(--r-s);border:1px dashed color-mix(in srgb,var(--crit) 45%,var(--line));background:var(--crit-soft);font-size:13px}
 .rawaudio{margin-top:8px;padding:9px 11px;border:1px solid var(--line);border-radius:var(--r-s);background:var(--surface)}
 .rawclean{margin-top:10px;padding-top:9px;border-top:1px dashed var(--line)}
 .rawaudio-h{display:flex;align-items:center;gap:8px;font-size:12.5px;flex-wrap:wrap}
@@ -463,6 +513,10 @@ const DEFAULT_FORMATS = [
 ];
 let FORMATS=DEFAULT_FORMATS;
 const fmtOf = x => FORMATS.find(f=>f.key===(x&&x.format)) || FORMATS[0];
+// a live session / stream: planned, then streamed — nothing to upload or edit (types marked live, or named "… Live …", or a live video type)
+// the type's own "It's live" switch decides; types made before the switch existed go by their name
+const isLiveFmt = F => !!F && (F.live!==undefined ? !!F.live : /\blive\b/i.test(F.name||""));
+const isLive = x => isLiveFmt(fmtOf(x)) || (x&&x.vtype)==="live";
 // older records had no type: work it out from the video type
 function guessFormat(vtype){ return vtype==="long"||vtype==="live" ? "long" : vtype==="image"||vtype==="carousel" ? "post"
   : (FORMATS.find(f=>(f.vtypes||[]).includes(vtype))||FORMATS[0]).key; }
@@ -637,8 +691,40 @@ function toast(m){ const t=$("#toast"); if(!t) return; t.textContent=m; t.classL
 // every change goes through here: the app re-draws and saves for the team
 function save(){
   if(!canEdit()){ toast("You can view this space but not edit it"); return false; }
+  try{ histDiff(); }catch(e){ console.warn("history", e); }
   if(OPT.save) OPT.save();
   return true;
+}
+/* ---- 🕘 History: every saved change to a card or idea — who, which field, old → new (team_activity; comments.js shows it) ---- */
+const at=(o,p)=>p.split(".").reduce((x,k)=>x==null?x:x[k],o);
+const H_CARD=[["stage","Status",v=>(STAGES.find(x=>x.id===v)||{}).label||v],["idea","Idea"],["pre.title","Title"],["pre.desc","Description"],
+  ["pre.hashtags","Hashtags"],[x=>plats(x),"Post on",v=>v.map(k=>regLabel("platform",k)||k).join(", ")],["vtype","Video type",v=>regLabel("vtype",v)||v],
+  ["scheduled","Goes live on",v=>v?dmy(v):""],["time","Time"],["shoot.hook","Hook"],["shoot.points","Talking points"],["shoot.cta","Closing line"],
+  ["shoot.tips","Shooting notes"],["raw","Raw video",v=>!v?"":v.kind==="link"?v.url:v.name],["raw.audio","Audio (WAV)",v=>v?"made":""],
+  ["raw.clean","Cleaned audio",v=>v?v.name:""],["post.reel","Edited video",v=>v?v.name:""],["post.thumb","Thumbnail",v=>v?v.name:""],
+  ["post.postUrl","Post link"],["extra","Own boxes",v=>(v||[]).map(x=>x.label+": "+(x.value||"")).join(" · ")]];
+const H_IDEA=[["status","Status",v=>(STATUS_UI[v]||{}).label||v],["idea","Idea"],["by","Reported by"],["hook","Hook"],["cta","CTA"],["title","Title"],
+  ["desc","Description"],["hashtags","Hashtags"],["why","Why this idea"],[x=>plats(x),"Post on",v=>v.map(k=>regLabel("platform",k)||k).join(", ")],
+  ["vtype","Video type",v=>regLabel("vtype",v)||v],["extra","Own boxes",v=>(v||[]).map(x=>x.label+": "+(x.value||"")).join(" · ")]];
+const HIST={ src:null, card:new Map(), idea:new Map() };
+const hSnap=(o,spec)=>{ const out={}; spec.forEach(([g,l,f])=>{ const v=typeof g==="function"?g(o):at(o,g);
+  let t=f?f(v):v; t=t==null?"":typeof t==="object"?JSON.stringify(t):String(t); out[l]=t.slice(0,600); }); return out; };
+function histBase(){ HIST.src=S; HIST.card=new Map(CARDS.map(c=>[c.id,hSnap(c,H_CARD)])); HIST.idea=new Map(IDEAS.map(i=>[i.id,hSnap(i,H_IDEA)])); }
+function histDiff(){
+  if(!window.CMT || !CMT.log || !SPACE) return;
+  if(HIST.src!==S){ histBase(); return; }
+  const ev=[], scope="cs:"+SPACE.id;
+  [["card",CARDS,H_CARD,c=>c.pre&&c.pre.title||c.idea],["idea",IDEAS,H_IDEA,i=>i.idea]].forEach(([kind,list,spec,name])=>{
+    const base=HIST[kind], seen=new Set();
+    list.forEach(o=>{ seen.add(o.id); const now=hSnap(o,spec), old=base.get(o.id), place="card:"+kind+":"+o.id, label=(kind==="idea"?"idea":"card")+" “"+String(name(o)||o.id).slice(0,80)+"”";
+      if(!old){ ev.push({ place, scope, place_label:label, field:"created", old_val:"", new_val:String(name(o)||"") }); }
+      else Object.keys(now).forEach(l=>{ if(now[l]!==old[l]) ev.push({ place, scope, place_label:label, field:l, old_val:old[l], new_val:now[l] }); });
+      base.set(o.id, now); });
+    [...base.keys()].filter(id=>!seen.has(id)).forEach(id=>{ const old=base.get(id);
+      ev.push({ place:"card:"+kind+":"+id, scope, place_label:(kind==="idea"?"idea":"card")+" “"+String(old.Title||old.Idea||id).slice(0,80)+"”", field:"deleted", old_val:"", new_val:"" });
+      base.delete(id); });
+  });
+  if(ev.length) CMT.log(ev.slice(0,200));
 }
 const slug = s => "x_"+String(s).toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,28);
 function regAdd(kind,label){
@@ -656,9 +742,11 @@ function gResearch(p){ const k=p.keywords||[]; const prim=k.find(x=>x.rank==="pr
   return !!(p.source && p.tool && prim && prim.kw && prim.vol!=null && p.why); }
 function gCopy(p){ return !!(p.title && p.desc && p.hashtags); }
 function gEdited(c){   // an edited video (Claude's or your own) + a thumbnail where YouTube needs one
+  if(isLive(c)) return true;   // a live session has no edit
   const j=window.PIPE&&PIPE.job(c.id), byClaude=!!(j&&j.media&&(j.media.yt||j.media.ig));
   return !!((c.post?.reel||byClaude) && (!plats(c).includes("yt") || c.vtype!=="long" || c.post?.thumb)); }
 function gAssets(c){
+  if(isLive(c)) return !!c.post?.postUrl;
   const j=window.PIPE&&PIPE.job(c.id), byClaude=!!(j&&j.media&&(j.media.yt||j.media.ig));   // Claude's render counts as the edited file
   return !!((c.post?.reel||byClaude) && c.post?.postUrl && (!plats(c).includes("yt") || c.vtype!=="long" || c.post?.thumb)); }
 // Ideas → To shoot → Editing are free (the research block is off for now) · leaving Editing needs the edited video ·
@@ -680,10 +768,17 @@ const GATE_MSG = { research:"Research block incomplete — needs idea source, re
   edited:"Needs the edited video (Claude's or your own) — and a thumbnail for long YouTube videos.",
   live:"Needs the live post link — Claude adds it when it posts.",
   assets:"Post-production incomplete — needs the edited video (Claude's or your own), the post link, and a thumbnail for long YouTube videos." };
+// what a gate still needs, in words for this card's type (a post has a design, not an edit; only long YouTube videos need a thumbnail)
+function gateMsg(c,g){ const F=fmtOf(c), thumb=F.video&&c.vtype==="long"&&plats(c).includes("yt");
+  if(g==="edited"){ const need=[!(c.post?.reel||(window.PIPE&&PIPE.job(c.id)&&(PIPE.job(c.id).media||{}).yt)||(window.PIPE&&PIPE.job(c.id)&&(PIPE.job(c.id).media||{}).ig))&&(F.video?(F.claude?"the edited video (Claude's or your own)":"the edited video"):"the finished design"),
+      thumb&&!c.post?.thumb&&"the thumbnail"].filter(Boolean);
+    return "Needs "+(need.join(" and ")||"the edited video")+"."; }
+  if(g==="live") return "Needs the "+plats(c).map(pl=>regLabel("platform",pl)||pl).join(" / ")+" link"+(F.claude?" — Claude adds it when it posts.":".");
+  return GATE_MSG[g]; }
 function canMove(c,to){ const fi=STAGES.findIndex(s=>s.id===c.stage), ti=STAGES.findIndex(s=>s.id===to);
   if(ti<=fi) return {ok:true};
   for(let i=fi;i<ti;i++){ const g=gateFor(STAGES[i].id); if(g&&!gatePass(c,g))
-    return {ok:false,msg:g==="prep"?`Fill in the research and copy before Editing. Missing: ${prepMissing(c).join(", ")}.`:GATE_MSG[g]}; }
+    return {ok:false,msg:g==="prep"?`Fill in the research and copy before Editing. Missing: ${prepMissing(c).join(", ")}.`:gateMsg(c,g)}; }
   return {ok:true}; }
 function moveCard(c,to){ if(!canEdit()){ toast("You can view this space but not edit it"); return false; }
   const v=canMove(c,to); if(!v.ok){ toast(v.msg); return false; }
@@ -1941,6 +2036,8 @@ function openFormats(editKey, back){
     <div class="fld"><label for="f-hint">One-line description</label><input id="f-hint" value="${esc(f.hint||"")}" placeholder="Shown when someone picks a type"></div>
     <div class="fld"><label class="pp-chk ${f.video?"on":""}"><input type="checkbox" id="f-video" ${f.video?"checked":""}> It's a video (gets a Shoot plan)</label></div>
     <div class="fld"><label class="pp-chk ${f.claude?"on":""}"><input type="checkbox" id="f-claude" ${f.claude?"checked":""}> 🤖 Claude can edit it (vertical video for Shorts / Reels only)</label></div>
+    <div class="fld"><label class="pp-chk ${isLiveFmt(f)?"on":""}"><input type="checkbox" id="f-live" ${isLiveFmt(f)?"checked":""}> 🔴 It's live (a stream / session — planned, no raw video or edit)</label></div>
+    <p class="hint" style="margin:-4px 0 12px">The card shows only the steps that fit: <b>video</b> → Shoot, Raw video, Edit, Publish · <b>live</b> → Plan the session, Go live · <b>neither</b> (image, poster, carousel) → Design, Publish.</p>
     ${f0?`<div class="fld"><label class="pp-chk ${f.hidden?"on":""}"><input type="checkbox" id="f-hidden" ${f.hidden?"checked":""}> Hide this type from "+ New idea" (ideas already made keep it)</label></div>`:""}
     <div class="row" style="margin-top:14px"><button class="btn pri" id="f-save">${f0?"Save type":"Add type"}</button>
       <button class="btn" id="f-back">Back</button></div>`);
@@ -1956,7 +2053,7 @@ function openFormats(editKey, back){
     const pl=[...$("#f-plats").querySelectorAll("input:checked")].map(x=>x.value); if(!pl.length){ toast("Pick at least one platform"); return; }
     const key=f0?f0.key:("f_"+name.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,20)+"_"+Date.now().toString(36).slice(-3));
     const out=Object.assign({}, f, { key, name, icon:$("#f-icon").value.trim()||"✨", plats:pl, defPlats:f.defPlats.filter(x=>pl.includes(x)).length?f.defPlats.filter(x=>pl.includes(x)):[pl[0]],
-      hint:$("#f-hint").value.trim(), video:$("#f-video").checked, claude:$("#f-claude").checked, hidden:!!($("#f-hidden")&&$("#f-hidden").checked) });
+      hint:$("#f-hint").value.trim(), video:$("#f-video").checked||$("#f-live").checked, claude:$("#f-claude").checked&&!$("#f-live").checked, live:$("#f-live").checked, hidden:!!($("#f-hidden")&&$("#f-hidden").checked) });
     if(!isBuiltin && !f0){ REG.vtype[key]=name; out.vtypes=[key]; }   // its own video type, so the numbers can tell it apart
     const list=(S.formats||[]).filter(x=>x.key!==key); list.push(out);
     S.formats=DEFAULT_FORMATS.map(d=>list.find(x=>x.key===d.key)||d).concat(list.filter(x=>!DEFAULT_FORMATS.some(d=>d.key===x.key)));
@@ -2214,6 +2311,34 @@ let OPEN=null;   // what the window shows ({kind:"card"|"idea", id}), so a refre
 let CLOSE_GUARD=null;   // the open card's "discard unsaved changes?" check
 // raw video audio: a job in progress per card ("Pulling out the audio…"), and short-lived play/download links
 const AUDIOJOB={}, RAWLINKS={}, CLEANJOB={};
+const STEPOPEN={};    // card id → { step: open? } — which steps someone opened or folded (kept while the page is open)
+const IMPORTJOB={};   // card id → { msg, stop, files? }: a link being copied into storage (survives redraws)
+// where a pasted link can be watched inside the app: Drive's own player, a plain video, or only in a new tab
+function watchOf(link){
+  let u; try{ u=new URL(link); }catch(_){ return null; }
+  const h=u.hostname, folder=/\/folders\/([\w-]{10,})/.exec(u.pathname), id=(/\/(?:file\/)?d\/([\w-]{10,})/.exec(u.pathname)||[])[1]||u.searchParams.get("id");
+  if(/google\.com$/.test(h)){ if(folder) return { frame:"https://drive.google.com/embeddedfolderview?id="+folder[1]+"#grid" };
+    if(id) return { frame:"https://drive.google.com/file/d/"+id+"/preview" }; }
+  if(/dropbox\.com$/.test(h)) return { video: link.replace(/([?&])dl=[01]/,"$1raw=1")+(/[?&](dl|raw)=/.test(link)?"":(link.includes("?")?"&":"?")+"raw=1") };
+  if(/\.(mp4|mov|m4v|webm)(\?|$)/i.test(u.pathname)) return { video: link };
+  return { tab: link };   // OneDrive / others: their own page
+}
+// a simple full-screen player over the card
+function watchVideo(w, title){
+  if(w.tab){ window.open(w.tab,"_blank","noopener"); return; }
+  const o=document.createElement("div");
+  o.setAttribute("style","position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.82);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px");
+  o.innerHTML=`<div style="width:min(980px,100%);display:flex;align-items:center;gap:10px;color:#fff;margin-bottom:10px">
+      <b style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">▶ ${esc(title||"Raw video")}</b>
+      ${w.open?`<a href="${esc(w.open)}" target="_blank" rel="noopener" style="color:#fff;font-size:13px">Open ↗</a>`:""}
+      <button type="button" data-x style="background:#fff;color:#111;border:0;border-radius:8px;padding:6px 12px;font-weight:600;cursor:pointer">Close ✕</button></div>
+    ${w.frame?`<iframe src="${esc(w.frame)}" allow="autoplay; fullscreen" allowfullscreen style="width:min(980px,100%);height:min(78vh,620px);border:0;border-radius:10px;background:#000"></iframe>`
+      :`<video src="${esc(w.video)}" controls autoplay playsinline style="max-width:min(980px,100%);max-height:78vh;border-radius:10px;background:#000"></video>`}`;
+  const close=()=>{ const v=o.querySelector("video"); if(v) v.pause(); o.remove(); document.removeEventListener("keydown",key); };
+  const key=e=>{ if(e.key==="Escape") close(); };
+  o.onclick=e=>{ if(e.target===o||e.target.closest("[data-x]")) close(); };
+  document.addEventListener("keydown",key); R.appendChild(o);
+}
 // a deleted card: remove its raw video, audio, Claude edit files and finished videos from storage
 function freeCardFiles(id, after){
   if(!window.PIPE || PIPE.mode()==="off") return;
@@ -2222,7 +2347,14 @@ function freeCardFiles(id, after){
 function closeDrawer(force){
   if(force!==true && CLOSE_GUARD && !CLOSE_GUARD()) return;
   CLOSE_GUARD=null; OPEN=null; $("#drawer").classList.remove("on"); $("#scrim").classList.remove("on"); }
-function openDrawer(h,wide){ const d=$("#drawer"); d.oninput=d.onchange=null; CLOSE_GUARD=null; d.innerHTML=h; d.classList.toggle("wide",!!wide); d.classList.add("on"); $("#scrim").classList.add("on"); d.scrollTop=0; }
+// key: what's in the drawer ("card:<id>", "idea:<id>"). Drawing the same thing again while it's open (a button that
+// redraws the card, Claude's status coming in) keeps the scroll exactly where it was; anything new starts at the top.
+let DRAWER_KEY=null;
+function openDrawer(h,wide,key){ const d=$("#drawer"), same=!!key&&key===DRAWER_KEY&&d.classList.contains("on"), y=same?d.scrollTop:0;
+  d.oninput=d.onchange=null; CLOSE_GUARD=null; d.innerHTML=h; d.classList.toggle("wide",!!wide); d.classList.add("on"); $("#scrim").classList.add("on");
+  DRAWER_KEY=key||null; d.scrollTop=y;
+  if(same) requestAnimationFrame(()=>{ if(Math.abs(d.scrollTop-y)>1) d.scrollTop=y; });   // rich-text boxes settle a frame later
+}
 // the team's members, from the app's user list (profiles + memberships)
 function teamNames(){ let l=[]; try{ l=(OPT.people && OPT.people()) || []; }catch(_){ }
   return [...new Set(l.filter(Boolean))].sort((a,b)=>a.localeCompare(b)); }
@@ -2261,6 +2393,9 @@ function wireKw(prefix,cb){
   if(add) add.onclick=()=>{ const l=readKw(prefix); l.push({kw:"",vol:null,rank:l.length?"secondary":"primary"}); cb(l); };
   $("#drawer").querySelectorAll("[data-kwdel]").forEach(b=>b.onclick=()=>{ const l=readKw(prefix); l.splice(Number(b.dataset.kwdel),1); cb(l); });
 }
+// 💬 the shared comment thread at the bottom of a card / idea (comments.js; the page says where it is, for email links)
+function mountComments(kind,id,title){ const h=$("#drawer").querySelector("[data-cmthost]");
+  if(h && window.CMT && window.cmtCardPlace) try{ CMT.mount(h, cmtCardPlace(kind,id,title)); }catch(e){ console.warn("comments",e); } }
 // viewers see the drawers but not the buttons that change anything
 function lockDrawer(){ if(canEdit()) return;
   $("#drawer").querySelectorAll("input,select,textarea").forEach(e=>e.disabled=true);
@@ -2332,14 +2467,10 @@ function openIdea(id,focusComments,fmtKey){
       <div class="fld" style="margin-bottom:0"><label for="i-cta">CTA</label>
         <input id="i-cta" value="${esc(i.cta)}" placeholder="What do they do next?"></div></div>
 
-    ${isNew?"":`<div class="block" id="cmtBlock">
-      <div class="block-h"><h4>Comments</h4><span class="hint">${i.comments.length} on this idea</span></div>
-      ${i.comments.map(c=>`<div class="cmt">${who(c.by)}<p style="margin-top:3px">${rich(c.text)}</p></div>`).join("")||`<p class="hint" style="margin:0">No comments yet.</p>`}
-      <div data-w="1"><div class="grid2" style="margin-top:12px">
-        <div class="fld" style="margin-bottom:0"><label for="i-cmtby">Comment as</label>${peopleSelect("i-cmtby",meName())}</div></div>
-      <div class="fld" style="margin-top:10px"><label for="i-newcmt">Add a comment</label>
-        <textarea id="i-newcmt" placeholder="Write a note…"></textarea></div>
-      <button class="btn sm" id="addCmt">Post comment</button></div></div>`}
+    ${isNew?"":`<div id="cmtBlock">${i.comments.length?`<div class="block">
+      <div class="block-h"><h4>Earlier comments</h4><span class="hint">from before the new comments below</span></div>
+      ${i.comments.map(c=>`<div class="cmt">${who(c.by)}<p style="margin-top:3px">${rich(c.text)}</p></div>`).join("")}</div>`:""}
+      <div data-cmthost></div></div>`}
     ${i.extra.length||canEdit()?ownBoxes(i.extra):""}
     </div><div class="dr-col">
 
@@ -2380,7 +2511,7 @@ function openIdea(id,focusComments,fmtKey){
       <button class="btn pri" id="saveIdea" data-w="1">${isNew?"Log idea":"Save changes"}</button>
       <button class="btn" id="xClose2">${canEdit()?"Cancel":"Close"}</button>
       <span id="dirtyDot" class="dirty" ${dirty?"":"hidden"}>● Unsaved changes</span>
-      ${!isNew?`<button class="btn danger" id="delIdea" style="margin-left:auto" data-w="1">Delete</button>`:""}</div>`,true);
+      ${!isNew?`<button class="btn danger" id="delIdea" style="margin-left:auto" data-w="1">Delete</button>`:""}</div>`,true,"idea:"+(isNew?"new":i.id));
 
     const read=()=>{
       i.idea=$("#i-idea").value.trim(); i.studentWhy=$("#i-studentwhy").value.trim(); i.by=$("#i-by").value.trim(); i.created=$("#i-created").value||today();
@@ -2414,10 +2545,6 @@ function openIdea(id,focusComments,fmtKey){
       box.insertAdjacentHTML("beforeend", vtypeSelect("i-vtype",v,pl)); wireReg("i-vtype");
       $("#i-platform").querySelectorAll(".pp-chk").forEach(l=>l.classList.toggle("on", l.querySelector("input").checked)); };
     wireKw("i-", l=>{ read(); markDirty(); draw(l); });
-    const ac=$("#addCmt"); if(ac) ac.onclick=()=>{ const t=$("#i-newcmt").value.trim(); if(!t) return;
-      const n=$("#i-cmtby").value.trim()||meName()||"Someone";
-      read(); if(!i.idea){ toast("Give the idea a one-line summary first"); return; }
-      persist(); i.comments.push({by:n,text:t,on:today()}); if(save()){ saved(); openIdea(i.id,true); } };
     const si=$("#saveIdea"); if(si) si.onclick=()=>{ read(); if(!i.idea){toast("An idea needs a one-line summary");return;}
       if(!i.by){toast("Add who is reporting this idea");return;}
       persist(); if(save()){ saved(); closeDrawer(true); toast(isNew?"Idea logged — research it, then the head decides":"Saved"); } };
@@ -2450,6 +2577,7 @@ function openIdea(id,focusComments,fmtKey){
     $("#drawer").querySelectorAll("[data-rs-title]").forEach(b=>b.onclick=()=>{ read(); i.title=b.dataset.rsTitle; markDirty(); draw(i.keywords);
       toast("Title filled in — press Save to keep it"); });
     lockDrawer();
+    mountComments("idea", i.id, i.idea);
     if(focusComments) setTimeout(()=>{ const cb=$("#cmtBlock"); if(cb) cb.scrollIntoView({block:"center"}); },60);
   };
   draw(i.keywords||[]);
@@ -2543,7 +2671,7 @@ function openCard(id,showGate){
   // the form's fields as they were when opened, so "discard changes" really discards
   const FORM=["idea","format","platform","platforms","vtype","scheduled","time","pre","metrics","shoot"];
   const snap=()=>JSON.stringify(FORM.map(k=>c[k])), restore=t=>JSON.parse(t).forEach((v,i)=>{ c[FORM[i]]=v; });
-  let opened=snap(), dirty=false;
+  let opened=snap(), dirty=false, scrolledToReview=false;
   const markDirty=()=>{ if(dirty) return; dirty=true; const d=$("#dirtyDot"); if(d) d.hidden=false; };
 
   const draw=(kwList0)=>{ let kwList=kwList0;
@@ -2583,35 +2711,49 @@ function openCard(id,showGate){
     // the raw footage, before any edit: a shared link, or the file itself uploaded to the video storage (the one Claude edits)
     const rawBox=()=>{ const r=c.raw||null, mode=RAWMODE[c.id]||(r&&r.kind)||"link", link=r&&r.kind==="link"?r.url:"";
       const off=!window.PIPE||PIPE.mode()==="off", okUrl=/^https?:\/\//i.test(link);
-      return `<div class="block rawbox" style="border-color:${r?"color-mix(in srgb,var(--good) 40%,var(--line))":"var(--line)"}">
-        <div class="block-h"><h4>${r?"✓ ":""}Raw video</h4><span class="hint">the footage before editing — a link or the file${useClaude?" · Claude edits it":""}</span></div>
+      const bin=c.rawBin&&new Date(c.rawBin.due)>Date.now()?c.rawBin:null;
+      const binLine=bin?`<div class="rawbin"><span style="font-size:18px">🗑</span><div style="flex:1;min-width:0">
+          <b>${esc((bin.raw&&bin.raw.name)||"The raw video")}</b> was deleted${bin.by?" by "+esc(bin.by):""}.
+          <div class="hint">It stays in storage until <b>${esc(new Date(bin.due).toLocaleTimeString([], { hour:"numeric", minute:"2-digit" }))}</b> (${Math.max(1,Math.round((new Date(bin.due)-Date.now())/60000))} min) — restore it until then. Uploading a new video deletes it for good straight away.</div></div>
+          <button type="button" class="btn sm pri" data-rawrestore data-w="1">↩ Restore</button></div>`:"";
+      return `<div class="rawbox">${binLine}
         <div class="seg rawseg" data-w="1"><button type="button" data-rawmode="link" class="${mode==="link"?"on":""}">🔗 Paste a link</button>
           <button type="button" data-rawmode="file" class="${mode==="file"?"on":""}">⬆ Upload the file</button></div>
-        ${mode==="link"?`<div class="fld" style="margin:0"><input id="raw-url" value="${esc(link)}" placeholder="Google Drive, Dropbox or WeTransfer link to the raw clip">
-            <p class="hint" style="margin:5px 0 0">${okUrl?`<a href="${esc(link)}" target="_blank" rel="noopener">Open the raw video ↗</a> · `:""}Set the link so anyone in the team can open it.</p></div>`
+        ${mode==="link"?`<div class="fld" style="margin:0"><input id="raw-url" value="${esc(link)}" placeholder="Google Drive or OneDrive link — a video, or a folder with the video in it">
+            <div class="pp-row" style="margin-top:7px;gap:6px;display:flex;flex-wrap:wrap;align-items:center">
+              <button type="button" class="btn sm" data-rawwatch ${okUrl?"":"disabled"}>▶ Watch the video</button>
+              ${isNew||off?"":IMPORTJOB[c.id]?`<button type="button" class="btn sm danger" data-rawimpstop data-w="1">Stop copying</button>`
+                :`<button type="button" class="btn sm pri" data-rawimport data-w="1" ${okUrl?"":"disabled"}>⬇ Copy the video into storage</button>`}
+              ${okUrl?`<a class="hint" href="${esc(link)}" target="_blank" rel="noopener">Open the link ↗</a>`:""}</div>
+            <div class="hint" data-rawimp-st style="margin:6px 0 0">${IMPORTJOB[c.id]?esc(IMPORTJOB[c.id].msg):isNew?"Create the card first, then copy the video into storage.":"Share the link as “Anyone with the link”. Copying puts the file in storage and makes the audio"+(useClaude?", and Claude edit can use it.":" — the editor can download both from here.")+" Have the file? Drop it on this box."}</div>
+            ${IMPORTJOB[c.id]&&IMPORTJOB[c.id].files?`<div class="rawpick" style="display:flex;flex-direction:column;gap:5px;margin-top:6px">${IMPORTJOB[c.id].files.map((f,i)=>`<button type="button" class="btn sm" data-rawpick="${i}" data-w="1" style="justify-content:flex-start;text-align:left">🎞️ ${esc(f.name)} <span class="hint" style="margin-left:auto">${mb(f.size)}</span></button>`).join("")}</div>`:""}
+            <div class="pp-bar" data-rawimpbar ${IMPORTJOB[c.id]&&IMPORTJOB[c.id].pc!=null?"":"hidden"}><i style="width:${(IMPORTJOB[c.id]&&IMPORTJOB[c.id].pc)||0}%"></i></div></div>`
         :r&&r.kind==="file"?`<div class="drop has"><span style="font-size:22px">🎞️</span>
             <div style="flex:1;min-width:0"><div class="lbl" style="margin:0 0 2px">Raw video · uploaded</div>
-              <div class="nm">${esc(r.name)}</div><div class="sz">${mb(r.size)}${r.by?" · by "+esc(r.by):""}${r.at?" · "+esc(dmy(r.at)):""}</div></div>
-            <label class="btn sm" data-w="1" style="cursor:pointer">Replace<input type="file" accept="video/*" data-rawfile hidden></label>
-            <button type="button" class="btn sm danger" data-rawdel data-w="1">Delete</button></div>
+              <div class="nm">${esc(r.name)}</div><div class="sz">${mb(r.size)}${r.by?" · by "+esc(r.by):""}${r.at?" · "+esc(dmy(r.at)):""}${r.link?` · <a href="${esc(r.link)}" target="_blank" rel="noopener">from a link ↗</a>`:""}</div></div>
+            <button type="button" class="btn sm pri" data-rawwatch>▶ Watch</button>
+            <button type="button" class="btn sm danger" data-rawdel data-w="1" title="Moves it to the bin for an hour — restore it until then">Delete</button></div>
             <div class="rawaudio">
               ${r.audio?`<div class="rawaudio-h">🎵 <b>Audio (WAV)</b> <span class="hint">${mb(r.audio.size)}${r.audio.seconds?" · "+Math.floor(r.audio.seconds/60)+":"+String(r.audio.seconds%60).padStart(2,"0"):""}</span>
                   <a class="hint" data-rawaudio-dl style="margin-left:auto" hidden>⬇ Download</a></div>
-                <audio controls preload="none" data-rawaudio-play style="width:100%;height:34px;margin-top:6px" hidden></audio>
+                <div class="aload" data-aload="audio"><span class="aspin"></span><span data-aload-t>Loading the audio…</span></div>
+                <audio controls preload="metadata" data-rawaudio-play style="width:100%;height:34px;margin-top:6px" hidden></audio>
                 <div class="rawclean">
                   ${r.clean?`<div class="rawaudio-h">✨ <b>Cleaned audio</b> <span class="hint">${esc(r.clean.name)} · ${mb(r.clean.size)}${CLEANJOB[c.id]?" · "+esc(CLEANJOB[c.id]):""}</span>
                       <a class="hint" data-rawclean-dl style="margin-left:auto" hidden>⬇ Download</a>
                       <label class="btn sm" data-w="1" style="cursor:pointer">Replace<input type="file" accept="audio/*,.wav,.mp3,.m4a,.flac" data-rawcleanfile hidden></label>
                       <button type="button" class="btn sm danger" data-rawcleandel data-w="1">Delete</button></div>
-                    <audio controls preload="none" data-rawclean-play style="width:100%;height:34px;margin-top:6px" hidden></audio>
-                    <p class="hint" style="margin:4px 0 0">🤖 Claude edit uses this clean voice instead of the camera sound (press Request changes if the edit was made before).</p>`
-                  :`<div class="rawaudio-h">✨ <b>Clean the voice</b> <span class="hint">${CLEANJOB[c.id]?esc(CLEANJOB[c.id]):"optional — Adobe Podcast removes background noise"}</span></div>
+                    <div class="aload" data-aload="clean"><span class="aspin"></span><span data-aload-t>Loading the cleaned audio…</span></div>
+                    <audio controls preload="metadata" data-rawclean-play style="width:100%;height:34px;margin-top:6px" hidden></audio>
+                    <p class="hint" style="margin:4px 0 0">${useClaude?"🤖 Claude edit uses this clean voice instead of the camera sound (press Request changes if the edit was made before).":"Give this clean voice to the editor with the video."}</p>`
+                  :`<div class="rawaudio-h">✨ <b>Clean the voice</b> <span class="hint">${CLEANJOB[c.id]?esc(CLEANJOB[c.id]):"optional — Adobe Podcast removes background noise"}</span>${CLEANJOB[c.id]?`<span class="aspin"></span>`:""}</div>
                     <div class="pp-row" style="margin-top:6px;gap:6px;display:flex;flex-wrap:wrap">
                       <button type="button" class="btn sm" data-adobe data-w="1">1 · Clean in Adobe Podcast ↗</button>
-                      <label class="btn sm" data-w="1" style="cursor:pointer">2 · Upload cleaned audio<input type="file" accept="audio/*,.wav,.mp3,.m4a,.flac" data-rawcleanfile hidden></label></div>
-                    <p class="hint" style="margin:6px 0 0">Step 1 downloads the WAV and opens Enhance Speech: drop the WAV in, then download Adobe's result. Step 2: upload that file here — Claude's edit then uses the clean voice.</p>`}
+                      <label class="btn sm" data-w="1" style="cursor:pointer">2 · Upload cleaned audio<input type="file" accept="audio/*,.wav,.mp3,.m4a,.flac" data-rawcleanfile hidden></label>
+                      <span class="hint" data-w="1">or drop the audio file here</span></div>
+                    <p class="hint" style="margin:6px 0 0">Step 1 downloads the WAV and opens Enhance Speech: drop the WAV in, then download Adobe's result. Step 2: upload that file here${useClaude?" — Claude's edit then uses the clean voice":" — it stays next to the video for the editor"}.</p>`}
                 </div>`
-              :`<div class="rawaudio-h">🎵 <b>Audio (WAV)</b> <span class="hint">${AUDIOJOB[c.id]?esc(AUDIOJOB[c.id]):"not made yet"}</span>
+              :`<div class="rawaudio-h">🎵 <b>Audio (WAV)</b> ${AUDIOJOB[c.id]?`<span class="aspin"></span>`:""}<span class="hint">${AUDIOJOB[c.id]?esc(AUDIOJOB[c.id]):"not made yet"}</span>
                   ${AUDIOJOB[c.id]?"":`<button type="button" class="btn sm" data-getaudio data-w="1" style="margin-left:auto">Get the audio</button>`}</div>`}
             </div>
             ${useClaude?`<p class="hint" style="margin:6px 0 0">🤖 Claude edit uses this file.</p>`:""}`
@@ -2619,7 +2761,7 @@ function openCard(id,showGate){
         :off?`<p class="hint pre-note">Uploading needs the video storage switched on (an owner sets it up once — <b>routine/SETUP.md</b>). Paste a link for now.</p>`
         :`<div class="drop" data-rawdrop><div class="lbl">Raw video</div>
             <label class="filebtn" data-w="1">Choose file<input type="file" accept="video/*" data-rawfile></label>
-            <div class="hint" style="margin-top:7px" data-rawup>MP4 or MOV, straight from the phone or camera. It's stored for the team${useClaude?" and Claude edit uses it":""}.</div>
+            <div class="hint" style="margin-top:7px" data-rawup>Drop the video here, or choose it. MP4 or MOV, straight from the phone or camera. It's stored for the team${useClaude?" and Claude edit uses it":""}.</div>
             <div class="pp-bar" data-rawbar hidden><i></i></div></div>`}
       </div>`; };
     const fileSlot=(key,label,accept,note)=>{ const f=c.post[key];
@@ -2632,136 +2774,163 @@ function openCard(id,showGate){
             <label class="filebtn" data-w="1">Choose file<input type="file" accept="${accept}" data-file="${key}"></label>
             <div class="hint" style="margin-top:7px">${note}</div>`}</div>`; };
 
-    openDrawer(`
-    <div class="dr-h"><div style="min-width:0;flex:1"><div class="lbl">${esc(F.icon+" "+F.name)} · ${STAGES[idx].label}${srcIdea?" · from Ideation":""}</div>
-      <h3 style="margin-top:4px">${isNew?"New card":esc(c.pre.title||c.idea)}</h3>
-      ${isNew?"":`<div class="steps">${STAGES.map((st,k)=>`<span class="step ${k<idx?"done":k===idx?"now":""}">${k<idx?"✓ ":""}${st.label}</span>`).join('<span class="step-sep">›</span>')}
-        ${window.PIPE?`<span class="step-pipe">${PIPE.badge(c.id)}</span>`:""}</div>`}</div>
-      <button class="btn sm" id="xClose">Close</button></div>
-
-    ${reviewing&&useClaude?`<div id="pipePanel"></div>
-    <details class="dr-more"><summary>Card details — idea, draft copy, shoot, post-production</summary>`:""}
-    <div class="dr-cols"><div class="dr-col">
-    <div class="fld"><label for="c-idea">Idea</label>
-      <input id="c-idea" value="${esc(c.idea)}" placeholder="What is this video, in one line?"></div>
-    <div class="grid2">
-      <div class="fld"><label>Post on</label>${platPicker("c-platform",plats(c),F)}</div>
-      <div class="fld" ${vtypeOptions(plats(c),F).length<2?"hidden":""}><label for="c-vtype">${F.video?"Video type":"Format"}</label>
-        ${vtypeSelect("c-vtype",c.vtype,plats(c),F)}</div></div>
-    <div class="grid2">
-      <div class="fld"><label for="c-sched">Goes live on</label><input id="c-sched" type="date" value="${c.scheduled||""}"></div>
-      <div class="fld"><label for="c-time">at</label><input id="c-time" type="time" value="${esc(c.time||slotPlan(c.platform).time)}"></div></div>
-
-    <div class="block">
-      <div class="block-h"><h4>Draft copy</h4>
-        <span class="hint">${window.PIPE?"Claude polishes this at the final check":"Title, description and hashtags"}</span></div>
+    // ---- the layout: the work as numbered steps on the left (only the ones this type needs), the card's facts on the right
+    const live=isLive(c);
+    const nextSt=idx<STAGES.length-1?STAGES[idx+1]:null, nextOk=nextSt?canMove(c,nextSt.id):{ok:true};
+    const shot=!["todo","draft"].includes(c.stage);
+    const copyMiss=[!c.pre.title&&"title",!c.pre.desc&&"description",!c.pre.hashtags&&"hashtags"].filter(Boolean);
+    const linksMiss=plats(c).filter(pl=>!linkOf(c,pl));
+    const CUR=live?({todo:["copy"],draft:["shoot"],inprogress:["shoot","publish"]})[c.stage]||["publish"]
+      :({todo:["copy"],draft:[F.video?"shoot":"design"],inprogress:F.video?["raw","edit"]:["design"],
+      inreview:F.video?["edit"]:["design"],approved:["publish"],published:["publish"]})[c.stage]||["copy"];
+    if(reviewing&&useClaude&&!CUR.includes("edit")) CUR.push("edit");
+    const chip=(t,cls)=>`<span class="badge ${cls||"mute"}">${esc(t)}</span>`;
+    const later=(k)=>STAGES.findIndex(x=>x.id===({raw:"inprogress",edit:"inprogress",design:"draft",publish:"approved"})[k])>idx;
+    const editDone=edited&&(!needThumb||!!c.post.thumb);
+    const copyBody=`<div class="fld"><label for="c-idea">Idea</label>
+        <input id="c-idea" value="${esc(c.idea)}" placeholder="What is this ${F.video?"video":"post"}, in one line?"></div>
       ${srcIdea?`<p class="hint" style="margin:-3px 0 11px;padding:8px 10px;background:var(--surface-2);border-radius:var(--r-s)">
         Copied from the idea when it was accepted. Edit freely here — the original idea is left untouched.
         <button class="btn sm" id="repull" style="margin-left:6px" data-w="1">Re-pull from idea</button></p>`:""}
-      <div class="fld"><label for="r-title">Title</label>
-        <input id="r-title" value="${esc(c.pre.title)}"></div>
-      <div class="fld"><label for="r-desc">Description</label>
-        <textarea id="r-desc">${esc(c.pre.desc)}</textarea></div>
+      <div class="fld"><label for="r-title">Title</label><input id="r-title" value="${esc(c.pre.title)}"></div>
+      <div class="fld"><label for="r-desc">${F.video?"Description":"Caption"}</label><textarea id="r-desc">${esc(c.pre.desc)}</textarea></div>
       <div class="fld" style="margin-bottom:0"><label for="r-hashtags">Hashtags</label>
         <input id="r-hashtags" value="${esc(c.pre.hashtags)}" placeholder="#cuet #du"></div>
-    </div>
-
-    ${F.video?`<div class="block">
-      <div class="block-h"><h4>Shoot</h4>
-        ${!["todo","draft"].includes(c.stage)?`<span class="badge good">✓ shot</span>`
-          :slot?`<span class="badge ${due<today()?"crit":"warn"}">shoot by ${esc(dow(due).slice(0,3))} ${esc(dmy(due))}</span>`:`<span class="hint">no slot yet</span>`}</div>
-      <p class="hint pre-note" style="margin:0 0 10px">${slot?`Goes live <b>${esc(slot.label)}</b> — the posting slot. Shoot two days before so the edit has time.`
-        :`Set the scheduled date above (or accept the idea again) to book a posting slot.`}</p>
+      ${useClaude?`<p class="hint" style="margin:8px 0 0">Claude polishes these at the final check.</p>`:""}`;
+    const shootBody=live?`<p class="hint pre-note" style="margin:12px 0 10px">${slot?`Goes live <b>${esc(slot.label)}</b>.`:`Set the “Goes live on” date on the right.`} Plan what you'll say — it's live, so there's no edit afterwards.</p>
+      <div class="fld"><label for="s-hook">Opening (first minute)</label><input id="s-hook" value="${esc(c.shoot.hook)}" placeholder="Who you are, what this session answers"></div>
+      <div class="fld"><label for="s-points">Run of show — one point per line</label><textarea id="s-points" rows="5">${esc(c.shoot.points)}</textarea></div>
+      <div class="grid2">
+        <div class="fld" style="margin-bottom:0"><label for="s-cta">Closing / call to action</label><input id="s-cta" value="${esc(c.shoot.cta)}" placeholder="Join the next session 👇"></div>
+        <div class="fld" style="margin-bottom:0"><label for="s-tips">Setup notes</label><input id="s-tips" value="${esc(c.shoot.tips)}" placeholder="e.g. mic, screen share, Q&A at the end"></div></div>`
+    :`<p class="hint pre-note" style="margin:12px 0 10px">${slot?`Goes live <b>${esc(slot.label)}</b> — the posting slot. Shoot two days before so the edit has time.`
+        :`Set the “Goes live on” date on the right to book a posting slot.`}</p>
       ${!isNew&&window.PIPE?`<div class="pp-row" style="margin-bottom:10px">
         <button class="btn sm" data-script data-w="1" ${sBusy?"disabled":""}>${sBusy?"Claude is writing…":"✍️ Draft hook & talking points"}</button>
         ${sData&&c.scriptApplied!==sData.at&&!shootEmpty?`<button class="btn sm pri" data-script-use data-w="1">Replace with Claude's new draft</button>`:""}
         <span class="hint">optional — a speaking plan, not a word-for-word script</span></div>`:""}
-      <div class="fld"><label for="s-hook">Hook (first 2 seconds)</label><input id="s-hook" value="${esc(c.shoot.hook)}" placeholder="A question or a surprising fact"></div>
-      <div class="fld"><label for="s-points">Talking points — one per line</label><textarea id="s-points" rows="4">${esc(c.shoot.points)}</textarea></div>
+      <div class="fld"><label for="s-hook">Hook (first ${c.vtype==="long"?"10":"2"} seconds)</label><input id="s-hook" value="${esc(c.shoot.hook)}" placeholder="A question or a surprising fact"></div>
+      <div class="fld"><label for="s-points">${c.vtype==="long"?"Outline — one point per line":"Talking points — one per line"}</label><textarea id="s-points" rows="4">${esc(c.shoot.points)}</textarea></div>
       <div class="grid2">
         <div class="fld" style="margin-bottom:0"><label for="s-cta">Closing line</label><input id="s-cta" value="${esc(c.shoot.cta)}" placeholder="Comment your doubt 👇"></div>
-        <div class="fld" style="margin-bottom:0"><label for="s-tips">Shooting notes</label><input id="s-tips" value="${esc(c.shoot.tips)}" placeholder="e.g. show the form on screen"></div></div>
-    </div>`:""}
-    ${c.extra.length||canEdit()?ownBoxes(c.extra):""}
+        <div class="fld" style="margin-bottom:0"><label for="s-tips">Shooting notes</label><input id="s-tips" value="${esc(c.shoot.tips)}" placeholder="e.g. show the form on screen"></div></div>`;
+    const claudeVids=claudeDone?`<div class="pp-mini">
+        ${jobM.yt?`<div><div class="lbl">YouTube</div><video controls preload="metadata" src="${esc(jobM.yt)}"></video></div>`:""}
+        ${jobM.ig?`<div><div class="lbl">Instagram</div><video controls preload="metadata" src="${esc(jobM.ig)}"></video></div>`:""}</div>`:"";
+    const editBody=useClaude?`<div style="height:12px"></div>${isNew?`<p class="hint pre-note">Create the card first.</p>`:`<div id="pipePanel"></div>`}${claudeVids}
+        <details class="manual" ${c.post.reel?"open":""}><summary>${claudeDone?"Use my own edit instead":c.post.reel?"Your own edit":"I edited it myself"}</summary>
+          ${fileSlot("reel","Edited reel","video/*","Pick the final cut. Its name and size are noted on the card — the file itself stays on your computer.")}
+          ${plats(c).includes("yt")&&c.vtype==="short"?fileSlot("thumb","Thumbnail (optional)","image/*","Optional for Shorts — YouTube picks a frame if you skip it."):""}</details>`
+      :`<div style="height:12px"></div>${fileSlot("reel", c.vtype==="long"?"Edited video":"Edited reel","video/*","Pick the final cut from the editor. Its name and size are noted on the card — the file itself stays on your computer.")}
+        ${needThumb?fileSlot("thumb","Thumbnail","image/*","Needed for long YouTube videos. A small preview is kept on the card."):
+          plats(c).includes("yt")&&c.vtype==="short"?fileSlot("thumb","Thumbnail (optional)","image/*","Optional for Shorts — YouTube picks a frame if you skip it."):""}`;
+    const designBody=`<div style="height:12px"></div>${fileSlot("reel","Image / slides","image/*,application/pdf","Pick the finished image (or a PDF of the slides). A small preview is kept on the card.")}`;
+    const publishBody=`<div style="height:10px"></div>
+      ${posts.length?`<div class="pub-list">${posts.map(x=>`<div class="pub-row"><span class="pub-pl">${x.pl}</span>
+          <span class="badge ${x.status==="posted"?"good":"crit"}">${esc(x.status)}</span>
+          ${x.url?`<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.url.replace(/^https?:\/\//,""))}</a>`:`<span class="hint">${esc(x.error||"")}</span>`}</div>`).join("")}</div>`:""}
+      ${plats(c).map(pl=>`<div class="fld" style="margin-bottom:6px"><label>${esc(regLabel("platform",pl)||pl)} link</label>
+        <input data-plink="${pl}" value="${esc(linkOf(c,pl))}" placeholder="https://…"></div>`).join("")}
+      <p class="hint" style="margin:0">${lp?`<b style="color:var(--good)">Linked</b> to “${esc(lp.title)}” — its views, likes and watch time update every morning.`
+        :c.post.postUrl?`Linked. The views, likes and watch time show up here after the next morning sync.`
+        :useClaude?`Filled in by itself when Claude posts. Posted it yourself? Paste the link — the views and likes on this card come from it.`
+        :live?`Paste the live link (or the recording once it ends) — the views and likes on this card come from it.`
+        :`Paste the link once it's live — the views and likes on this card come from it.`}</p>
+      ${lp?`<div class="lbl" style="margin:14px 0 6px">Performance · live from ${c.platform==="ig"?"Instagram":"YouTube"}</div>
+        <div class="livegrid">
+          <div><span class="lbl">Views</span><b>${fmt(lp.views)}</b></div><div><span class="lbl">Likes</span><b>${fmt(lp.likes)}</b></div>
+          <div><span class="lbl">Comments</span><b>${fmt(lp.comments)}</b></div><div><span class="lbl">Shares</span><b>${fmt(lp.shares)}</b></div>
+          ${F.video?`<div><span class="lbl">Avg watch</span><b>${mmss(lp.avg_view_s)}</b></div>
+          <div><span class="lbl">Avg viewed</span><b>${lp.avg_view_pct!=null?Math.round(lp.avg_view_pct)+"%":"—"}</b></div>`:""}</div>
+        <p class="hint" style="margin:10px 0 0">Updated ${esc(ago(lp.updated_at))}.${F.video?" YouTube figures settle 48–72 hours after publishing.":""}</p>`
+      :c.stage==="published"?`<div class="lbl" style="margin:14px 0 6px">Performance · typed in</div>
+        <div class="grid2">
+          <div class="fld"><label for="m-views">Views</label><input id="m-views" type="number" value="${c.metrics?.views??""}"></div>
+          <div class="fld"><label for="m-likes">Likes</label><input id="m-likes" type="number" value="${c.metrics?.likes??""}"></div></div>
+        <div class="grid2">
+          <div class="fld"><label for="m-comments">Comments</label><input id="m-comments" type="number" value="${c.metrics?.comments??""}"></div>
+          <div class="fld"><label for="m-shares">Shares</label><input id="m-shares" type="number" value="${c.metrics?.shares??""}"></div></div>
+        ${F.video?`<div class="grid2">
+          <div class="fld"><label for="m-watch">Avg watch time</label><input id="m-watch" value="${esc(c.metrics?.watch??"")}" placeholder="0:24"></div>
+          <div class="fld"><label for="m-ctr">Thumbnail CTR %${c.platform!=="yt"?" (YouTube only)":""}</label>
+            <input id="m-ctr" type="number" step="0.1" value="${c.metrics?.ctr??""}" ${c.platform!=="yt"?"disabled":""}></div></div>`:""}
+        <p class="hint" style="margin:0">${c.platform==="yt"?"Paste the YouTube link above and these fill in by themselves.":"Read these off Instagram once a week until it is connected."}</p>`:""}`;
+    const STEPS=[
+      { k:"copy", t:F.video?"Idea & copy":"Idea & caption", done:!copyMiss.length&&!!c.idea, body:copyBody,
+        sum:(c.idea?`“${c.idea}”`:"the idea in one line")+(copyMiss.length?` · needs ${copyMiss.join(", ")}`:` · ${F.video?"title, description":"title, caption"}, hashtags`),
+        chip:copyMiss.length?chip(copyMiss.length===3?"To write":"Needs "+copyMiss.length,"warn"):chip("Done","good") },
+      live&&{ k:"shoot", t:"Plan the session", done:!!(c.shoot.points||c.shoot.hook), body:shootBody,
+        sum:c.shoot.hook?`opening: “${c.shoot.hook}”`:"opening, run of show, closing",
+        chip:(c.shoot.points||c.shoot.hook)?chip("Planned","good"):later("raw")?chip("Later"):chip("To plan","warn") },
+      F.video&&!live&&{ k:"shoot", t:"Shoot", done:shot, body:shootBody,
+        sum:shot?(c.shoot.hook?`hook: “${c.shoot.hook}”`:"shot"):c.shoot.hook?`hook: “${c.shoot.hook}”`:"hook, talking points, closing line",
+        chip:shot?chip("Shot","good"):slot?chip("Shoot by "+dmy(due),due<today()?"crit":"warn"):chip("No slot yet") },
+      F.video&&!live&&{ k:"raw", t:"Raw video", done:!!c.raw, body:rawBox(),
+        sum:c.raw?(c.raw.kind==="file"?`${c.raw.name} · ${mb(c.raw.size)} in storage${c.raw.audio?" · audio ready":""}`:"a link to the footage"):"the footage before editing — a Drive / OneDrive link or the file",
+        chip:c.raw?chip(c.raw.kind==="file"?"Uploaded":"Link","good"):later("raw")?chip("Later"):chip("Needed","crit") },
+      F.video&&!live&&{ k:"edit", t:"Edit", done:editDone, body:editBody,
+        sum:claudeDone?"edited by Claude":c.post.reel?`your own edit: ${c.post.reel.name}`:useClaude?"🤖 Claude edit, or upload your own edit":"the editor's final cut"+(needThumb?" + the thumbnail":""),
+        chip:editDone?chip("Done","good"):useClaude&&job?`<span data-stp-pipe>${PIPE.badge(c.id)}</span>`:!c.raw&&useClaude?chip("Waiting for raw video"):later("edit")?chip("Later"):chip(needThumb&&edited?"Needs thumbnail":"Needed","crit") },
+      !F.video&&{ k:"design", t:"Design", done:!!c.post.reel, body:designBody,
+        sum:c.post.reel?c.post.reel.name:"the finished image or carousel slides",
+        chip:c.post.reel?chip("Done","good"):later("design")?chip("Later"):chip("Needed","crit") },
+      { k:"publish", t:live?"Go live":"Publish", done:!linksMiss.length, body:publishBody,
+        sum:lp?`${fmt(lp.views)} views · ${fmt(lp.likes)} likes`:c.post.postUrl?"linked":`${plats(c).map(pl=>regLabel("platform",pl)||pl).join(" + ")} link once it's live`,
+        chip:!linksMiss.length?chip(c.stage==="published"?"Live":"Linked","good"):later("publish")?chip("Later"):chip("Needed","crit") },
+    ].filter(Boolean);
+    const SO=STEPOPEN[c.id]||(STEPOPEN[c.id]={});
+    const stepsHtml=STEPS.map((st,n)=>{ const now=!isNew&&CUR.includes(st.k), open=SO[st.k]!==undefined?SO[st.k]:(isNew?st.k==="copy":now);
+      return `<details class="stp ${now?"now":""} ${st.done&&!now?"done":""}" data-step="${st.k}" ${open?"open":""}>
+        <summary><span class="stp-n">${st.done&&!now?"✓":n+1}</span><b>${esc(st.t)}</b><span class="stp-sum">${esc(st.sum)}</span>${isNew?"":st.chip}<span class="stp-chev"></span></summary>
+        <div class="stp-b">${st.body}</div></details>`; }).join("");
+    // the checklist: what each stage needs, in order — the one blocking the next move in red
+    const blockTxt=nextOk.ok?"":String(nextOk.msg||"").toLowerCase();
+    const CK=[[F.video?"Title, description, hashtags":"Title, caption, hashtags", !copyMiss.length, /title|description|hashtag/.test(blockTxt)],
+      live&&["Session plan", !!(c.shoot.points||c.shoot.hook), false],
+      F.video&&!live&&["Shot", shot, false], F.video&&!live&&["Raw video", !!c.raw, false],
+      !live&&[F.video?"Edited video":"Finished design", edited, /edited|design/.test(blockTxt)],
+      needThumb&&["Thumbnail", !!c.post.thumb, /thumbnail/.test(blockTxt)],
+      ...plats(c).map(pl=>[`${regLabel("platform",pl)||pl} link`, !!linkOf(c,pl), /link/.test(blockTxt)])].filter(Boolean);
+    const kv=(k,v)=>`<div class="kv"><span>${k}</span><span>${v}</span></div>`;
+    const sideHtml=`<aside class="cv-side">
+      ${isNew?"":`<div class="sbox"><h5>Status</h5>
+        <div class="stat"><span class="stat-cur">${esc(STAGES[idx].label)}</span>${useClaude?PIPE.badge(c.id):""}</div>
+        <div class="row stat-move" data-w="1">
+          ${idx>0?`<button class="btn sm" data-move="${STAGES[idx-1].id}">← ${STAGES[idx-1].label}</button>`:""}
+          ${nextSt?`<button class="btn sm pri" data-move="${nextSt.id}" ${nextOk.ok?"":"disabled"}>${nextSt.label} →</button>`:""}</div>
+        ${nextSt&&!nextOk.ok?`<div class="stat-miss"><b>Before “${esc(nextSt.label)}”:</b> ${esc(nextOk.msg)}</div>`:""}
+        <p class="hint" style="margin:8px 0 0">Or drag the card on the board.</p></div>`}
+      <div class="sbox"><h5>Details</h5>
+        <div class="fld"><label>Post on</label>${platPicker("c-platform",plats(c),F)}</div>
+        <div class="fld" ${vtypeOptions(plats(c),F).length<2?"hidden":""}><label for="c-vtype">${F.video?"Video type":"Format"}</label>
+          ${vtypeSelect("c-vtype",c.vtype,plats(c),F)}</div>
+        <div class="grid2">
+          <div class="fld"><label for="c-sched">Goes live on</label><input id="c-sched" type="date" value="${c.scheduled||""}"></div>
+          <div class="fld"><label for="c-time">At</label><input id="c-time" type="time" value="${esc(c.time||slotPlan(c.platform).time)}"></div></div>
+        <div class="kvs">${kv("Type",esc(F.icon+" "+F.name))}
+          ${F.video&&!live&&slot&&!shot?kv("Shoot by",`<b style="color:${due<today()?"var(--crit)":"inherit"}">${esc(dow(due).slice(0,3))} ${esc(dmy(due))}</b>`):""}
+          ${srcIdea?kv("From idea",`<button type="button" class="linkbtn" data-openidea>${esc(String(srcIdea.idea||"the idea").slice(0,40))} ↗</button>`):""}
+          ${c.acceptedOn?kv("Accepted",esc(dmy(c.acceptedOn))):""}</div></div>
+      ${isNew?"":`<div class="sbox ck-box"><h5>Checklist</h5><ul class="cvck">${CK.map(([l,ok,bl])=>`<li class="${ok?"ok":bl?"bl":""}"><span class="i">${ok?"✓":"○"}</span>${esc(l)}</li>`).join("")}</ul></div>`}
+    </aside>`;
 
-    </div><div class="dr-col">
-    ${F.video?rawBox():""}
-    ${!isNew&&useClaude&&!reviewing?`<div id="pipePanel"></div>`:""}
-
-    <div class="block" style="border-color:${aOk?"color-mix(in srgb,var(--good) 40%,var(--line))":"var(--line)"}">
-      <div class="block-h"><h4>Post-production</h4>
-        ${c.stage==="published"&&c.post.postUrl?`<span class="badge good">✓ published</span>`
-          :pMissing.length?`<span class="pre-miss">Missing: ${esc(pMissing.join(", "))}</span>`:`<span class="badge good">✓ ready to publish</span>`}</div>
-
-      <div class="pre-step">
-        <div class="pre-h"><span class="pre-n ${edited?"ok":""}">${edited?"✓":"1"}</span><b>${F.video?"Edited video":"Finished design"}</b>
-          ${claudeDone?`<span class="hint">by Claude</span>`:c.post.reel?`<span class="hint">your own edit</span>`:""}</div>
-        ${claudeDone?`<div class="pp-mini">
-            ${jobM.yt?`<div><div class="lbl">YouTube</div><video controls preload="metadata" src="${esc(jobM.yt)}"></video></div>`:""}
-            ${jobM.ig?`<div><div class="lbl">Instagram</div><video controls preload="metadata" src="${esc(jobM.ig)}"></video></div>`:""}</div>`
-          :!c.post.reel?`<p class="hint pre-note">${useClaude?`Not edited yet. Add the raw video at the top of this column, then start <b>🤖 Claude edit</b>${!isNew?(reviewing?" above":" (top of this column)"):""} — or add your own edit below.`
-              :F.video?"Not edited yet — add the finished video below once it's edited.":"Not designed yet — add the finished image or slides below."}</p>`:""}
-        <details class="manual" ${c.post.reel||!useClaude?"open":""}><summary>${claudeDone?"Use my own edit instead":c.post.reel?(F.video?"Your own edit":"The design"):useClaude?"I edited it myself":F.video?"The finished video":"The finished design"}</summary>
-          ${fileSlot("reel", !F.video?"Image / slides":c.vtype==="long"?"Edited video":"Edited reel", F.video?"video/*":"image/*,application/pdf",
-            F.video?"Pick the final cut. Its name and size are noted on the card — the file itself stays on your computer."
-              :"Pick the finished image (or a PDF of the slides). A small preview is kept on the card.")}
-          ${plats(c).includes("yt")&&c.vtype==="short"?fileSlot("thumb","Thumbnail (optional)","image/*","Optional for Shorts — YouTube picks a frame if you skip it."):""}
-        </details>
-        ${needThumb?fileSlot("thumb","Thumbnail","image/*","Needed for long YouTube videos. A small preview is kept on the card."):""}
-      </div>
-
-      <div class="pre-step">
-        <div class="pre-h"><span class="pre-n ${c.post.postUrl?"ok":""}">${c.post.postUrl?"✓":"2"}</span><b>Published</b>
-          ${lp?`<span class="badge good" style="margin-left:auto">linked · ${fmt(lp.views)} views</span>`:""}</div>
-        ${posts.length?`<div class="pub-list">${posts.map(x=>`<div class="pub-row"><span class="pub-pl">${x.pl}</span>
-            <span class="badge ${x.status==="posted"?"good":"crit"}">${esc(x.status)}</span>
-            ${x.url?`<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.url.replace(/^https?:\/\//,""))}</a>`:`<span class="hint">${esc(x.error||"")}</span>`}</div>`).join("")}</div>`:""}
-        ${plats(c).map(pl=>`<div class="fld" style="margin-bottom:6px"><label>${esc(regLabel("platform",pl)||pl)} link</label>
-          <input data-plink="${pl}" value="${esc(linkOf(c,pl))}" placeholder="https://…"></div>`).join("")}
-        <p class="hint" style="margin:0">${lp?`<b style="color:var(--good)">Linked</b> to “${esc(lp.title)}” — its views, likes and watch time show in Performance below and update every morning.`
-          :c.post.postUrl?`Linked. The views, likes and watch time show up here after the next morning sync.`
-          :window.PIPE?`Filled in by itself when Claude posts. Posted it yourself? Paste the link — the views and likes on this card come from it.`
-          :`Paste the link once it's live — the views and likes on this card come from it.`}</p>
-      </div></div>
-
-    ${lp?`
-    <div class="block"><div class="block-h"><h4>Performance</h4><span class="badge good">live from ${c.platform==="ig"?"Instagram":"YouTube"}</span></div>
-      <div class="livegrid">
-        <div><span class="lbl">Views</span><b>${fmt(lp.views)}</b></div>
-        <div><span class="lbl">Likes</span><b>${fmt(lp.likes)}</b></div>
-        <div><span class="lbl">Comments</span><b>${fmt(lp.comments)}</b></div>
-        <div><span class="lbl">Shares</span><b>${fmt(lp.shares)}</b></div>
-        <div><span class="lbl">Avg watch</span><b>${mmss(lp.avg_view_s)}</b></div>
-        <div><span class="lbl">Avg viewed</span><b>${lp.avg_view_pct!=null?Math.round(lp.avg_view_pct)+"%":"—"}</b></div></div>
-      <p class="hint" style="margin:10px 0 0">Updated ${esc(ago(lp.updated_at))}. YouTube figures settle 48–72 hours after publishing. Thumbnail CTR: see YouTube Studio.</p></div>`
-    : c.stage==="published"?`
-    <div class="block"><div class="block-h"><h4>Performance</h4><span class="badge mute">manual entry</span></div>
-      <div class="grid2">
-        <div class="fld"><label for="m-views">Views</label><input id="m-views" type="number" value="${c.metrics?.views??""}"></div>
-        <div class="fld"><label for="m-likes">Likes</label><input id="m-likes" type="number" value="${c.metrics?.likes??""}"></div></div>
-      <div class="grid2">
-        <div class="fld"><label for="m-comments">Comments</label><input id="m-comments" type="number" value="${c.metrics?.comments??""}"></div>
-        <div class="fld"><label for="m-shares">Shares</label><input id="m-shares" type="number" value="${c.metrics?.shares??""}"></div></div>
-      <div class="grid2">
-        <div class="fld"><label for="m-watch">Avg watch time</label><input id="m-watch" value="${esc(c.metrics?.watch??"")}" placeholder="0:24"></div>
-        <div class="fld"><label for="m-ctr">Thumbnail CTR %${c.platform!=="yt"?" (YouTube only)":""}</label>
-          <input id="m-ctr" type="number" step="0.1" value="${c.metrics?.ctr??""}" ${c.platform!=="yt"?"disabled":""}></div></div>
-      <p class="hint" style="margin:0">${c.platform==="yt"?"Paste the video's YouTube link above and these fill in by themselves.":"Read these off Instagram once a week until it is connected."}</p></div>`:""}
-
-    <div class="block" data-w="1"><div class="block-h"><h4>Move card</h4><span class="hint">Or drag it on the board</span></div>
-      <div class="row">
-        ${idx>0?`<button class="btn" data-move="${STAGES[idx-1].id}">← ${STAGES[idx-1].label}</button>`:""}
-        ${idx<STAGES.length-1?`<button class="btn pri" data-move="${STAGES[idx+1].id}" ${canMove(c,STAGES[idx+1].id).ok?"":"disabled"}>${STAGES[idx+1].label} →</button>`:""}</div>
-      ${idx<STAGES.length-1&&!canMove(c,STAGES[idx+1].id).ok?`<p class="hint" style="margin:10px 0 0;color:var(--crit)">${esc(canMove(c,STAGES[idx+1].id).msg)}</p>`:""}
-</div>
-
-    </div></div>
-    ${reviewing&&useClaude?"</details>":""}
+    openDrawer(`
+    <div class="dr-h"><div style="min-width:0;flex:1"><div class="lbl">${esc(F.icon+" "+F.name)} · ${STAGES[idx].label}${srcIdea?" · from Ideation":""}</div>
+      <h3 style="margin-top:4px">${isNew?"New card":esc(c.pre.title||c.idea)}</h3>
+      ${isNew?"":`<div class="stgs">${STAGES.map((st,k)=>`<span class="stg ${k<idx?"done":k===idx?"now":""}"><i>${k<idx?"✓":k+1}</i>${st.label}</span>`).join("")}</div>`}</div>
+      <button class="btn sm" id="xClose">Close</button></div>
+    <div class="cv"><div class="cv-main">${stepsHtml}${isNew?"":`<div data-cmthost></div>`}</div>${sideHtml}</div>
     <div class="row dr-foot">
       <button class="btn pri" id="saveCard" data-w="1">${isNew?"Create card":"Save changes"}</button>
       <button class="btn" id="xClose2">${canEdit()?"Cancel":"Close"}</button>
       <span id="dirtyDot" class="dirty" ${dirty?"":"hidden"}>● Unsaved changes</span>
-      ${!isNew&&canDeleteCards()?`<button class="btn danger" id="delCard" style="margin-left:auto" data-w="1">Delete</button>`:""}</div>`,true);
+      ${!isNew&&canDeleteCards()?`<button class="btn danger" id="delCard" style="margin-left:auto" data-w="1">Delete</button>`:""}</div>`,true,"card:"+(isNew?"new":c.id));
+    // remember which steps are open / folded while the card is open
+    $("#drawer").querySelectorAll("details.stp").forEach(d=>d.addEventListener("toggle",()=>{ SO[d.dataset.step]=d.open; }));
+    const oi=$("#drawer").querySelector("[data-openidea]");
+    if(oi&&srcIdea) oi.onclick=()=>{ if(CLOSE_GUARD && !CLOSE_GUARD()) return; openIdea(srcIdea.id); };
+    // a Claude check waiting: bring its step into view once
+    if(reviewing&&useClaude&&!scrolledToReview){ scrolledToReview=true; setTimeout(()=>{ const e=$("#drawer").querySelector('[data-step="edit"]'); if(e) e.scrollIntoView({block:"start"}); },80); }
 
     const read=()=>{
       c.idea=$("#c-idea").value.trim(); c.platforms=readPlats("c-platform",plats(c)); c.platform=c.platforms[0];
@@ -2772,8 +2941,7 @@ function openCard(id,showGate){
       c.pre.desc=$("#r-desc").value.trim(); c.pre.hashtags=$("#r-hashtags").value.trim();
       $("#drawer").querySelectorAll("[data-plink]").forEach(e=>{ c.post.links[e.dataset.plink]=e.value.trim(); });
       c.post.postUrl=c.post.links[c.platform]||Object.values(c.post.links).find(Boolean)||"";
-      c.shoot={ hook:$("#s-hook").value.trim(), points:$("#s-points").value.trim(), cta:$("#s-cta").value.trim(), tips:$("#s-tips").value.trim() };
-      c.extra=readOwn();
+      if($("#s-hook")) c.shoot={ hook:$("#s-hook").value.trim(), points:$("#s-points").value.trim(), cta:$("#s-cta").value.trim(), tips:$("#s-tips").value.trim() };
       const ru=$("#raw-url"); if(ru){ const u=ru.value.trim(); c.raw = u ? { kind:"link", url:u } : (c.raw && c.raw.kind==="file" ? c.raw : null); }
       if(c.stage==="published" && $("#m-views")){ const n=s=>{const e=$(s); return !e||e.value===""?null:Number(e.value);};
         c.metrics={ views:n("#m-views"), likes:n("#m-likes"), comments:n("#m-comments"),
@@ -2783,8 +2951,8 @@ function openCard(id,showGate){
 
     $("#xClose").onclick=$("#xClose2").onclick=()=>closeDrawer();
     // typing anywhere in the card (not in the Claude panel) = unsaved changes; closing asks first
-    $("#drawer").oninput=$("#drawer").onchange=e=>{ if(!e.target.closest("#pipePanel")) markDirty(); };
-    wireOwn(c, read, markDirty, ()=>draw(c.pre.keywords));
+    $("#drawer").oninput=$("#drawer").onchange=e=>{ if(!e.target.closest("#pipePanel,[data-cmthost]")) markDirty(); };
+
     CLOSE_GUARD=()=>{ if(!dirty || !canEdit()) return true;
       if(!confirm("Discard your unsaved changes to this card?")) return false;
       restore(opened); return true; };
@@ -2809,7 +2977,8 @@ function openCard(id,showGate){
     // 🎵 the raw video's sound as a WAV, kept next to it (from the picked file, or the stored video)
     const getAudio=async src=>{
       if(AUDIOJOB[c.id]) return; const id=c.id;
-      const step=m=>{ AUDIOJOB[id]=m; const el=$("#drawer").querySelector(".rawaudio .hint"); if(el && OPEN && OPEN.id===id) el.textContent=m; };
+      const step=m=>{ AUDIOJOB[id]=m; const el=$("#drawer").querySelector(".rawaudio .hint"); if(el && OPEN && OPEN.id===id){ el.textContent=m;
+        if(!(el.previousElementSibling&&el.previousElementSibling.classList.contains("aspin"))) el.insertAdjacentHTML("beforebegin",'<span class="aspin"></span>'); } };
       try{ step("Starting…");
         if(!src){ const l=await PIPE.rawLinks(id); if(!l.video) throw new Error("The video isn't in storage any more"); src=l.video; }
         const a=await PIPE.makeAudio(id, src, step);
@@ -2821,13 +2990,19 @@ function openCard(id,showGate){
     // play / download links for the stored audio (short-lived, fetched when the card opens)
     const ap=$("#drawer").querySelector("[data-rawaudio-play]");
     const base=(c.pre.title||c.idea||"raw").replace(/[^\w\- ]+/g,"").trim().slice(0,60)||"raw";
+    const ready=(el,which)=>{ const ld=$("#drawer").querySelector(`[data-aload="${which}"]`);
+      el.onloadedmetadata=()=>{ el.hidden=false; if(ld) ld.remove(); };
+      el.onerror=()=>{ if(!ld) return; ld.classList.add("bad"); ld.querySelector("[data-aload-t]").innerHTML=`Couldn't load the audio. <button type="button" class="linkbtn" data-aretry>Try again</button>`;
+        ld.querySelector("[data-aretry]").onclick=()=>{ delete RAWLINKS[c.id]; draw(c.pre.keywords); }; }; };
     if(ap && window.PIPE){ const fill=l=>{ if(!l) return;
-        if(l.audio){ ap.src=l.audio; ap.hidden=false;
+        if(l.audio){ ready(ap,"audio"); ap.src=l.audio;
           const dl=$("#drawer").querySelector("[data-rawaudio-dl]"); if(dl){ dl.href=l.audio; dl.hidden=false; dl.setAttribute("download", base+" audio.wav"); } }
         const cp=$("#drawer").querySelector("[data-rawclean-play]"), cd=$("#drawer").querySelector("[data-rawclean-dl]");
-        if(l.clean && cp){ cp.src=l.clean; cp.hidden=false; } if(l.clean && cd){ cd.href=l.clean; cd.hidden=false; cd.setAttribute("download", base+" clean"+((c.raw&&c.raw.clean&&c.raw.clean.file.match(/\.\w+$/))||[".wav"])[0]); } };
+        if(l.clean && cp){ ready(cp,"clean"); cp.src=l.clean; } if(l.clean && cd){ cd.href=l.clean; cd.hidden=false; cd.setAttribute("download", base+" clean"+((c.raw&&c.raw.clean&&c.raw.clean.file.match(/\.\w+$/))||[".wav"])[0]); } };
       const cached=RAWLINKS[c.id]; if(cached && Date.now()-cached.at<3e6) fill(cached.data);
-      else PIPE.rawLinks(c.id).then(d=>{ if(!(c.raw&&c.raw.audio&&!d.audio)) RAWLINKS[c.id]={ at:Date.now(), data:d }; fill(d); }).catch(()=>{}); }
+      else PIPE.rawLinks(c.id).then(d=>{ if(!(c.raw&&c.raw.audio&&!d.audio)) RAWLINKS[c.id]={ at:Date.now(), data:d }; fill(d);
+          if(!d.audio){ const ld=$("#drawer").querySelector('[data-aload="audio"]'); if(ld){ ld.classList.add("bad"); ld.querySelector("[data-aload-t]").textContent="The audio file is missing from storage — upload the video again to make it."; } } })
+        .catch(e=>{ $("#drawer").querySelectorAll("[data-aload]").forEach(ld=>{ ld.classList.add("bad"); ld.querySelector("[data-aload-t]").textContent="Couldn't load the audio: "+e.message; }); }); }
     // ✨ Adobe Podcast, one click each way: download the WAV + open Enhance Speech; upload the cleaned file back
     const adb=$("#drawer").querySelector("[data-adobe]");
     if(adb) adb.onclick=async()=>{
@@ -2851,15 +3026,17 @@ function openCard(id,showGate){
         toast("WAV downloaded — drop it into Adobe Podcast, then upload the result here"); }
       catch(e){ toast("Couldn't download the WAV: "+e.message); if(tab) tab.close(); }
       adb.disabled=false; adb.textContent="1 · Clean in Adobe Podcast ↗"; };
-    $("#drawer").querySelectorAll("[data-rawcleanfile]").forEach(inp=>inp.onchange=async()=>{
-      const f=inp.files[0]; if(!f) return; const id=c.id;
-      if(!(/^audio\//.test(f.type)||/\.(wav|mp3|m4a|aac|flac|ogg)$/i.test(f.name))){ toast("Pick an audio file (.wav / .mp3 / .m4a)"); return; }
+    const isAudio=f=>/^audio\//.test(f.type)||/\.(wav|mp3|m4a|aac|flac|ogg)$/i.test(f.name);
+    const isVideo=f=>/^video\//.test(f.type)||/\.(mp4|mov|m4v|mkv)$/i.test(f.name);
+    $("#drawer").querySelectorAll("[data-rawcleanfile]").forEach(inp=>inp.onchange=()=>{ if(inp.files[0]) cleanUpload(inp.files[0]); });
+    const cleanUpload=async f=>{ const id=c.id;
+      if(!isAudio(f)){ toast(isVideo(f)?"That's a video — drop it on the Raw video box":"Pick an audio file (.wav / .mp3 / .m4a)"); return; }
       const step=m=>{ CLEANJOB[id]=m; const el=$("#drawer").querySelector(".rawclean .hint"); if(el&&OPEN&&OPEN.id===id) el.textContent=m; };
       try{ step("Uploading…"); const up=await PIPE.uploadClean(id, f, pc=>step("Uploading… "+pc+"%"));
         const card=CARDS.find(x=>x.id===id); if(card&&card.raw){ card.raw.clean=Object.assign(up,{ at:today(), by:meName() }); save(); }
         delete RAWLINKS[id]; toast("Cleaned audio saved — Claude's edit will use it"); }
       catch(e){ toast("Upload didn't work: "+e.message); }
-      delete CLEANJOB[id]; if(OPEN&&OPEN.id===id){ if(dirty) read(); draw(c.pre.keywords); } });
+      delete CLEANJOB[id]; if(OPEN&&OPEN.id===id){ if(dirty) read(); draw(c.pre.keywords); } };
     const cdel=$("#drawer").querySelector("[data-rawcleandel]");
     if(cdel) cdel.onclick=async()=>{
       if(!confirm("Delete the cleaned audio from storage? Claude's edit goes back to the camera sound.")) return;
@@ -2868,28 +3045,92 @@ function openCard(id,showGate){
         read(); delete c.raw.clean; delete RAWLINKS[c.id]; if(save()){ dirty=false; opened=snap(); }
         toast("Cleaned audio deleted from storage (checked)"); draw(c.pre.keywords); }
       catch(e){ toast("Couldn't delete: "+e.message); } };
-    // delete the raw video + its audio from storage (checked: the answer says what's really gone)
+    // 🗑 Delete: the raw video + its audio go to the bin for an hour (still in storage, restorable), then leave storage for good
     const rdel=$("#drawer").querySelector("[data-rawdel]");
     if(rdel) rdel.onclick=async()=>{
-      if(!confirm("Delete the raw video"+(c.raw&&c.raw.audio?" and its audio":"")+" from storage? This can't be undone.")) return;
+      if(!confirm("Delete the raw video"+(c.raw&&c.raw.audio?" and its audio":"")+"?\n\nIt goes to the bin: you can restore it for 1 hour, then it's deleted from storage for good.")) return;
       rdel.disabled=true; rdel.textContent="Deleting…";
-      try{ const r=await PIPE.deleteRaw(c.id);
-        if(r.still_there&&r.still_there.length){ toast("Storage still has: "+r.still_there.join(", ")+" — try again"); rdel.disabled=false; rdel.textContent="Delete"; return; }
-        read(); c.raw=null; RAWMODE[c.id]="file"; delete RAWLINKS[c.id]; if(save()){ dirty=false; opened=snap(); }
-        toast(r.deleted.length?`Deleted from storage: ${r.deleted.join(", ")} (checked, it's gone)`:"Nothing was in storage — removed from the card"); draw(c.pre.keywords); }
+      try{ const r=await PIPE.binRaw(c.id);
+        read(); c.rawBin=r.due?{ raw:c.raw, due:r.due, by:meName(), at:new Date().toISOString() }:null; c.raw=null; RAWMODE[c.id]="file"; delete RAWLINKS[c.id];
+        if(save()){ dirty=false; opened=snap(); }
+        toast(r.due?"Moved to the bin — restore it within the hour":"Nothing was in storage — removed from the card"); draw(c.pre.keywords); }
       catch(e){ toast("Couldn't delete: "+e.message); rdel.disabled=false; rdel.textContent="Delete"; } };
+    const rres=$("#drawer").querySelector("[data-rawrestore]");
+    if(rres) rres.onclick=async()=>{
+      rres.disabled=true; rres.textContent="Restoring…";
+      try{ await PIPE.restoreRaw(c.id);
+        read(); c.raw=c.rawBin.raw; delete c.rawBin; RAWMODE[c.id]="file"; delete RAWLINKS[c.id];
+        if(save()){ dirty=false; opened=snap(); } toast("Raw video restored ✓"); draw(c.pre.keywords); }
+      catch(e){ toast(e.message); if(/too late/i.test(e.message)){ read(); delete c.rawBin; if(save()){ dirty=false; opened=snap(); } draw(c.pre.keywords); }
+        else { rres.disabled=false; rres.textContent="↩ Restore"; } } };
+    // a new raw video while one is in the bin: the bin is emptied for good (the server does it before the upload)
+    const binOk=()=>{ if(!(c.rawBin&&new Date(c.rawBin.due)>Date.now())) return true;
+      return confirm("The deleted video in the bin will be removed from storage for good now. Upload the new one?"); };
+    const binDone=()=>{ const card=CARDS.find(x=>x.id===c.id); if(card) delete card.rawBin; delete c.rawBin; };
+    // ▶ watch the raw video: the stored file, or the pasted link (Drive's player / a new tab for OneDrive)
+    $("#drawer").querySelectorAll("[data-rawwatch]").forEach(b=>b.onclick=async()=>{
+      const title=c.pre.title||c.idea||"Raw video", ru=$("#raw-url");
+      if(ru){ const w=watchOf(ru.value.trim()); if(!w){ toast("Paste a full link (https://…)"); return; } watchVideo(Object.assign({ open: ru.value.trim() }, w), title); return; }
+      try{ b.disabled=true; const l=await PIPE.rawLinks(c.id); b.disabled=false;
+        if(!l.video){ toast("The video isn't in storage any more"); return; } watchVideo({ video:l.video }, title); }
+      catch(e){ b.disabled=false; toast("Couldn't open the video: "+e.message); } });
+    // ⬇ copy the video behind the link into storage (a folder: pick which video), then make its audio
+    const impSt=m=>{ const id=c.id; IMPORTJOB[id]=Object.assign(IMPORTJOB[id]||{}, typeof m==="string"?{ msg:m }:m);
+      if(OPEN&&OPEN.id===id){ const el=$("#drawer").querySelector("[data-rawimp-st]"); if(el) el.textContent=IMPORTJOB[id].msg;
+        const bar=$("#drawer").querySelector("[data-rawimpbar]"); if(bar&&IMPORTJOB[id].pc!=null){ bar.hidden=false; bar.firstChild.style.width=IMPORTJOB[id].pc+"%"; } } };
+    const redraw=()=>{ if(OPEN&&OPEN.id===c.id){ if(dirty) read(); draw(c.pre.keywords); } };
+    const runImport=async(f, link)=>{ const id=c.id;
+      IMPORTJOB[id]={ msg:"Starting the copy of "+f.name+"…", pc:0 }; redraw();
+      try{ const up=await PIPE.importLink(id, f.pick, (done,size)=>impSt({ pc:Math.floor(done/size*100), msg:`Copying ${f.name}… ${Math.floor(done/size*100)}% (${mb(done)} of ${mb(size)})` }), ()=>IMPORTJOB[id]&&IMPORTJOB[id].stop);
+        delete IMPORTJOB[id]; delete RAWLINKS[id]; { const cd=CARDS.find(x=>x.id===id); if(cd) delete cd.rawBin; if(c.id===id) delete c.rawBin; }
+        if(OPEN&&OPEN.id===id){ keepRaw(Object.assign(up,{ link })); getAudio(null); }
+        else { const card=CARDS.find(x=>x.id===id); if(card){ card.raw=Object.assign({ kind:"file" }, up, { link, at:today(), by:meName() }); RAWMODE[id]="file"; save(); } }
+        toast("Video copied into storage ✓"); }
+      catch(e){ delete IMPORTJOB[id]; toast("Copy didn't work: "+e.message); redraw(); } };
+    const imp=$("#drawer").querySelector("[data-rawimport]");
+    if(imp) imp.onclick=async()=>{ const link=$("#raw-url").value.trim(); if(!binOk()) return;
+      read(); persist(); if(save()){ dirty=false; opened=snap(); }   // keep the link on the card either way
+      IMPORTJOB[c.id]={ msg:"Looking at the link…" }; redraw();
+      try{ const files=await PIPE.linkFiles(c.id, link);
+        if(files.length===1) return runImport(files[0], link);
+        IMPORTJOB[c.id]={ msg:`This folder has ${files.length} videos — pick the raw one:`, files, link }; redraw(); }
+      catch(e){ delete IMPORTJOB[c.id]; toast(e.message); redraw(); } };
+    $("#drawer").querySelectorAll("[data-rawpick]").forEach(b=>b.onclick=()=>{ const j=IMPORTJOB[c.id]; if(j&&j.files) runImport(j.files[+b.dataset.rawpick], j.link); });
+    const impStop=$("#drawer").querySelector("[data-rawimpstop]");
+    if(impStop) impStop.onclick=()=>{ const j=IMPORTJOB[c.id]; if(!j) return;
+      if(j.files){ delete IMPORTJOB[c.id]; redraw(); return; }
+      j.stop=true; impSt("Stopping after this piece…"); };
+    // the Watch / Copy buttons switch on as soon as a link is typed
+    const ruIn=$("#raw-url");
+    if(ruIn) ruIn.addEventListener("input",()=>{ const ok=/^https?:\/\//i.test(ruIn.value.trim());
+      $("#drawer").querySelectorAll("[data-rawwatch],[data-rawimport]").forEach(b=>b.disabled=!ok); });
     const rawUpload=async f=>{
       if(!window.PIPE || PIPE.mode()==="off"){ toast("Uploading needs the video storage set up first — paste a link for now"); return; }
       if(!(/^video\//.test(f.type) || /\.(mp4|mov|m4v|mkv)$/i.test(f.name))){ toast("Pick a video file (.mp4 / .mov)"); return; }
+      if(!binOk()) return;
       const st=$("#drawer").querySelector("[data-rawup]"), bar=$("#drawer").querySelector("[data-rawbar]");
       if(bar) bar.hidden=false; if(st) st.textContent="Getting an upload link…";
       try{ const up=await PIPE.uploadRaw(c.id, f, pc=>{ if(bar) bar.firstChild.style.width=pc+"%"; if(st) st.textContent=`Uploading ${f.name}… ${pc}%`; });
-        delete RAWLINKS[c.id]; keepRaw(up); getAudio(f); }
+        delete RAWLINKS[c.id]; binDone(); keepRaw(up); getAudio(f); }
       catch(e){ if(st) st.textContent=e.message; if(bar) bar.hidden=true; toast("Upload didn't work: "+e.message); } };
     $("#drawer").querySelectorAll("[data-rawfile]").forEach(inp=>inp.onchange=()=>{ if(inp.files[0]) rawUpload(inp.files[0]); });
-    const rd=$("#drawer").querySelector("[data-rawdrop]");
-    if(rd){ rd.ondragover=e=>{ e.preventDefault(); rd.style.borderColor="var(--accent)"; }; rd.ondragleave=()=>{ rd.style.borderColor=""; };
-      rd.ondrop=e=>{ e.preventDefault(); rd.style.borderColor=""; const f=(e.dataTransfer.files||[])[0]; if(f) rawUpload(f); }; }
+    // a drop target: lights up while a file is over it (only the innermost box — Clean the voice sits inside Raw video)
+    const dropZone=(el,take)=>{ if(!el || !canEdit()) return;
+      const files=e=>[...(e.dataTransfer&&e.dataTransfer.types||[])].includes("Files");
+      el.addEventListener("dragover",e=>{ if(!files(e)) return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect="copy";
+        el.classList.add("dropon"); clearTimeout(el._dt); el._dt=setTimeout(()=>el.classList.remove("dropon"),160); });
+      el.addEventListener("drop",e=>{ if(!files(e)) return; e.preventDefault(); e.stopPropagation(); el.classList.remove("dropon");
+        const f=(e.dataTransfer.files||[])[0]; if(f) take(f); }); };
+    // the cleaned audio: on the Clean the voice box (needs the raw video's audio first)
+    dropZone($("#drawer").querySelector(".rawclean"), f=>cleanUpload(f));
+    // the raw video: anywhere on the Raw video box (link or upload mode) while there's none
+    dropZone($("#drawer").querySelector(".rawbox"), f=>{
+      if(isAudio(f)){ toast(c.raw?"Drop the cleaned audio on “Clean the voice”":"Add the raw video first — then drop the cleaned audio on “Clean the voice”"); return; }
+      if(!isVideo(f)){ toast("Drop a video file (.mp4 / .mov)"); return; }
+      if(c.raw&&c.raw.kind==="file"){ toast("Delete the current video first (it goes to the bin), then drop the new one"); return; }
+      rawUpload(f); });
+    // anything dropped elsewhere on the card doesn't open the file in the browser tab
+    const dr=$("#drawer"); if(!dr._nodrop){ dr._nodrop=1; dr.addEventListener("dragover",e=>e.preventDefault()); dr.addEventListener("drop",e=>{ e.preventDefault(); toast("Drop the raw video on “Raw video”, the cleaned audio on “Clean the voice”"); }); }
     // Claude pipeline (pipeline.js): raw video → edit → your checks → post
     if(window.PIPE && $("#pipePanel")) PIPE.mount($("#pipePanel"), c, {
       raw: ()=>c.raw, onRaw: (up,f)=>{ delete RAWLINKS[c.id]; keepRaw(up); getAudio(f); },
@@ -2949,6 +3190,7 @@ function openCard(id,showGate){
       read(); if(!c.idea&&!c.pre.title){toast("A card needs an idea or a title");return;}
       persist(); const to=b.dataset.move; if(moveCard(c,to)){ dirty=false; closeDrawer(true); toast(`Moved to ${STAGES.find(s=>s.id===to).label}`); } });
     lockDrawer();
+    mountComments("card", c.id, c.pre.title||c.idea);   // 💬 after lockDrawer: viewers can comment too
   };
   draw(c.pre.keywords||[]);
   if(showGate) setTimeout(()=>{ const b=$("#drawer").querySelector('[data-gate="pre"]'); if(b) b.scrollIntoView({block:"start",behavior:"smooth"}); },80);
@@ -3169,6 +3411,7 @@ window.SX = {
     OPT = opt || {};
     if(SPACE!==space){ SPACE=space; if(R) closeDrawer(true); }
     S = normalize(space); IDEAS=S.ideas; CARDS=S.cards; REG=S.reg;
+    if(HIST.src!==S) histBase();   // fresh data (opened, or teammates' changes): the starting point for 🕘 History
     // targets: their own saved copy, or (before anyone has saved one) what the space held
     const tRaw = (OPT.targets && OPT.targets(space)) || { targets:S.targets, goals:S.goals };
     const tKey = JSON.stringify(tRaw);

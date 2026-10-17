@@ -16,6 +16,7 @@
 <script src="richtext.js"></script><!-- rich text + "Show all" in every multi-line text box (load before the spaces) -->
 <script src="social-space.js"></script>
 <script src="pipeline.js"></script><!-- Claude edit & post panel on Content Process cards -->
+<script src="comments.js"></script><!-- 💬 comments + history at the bottom of every Social Media card and idea, with @tags by email -->
 <script src="hinglish.js"></script><script src="dictate.js"></script><!-- 🎤 dictation in every text box -->
 <script src="wiki-utm.js"></script>
 <!-- Notifications: the 🔔 bell and pop-ups (notifications.js) -->
@@ -799,6 +800,7 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .sys-bar.warn i{background:#e0a23a}.sys-bar.crit i{background:#d64545}
 .sys-sub{font-size:12px;color:var(--muted)}
 .sys-stop{border-color:#d64545;background:color-mix(in srgb,#d64545 9%,var(--card));color:#a32d2d}
+.sys-warn{border-color:#d99a1e;background:color-mix(in srgb,#d99a1e 10%,var(--card));color:#8a5d00}
 .sys-tab{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px}.sys-tab td{padding:6px 4px;border-top:1px solid var(--line)}.sys-tab td:not(:first-child){text-align:right;white-space:nowrap}
 .admin-table{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card)}
 .au-row{display:grid;grid-template-columns:1fr minmax(200px,auto) 150px;align-items:center;border-bottom:1px solid var(--line)}
@@ -5442,19 +5444,50 @@ let _dvBusy = false;
    start() puts them back there. Anything that no longer exists, or that they can
    no longer see, falls back to the normal start page. Kept per browser tab.   */
 function placeKey(){ return "cf-place-" + TEAM; }
+// where the person is right now (also what a 💬 comment link in an email opens again)
+function placeSnapshot(){
+  const shown = id => { const el = document.getElementById(id); return !!el && el.style.display === "block"; };
+  const page = shown("admin-page") ? "admin" : shown("kim-page") ? "kim" : shown("team-page") ? "team" : "";
+  return {
+    view, lastWs, activeModule, activeCspace, activeSection, activeRmap, devSpace, activeCycle,
+    okrView2, paneTab, contentMode, page, adminView, mtView, y: window.scrollY || 0,
+    socialView, discView, pdtView, campView, watchView, horizonView, // the tab inside a space
+    sxOpen: (window.SX && SX.openState) ? SX.openState() : null,     // a card or idea open in Social Media
+  };
+}
 function savePlace(){
   if(!TEAM || !db) return;
-  try{
-    const shown = id => { const el = document.getElementById(id); return !!el && el.style.display === "block"; };
-    const page = shown("admin-page") ? "admin" : shown("kim-page") ? "kim" : shown("team-page") ? "team" : "";
-    sessionStorage.setItem(placeKey(), JSON.stringify({
-      view, lastWs, activeModule, activeCspace, activeSection, activeRmap, devSpace, activeCycle,
-      okrView2, paneTab, contentMode, page, adminView, mtView, y: window.scrollY || 0,
-      socialView, discView, pdtView, campView, watchView, horizonView, // the tab inside a space
-      sxOpen: (window.SX && SX.openState) ? SX.openState() : null,     // a card or idea open in Social Media
-    }));
-  }catch(_){ }
+  try{ sessionStorage.setItem(placeKey(), JSON.stringify(placeSnapshot())); }catch(_){ }
 }
+// ?place=<where, base64>&cm=<comment id> → put that place where restorePlace() looks, and clean the address bar
+function cmtLinkFromUrl(){
+  try{
+    const u = new URL(location.href), pl = u.searchParams.get("place"), cm = u.searchParams.get("cm");
+    if(!pl) return null;
+    const nav = JSON.parse(decodeURIComponent(escape(atob(pl.replace(/-/g,"+").replace(/_/g,"/")))));
+    if(nav && typeof nav.view === "string") sessionStorage.setItem(placeKey(), JSON.stringify(nav));
+    u.searchParams.delete("place"); u.searchParams.delete("cm"); history.replaceState(null, "", u.pathname + u.search + u.hash);
+    return { nav, cm };
+  }catch(_){ return null; }
+}
+// a 🔔 about a comment (ref "place:<where>:<comment id>") → go there now
+window.cmtGo = function(b64, cm){
+  try{
+    const nav = JSON.parse(decodeURIComponent(escape(atob(b64.replace(/-/g,"+").replace(/_/g,"/")))));
+    sessionStorage.setItem(placeKey(), JSON.stringify(nav));
+    if(typeof closeAdmin === "function" && nav.page !== "admin"){ const ap = document.getElementById("admin-page"); if(ap && ap.style.display === "block") closeAdmin(); }
+    if(restorePlace()){ renderAll(); restorePageAfterRender(); }
+    if(cm && window.CMT) setTimeout(()=> CMT.focus(cm), 450);
+  }catch(e){ toast("Couldn't open that comment"); }
+};
+/* ---- 💬 comments on Social Media cards and ideas: which thread is which (comments.js draws it) ---- */
+// a Social Media card or idea (social-space.js asks for it when a card opens)
+window.cmtCardPlace = function(kind, id, title){
+  const nav = Object.assign(placeSnapshot(), { y: 0, page: "", sxOpen: { kind, id } });
+  const sp = (typeof currentSocial === "function" && currentSocial()) || {};
+  const key = "card:" + kind + ":" + id;
+  return { key, label: (sp.name || "Social Media") + " → " + (kind === "idea" ? "idea" : "card") + " “" + String(title || id).slice(0, 80) + "”", nav, history: { place: key } };
+};
 window.addEventListener("pagehide", savePlace);
 window.addEventListener("beforeunload", savePlace);
 document.addEventListener("visibilitychange", function(){ if(document.hidden) savePlace(); });
@@ -6975,6 +7008,7 @@ async function start(){
   }
   refreshLeaderFromRole();
   let _restored = false;
+  const _cmtLink = cmtLinkFromUrl();   // 💬 a comment link from an email: open that tab / card
   try{ _restored = restorePlace(); }catch(_){ _restored = false; }
   if(!_restored) defaultView();
   if(currentUser() && currentUser().mustChangePw){ setTimeout(()=> openPassword(true), 400); }
@@ -6998,6 +7032,7 @@ async function start(){
     _pendingPlace = null; defaultView(); renderAll();
   }
   restorePageAfterRender();
+  if(_cmtLink && _cmtLink.cm && window.CMT) setTimeout(()=> CMT.focus(_cmtLink.cm), 400);
   try{ docOpenFromUrl(); }catch(_){ }
   if(db) loadGames().catch(function(){ });
   if(db) notifBoot();   // 🔔 bell + pop-ups (notifications.js)
@@ -15370,7 +15405,7 @@ function campEnsureFormat(soc, name, icon, plats){
   if(f) return f;
   const pl = plats || [];
   f = { key, name, icon: icon || "\uD83D\uDCCC", plats:["yt","ig"], defPlats:[pl.includes("YouTube") && !pl.includes("Instagram") ? "yt" : "ig"],
-    vtypes:[key], video: /live|story|video/i.test(name), claude:false, hint:"Made from campaign pieces (" + name + ")" };
+    vtypes:[key], video: /live|story|video/i.test(name), live: /\blive\b/i.test(name), claude:false, hint:"Made from campaign pieces (" + name + ")" };
   soc.sx.formats.push(f);
   soc.sx.reg = soc.sx.reg || {}; soc.sx.reg.vtype = soc.sx.reg.vtype || {}; soc.sx.reg.vtype[key] = name;
   return f;
@@ -22190,11 +22225,13 @@ async function renderAdminSystemStats(main){
     return '<div class="sys-card"><div class="sys-h"><b>' + label + '</b><span class="sys-big">' + sysBytes(used) + ' <small>of ' + sysBytes(limit) + '</small></span></div>'
       + '<div class="sys-bar ' + lvl + '"><i style="width:' + pc.toFixed(1) + '%"></i></div>'
       + '<div class="sys-sub">' + pc.toFixed(1) + '% used' + (lvl !== "ok" ? ' — <b>' + (lvl === "crit" ? "almost full" : "getting full") + '</b>, free some space below' : "") + (sub ? " · " + sub : "") + '</div></div>'; };
-  const KIND = { raw:"🎞️ Raw videos", audio:"🎵 Raw audio (WAV)", clean:"✨ Cleaned audio", edit:"🧠 Claude edit folders", preview:"▶ Live player files", final:"🎬 Finished videos", library:"🔊 Sound library", other:"Other" };
+  const KIND = { raw:"🎞️ Raw videos", audio:"🎵 Raw audio (WAV)", clean:"✨ Cleaned audio", edit:"🧠 Claude edit folders", preview:"▶ Live player files", final:"🎬 Finished videos", library:"🔊 Sound library", comments:"💬 Comment photos &amp; videos", other:"Other" };
   const kinds = Object.entries(d.r2.byKind || {}).sort((a,b)=> b[1]-a[1]);
   const sb = d.supabase || {};
   let h = '<p class="sys-note">Updated ' + new Date(d.at).toLocaleString() + (d.files !== "r2" ? ' · <b>test mode: files on this computer, not Cloudflare</b>' : '') + ' <button class="btn sm" id="sys-reload">Refresh</button></p>';
   if(d.stop) h += '<div class="sys-card sys-stop"><b>⏸ Uploads and Claude runs are stopped to stay on the free plan.</b><div class="sys-sub" style="color:inherit;margin-top:4px">' + sysEsc(d.stop.why) + ' They start again by itself ' + (/\d/.test(d.stop.resumes) ? "on " + sysEsc(d.stop.resumes) : sysEsc(d.stop.resumes)) + '. Nothing is ever charged.</div></div>';
+  const elw = d.eleven || {}, elPc = elw.limit ? elw.used / elw.limit * 100 : 0;
+  if(elPc >= 75) h += '<div class="sys-card ' + (elPc >= 90 ? 'sys-stop' : 'sys-warn') + '"><b>🎙️ ElevenLabs credits ' + (elPc >= 90 ? 'almost out' : 'running low') + ': ' + Math.max(0, elw.limit - elw.used).toLocaleString() + ' of ' + elw.limit.toLocaleString() + ' left.</b><div class="sys-sub" style="color:inherit;margin-top:4px">The 🎤 mic and Claude\'s voice/sound work use these. They refill ' + (elw.resets ? 'on ' + new Date(elw.resets).toDateString().slice(4,10) : 'at the next reset') + '.</div></div>';
   const stopPc = Math.round((d.stopAt || .9) * 100);
   h += '<h3 class="sys-t">☁️ Cloudflare R2 — videos and Claude edit files</h3>' + bar(d.r2.bytes, d.limits.r2, "Storage used", d.r2.count + " files · uploads and runs stop at " + stopPc + "%");
   const op = d.ops || {}, per = op.period ? new Date(op.period.from).toDateString().slice(4,10) + " – " + new Date(op.period.to).toDateString().slice(4,10) : "";
@@ -22210,6 +22247,13 @@ async function renderAdminSystemStats(main){
   h += '<div class="sys-card"><b>Biggest cards</b> <span class="sys-sub">files a card keeps in storage — a deleted card\'s leftovers can be removed here</span><table class="sys-tab">'
     + (cards.map(c => '<tr><td>' + (c.name ? sysEsc(c.name.title) + ' <span class="sys-sub">' + sysEsc(c.name.space) + '</span>' : c.name === null ? '<span style="color:var(--crit)">Deleted card</span> <span class="sys-sub">' + sysEsc(c.card) + '</span>' : '<span class="sys-sub">' + sysEsc(c.team + " / " + c.card) + '</span>')
       + '</td><td>' + c.files + ' files</td><td>' + sysBytes(c.bytes) + '</td><td>' + (c.name === null ? '<button class="btn sm danger" data-sys-purge="' + sysEsc(c.card) + '">Delete leftovers</button>' : '') + '</td></tr>').join("") || '<tr><td>No card files yet</td></tr>') + '</table></div>';
+  const el = d.eleven || {};
+  h += '<h3 class="sys-t">🎙️ ElevenLabs — credits</h3>';
+  if(el.error || !el.limit) h += '<p class="sys-note">' + sysEsc(el.error || "Not available") + '</p>';
+  else { const left = Math.max(0, el.limit - el.used), pc = Math.min(100, el.used / el.limit * 100), lvl = pc >= 90 ? "crit" : pc >= 75 ? "warn" : "ok";
+    h += '<div class="sys-card"><div class="sys-h"><b>Credits left</b><span class="sys-big">' + left.toLocaleString() + ' <small>of ' + el.limit.toLocaleString() + '</small></span></div>'
+      + '<div class="sys-bar ' + lvl + '"><i style="width:' + pc.toFixed(1) + '%"></i></div>'
+      + '<div class="sys-sub">' + el.used.toLocaleString() + ' used (' + pc.toFixed(1) + '%)' + (lvl !== "ok" ? ' — <b>' + (lvl === "crit" ? "almost out of credits" : "credits running low") + '</b>' : "") + (el.tier ? ' · ' + sysEsc(el.tier) + ' plan' : '') + (el.resets ? ' · resets ' + new Date(el.resets).toDateString().slice(4,10) : '') + '</div></div>'; }
   h += '<h3 class="sys-t">🗄️ Supabase — the app\'s data</h3>';
   if(sb.error || !sb.db_bytes) h += '<p class="sys-note">' + sysEsc(sb.error || "Not available in test mode") + '</p>';
   else {

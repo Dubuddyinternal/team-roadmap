@@ -41,9 +41,16 @@ async function headers(){
     if(data && data.session) h.authorization = "Bearer " + data.session.access_token; } }catch(_){ }
   return h;
 }
-async function call(path, body){
-  const r = await fetch(path, body ? { method:"POST", headers: await headers(), body: JSON.stringify(body) } : { headers: await headers() });
-  const j = await r.json().catch(()=>({ error:"The pipeline server didn't answer ("+r.status+")" }));
+async function call(path, body, tries){
+  let r;
+  try{ r = await fetch(path, body ? { method:"POST", headers: await headers(), body: JSON.stringify(body) } : { headers: await headers(), cache:"no-store" }); }
+  catch(e){
+    // the network dropped (or the preview's sign-in expired): reads are safe to try again once
+    if(!body && !tries){ await new Promise(ok=>setTimeout(ok,1200)); return call(path, body, 1); }
+    throw new Error("Couldn't reach the server — check the connection" + (location.hostname.endsWith(".vercel.app") ? ", or reload the page (the preview's sign-in may have expired)" : "") + " and try again");
+  }
+  const t = await r.text();
+  let j; try{ j = JSON.parse(t); }catch(_){ j = { error: `The server answered ${r.status}${r.status===504?" (it took too long)":""}${t&&!/^\s*</.test(t)?": "+t.slice(0,140):""} — try again` }; }
   if(j.error) throw new Error(j.error);
   return j;
 }
@@ -58,7 +65,8 @@ async function uploadRaw(cardId, f, onProgress){
     const x = new XMLHttpRequest(); x.open("PUT", data.url);
     x.upload.onprogress = e => { if(e.lengthComputable && onProgress) onProgress(Math.round(e.loaded/e.total*100)); };
     x.onload = () => x.status < 300 ? ok() : bad(new Error("Upload refused (" + x.status + ")"));
-    x.onerror = () => bad(new Error("Upload failed — check the connection"));
+    x.onerror = () => bad(new Error("The upload to storage was cut off — check the connection and try again"));
+    x.ontimeout = () => bad(new Error("The upload to storage timed out — try again"));
     x.send(f);
   });
   // a replacement with another file type (raw.mov → raw.mp4) must not leave the old one behind in storage
@@ -210,6 +218,7 @@ const CSS = `<style>
 .pp .gchip{font-family:var(--mono);font-size:10.5px;padding:3px 8px;border-radius:99px;border:1px solid var(--line)}
 .pp .gchip.ok{color:var(--good);background:var(--good-soft);border-color:color-mix(in srgb,var(--good) 30%,var(--line))}
 .pp .gchip.no{color:var(--crit);background:var(--crit-soft);border-color:color-mix(in srgb,var(--crit) 25%,var(--line))}
+.pp .pp-rawline{margin:0 0 12px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:13px}
 .pp .pp-drop{display:flex;gap:12px;align-items:center;border:1.5px dashed var(--line-2);border-radius:10px;padding:12px;background:var(--surface);transition:border-color .15s,background .15s}
 .pp .pp-drop.over{border-color:var(--accent);background:var(--accent-soft)}
 .pp .pp-drop.has{border-style:solid;border-color:color-mix(in srgb,var(--good) 35%,var(--line))}
@@ -256,15 +265,8 @@ function startView(c, canRun, m){
       title, description and hook, then waits for a check. Nothing renders without an owner's click.</p>
     <div class="pp-ready">${ready.map(([l,ok])=>`<span class="gchip ${ok?"ok":"no"}">${ok?"✓":"✗"} ${l}</span>`).join("")}</div>
     ${missing.length?`<p class="hint" style="margin:6px 0 12px">Claude can start without the ${esc(missing.join(", "))}, but the hook and SEO get weaker — fill ${missing.length>1?"them":"it"} in on the left first if you can.</p>`:`<div style="height:10px"></div>`}
-    <div class="fld" style="margin-bottom:10px"><label>Raw video</label>
-      <div class="pp-drop ${r?"has":""}" data-pp-drop>
-        ${r&&r.thumb?`<img class="pp-thumb" src="${r.thumb}" alt="">`:`<div class="pp-dropic">🎞️</div>`}
-        <div style="flex:1;min-width:0">
-          <div data-pp-up>${r?`<b>✓ ${esc(r.name)}</b> <span class="hint">${(r.size/1e6).toFixed(0)} MB${r.duration?" · "+mmss(r.duration):""} · uploaded</span>`
-            :`<b>Drop the raw clip here</b> <span class="hint">or</span>`}</div>
-          <label class="filebtn" style="margin-top:6px">${r?"Choose another file":"Choose file"}<input type="file" accept="video/*" data-pp-file ${canRun?"":"disabled"}></label>
-          <span class="hint" style="margin-left:6px">MP4 or MOV, straight from the phone/camera</span>
-          <div class="pp-bar" data-pp-bar hidden><i></i></div></div></div></div>
+    <div class="pp-rawline">${r?`🎞️ <b>${esc(r.name)}</b> <span class="hint">${(r.size/1e6).toFixed(0)} MB · the raw video in the step above</span>`
+      :`<span class="hint">Add the raw video in the <b>Raw video</b> step above first — then Claude can start.</span>`}</div>
     <div class="pp-row"><button class="btn pri" data-pp="start" ${canRun&&r?"":"disabled"}>🤖 Edit with Claude</button>
       ${canRun?"":`<span class="hint">Your role can view this, not run it.</span>`}</div>`;
 }
@@ -524,10 +526,28 @@ window.PIPE = {
     await putFile(data.url, f, onProgress);
     return { file: data.file, name: f.name, size: f.size };
   },
+  // 🔗 copy the raw video from a Google Drive / OneDrive / Dropbox link: the videos the link holds, then the copy itself
+  async linkFiles(cardId, link){ return (await call("/api/pipeline/import", { team: team(), job: cardId, op: "list", link })).data.files; },
+  async importLink(cardId, pick, onProgress, isCancelled){
+    let r = (await call("/api/pipeline/import", { team: team(), job: cardId, op: "start", pick })).data;
+    while(!r.file){
+      if(isCancelled && isCancelled()){ await call("/api/pipeline/import", { team: team(), job: cardId, op: "cancel", state: r.state }).catch(()=>{}); throw new Error("Copy stopped"); }
+      onProgress && onProgress(r.done, r.size);
+      let tries = 0;
+      for(;;){ try{ r = (await call("/api/pipeline/import", { team: team(), job: cardId, op: "step", state: r.state })).data; break; }
+        catch(e){ if(++tries >= 3 || /expired|free plan|Wrong card|isn't open/.test(e.message)) throw e; await new Promise(ok => setTimeout(ok, 3000)); } }
+    }
+    onProgress && onProgress(r.size, r.size);
+    await call("/api/pipeline/storage", { team: team(), job: cardId, op: "delete_raw", keep: r.file }).catch(() => {});   // e.g. an older raw.mov
+    return { file: r.file, name: r.name, size: r.size };
+  },
   async deleteClean(cardId){ return (await call("/api/pipeline/storage", { team: team(), job: cardId, op: "delete_clean" })).data; },
   // play / download links for the card's raw video and audio: { video?, audio?, clean? }
   async rawLinks(cardId){ return (await call("/api/pipeline/storage?team=" + encodeURIComponent(team()) + "&job=" + encodeURIComponent(cardId))).data; },
   // delete the raw video + audio from storage; the answer says what is gone and what (if anything) is still there
+  // 🗑 Delete on the card: the raw video + audio go to the bin for an hour (restorable), then leave storage
+  async binRaw(cardId){ return (await call("/api/pipeline/storage", { team: team(), job: cardId, op: "bin_raw" })).data; },
+  async restoreRaw(cardId){ return (await call("/api/pipeline/storage", { team: team(), job: cardId, op: "restore_raw" })).data; },
   async deleteRaw(cardId){ return (await call("/api/pipeline/storage", { team: team(), job: cardId, op: "delete_raw" })).data; },
   // a deleted card: all its files and Claude jobs
   async purge(cardId){ return (await call("/api/pipeline/storage", { team: team(), job: cardId, op: "purge" })).data; },
@@ -544,7 +564,8 @@ window.PIPE = {
     const keep = S.mounted && S.mounted.card.id===card.id ? S.mounted : {};
     // a raw video already uploaded in the card's Raw video box is the one Claude edits
     const cr = helpers && helpers.raw && helpers.raw();
-    const raw = keep.raw || (cr && cr.kind === "file" && cr.file ? { file: cr.file, name: cr.name, size: cr.size } : undefined);
+    // always the card's own raw file (it can change in the card's Raw video step); keep the preview thumb if it's the same file
+    const raw = cr && cr.kind === "file" && cr.file ? Object.assign({}, keep.raw && keep.raw.file === cr.file ? keep.raw : {}, { file: cr.file, name: cr.name, size: cr.size }) : undefined;
     S.mounted = { host, card, h: helpers||{}, raw, draft: keep.draft, rsig: keep.rsig, studioCmd: keep.studioCmd, pv: keep.pv };
     ensurePolling(); render(); poll();     // fresh status as soon as a card opens
   },
