@@ -2497,6 +2497,19 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .rmb-row.done .rmb-t{color:var(--muted);text-decoration:line-through}
 .rmb-row.off{opacity:.5;cursor:not-allowed}
 .rmb-empty{padding:18px;text-align:center;color:var(--muted);font-size:13px}
+/* chart roadmaps: quiet page header, one compact control bar, the chart gets the space */
+body.rm-chart #rm-subtitle{display:none}
+body.rm-chart .pane-head{padding-bottom:0}
+body.rm-chart .tabstrip{margin-top:6px}
+body.rm-chart .pane-body{padding-top:10px}
+body.rm-chart #pane-work > .controls{display:none}
+.rm-bar{padding:10px 14px!important;margin-bottom:10px!important}
+.rm-bar .module-head{margin-bottom:0;gap:8px}
+.rm-bar h2{font-size:18px;margin:0}
+.rm-bar .rmg-win{margin-left:2px}
+.tool.sm{font-size:12px;padding:5px 10px;border-radius:99px;font-weight:600}
+.tool.sm.primary{color:#fff}
+.rml-redpill{font-size:11.5px;font-weight:700;color:var(--blocked);background:var(--blocked-bg);border-radius:99px;padding:3px 10px}
 .rml-sw{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
 .rml-sw button{width:28px;height:28px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;box-shadow:inset 0 0 0 1px rgba(0,0,0,.1)}
 .rml-sw button.auto{width:auto;border-radius:99px;padding:0 10px;font-size:11.5px;font-weight:600;background:var(--paper);color:var(--muted);border-color:var(--line-strong)}
@@ -7932,6 +7945,8 @@ function renderHeader(){
     ? "Reported by the team and by students \u2014 triage, fix, verify, close."
     : view==="ideas"
     ? "Anyone on the team can pitch an idea \u2014 name on it, points for it, and a clear stage so nothing disappears."
+    : (view==="rmap" && rmapViewOf(currentRmap())!=="timeline")
+    ? ""   /* chart roadmaps: the chart speaks for itself */
     : view==="rmap"
     ? (rmapViewOf(currentRmap())==="wbs"
       ? "The whole project as a task tree \u2014 groups, dates, % complete and what depends on what."
@@ -7943,6 +7958,7 @@ function renderHeader(){
       ? "Lines of work across every space \u2014 projects with a due date, and ongoing work that turns red when it slips."
       : "A timeline across every space \u2014 pull in tasks, dev cards, and bugs from anywhere and schedule them.")
     : (DATA.subtitle||"");
+  document.body.classList.toggle("rm-chart", view==="rmap" && rmapViewOf(currentRmap())!=="timeline");
   document.title = $("rm-title").textContent + " \u00b7 " + ((TEAMS[TEAM] && TEAMS[TEAM].name) || TEAM || "Cyberflow");
   (function(){
     var _tn=(TEAMS[TEAM] && TEAMS[TEAM].name) || (TEAM ? TEAM.charAt(0).toUpperCase()+TEAM.slice(1) : "Team");
@@ -12607,6 +12623,14 @@ function openStoryImport(spaceId){
    and on each item:       it.lane, it.team, it.progress (done so far),
                            it.next (next steps), it.rule {type, days}, it.lastDone
    ================================================================ */
+/* the small buttons at the right of a chart's top bar: add from spaces · write a task · ＋ row */
+function rmlBarButtons(row, m, rowWord){
+  const spx = document.createElement("span"); spx.className = "spacer"; row.appendChild(spx);
+  const mk = (txt, title, fn, cls)=>{ const b = document.createElement("button"); b.className = "tool sm" + (cls ? " " + cls : ""); b.textContent = txt; b.title = title; b.onclick = fn; row.appendChild(b); };
+  mk("＋ From spaces", "Add items from any space", ()=> openRmapPicker(m), "primary");
+  mk("✏️ Write task", "Write a new task on this roadmap", ()=> rmlNewOwn(m, rmlEnsureLanes(m)[0].id));
+  mk("＋ " + rowWord, "Add a " + rowWord.toLowerCase(), ()=> rmlEditLane(m, null));
+}
 /* roadmap name in the header of Lanes / Gantt views: click it (edit mode) to rename or change type */
 function rmapTitleEl(m){
   const h2 = document.createElement("h2"); h2.textContent = m.name;
@@ -12654,28 +12678,14 @@ function renderRmapLanes(m, wrap, byTid){
   rmlEnsureLanes(m);
   const live = m.items.filter(it=> byTid[it.tid]);
   const head = document.createElement("section");
-  head.className = "module-block"; head.style.marginBottom = "12px";
+  head.className = "module-block rm-bar";
   const row = document.createElement("div"); row.className = "module-head";
   const h2 = rmapTitleEl(m);
-  const pc = document.createElement("span"); pc.className = "pct";
-  const done = live.filter(it=> effStatus(byTid[it.tid].task)==="done").length;
+  row.appendChild(h2);
+  /* only the one number that matters here: how many cards are red */
   const red = live.filter(it=> rmlIsRed(it, byTid[it.tid])).length;
-  pc.textContent = live.length + " item(s) · " + done + " done" + (red ? " · " + red + " need attention" : "");
-  row.append(h2, pc);
-  if(editMode){
-    const spx = document.createElement("span"); spx.className = "spacer"; row.appendChild(spx);
-    const addL = document.createElement("button"); addL.className = "tool"; addL.textContent = "＋ Lane";
-    addL.title = "Add another line — a project, or ongoing work like Blogs or Social media";
-    addL.onclick = ()=> rmlEditLane(m, null);
-    row.appendChild(addL);
-    const addB = document.createElement("button"); addB.className = "tool primary"; addB.textContent = "＋ Add items from any space";
-    addB.onclick = ()=> openRmapPicker(m);
-    row.appendChild(addB);
-    const ownB = document.createElement("button"); ownB.className = "tool"; ownB.textContent = "✏️ Write an item";
-    ownB.title = "Add something that isn't in any space — it lives only on this roadmap";
-    ownB.onclick = ()=> rmlNewOwn(m, m.lanes[0].id);
-    row.appendChild(ownB);
-  }
+  if(red){ const rb = document.createElement("span"); rb.className = "rml-redpill"; rb.textContent = red + " need attention"; row.appendChild(rb); }
+  if(editMode) rmlBarButtons(row, m, "Lane");
   head.appendChild(row);
   wrap.appendChild(head);
 
@@ -12937,13 +12947,12 @@ function renderRmapGantt(m, wrap, byTid){
   const colorOf = t => { const i = teams.indexOf((t||"").trim()); return i<0 ? "#8C95A3" : RMG_COLORS[i % RMG_COLORS.length]; };
 
   const head = document.createElement("section");
-  head.className = "module-block"; head.style.marginBottom = "12px";
+  head.className = "module-block rm-bar";
   const row = document.createElement("div"); row.className = "module-head";
   const h2 = rmapTitleEl(m);
   const pc = document.createElement("span"); pc.className = "pct";
   const done = live.filter(it=> effStatus(byTid[it.tid].task)==="done").length;
-  pc.textContent = live.length + " task(s) · " + done + " done · " + nW + " weeks";
-  row.append(h2, pc);
+  row.append(h2);
   /* how much to show: 1 / 2 / 3 months, or everything */
   const ctl = document.createElement("span"); ctl.className = "rmg-win";
   const seg = document.createElement("span"); seg.className = "rmg-seg";
@@ -12967,22 +12976,7 @@ function renderRmapGantt(m, wrap, byTid){
     const wl = document.createElement("span"); wl.className = "rmg-wl"; wl.textContent = winLabel; ctl.appendChild(wl);
   }
   row.appendChild(ctl);
-  if(editMode){
-    const spx = document.createElement("span"); spx.className = "spacer"; row.appendChild(spx);
-    const addL = document.createElement("button"); addL.className = "tool"; addL.textContent = m.view==="swimlane" ? "＋ Swimlane" : "＋ Phase";
-    addL.title = m.view==="swimlane" ? "Add a band — a team or workstream (Product, Marketing…)" : "Add a row — Brainstorming, Research, Design, Testing…";
-    addL.onclick = ()=> rmlEditLane(m, null);
-    row.appendChild(addL);
-    const addB = document.createElement("button"); addB.className = "tool primary"; addB.textContent = "＋ Add items from any space";
-    addB.onclick = ()=> openRmapPicker(m);
-    row.appendChild(addB);
-    const ownB = document.createElement("button"); ownB.className = "tool"; ownB.textContent = "✏️ Write a task";
-    ownB.onclick = ()=> rmlNewOwn(m, m.lanes[0].id);
-    row.appendChild(ownB);
-    const acts = document.createElement("div"); acts.className = "acts";
-    acts.appendChild(actBtn("pencil", "Rename · roadmap type · weeks shown", false, ()=> openRmapSettings(m)));
-    row.appendChild(acts); acts.style.opacity = 1;
-  }
+  if(editMode) rmlBarButtons(row, m, m.view==="swimlane" ? "Swimlane" : "Phase");
   head.appendChild(row); wrap.appendChild(head);
   if(m.view==="swimlane"){ rmgSwimlanes(m, wrap, byTid, live, w0, nW, today); return; }
 
@@ -13248,14 +13242,10 @@ function renderRmapWbs(m, wrap, byTid){
 
   /* ---- header bar ---- */
   const head = document.createElement("section");
-  head.className = "module-block"; head.style.marginBottom = "12px";
+  head.className = "module-block rm-bar";
   const row = document.createElement("div"); row.className = "module-head";
   const h2 = rmapTitleEl(m);
-  const pc = document.createElement("span"); pc.className = "pct";
-  const tot = live.reduce((s,it)=> s + Math.max(1, dNum(it.end||it.start||todayISO()) - dNum(it.start||it.end||todayISO()) + 1), 0);
-  const doneW = live.reduce((s,it)=> s + Math.max(1, dNum(it.end||it.start||todayISO()) - dNum(it.start||it.end||todayISO()) + 1) * rmwPct(it, byTid[it.tid]) / 100, 0);
-  pc.textContent = live.length + " task(s) · " + (tot ? Math.round(doneW/tot*100) : 0) + "% complete";
-  row.append(h2, pc);
+  row.appendChild(h2);
   const seg = document.createElement("span"); seg.className = "rmg-seg"; seg.style.marginLeft = "6px";
   RMW_ZOOMS.forEach(([k, lbl])=>{
     const b = document.createElement("button"); b.textContent = lbl; b.className = zk===k ? "on" : "";
@@ -13265,22 +13255,7 @@ function renderRmapWbs(m, wrap, byTid){
   row.appendChild(seg);
   const tb = document.createElement("button"); tb.className = "rmg-nav"; tb.textContent = "Today"; tb.title = "Scroll to today";
   row.appendChild(tb);
-  if(editMode){
-    const spx = document.createElement("span"); spx.className = "spacer"; row.appendChild(spx);
-    const addG = document.createElement("button"); addG.className = "tool"; addG.textContent = "＋ Group";
-    addG.title = "Add a group (Strategic projects, Infrastructure team…) — groups can sit inside groups";
-    addG.onclick = ()=> rmlEditLane(m, null);
-    row.appendChild(addG);
-    const addB = document.createElement("button"); addB.className = "tool primary"; addB.textContent = "＋ Add items from any space";
-    addB.onclick = ()=> openRmapPicker(m);
-    row.appendChild(addB);
-    const ownB = document.createElement("button"); ownB.className = "tool"; ownB.textContent = "✏️ Write a task";
-    ownB.onclick = ()=> rmlNewOwn(m, m.lanes[0].id);
-    row.appendChild(ownB);
-    const acts = document.createElement("div"); acts.className = "acts";
-    acts.appendChild(actBtn("pencil", "Rename · roadmap type · months shown", false, ()=> openRmapSettings(m)));
-    row.appendChild(acts); acts.style.opacity = 1;
-  }
+  if(editMode) rmlBarButtons(row, m, "Group");
   head.appendChild(row); wrap.appendChild(head);
 
   /* ---- rows: groups (recursive) then their tasks ---- */
