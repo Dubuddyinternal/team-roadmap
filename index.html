@@ -2425,6 +2425,19 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .okr-modetg{display:inline-flex;gap:4px;background:var(--card);border:1px solid var(--line-strong);border-radius:99px;padding:3px;margin-bottom:16px}
 .okr-modetg .okr-mode{border:none;background:none;border-radius:99px;padding:6px 15px;font-weight:600;font-size:12.5px;color:var(--muted);cursor:pointer;font-family:var(--disp)}
 .okr-modetg .okr-mode.on{background:var(--indigo);color:#fff}
+.rmg-win{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:6px}
+.rmg-seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:99px;padding:2px;background:var(--card)}
+.rmg-seg button{border:0;background:none;border-radius:99px;padding:4px 11px;font-size:12px;font-weight:600;cursor:pointer;color:var(--muted);font-family:var(--disp)}
+.rmg-seg button.on{background:var(--indigo);color:#fff}
+.rmg-nav{border:1px solid var(--line-strong);background:var(--card);border-radius:99px;min-width:30px;height:28px;padding:0 10px;font-size:12.5px;font-weight:600;cursor:pointer;color:inherit;font-family:var(--disp)}
+.rmg-nav:hover{border-color:var(--indigo);color:var(--indigo)}
+.rmg-wl{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--ink,#172B4D)}
+.rmg-grid.mid{grid-auto-rows:minmax(54px,auto)}
+.rmg-grid.mid .rmg-blk{font-size:13px;padding:9px 11px}
+.rmg-grid.big{grid-auto-rows:minmax(70px,auto)}
+.rmg-grid.big .rmg-wk{font-size:13px;padding:12px 6px 10px}
+.rmg-grid.big .rmg-blk{font-size:14.5px;padding:12px 14px;margin:7px 5px;white-space:normal}
+.rmg-grid.big .rmg-phase{font-size:14.5px}
 .rmg-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--card);margin-bottom:12px}
 .rmg-grid{display:grid;min-width:max-content;grid-auto-rows:minmax(44px,auto)}
 .rmg-corner{grid-row:1;grid-column:1;border-bottom:1px solid var(--line);position:sticky;left:0;background:var(--card);z-index:3}
@@ -12678,6 +12691,8 @@ function rmlEditLane(m, ln){
    each item as a block over the weeks it runs, coloured by its team.
    ================================================================ */
 const RMG_COLORS = ["#C8473B","#D9A030","#2F6DB5","#2E9466","#8A55C2","#D9682B","#3A9CA8","#B5487F"];
+let rmgFrom = {};   /* per roadmap (session): first day of the window when a window size is picked */
+const RMG_WINDOWS = [[4,"1 month"],[8,"2 months"],[13,"3 months"],[0,"All"]];
 function rmgWeekStart(n){ const dow = (new Date(n*86400000).getUTCDay()+6)%7; return n - dow; }   /* Monday */
 function renderRmapGantt(m, wrap, byTid){
   rmlEnsureLanes(m);
@@ -12691,8 +12706,22 @@ function renderRmapGantt(m, wrap, byTid){
     a = ns.length ? Math.min(...ns) : today; b = ns.length ? Math.max(...ns) : today + 55;
     b = Math.max(b, a + 55);
   }
-  const w0 = rmgWeekStart(a), nW = Math.min(104, Math.floor((rmgWeekStart(b) - w0)/7) + 1);
-  const wkOf = n => Math.max(0, Math.min(nW-1, Math.floor((n - w0)/7)));
+  /* window: "1 month" = the 4–5 weeks of a calendar month, else N weeks from a chosen Monday */
+  const win = Number(m.gWin)||0;
+  let w0, nW, winLabel = "";
+  if(win===4){
+    const f = rmgFrom[m.id] || todayISO().slice(0,7)+"-01";
+    const ms = dNum(f.slice(0,7)+"-01"), me = dNum(monthEndISO(f.slice(0,7)));
+    w0 = rmgWeekStart(ms); nW = Math.floor((rmgWeekStart(me) - w0)/7) + 1;
+    winLabel = ymShort(f.slice(0,7));
+  } else if(win){
+    w0 = rmgWeekStart(rmgFrom[m.id] ? dNum(rmgFrom[m.id]) : today); nW = win;
+    winLabel = rmlFmt(dISO(w0)) + " – " + rmlFmt(dISO(w0 + nW*7 - 1));
+  } else {
+    w0 = rmgWeekStart(a); nW = Math.min(104, Math.floor((rmgWeekStart(b) - w0)/7) + 1);
+  }
+  const wkRaw = n => Math.floor((n - w0)/7);
+  const wkOf = n => Math.max(0, Math.min(nW-1, wkRaw(n)));
   /* one colour per team, in first-seen order */
   const teams = [];
   live.forEach(it=>{ const t=(it.team||"").trim(); if(t && teams.indexOf(t)<0) teams.push(t); });
@@ -12706,6 +12735,29 @@ function renderRmapGantt(m, wrap, byTid){
   const done = live.filter(it=> effStatus(byTid[it.tid].task)==="done").length;
   pc.textContent = live.length + " task(s) · " + done + " done · " + nW + " weeks";
   row.append(h2, pc);
+  /* how much to show: 1 / 2 / 3 months, or everything */
+  const ctl = document.createElement("span"); ctl.className = "rmg-win";
+  const seg = document.createElement("span"); seg.className = "rmg-seg";
+  RMG_WINDOWS.forEach(([wv, lbl])=>{
+    const bt = document.createElement("button"); bt.textContent = lbl; bt.className = win===wv ? "on" : "";
+    bt.title = wv ? "Show " + lbl + " at a time — bigger blocks" : "Show every week the roadmap covers";
+    bt.onclick = ()=>{ if(win===wv) return; m.gWin = wv; delete rmgFrom[m.id]; saveRmaps(); };
+    seg.appendChild(bt);
+  });
+  ctl.appendChild(seg);
+  if(win){
+    const step = dir=>{
+      if(win===4){ const f = rmgFrom[m.id] || todayISO().slice(0,7)+"-01"; rmgFrom[m.id] = idxYm(ymIdx(f.slice(0,7)) + dir) + "-01"; }
+      else rmgFrom[m.id] = dISO(w0 + dir*win*7);
+      renderAll();
+    };
+    const nb = (t, title, fn)=>{ const x=document.createElement("button"); x.className="rmg-nav"; x.textContent=t; x.title=title; x.onclick=fn; return x; };
+    ctl.appendChild(nb("‹", "Previous", ()=> step(-1)));
+    ctl.appendChild(nb("Today", "Jump back to now", ()=>{ delete rmgFrom[m.id]; renderAll(); }));
+    ctl.appendChild(nb("›", "Next", ()=> step(1)));
+    const wl = document.createElement("span"); wl.className = "rmg-wl"; wl.textContent = winLabel; ctl.appendChild(wl);
+  }
+  row.appendChild(ctl);
   if(editMode){
     const spx = document.createElement("span"); spx.className = "spacer"; row.appendChild(spx);
     const addL = document.createElement("button"); addL.className = "tool"; addL.textContent = "＋ Phase";
@@ -12725,18 +12777,22 @@ function renderRmapGantt(m, wrap, byTid){
   head.appendChild(row); wrap.appendChild(head);
 
   const scroll = document.createElement("div"); scroll.className = "rmg-scroll";
-  const grid = document.createElement("div"); grid.className = "rmg-grid";
+  const grid = document.createElement("div"); grid.className = "rmg-grid" + (nW<=5 ? " big" : nW<=9 ? " mid" : "");
   grid.style.gridTemplateColumns = "170px repeat("+nW+", minmax(74px, 1fr))";
   const corner = document.createElement("div"); corner.className = "rmg-corner"; grid.appendChild(corner);
   const tw = wkOf(today), inRange = today >= w0 && today < w0 + nW*7;
   for(let w=0; w<nW; w++){
     const c = document.createElement("div"); c.className = "rmg-wk" + (inRange && w===tw ? " now" : "");
-    c.innerHTML = "Week " + (w+1) + "<small>" + rmlFmt(dISO(w0 + w*7)) + "</small>";
+    c.innerHTML = "Week " + (w+1) + "<small>" + rmlFmt(dISO(w0 + w*7)) + (nW<=9 ? " – " + rmlFmt(dISO(w0 + w*7 + 6)) : "") + "</small>";
     grid.appendChild(c);
   }
   let rIdx = 2;
   m.lanes.forEach(ln=>{
     const items = live.filter(it=> rmlLaneOf(m, it)===ln)
+      .filter(it=>{ /* in a window, drop tasks entirely outside it */
+        const s0 = wkRaw(dNum(it.start || it.end || todayISO())), e0 = wkRaw(dNum(it.end || it.start || todayISO()));
+        return !(e0 < 0 || s0 > nW-1);
+      })
       .sort((x,y)=> dNum(x.start||todayISO()) - dNum(y.start||todayISO()));
     /* pack overlapping tasks into sub-rows */
     const rowsEnd = [];
