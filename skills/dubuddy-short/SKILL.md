@@ -9,12 +9,14 @@ description: Automatic edit of a raw Hindi/Hinglish talking-head clip into a fin
 Extras (music, Devanagari, custom graphics, Codex, missing B-roll, troubleshooting): read `references/extras.md` only when needed.
 
 ## Rules
+- **Fetch the latest skill first.** Every time this skill is used, before anything else run `bash $S/sync.sh` (pulls GitHub main), and if it changed anything re-read this file.
+- **Upload what's learned.** When the user says "remember this" / "for every video" / "save as default": a rule → `python3 $S/remember.py add "<rule>"`; any other new learning (glossary spellings, a lesson in `references/animation-lessons.md`, a script/scene fix) → make the edit, then `python3 $S/remember.py push "<what was learned>"`. Both push to GitHub main; tell the user the commit hash (or the error — never claim it saved if `ok` is false).
 - **One video → one brief.** Batch only when the user says batch.
 - **Every video ships 2 versions** from one edit: YouTube (`hf_yt/`) + Instagram (`hf_ig/`). Only the ending CTA + IG caption height differ.
 - **Three checkpoints, always in this order:** ① watch the video and **propose** what you'll do (no HyperFrames) → wait for OK/changes · ② **build** it in HyperFrames and **show** it (brief + live Studio) → wait for render/changes · ③ **render**. Nothing is built before ①'s OK; nothing renders before ②'s OK. Every revision → rebuild + re-show.
 - Captions **Hinglish** by default (Devanagari only on request), **every word pops** orange as spoken; brand/key words stay orange.
 - **All text centre-aligned** (only the rows inside a `steps` list stay left).
-- Brief changes apply to this video only. If a change sounds like a lasting style preference (caption size/colour, SFX, layout, pacing) and the user didn't say "save"/"always"/"from now on", ask: "just this video, or save as default?" A saved default → `python3 $S/remember.py add "<rule>"` ("Your rules" at the end of this file, pushed to GitHub main).
+- Brief changes apply to this video only. If a change sounds like a lasting style preference (caption size/colour, SFX, layout, pacing) and the user didn't say "save"/"always"/"from now on", ask: "just this video, or save as default?" A saved default → `remember.py add "<rule>"` (or `push` for non-rule learnings) ("Your rules" at the end of this file, pushed to GitHub main).
 - **No dead panels.** A full/split panel appears ≤ 0.5 s before its first content animates (never a title alone for 1–2 s), and when the next item is ≥ 3–4 s away it leaves → back to the anchor's face → returns just before the next item. Applies to custom animations too (their content must start at `{S}`+0.3, not later).
 - **Texture on what we create** (panels, cards, graphic text). Over the footage only where it adds mood for a short moment (e.g. a scary/glitch hook: grain + scanlines that leave with the hook) — never on the regular talking footage. Use judgment, not literal rules.
 - **Captions never move in split screens.** `split_caption_y` defaults to `captions.y` (YT 1440, IG 1380); `split_shift` ≈ 460 so the captions sit under the mouth.
