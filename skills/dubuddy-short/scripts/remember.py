@@ -18,32 +18,29 @@ HEAD = "## Your rules (saved with “remember this”)"
 INTRO = "Standing rules the owner asked to remember for every video. Newest last; a rule here beats anything above it."
 
 
-def norm(s):
-    return re.sub(r"\s+", " ", re.sub(r"\s*_\(\d{4}-\d{2}-\d{2}\)_\s*$", "", s)).strip().lower()
+def norm(s):   # compare rules without dates, markdown emphasis or spacing
+    s = re.sub(r"\s*_\(\d{4}-\d{2}-\d{2}\)_\s*$", "", s)
+    return re.sub(r"\s+", " ", re.sub(r"[*`]", "", s)).strip().lower()
 
 
 def edit(path, add=None, remove=None):
-    """change the rules section of one SKILL.md; True if it changed"""
+    """add a rule to "Your rules" (at the end) or remove one from anywhere in SKILL.md; True if it changed"""
     with open(path) as f:
         text = f.read()
-    if HEAD not in text:
-        if remove:
-            return False
-        text = text.rstrip("\n") + f"\n\n{HEAD}\n{INTRO}\n"
-    before, after = text.split(HEAD, 1)
-    lines = after.split("\n")
-    rules = [l for l in lines if l.startswith("- ")]
-    if add:
-        if any(norm(l[2:]) == norm(add) for l in rules):
-            return False
-        new = after.rstrip("\n") + f"\n- {add.strip()} _({time.strftime('%Y-%m-%d')})_\n"
-    else:
+    if remove:   # a rule can sit anywhere in the file (e.g. written into the Rules list by hand): drop that bullet wherever it is
+        lines = text.split("\n")
         keep = [l for l in lines if not (l.startswith("- ") and norm(l[2:]) == norm(remove))]
         if len(keep) == len(lines):
             return False
-        new = "\n".join(keep)
+        with open(path, "w") as f:
+            f.write("\n".join(keep))
+        return True
+    if any(l.startswith("- ") and norm(l[2:]) == norm(add) for l in text.split("\n")):
+        return False   # already a rule somewhere in the skill
+    if HEAD not in text:
+        text = text.rstrip("\n") + f"\n\n{HEAD}\n{INTRO}\n"
     with open(path, "w") as f:
-        f.write(before + HEAD + new)
+        f.write(text.rstrip("\n") + f"\n- {add.strip()} _({time.strftime('%Y-%m-%d')})_\n")
     return True
 
 

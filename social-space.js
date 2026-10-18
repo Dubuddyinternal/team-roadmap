@@ -325,6 +325,7 @@ details.isec .hint{font-size:12px}
 .pp-mini{display:flex;gap:10px;margin:0 0 10px}
 .pp-mini>div{width:118px}.pp-mini video{width:118px;aspect-ratio:9/16;background:#000;border-radius:8px;display:block}
 .pp-mini .lbl{margin-bottom:3px}
+.pp-dl{display:inline-block;margin-top:4px;font-size:12px;color:var(--accent-ink)}
 .pub-list{margin:0 0 10px}
 .pub-row{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px;min-width:0}
 .pub-row a{color:var(--accent-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
@@ -337,6 +338,11 @@ details.isec .hint{font-size:12px}
 .pre-n{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:var(--surface-2);border:1px solid var(--line-2);color:var(--ink-2)}
 .pre-n.ok{background:var(--good);border-color:var(--good);color:#fff}
 .pre-note{margin:-4px 0 10px;font-size:12px}
+.ebrief{margin:0 0 12px}
+.bf-drop{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px;border:1.5px dashed var(--line-2);border-radius:10px}
+.bf-drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.bf-list{list-style:none;margin:8px 0 0;padding:0;font-size:13px}.bf-list li{display:flex;gap:8px;align-items:center;padding:3px 0}
+.bf-list a{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ebrief>summary{cursor:pointer;font-size:13.5px}.ebrief textarea{width:100%;box-sizing:border-box}
 details.srcd>summary{cursor:pointer;font-size:12px;color:var(--ink-2);list-style:none}
 details.srcd>summary::-webkit-details-marker{display:none}
 .srcd-ch{color:var(--accent-ink);font-weight:600;margin-left:6px;text-decoration:underline;text-underline-offset:2px}
@@ -591,6 +597,43 @@ function ownBoxes(list){
         <button type="button" class="linkbtn" data-xdel="${k}" data-w="1" style="margin-left:auto">remove</button></label>
       <textarea id="xb-${k}">${esc(x.value||"")}</textarea></div>`).join("")}
     <button type="button" class="btn sm" data-xadd data-w="1">+ Add a box</button></div>`;
+}
+// 🤖 what Claude gets from a card: every box on it, by step, with the box's own label, plus every box of its idea.
+// Read from the open card itself (and the idea's fields + own boxes), so boxes added or renamed later come along too.
+const IDEA_BOX = { idea:"Idea", studentWhy:"Why should students watch this video?", hook:"Hook", cta:"CTA (call to action)",
+  title:"Title", desc:"Description", hashtags:"Hashtags", why:"Why this topic (research)", source:"Research source", tool:"Research tool",
+  keywords:"Keywords", platform:"Post on", platforms:"Post on", vtype:"Video type", format:"Format" };
+const IDEA_SKIP = ["id","by","created","status","comments","extra","cardId","card","updated","at"];
+function boxValue(el){
+  if(el.tagName === "SELECT"){ const o = el.selectedOptions && el.selectedOptions[0]; return o ? o.textContent.trim() : el.value; }
+  if(/^(file|checkbox|radio|hidden|button|submit)$/i.test(el.type || "")) return "";
+  return String(el.value || "").trim();
+}
+function cardContext(c){
+  const out = { card: [], idea: [] }, D = $("#drawer");
+  if(D){
+    const groups = [...D.querySelectorAll("details.stp")].map(st => ({ step: (st.querySelector("summary b")||{}).textContent || st.dataset.step, el: st.querySelector(".stp-b") }));
+    const side = D.querySelector(".cv-side"); if(side) groups.push({ step: "Details (side panel)", el: side });
+    groups.forEach(g => {
+      if(!g.el) return; const boxes = [];
+      g.el.querySelectorAll(".fld").forEach(f => {
+        if(f.closest("#pipePanel,.ebrief,[data-cmthost]")) return;
+        const l = f.querySelector("label"), inp = f.querySelector("textarea,input,select"); if(!l || !inp) return;
+        const label = (f.dataset.label || l.textContent || "").replace(/✕/g, "").trim(), v = boxValue(inp);
+        if(label && v) boxes.push({ box: label, value: v.slice(0, 4000) });
+      });
+      if(boxes.length) out.card.push({ step: g.step.trim(), boxes });
+    });
+  }
+  const i = c.ideaId ? IDEAS.find(x => x.id === c.ideaId) : null;
+  if(i){
+    Object.keys(i).forEach(k => { if(IDEA_SKIP.includes(k)) return; let v = i[k];
+      if(Array.isArray(v)) v = v.map(x => typeof x === "string" ? x : x && (x.kw || x.keyword || x.term || x.text)).filter(Boolean).join(", ");
+      if(typeof v !== "string" && typeof v !== "number") return; v = String(v).trim();
+      if(v) out.idea.push({ box: IDEA_BOX[k] || k, value: v.slice(0, 4000) }); });
+    (i.extra || []).forEach(x => { if(x.value && String(x.value).trim()) out.idea.push({ box: x.label, value: String(x.value).trim().slice(0, 4000) }); });
+  }
+  return out;
 }
 const readOwn = () => [...$("#drawer").querySelectorAll("[data-xbox]")].map(el=>({ label:el.dataset.label, value:el.querySelector("textarea").value.trim() }));
 function wireOwn(obj, read, markDirty, redraw){
@@ -2037,7 +2080,7 @@ function openFormats(editKey, back){
     <div class="fld"><label class="pp-chk ${f.video?"on":""}"><input type="checkbox" id="f-video" ${f.video?"checked":""}> It's a video (gets a Shoot plan)</label></div>
     <div class="fld"><label class="pp-chk ${f.claude?"on":""}"><input type="checkbox" id="f-claude" ${f.claude?"checked":""}> 🤖 Claude can edit it (vertical video for Shorts / Reels only)</label></div>
     <div class="fld"><label class="pp-chk ${isLiveFmt(f)?"on":""}"><input type="checkbox" id="f-live" ${isLiveFmt(f)?"checked":""}> 🔴 It's live (a stream / session — planned, no raw video or edit)</label></div>
-    <p class="hint" style="margin:-4px 0 12px">The card shows only the steps that fit: <b>video</b> → Shoot, Raw video, Edit, Publish · <b>live</b> → Plan the session, Go live · <b>neither</b> (image, poster, carousel) → Design, Publish.</p>
+    <p class="hint" style="margin:-4px 0 12px">The card shows only the steps that fit: <b>video</b> → Shoot, Raw video, Edit, Post Production · <b>live</b> → Plan the session, Go live · <b>neither</b> (image, poster, carousel) → Design, Post Production.</p>
     ${f0?`<div class="fld"><label class="pp-chk ${f.hidden?"on":""}"><input type="checkbox" id="f-hidden" ${f.hidden?"checked":""}> Hide this type from "+ New idea" (ideas already made keep it)</label></div>`:""}
     <div class="row" style="margin-top:14px"><button class="btn pri" id="f-save">${f0?"Save type":"Add type"}</button>
       <button class="btn" id="f-back">Back</button></div>`);
@@ -2603,7 +2646,7 @@ function openReject(i){
 /* ---- Claude pipeline → board ----
    A card moves forward by itself as its Claude job does. Never backwards, and only once per job step,
    so a card moved back by hand stays there until the job moves on. */
-const PIPE_STAGE = { planning:"inprogress", brief_ready:"inprogress", rendering:"inprogress", seo_running:"inprogress",
+const PIPE_STAGE = { proposing:"inprogress", proposal_ready:"inprogress", planning:"inprogress", brief_ready:"inprogress", rendering:"inprogress", seo_running:"inprogress",
   final_review:"inreview", post_failed:"inreview", scheduled:"approved", posting:"approved", posted:"published" };
 let IDEA_JOBS_SIG="";
 function syncPipelineStages(jobs){
@@ -2680,7 +2723,7 @@ function openCard(id,showGate){
     // Claude pipeline (pipeline.js): at a check, the review takes the whole window and the card details fold away
     const F=fmtOf(c), useClaude=!!F.claude&&!!window.PIPE;   // Claude edits only types marked for it (Shorts / Reels)
     const job=(!isNew&&window.PIPE)?PIPE.job(c.id):null, jobM=(job&&job.media)||{}, claudeDone=!!(jobM.yt||jobM.ig);
-    const reviewing=!!job&&["brief_ready","final_review","post_failed"].includes(job.status);
+    const reviewing=!!job&&["proposal_ready","brief_ready","final_review","post_failed"].includes(job.status);
     const rjob=(!isNew&&window.PIPE)?PIPE.job(c.id+"__r"):null;   // "🔎 Fill with vidIQ" research
     const sjob=(!isNew&&window.PIPE)?PIPE.job(c.id+"__s"):null;   // "✍️ Draft hook & talking points"
     c.shoot=c.shoot||{hook:"",points:"",cta:"",tips:""};
@@ -2814,10 +2857,20 @@ function openCard(id,showGate){
       <div class="grid2">
         <div class="fld" style="margin-bottom:0"><label for="s-cta">Closing line</label><input id="s-cta" value="${esc(c.shoot.cta)}" placeholder="Comment your doubt 👇"></div>
         <div class="fld" style="margin-bottom:0"><label for="s-tips">Shooting notes</label><input id="s-tips" value="${esc(c.shoot.tips)}" placeholder="e.g. show the form on screen"></div></div>`;
-    const claudeVids=claudeDone?`<div class="pp-mini">
-        ${jobM.yt?`<div><div class="lbl">YouTube</div><video controls preload="metadata" src="${esc(jobM.yt)}"></video></div>`:""}
-        ${jobM.ig?`<div><div class="lbl">Instagram</div><video controls preload="metadata" src="${esc(jobM.ig)}"></video></div>`:""}</div>`:"";
-    const editBody=useClaude?`<div style="height:12px"></div>${isNew?`<p class="hint pre-note">Create the card first.</p>`:`<div id="pipePanel"></div>`}${claudeVids}
+    // 🎬 the edited videos live in Post Production (to watch, download and post); the Edit step keeps making them
+    const vid=(k,l)=>jobM[k]?`<div><div class="lbl">${l}</div><video controls playsinline preload="metadata" src="${esc(jobM[k])}"></video>
+        <a class="pp-dl" href="${esc(jobM[k])}" download="final_${k}.mp4" target="_blank" rel="noopener">⬇ Download</a></div>`:"";
+    const editedVids=claudeDone?`<div class="lbl" style="margin:0 0 6px">Edited video${jobM.yt&&jobM.ig?"s":""}</div><div class="pp-mini">${vid("yt","YouTube")}${vid("ig","Instagram")}</div>`
+      :c.post.reel?`<p class="hint" style="margin:0 0 10px">Edited video: <b>${esc(c.post.reel.name||"your own edit")}</b> (from the Edit step).</p>`:"";
+    const started=!!job;
+    // 📝 what you already know about the edit, before Claude plans it (goes to Claude with the idea, shoot plan and files)
+    const briefBlock=isNew?"":`<details class="block ebrief" ${started&&!c.editBrief?"":"open"}><summary><b>📝 Your edit brief</b> <span class="hint">— Claude reads this first, before it plans</span></summary>
+        <p class="hint" style="margin:8px 0">Anything you already have in mind: a comment screenshot that must appear, a moment to cut, a scene idea, the mood, a reference video.
+          Add the photos, videos and files right here. Claude also gets everything written on this card and its idea (every box, with its name) and the clean audio if there is one — and tells you if anything planned is missing from the video.</p>
+        <textarea id="e-brief" rows="4" placeholder="e.g. Put the comment screenshot (attached) on screen when I read the question · keep the joke at 0:40 · end on the CUET form">${esc(c.editBrief||"")}</textarea>
+        <div id="briefFiles" style="margin-top:8px"></div>
+        ${started?`<p class="hint" style="margin:6px 0 0">Claude got this when the edit started. Changes now → say them in the chat.</p>`:""}</details>`;
+    const editBody=useClaude?`<div style="height:12px"></div>${isNew?`<p class="hint pre-note">Create the card first.</p>`:briefBlock+`<div id="pipePanel"></div>`}
         <details class="manual" ${c.post.reel?"open":""}><summary>${claudeDone?"Use my own edit instead":c.post.reel?"Your own edit":"I edited it myself"}</summary>
           ${fileSlot("reel","Edited reel","video/*","Pick the final cut. Its name and size are noted on the card — the file itself stays on your computer.")}
           ${plats(c).includes("yt")&&c.vtype==="short"?fileSlot("thumb","Thumbnail (optional)","image/*","Optional for Shorts — YouTube picks a frame if you skip it."):""}</details>`
@@ -2825,7 +2878,7 @@ function openCard(id,showGate){
         ${needThumb?fileSlot("thumb","Thumbnail","image/*","Needed for long YouTube videos. A small preview is kept on the card."):
           plats(c).includes("yt")&&c.vtype==="short"?fileSlot("thumb","Thumbnail (optional)","image/*","Optional for Shorts — YouTube picks a frame if you skip it."):""}`;
     const designBody=`<div style="height:12px"></div>${fileSlot("reel","Image / slides","image/*,application/pdf","Pick the finished image (or a PDF of the slides). A small preview is kept on the card.")}`;
-    const publishBody=`<div style="height:10px"></div>
+    const publishBody=`<div style="height:10px"></div>${live?"":editedVids}
       ${posts.length?`<div class="pub-list">${posts.map(x=>`<div class="pub-row"><span class="pub-pl">${x.pl}</span>
           <span class="badge ${x.status==="posted"?"good":"crit"}">${esc(x.status)}</span>
           ${x.url?`<a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.url.replace(/^https?:\/\//,""))}</a>`:`<span class="hint">${esc(x.error||"")}</span>`}</div>`).join("")}</div>`:""}
@@ -2874,8 +2927,8 @@ function openCard(id,showGate){
       !F.video&&{ k:"design", t:"Design", done:!!c.post.reel, body:designBody,
         sum:c.post.reel?c.post.reel.name:"the finished image or carousel slides",
         chip:c.post.reel?chip("Done","good"):later("design")?chip("Later"):chip("Needed","crit") },
-      { k:"publish", t:live?"Go live":"Publish", done:!linksMiss.length, body:publishBody,
-        sum:lp?`${fmt(lp.views)} views · ${fmt(lp.likes)} likes`:c.post.postUrl?"linked":`${plats(c).map(pl=>regLabel("platform",pl)||pl).join(" + ")} link once it's live`,
+      { k:"publish", t:live?"Go live":"Post Production", done:!linksMiss.length, body:publishBody,
+        sum:lp?`${fmt(lp.views)} views · ${fmt(lp.likes)} likes`:c.post.postUrl?"linked":claudeDone&&!live?`edited video ready · ${plats(c).map(pl=>regLabel("platform",pl)||pl).join(" + ")} link once it's live`:`${plats(c).map(pl=>regLabel("platform",pl)||pl).join(" + ")} link once it's live`,
         chip:!linksMiss.length?chip(c.stage==="published"?"Live":"Linked","good"):later("publish")?chip("Later"):chip("Needed","crit") },
     ].filter(Boolean);
     const SO=STEPOPEN[c.id]||(STEPOPEN[c.id]={});
@@ -2941,6 +2994,7 @@ function openCard(id,showGate){
       c.pre.desc=$("#r-desc").value.trim(); c.pre.hashtags=$("#r-hashtags").value.trim();
       $("#drawer").querySelectorAll("[data-plink]").forEach(e=>{ c.post.links[e.dataset.plink]=e.value.trim(); });
       c.post.postUrl=c.post.links[c.platform]||Object.values(c.post.links).find(Boolean)||"";
+      if($("#e-brief")) c.editBrief=$("#e-brief").value.trim();
       if($("#s-hook")) c.shoot={ hook:$("#s-hook").value.trim(), points:$("#s-points").value.trim(), cta:$("#s-cta").value.trim(), tips:$("#s-tips").value.trim() };
       const ru=$("#raw-url"); if(ru){ const u=ru.value.trim(); c.raw = u ? { kind:"link", url:u } : (c.raw && c.raw.kind==="file" ? c.raw : null); }
       if(c.stage==="published" && $("#m-views")){ const n=s=>{const e=$(s); return !e||e.value===""?null:Number(e.value);};
@@ -3132,10 +3186,16 @@ function openCard(id,showGate){
     // anything dropped elsewhere on the card doesn't open the file in the browser tab
     const dr=$("#drawer"); if(!dr._nodrop){ dr._nodrop=1; dr.addEventListener("dragover",e=>e.preventDefault()); dr.addEventListener("drop",e=>{ e.preventDefault(); toast("Drop the raw video on “Raw video”, the cleaned audio on “Clean the voice”"); }); }
     // Claude pipeline (pipeline.js): raw video → edit → your checks → post
+    if(window.PIPE && $("#briefFiles")){ PIPE.briefFiles($("#briefFiles"), c, { toast });
+      // a screenshot pasted anywhere in the brief box becomes one of its files
+      $("#drawer").querySelector(".ebrief").addEventListener("paste", e=>{ const fs=[...((e.clipboardData&&e.clipboardData.files)||[])];
+        if(fs.length){ e.preventDefault(); e.stopPropagation(); PIPE.addBriefFiles(fs); } }, true); }
     if(window.PIPE && $("#pipePanel")) PIPE.mount($("#pipePanel"), c, {
       raw: ()=>c.raw, onRaw: (up,f)=>{ delete RAWLINKS[c.id]; keepRaw(up); getAudio(f); },
       canEdit, toast, idea: x=>x.ideaId?IDEAS.find(i=>i.id===x.ideaId):null,
       beforeStart: ()=>{ read(); persist(); if(save()){ dirty=false; opened=snap(); } },
+      brief: ()=>{ const e=$("#e-brief"); return e ? e.value.trim() : (c.editBrief||""); },
+      context: ()=>cardContext(c),
       slot: ()=>slotOf(c),
       onJob: ()=>{ const a=R.activeElement;               // the job moved on: redraw the card, unless someone is typing in it
         if(!$("#drawer").classList.contains("on") || !CARDS.includes(c)) return true;   // closed or deleted: nothing to redraw

@@ -96,6 +96,35 @@
   $bar.addEventListener("pointerup", () => { $bar.onpointermove = null; });
   $bar.addEventListener("click", e => e.stopPropagation());
 
+  // ---- smooth playback: every video / sound is downloaded into the browser first (the light preview copy when the run
+  // made one), so playing and scrubbing never wait on the network. If a download fails, that one just streams.
+  const load = document.createElement("div"); load.id = "hfp-load";
+  load.innerHTML = `<div><b>Loading the edit…</b><i><s></s></i><span>0%</span></div>`;
+  const lcss = document.createElement("style");
+  lcss.textContent = `#hfp-load{position:fixed;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.6);z-index:2147483647;font:600 14px system-ui,-apple-system,sans-serif;color:#fff}
+#hfp-load div{display:grid;gap:10px;justify-items:center;width:min(70vw,260px)}#hfp-load i{display:block;width:100%;height:6px;border-radius:3px;background:rgba(255,255,255,.25);overflow:hidden}
+#hfp-load s{display:block;height:100%;width:0;background:#ff6a2b;transition:width .2s}#hfp-load span{font-size:12px;opacity:.8}`;
+  document.head.appendChild(lcss); document.body.appendChild(load);
+  async function preload() {
+    const els = items.filter(it => it.media).map(it => it.el);
+    const jobs = new Map();   // one download per file, shared by every element using it
+    els.forEach(el => { const u = el.dataset.proxy || el.getAttribute("src"); if (u && !u.startsWith("blob:")) { if (!jobs.has(u)) jobs.set(u, []); jobs.get(u).push(el); } });
+    const total = { got: 0, size: 0 }, sizes = new Map();
+    const show = () => { const pc = total.size ? Math.min(99, Math.round(total.got / total.size * 100)) : 0;
+      load.querySelector("s").style.width = pc + "%"; load.querySelector("span").textContent = pc + "%"; };
+    await Promise.all([...jobs].map(async ([u, list]) => {
+      try {
+        const r = await fetch(u); if (!r.ok || !r.body) throw new Error(r.status);
+        const n = +r.headers.get("content-length") || 0; sizes.set(u, n); total.size += n;
+        const rd = r.body.getReader(), parts = [];
+        for (;;) { const { done, value } = await rd.read(); if (done) break; parts.push(value); total.got += value.length; show(); }
+        const url = URL.createObjectURL(new Blob(parts, { type: r.headers.get("content-type") || "video/mp4" }));
+        list.forEach(el => { el.src = url; el.preload = "auto"; el.load(); });
+      } catch (_) { list.forEach(el => { if (el.dataset.proxy) el.src = el.dataset.proxy; }); }   // streams instead
+    }));
+    load.remove();
+  }
   const start = () => { apply(true); draw(); requestAnimationFrame(frame); };
-  if (tl()) start(); else addEventListener("load", start);
+  const go = () => preload().then(start, start);
+  if (document.readyState === "complete") go(); else addEventListener("load", go);
 })();

@@ -26,12 +26,14 @@ const ago = iso => { if(!iso) return ""; const s=Math.round((Date.now()-new Date
 const team = () => (typeof TEAM!=="undefined" && TEAM) || new URLSearchParams(location.search).get("team") || "";
 
 const LABEL = {
-  planning:["Claude is planning the edit","warn","🧠"], brief_ready:["Brief ready — your check","accent","✋"],
+  proposing:["Claude is watching the video","warn","👀"], proposal_ready:["Plan ready — answer in the chat","accent","✋"],
+  planning:["Claude is building the edit","warn","🧠"], brief_ready:["Edit built — watch it","accent","✋"],
+  chat_open:["Waiting for you — answer in the chat","accent","💬"],
   rendering:["Rendering YT + IG","warn","🎬"], seo_running:["vidIQ SEO running","warn","🔎"],
   final_review:["Videos ready","good","🎬"], scheduled:["Scheduled","good","🗓"], posting:["Posting","warn","🚀"], posted:["Posted","good","✅"],
   paused:["Paused — free limit reached","warn","⏸"], post_failed:["Posting needs a look","crit","⚠️"], failed:["Stopped — needs a look","crit","⚠️"], cancelled:["Cancelled","mute","⏹"],
 };
-const BUSY = ["planning","rendering","seo_running","posting","researching","scripting"];
+const BUSY = ["proposing","planning","rendering","seo_running","posting","researching","scripting"];
 const MODE = { fire:["☁️ Cloud routine","good"], local:["💻 This Mac","warn"], fake:["🧪 Test mode (nothing real)","mute"], off:["Not set up yet","mute"] };
 
 /* ------------------------------------------------------------ server */
@@ -56,7 +58,7 @@ async function call(path, body, tries){
 }
 async function action(card, act, extra){
   const j = await call("/api/pipeline/action", Object.assign({ team: team(), job: card, action: act }, extra||{}));
-  S.jobs[card] = Object.assign({}, S.jobs[card], j.data); kick(); return j.data;
+  S.jobs[card] = Object.assign({}, S.jobs[card], j.data); S.sent = j.sent || ""; kick(); return j.data;
 }
 // the raw clip: a one-file upload link, then the file goes straight to storage (also used by the card's Raw video box)
 async function uploadRaw(cardId, f, onProgress){
@@ -123,16 +125,19 @@ function preview(f){
     setTimeout(() => done({}), 8000);
   });
 }
-const sigOf = job => [S.mode, S.me&&S.me.role, S.err?1:0].join("/") + "|" + (job ? [job.status, job.brief&&job.brief.at, job.seo?1:0, job.error||"", Object.keys(job.media||{}).join()].join("|") : "none");
+const sigOf = job => [S.mode, S.me&&S.me.role, S.err?1:0].join("/") + "|" + (job ? [job.status, job.brief&&job.brief.at, job.proposal&&job.proposal.at, job.rendered&&job.rendered.at,
+  job.seo?1:0, job.error||"", job.status==="chat_open"?job.progress:"", (job.files&&job.files.preview&&job.files.preview.at)||"", Object.keys(job.media||{}).join()].join("|") : "none");
 async function poll(){
   try{ const j = await call("/api/pipeline/jobs?team=" + encodeURIComponent(team()));
     S.jobs = j.data || {}; S.mode = j.mode; S.me = j.me; S.err = "";
+    const sk = JSON.stringify(j.skill_notes || []); if(sk !== S.skillSig){ S.skillSig = sk; S.skill = j.skill_notes || []; if(S.mounted) S.mounted.sig = ""; }
     if(S.hooks.onJobs) S.hooks.onJobs(S.jobs); }
   catch(e){ S.err = e.message; }
   paintBadges();
   const m = S.mounted;
   if(!m || !m.host.isConnected) return;
   const job = S.jobs[m.card.id];
+  paintChat(job);
   const rj = S.jobs[m.card.id + "__r"], sj = S.jobs[m.card.id + "__s"];
   const rsig = (rj ? rj.status + (rj.research ? rj.research.at : "") : "") + "/" + (sj ? sj.status + (sj.script ? sj.script.at : "") : "");
   if(rsig !== (m.rsig || "")){ m.rsig = rsig; if(m.h.onJob && m.h.onJob(job) !== false) return; }
@@ -180,6 +185,11 @@ function progressLine(job){
 }
 const watchLink = job => job.run && job.run.session_url
   ? `<a class="pp-link" href="${esc(job.run.session_url)}" target="_blank" rel="noopener">Watch Claude work ↗</a>` : "";
+// 💬 the edit chat: the claude.ai session where Claude is working — you talk to it there (signed in as the routine's account)
+// (the same conversation as the 💬 chat on the card — this just opens Claude's session itself)
+const chatBtn = job => job && job.run && job.run.chat && job.run.session_url
+  ? `<a class="pp-link" href="${esc(job.run.session_url)}" target="_blank" rel="noopener">Open in claude.ai ↗</a>` : "";
+const VNAME = { yt:"YouTube Short", ig:"Instagram Reel" };
 function copyBlock(cmd){ return `<div class="pp-copy"><code>${esc(cmd)}</code><button class="btn sm" data-copy="${esc(cmd)}">Copy</button></div>`; }
 function macLoginHelp(){
   return `<div class="pp-note crit"><b>Claude isn't signed in on this Mac yet.</b> One-time setup — run these in Terminal, one at a time:
@@ -196,7 +206,11 @@ function cardInfo(c, h){
     keywords:(c.pre.keywords||[]).map(k=>k.kw||k.keyword||k.term||k.text||k).filter(x=>typeof x==="string"),
     why:P(c.pre.why), platform:c.platform, platforms:(c.platforms&&c.platforms.length?c.platforms:[c.platform]),
     video_type:c.vtype, scheduled:c.scheduled, time:c.time||null,
-    hook: idea ? P(idea.hook) : "", cta: idea ? P(idea.cta) : "" };
+    hook: (c.shoot && c.shoot.hook) || (idea ? P(idea.hook) : ""), cta: (c.shoot && c.shoot.cta) || (idea ? P(idea.cta) : ""),
+    talking_points: c.shoot ? P(c.shoot.points||"") : "", shooting_notes: c.shoot ? P(c.shoot.tips||"") : "",
+    edit_brief: P(h.brief ? h.brief() : c.editBrief || ""),
+    // everything written on the card and its idea, box by box with the box's own label (new boxes come along by themselves)
+    sections: h.context ? h.context() : null };
 }
 // the skill's hook markup: *word* = orange, | = new line
 const hookHtml = t => esc(t).replace(/\*([^*]+)\*/g, '<span class="pp-em">$1</span>').replace(/\s*\|\s*/g, " / ");
@@ -219,6 +233,13 @@ const CSS = `<style>
 .pp .gchip.ok{color:var(--good);background:var(--good-soft);border-color:color-mix(in srgb,var(--good) 30%,var(--line))}
 .pp .gchip.no{color:var(--crit);background:var(--crit-soft);border-color:color-mix(in srgb,var(--crit) 25%,var(--line))}
 .pp .pp-rawline{margin:0 0 12px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:13px}
+.pp .pp-refs{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.pp .pp-refs.top{margin:0 0 12px;border-top:0;padding-top:0}
+.pp .pp-refs summary{cursor:pointer;font-weight:600;font-size:13px}
+.pp .pp-refdrop{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;padding:10px;border:1.5px dashed var(--line-2);border-radius:10px}
+.pp .pp-refdrop.over{border-color:var(--accent);background:var(--accent-soft)}
+.pp .pp-reflist{list-style:none;margin:8px 0 0;padding:0;font-size:13px}.pp .pp-reflist li{display:flex;gap:8px;align-items:center;padding:4px 0}
+.pp .pp-reflist a{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pp .pp-drop{display:flex;gap:12px;align-items:center;border:1.5px dashed var(--line-2);border-radius:10px;padding:12px;background:var(--surface);transition:border-color .15s,background .15s}
 .pp .pp-drop.over{border-color:var(--accent);background:var(--accent-soft)}
 .pp .pp-drop.has{border-style:solid;border-color:color-mix(in srgb,var(--good) 35%,var(--line))}
@@ -250,6 +271,28 @@ const CSS = `<style>
 .pp .pp-studio summary{cursor:pointer;font-size:13px;font-weight:600}
 .pp .pp-link{font-size:12px;color:var(--accent-ink)}
 .pp ul{margin:4px 0 8px 18px;padding:0;font-size:12.5px}
+.pp .pp-chat{margin:12px 0 4px;border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+.pp .pp-chat.over{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.pp .pp-chat-h{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);font-size:13px}
+.pp .pp-dot{width:8px;height:8px;border-radius:50%;background:var(--ink-3);flex:none}.pp .pp-dot.on{background:var(--good);box-shadow:0 0 0 3px var(--good-soft)}
+.pp .pp-thread{max-height:340px;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.pp .pp-msg{max-width:86%;padding:7px 10px;border-radius:12px;font-size:13px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+.pp .pp-msg.you{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+.pp .pp-msg.claude{align-self:flex-start;background:var(--surface-2);border-bottom-left-radius:4px}
+.pp .pp-msg.stage{align-self:center;background:var(--accent-soft);color:var(--ink);font-size:12px;border-radius:99px;padding:4px 12px}
+.pp .pp-msg .meta{display:block;font-size:10.5px;opacity:.75;margin-top:3px;white-space:normal}
+.pp .pp-msg img{display:block;max-width:180px;max-height:160px;border-radius:8px;margin:4px 0}
+.pp .pp-msg a{color:inherit;text-decoration:underline}
+.pp .pp-compose{border-top:1px solid var(--line);padding:8px}
+.pp .pp-compose textarea{width:100%;min-height:42px;max-height:160px;resize:vertical;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;font-size:13px;background:var(--surface);color:var(--ink);box-sizing:border-box}
+.pp .pp-att{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 6px}
+.pp .pp-att span{font-size:11.5px;padding:3px 8px;border-radius:99px;background:var(--surface-2);border:1px solid var(--line)}
+.pp .pp-att button{border:0;background:none;cursor:pointer;color:var(--ink-3);padding:0 0 0 4px}
+.pp .pp-trlist{max-height:320px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--surface)}
+.pp .pp-trl{display:flex;gap:8px;padding:3px 0;font-size:13px;line-height:1.45}
+.pp .pp-trl .t{font-family:var(--mono);font-size:11px;color:var(--ink-3);flex:none;width:38px;padding-top:2px}
+.pp .pp-trl.cut span:last-child{text-decoration:line-through;color:var(--ink-3)}
+.pp .pp-quick{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 </style>`;
 
 /* ------------------------------------------------------------ panel */
@@ -261,8 +304,10 @@ const mmss = s => s ? Math.floor(s/60) + ":" + String(Math.round(s%60)).padStart
 function startView(c, canRun, m){
   const ready = readiness(c), missing = ready.filter(x=>!x[1]).map(x=>x[0].toLowerCase());
   const r = m.raw;
-  return `<p class="hint" style="margin:0 0 10px">Give Claude the raw clip. It plans the edit with the <b>dubuddy-short</b> skill using this card's
-      title, description and hook, then waits for a check. Nothing renders without an owner's click.</p>
+  const tv = (c.platforms&&c.platforms.length?c.platforms:[c.platform]).filter(x=>x==="yt"||x==="ig");
+  return `<p class="hint" style="margin:0 0 10px">Start, then talk to Claude in the <b>chat on this card</b>: ① it watches the clip and tells you what it will do,
+      ② after your OK it builds the edit — watch it here without rendering — and changes whatever you say, ③ it renders only when you say <b>render</b>.
+      Versions: <b>${esc((tv.length?tv:["yt","ig"]).map(x=>VNAME[x]).join(" + "))}</b> (from “Post on”).</p>
     <div class="pp-ready">${ready.map(([l,ok])=>`<span class="gchip ${ok?"ok":"no"}">${ok?"✓":"✗"} ${l}</span>`).join("")}</div>
     ${missing.length?`<p class="hint" style="margin:6px 0 12px">Claude can start without the ${esc(missing.join(", "))}, but the hook and SEO get weaker — fill ${missing.length>1?"them":"it"} in on the left first if you can.</p>`:`<div style="height:10px"></div>`}
     <div class="pp-rawline">${r?`🎞️ <b>${esc(r.name)}</b> <span class="hint">${(r.size/1e6).toFixed(0)} MB · the raw video in the step above</span>`
@@ -286,8 +331,18 @@ function render(){
     body = `<div class="pp-prog"><div class="pp-spin"></div><div><b>${esc(lbl)}</b><div class="hint" data-pp-progress>${esc(progressLine(job))}</div></div></div>
       ${st==="rendering"&&S.mode==="local"?`<div class="pp-note">Rendering uses the whole Mac — keep it plugged in and awake.</div>`:""}
       ${st==="posting"?`<div class="pp-note">Posting exactly what was approved to ${esc((job.post_request&&job.post_request.targets||[]).map(t=>t==="yt"?"YouTube":"Instagram").join(" + "))}.</div>`:""}
-      <div class="pp-row">${watchLink(job)}${st!=="posting"&&me.canRun?`<button class="btn sm" data-pp="cancel" style="margin-left:auto">Cancel</button>`:""}</div>`;
+      ${job.media&&(job.media.preview_yt||job.media.preview_ig)&&st!=="proposing"?`<details style="margin:0 0 10px"><summary>▶ The edit so far</summary>${livePlayer(job.media)}</details>`:""}
+      <div class="pp-row">${job.run&&job.run.chat?"":watchLink(job)}${st!=="posting"&&me.canRun?`<button class="btn sm" data-pp="cancel" style="margin-left:auto">Cancel</button>`:""}</div>`;
   }
+  else if(st==="proposal_ready") body = (job.error?`<div class="pp-note crit"><b>Something went wrong:</b> ${esc(job.error)} <span class="hint">— Claude is still in the chat to fix it.</span></div>`:"") + proposalView(job, me);
+  else if(st==="chat_open" && lastStage(job)){ const ls = lastStage(job);
+    body = `${job.progress?`<div class="pp-note"><b>💬 Claude asks:</b> ${esc(job.progress)} <span class="hint">— answer in the chat below.</span></div>`:""}
+      ${job.error?`<div class="pp-note crit"><b>Something went wrong:</b> ${esc(job.error)} <span class="hint">— Claude is still in the chat to fix it.</span></div>`:""}
+      ${ls==="proposal"?proposalView(job, me):ls==="built"?briefView(job, me):finalView(job, c, me)}`; }
+  else if(st==="chat_open") body = `<div class="pp-note"><b>💬 Claude is waiting for you — answer in the chat below.</b>${job.progress?` <span class="hint">“${esc(job.progress)}”</span>`:""}</div>
+      ${job.error?`<div class="pp-note crit"><b>Something went wrong:</b> ${esc(job.error)} <span class="hint">— Claude is still in the chat to fix it.</span></div>`:""}
+      ${job.media&&(job.media.preview_yt||job.media.preview_ig)?livePlayer(job.media):""}
+      <div class="pp-row">${chatBtn(job)}${me.canRun?`<button class="btn sm" data-pp="cancel" style="margin-left:auto">Cancel job</button>`:""}</div>`;
   else if(st==="brief_ready") body = briefView(job, me);
   else if(st==="final_review") body = finalView(job, c, me);
   else if(st==="paused"){ const pz = job.paused || {};   // stopped so the free plan is never exceeded; starts again by itself
@@ -308,6 +363,8 @@ function render(){
     <div class="block-h"><h4>🤖 Claude edit</h4><span class="badge ${cls==="accent"?"warn":cls}">${ic} ${esc(lbl)}</span>
       <span style="margin-left:auto">${modePill()}</span></div>
     ${body}
+    ${S.mode==="off"||(S.err&&!S.me)?"":showChat(job)?chatBox(job, me):""}
+    ${skillBox(me)}
     ${job&&(job.history||[]).length?`<details style="margin-top:10px"><summary>History (${job.history.length})</summary><table>
       ${job.history.slice().reverse().map(x=>`<tr><td style="width:90px" class="hint">${esc(new Date(x.at).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}))}</td><td>${esc(x.msg||x.status)}</td></tr>`).join("")}</table></details>`:""}
   </div>`;
@@ -315,72 +372,105 @@ function render(){
 }
 
 function briefView(job, me){
-  const b = job.brief || {}, md = job.media || {};
-  const list = a => (a&&a.length)?`<ul>${a.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:"";
-  return `<div class="pp-note"><b>✋ Check 1 — the edit plan.</b> Nothing is rendered yet. Approve it, or say what to change and Claude redoes the brief.</div>
+  const b = job.brief || {}, md = job.media || {}, list = a => (a&&a.length)?`<ul>${a.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:"";
+  const vs = (job.variants&&job.variants.length) ? job.variants : ["yt","ig"].filter(v=>md["preview_"+v]);
+  return `<div class="pp-note"><b>✋ The edit is built — watch it below</b> (the real edit, not a render). Tell Claude what to change in the chat; it renders only when you say <b>render</b> or press Render.</div>
     ${livePlayer(md)}
-    ${md.brief_sheet?`<a href="${esc(md.brief_sheet)}" target="_blank"><img class="pp-sheet" src="${esc(md.brief_sheet)}" alt="Preview stills of every graphic"></a>`:""}
     ${b.summary?`<p style="margin:0 0 8px;font-size:13px">${esc(b.summary)}</p>`:""}
-    ${b.hook?`<p style="margin:0 0 8px;font-size:13px"><b>Hook:</b> ${hookHtml(b.hook)}</p>`:""}
-    ${(b.storyboard||[]).length?`<details open><summary>Storyboard (${b.storyboard.length})</summary><table class="pp-at"><tr><th>At</th><th>Said</th><th>Scene</th><th>Display</th></tr>
-      ${b.storyboard.map(s=>`<tr><td>${esc(s.at)}</td><td>${esc(s.said)}</td><td>${esc(s.scene)}</td><td>${esc(s.display)}</td></tr>`).join("")}</table></details>`:""}
-    ${(b.graphics||[]).length?`<details><summary>Graphics &amp; B-roll (${b.graphics.length})</summary><table class="pp-at"><tr><th>At</th><th>Display</th><th>Text</th><th>Source</th></tr>
-      ${b.graphics.map(s=>`<tr><td>${esc(s.at)}</td><td>${esc(s.display)}</td><td>${esc(s.text)}</td><td>${esc(s.source)}</td></tr>`).join("")}</table></details>`:""}
-    ${b.cuts?`<details><summary>Cuts</summary><p style="margin:4px 0">${esc(b.cuts)}</p></details>`:""}
+    ${md.brief_sheet?`<details><summary>Preview stills</summary><a href="${esc(md.brief_sheet)}" target="_blank"><img class="pp-sheet" src="${esc(md.brief_sheet)}" alt="Preview stills of every graphic"></a></details>`:""}
+    ${(b.storyboard||[]).length?`<details><summary>Storyboard (${b.storyboard.length})</summary><table class="pp-at"><tr><th>At</th><th>Said</th><th>Scene</th><th>Display</th></tr>
+      ${b.storyboard.map(x=>`<tr><td>${esc(x.at)}</td><td>${esc(x.said)}</td><td>${esc(x.scene)}</td><td>${esc(x.display)}</td></tr>`).join("")}</table></details>`:""}
     ${b.captions?`<details><summary>Full captions</summary><p style="margin:4px 0;white-space:pre-wrap">${esc(b.captions)}</p></details>`:""}
-    ${b.audio?`<details><summary>Audio</summary><p style="margin:4px 0">${esc(b.audio)}</p></details>`:""}
-    ${(b.questions||[]).length?`<div class="pp-note"><b>Claude decided these — change any you like:</b>${list(b.questions)}</div>`:""}
+    ${(b.questions||[]).length?`<div class="pp-note"><b>Claude decided these — change any in the chat:</b>${list(b.questions)}</div>`:""}
     ${(b.warnings||[]).length?`<div class="pp-note crit"><b>Warnings</b>${list(b.warnings)}</div>`:""}
-    <div class="pp-row">${md.brief_md?`<a class="pp-link" href="${esc(md.brief_md)}" target="_blank">Full brief</a>`:""}${watchLink(job)}</div>
-    ${studioBlock(job, me)}
-    <div class="fld" style="margin-top:12px"><label>What should change? (only for "Request changes")</label>
-      <textarea data-pp-notes placeholder="e.g. Shorter hook, drop the second B-roll, bigger captions…"></textarea></div>
-    <div class="pp-row"><button class="btn pri" data-pp="approve_edit" ${me.canApprove?"":"disabled"}>✅ Approve — render it</button>
-      <button class="btn" data-pp="request_changes" ${me.canRun?"":"disabled"}>✏️ Request changes</button>
+    <div class="pp-row">${chatBtn(job)}
+      <button class="btn pri" data-pp="render" data-vs="${esc(vs.join(","))}" ${me.canApprove?"":"disabled"} title="Or say “render” in the chat">🎬 Render ${esc(vs.map(v=>v==="yt"?"YouTube":"Instagram").join(" + "))}</button>
       ${me.canRun?`<button class="btn sm" data-pp="cancel" style="margin-left:auto">Cancel job</button>`:""}</div>
-    ${me.canApprove?"":`<p class="hint" style="margin:8px 0 0">Only an owner or admin can approve.</p>`}`;
+    ${me.canApprove?"":`<p class="hint" style="margin:8px 0 0">Only an owner or admin can render.</p>`}`;
+}
+
+// 🧠 what Claude remembers for every video: only what you told it to remember in the chat ("remember this")
+function skillBox(me){
+  const n = S.skill || [];
+  if(S.mode === "off") return "";
+  return `<details class="pp-skill" style="margin-top:10px"><summary>🧠 Skill notes (${n.length}) <span class="hint">— what Claude remembers for every video</span></summary>
+    <p class="hint" style="margin:6px 0">Only what you tell Claude to remember in the chat (“remember this for every video”) lands here. It's written into the dubuddy-short skill on GitHub, so every copy of the skill — the cloud edits and your Mac — uses it. Your edit brief and the card's boxes are for one video and never go into the skill.</p>
+    ${n.length?`<ul class="pp-reflist">${n.map(x=>`<li><span style="flex:1;white-space:normal">${esc(x.text)} <span class="hint">· ${esc(new Date(x.at).toLocaleDateString("en-GB",{day:"numeric",month:"short"}))} ·
+        ${x.remove?"leaves the skill when the next edit starts":x.synced?"✓ in the skill":"⏳ not in the skill file yet"+(x.error?" ("+esc(x.error.slice(0,90))+") — the edits here still follow it":"")}</span></span>
+      ${me.canApprove&&!x.remove?`<button class="linkbtn" data-forget="${esc(x.id)}">remove</button>`:""}</li>`).join("")}</ul>`:`<p class="hint" style="margin:0">Nothing yet.</p>`}
+  </details>`;
+}
+// the newest checkpoint this edit reached (a chat that's waiting on you keeps showing it)
+function lastStage(job){
+  const t = [["proposal", job.proposal&&job.proposal.at], ["built", job.brief&&job.brief.at], ["rendered", job.rendered&&job.rendered.at]].filter(x=>x[1]);
+  return t.length ? t.sort((a,b)=>a[1]<b[1]?1:-1)[0][0] : null;
+}
+// ✋ Check 1: what Claude will do with the clip — nothing is built yet
+function proposalView(job, me){
+  const p = job.proposal || {}, list = a => (a&&a.length)?`<ul>${a.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:"";
+  const hook = p.hook && typeof p.hook === "object" ? p.hook : { text: p.hook };
+  const tbl = (rows, cols) => `<table class="pp-at"><tr>${cols.map(c=>`<th>${c[1]}</th>`).join("")}</tr>${rows.map(r=>`<tr>${cols.map(c=>`<td>${esc(r[c[0]]||"")}</td>`).join("")}</tr>`).join("")}</table>`;
+  return `<div class="pp-note"><b>✋ What Claude will do.</b> Nothing is built yet.</div>
+    ${(p.precautions||[]).length?`<div class="pp-note crit"><b>⚠️ Precautions — planned, but not in the video</b>${list(p.precautions)}</div>`:""}
+    ${p.summary?`<p style="margin:0 0 8px;font-size:13px">${esc(p.summary)}</p>`:""}
+    ${hook.text?`<p style="margin:0 0 4px;font-size:13px"><b>Hook:</b> ${hookHtml(hook.text)}</p>${hook.why?`<p class="hint" style="margin:0 0 8px">${esc(hook.why)}</p>`:""}`:""}
+    ${p.length?`<p style="margin:0 0 8px;font-size:13px"><b>Length:</b> ${esc(p.length)}</p>`:""}
+    ${(p.brief_used||[]).length?`<details open><summary>📝 From your edit brief (${p.brief_used.length})</summary>${list(p.brief_used)}</details>`:""}
+    ${(p.scenes||[]).length?`<details open><summary>Scenes — the animations (${p.scenes.length})</summary>${tbl(p.scenes,[["at","At"],["said","Said"],["scene","Scene"],["display","Display"]])}</details>`:""}
+    ${(p.cuts||[]).length?`<details open><summary>Cuts (${p.cuts.length})</summary><ul style="margin:6px 0;padding-left:18px">${p.cuts.map(x=>typeof x==="string"?`<li>${esc(x)}</li>`:`<li><b>${esc(x.what||"")}</b>${x.why?` <span class="hint">— ${esc(x.why)}</span>`:""}</li>`).join("")}</ul></details>`:""}
+    ${(p.broll||[]).length?`<details><summary>B-roll (${p.broll.length})</summary>${tbl(p.broll,[["at","At"],["what","What"],["display","Display"],["source","Source"]])}</details>`:""}
+    ${p.captions?`<details><summary>Captions</summary><p style="margin:4px 0">${esc(p.captions)}</p></details>`:""}
+    ${p.cta?`<details><summary>Ending / CTA</summary><p style="margin:4px 0">${esc(p.cta)}</p></details>`:""}
+    ${p.audio?`<details><summary>Audio</summary><p style="margin:4px 0">${esc(p.audio)}</p></details>`:""}
+    ${transcriptHtml(p.transcript)}
+    ${(p.questions||[]).length?`<div class="pp-note"><b>Claude decided these — change any you like:</b>${list(p.questions)}</div>`:""}
+    ${(p.warnings||[]).length?`<div class="pp-note crit"><b>Warnings</b>${list(p.warnings)}</div>`:""}
+    <div class="pp-note"><b>Say OK or what to change in the chat below.</b> Paste or drop screenshots and files right into it.</div>
+    <div class="pp-row">${chatBtn(job)}${me.canRun?`<button class="btn sm" data-pp="cancel" style="margin-left:auto">Cancel job</button>`:""}</div>`;
+}
+
+// 📝 the whole transcription of the raw clip; the parts the plan cuts are struck through
+function transcriptHtml(t){
+  if(typeof t === "string") t = t.trim() ? [{ text: t }] : [];
+  if(!Array.isArray(t) || !t.length) return "";
+  const cut = t.filter(x => x && x.cut).length;
+  return `<details class="pp-tr"><summary>📝 Full transcript (${t.length} lines${cut?` · ${cut} cut`:""})</summary>
+    ${cut?`<p class="hint" style="margin:4px 0 6px">Struck-through lines are what the plan cuts.</p>`:""}
+    <div class="pp-trlist">${t.map(x => `<div class="pp-trl${x.cut?" cut":""}">${x.at?`<span class="t">${esc(x.at)}</span>`:""}<span>${esc(x.text||"")}</span></div>`).join("")}</div>
+    <div class="pp-row" style="margin:6px 0 0"><button class="btn sm" data-copy="${esc(t.map(x => (x.at?x.at+"  ":"") + (x.text||"")).join("\n"))}">Copy</button></div>
+  </details>`;
 }
 
 // ▶ live player: the edit itself, played in the browser (phone too) — no render, no Studio
 function livePlayer(md){
-  if(!md.preview_yt) return "";
-  const m = S.mounted || {}, v = m.pv === "ig" && md.preview_ig ? "ig" : "yt", src = v === "ig" ? md.preview_ig : md.preview_yt;
+  if(!md.preview_yt && !md.preview_ig) return "";
+  const m = S.mounted || {}, v = (m.pv === "ig" && md.preview_ig) || !md.preview_yt ? "ig" : "yt", src = v === "ig" ? md.preview_ig : md.preview_yt;
   return `<div class="pp-live">
     <div class="pp-row" style="margin:0 0 8px"><b style="font-size:13px">▶ Watch the edit</b>
-      <span class="pp-seg"><button class="btn sm${v==="yt"?" on":""}" data-pp-pv="yt">YouTube</button><button class="btn sm${v==="ig"?" on":""}" data-pp-pv="ig">Instagram</button></span>
+      ${md.preview_yt&&md.preview_ig?`<span class="pp-seg"><button class="btn sm${v==="yt"?" on":""}" data-pp-pv="yt">YouTube</button><button class="btn sm${v==="ig"?" on":""}" data-pp-pv="ig">Instagram</button></span>`
+        :`<span class="hint">${v==="yt"?"YouTube Short":"Instagram Reel"}</span>`}
       <a class="pp-link" href="${esc(src)}" target="_blank" rel="noopener" style="margin-left:auto">Full screen ↗</a></div>
     <div class="pp-frame"><iframe src="${esc(src)}" title="Live preview" allow="autoplay; fullscreen" loading="lazy"></iframe></div>
-    <p class="hint" style="margin:6px 0 0">Tap to play. This is the real edit running live, not a render — heavy scenes can stutter on a phone.</p>
+    <p class="hint" style="margin:6px 0 0">The real edit, not a render: it downloads first, then plays smoothly. Tap to play, drag the bar to jump.</p>
   </div>`;
-}
-
-// 🎬 HyperFrames Studio on the Mac: one Terminal line downloads this edit, opens both versions in Studio,
-// and sends the edited folder back when you press Enter. Approve then renders exactly what Studio shows.
-function studioBlock(job, me){
-  if(!me.canRun) return "";
-  const m = S.mounted || {}, cmd = m.studioCmd && m.studioCmd.job === job.card_id ? m.studioCmd.cmd : "";
-  return `<details class="pp-studio" ${cmd?"open":""}><summary>🎬 See it moving &amp; fix it in HyperFrames Studio (Mac)</summary>
-    ${job.studio?`<div class="pp-note"><b>✅ Your Studio edits arrived</b> (${esc(new Date(job.studio.at).toLocaleString())}). Approve renders them exactly as you left them.</div>`:""}
-    <p class="hint" style="margin:6px 0">Plays the real motion, captions and sound — no render. Cut, trim, move or retime anything, then send it back.</p>
-    ${cmd?`<ol class="hint" style="margin:4px 0 8px;padding-left:18px"><li>Open <b>Terminal</b> on your Mac, paste this line and press Return:</li></ol>${copyBlock(cmd)}
-      <ol class="hint" start="2" style="margin:8px 0 0;padding-left:18px"><li>Studio opens the YouTube and Instagram versions in your browser. Edit them there (Studio saves by itself).</li>
-      <li>Back in Terminal press <b>Return</b> — your changes are sent here. Then press <b>Approve — render it</b>.</li></ol>
-      <p class="hint" style="margin:6px 0 0">The line works for 12 hours.</p>`
-    :`<div class="pp-row"><button class="btn" data-pp-studio>🎬 Open in Studio</button></div>`}
-  </details>`;
 }
 
 // after the render: both finished videos to watch and download (posting is off for now — upload them yourself)
 function finalView(job, c, me){
-  const md = job.media || {};
-  const vid = (k, label, file) => md[k] ? `<div><div class="lbl">${label}</div><video controls preload="metadata" src="${esc(md[k])}"></video>
-      <a class="pp-link" href="${esc(md[k])}" target="_blank" rel="noopener" download="${file}">⬇ Download</a></div>` : "";
-  return `<div class="pp-note"><b>🎬 Both videos are ready.</b> Watch them, download them and post them yourself. Not happy? Say what to change and Claude redoes the edit.</div>
-    <div class="pp-vids">${vid("yt", "YouTube Short", "final_yt.mp4")}${vid("ig", "Instagram Reel", "final_ig.mp4")}</div>
+  const md = job.media || {}, made = ["yt","ig"].filter(v=>md[v]);
+  const vid = v => `<div><div class="lbl">${VNAME[v]}</div><video controls playsinline preload="metadata" src="${esc(md[v])}"></video>
+      <a class="pp-link" href="${esc(md[v])}" target="_blank" rel="noopener" download="final_${v}.mp4">⬇ Download</a></div>`;
+  const cardV = ((c.platforms&&c.platforms.length?c.platforms:[c.platform])||[]).filter(x=>x==="yt"||x==="ig");
+  const choose = [...new Set([...made, ...cardV])];
+  return `<div class="pp-note"><b>🎬 ${made.length>1?"Both videos are":"The video is"} ready.</b> Watch ${made.length>1?"them":"it"} here, download, and post. Want a change later? Say it in the chat or use <b>Edit again</b> — the new render replaces the old file.</div>
+    <div class="pp-vids">${made.map(vid).join("")}</div>
     ${job.outputs&&job.outputs.qc?`<p class="hint" style="margin:-4px 0 10px">QC: ${esc(job.outputs.qc)}</p>`:""}
-    <div class="fld" style="margin-top:14px"><label>Not happy? Say what to change</label><textarea data-pp-notes placeholder="e.g. cut the last 3 seconds · bigger captions · swap the second scene"></textarea></div>
-    <div class="pp-row"><button class="btn" data-pp="back_to_edit" ${me.canRun?"":"disabled"}>↩ Back to edit</button>
-      ${me.canRun?`<button class="btn sm" data-pp="cancel" style="margin-left:auto">Cancel job</button>`:""}</div>`;
+    <details class="pp-again"><summary>✏️ Edit again</summary>
+      <div class="pp-row" style="margin:8px 0">${choose.map(v=>`<label class="pp-chk"><input type="checkbox" data-again="${v}" checked> ${VNAME[v]}</label>`).join("")}</div>
+      <div class="fld"><label>What should change? (optional — you can also just say it in the chat)</label><textarea data-pp-notes placeholder="e.g. cut the last 3 seconds · bigger captions · swap the second scene"></textarea></div>
+      <div class="pp-row"><button class="btn pri" data-pp="edit_again" ${me.canRun?"":"disabled"}>✏️ Edit again</button></div>
+      <p class="hint" style="margin:6px 0 0">Claude picks up the last edit and everything decided so far. Only the ticked versions are re-rendered; their old files are replaced.</p>
+    </details>`;
 }
 
 function scheduledView(job, me){
@@ -414,6 +504,105 @@ function postFailedView(job, c, me){
     ${finalView(job, c, me)}`;
 }
 
+// 💬 the chat with Claude, right on the card. Your messages go to the cloud session doing the edit (it checks every few
+// seconds while it waits for you); if that session has gone to sleep, a message starts a fresh one with this whole chat.
+// Screenshots / files: paste, drop or 📎 — they go to the card's refs folder and Claude downloads them with the message.
+const showChat = job => !!job && ((job.run && job.run.chat) || (job.chat||[]).length > 0) && !["posted","scheduled","posting"].includes(job.status);
+const chatSig = job => job ? (job.chat||[]).length + "/" + ((job.chat||[]).slice(-1)[0]||{}).id + "/" + (job.chat||[]).filter(x=>x.seen).length + "/" + !!job.chat_live + "/" + job.status : "";
+function chatState(job){
+  if(job.chat_live) return [true, BUSY.includes(job.status) ? "Claude is working — it reads new messages between steps" : "Claude is here — it reads your message within seconds"];
+  return [false, "Claude is resting — a message wakes it up with this whole chat (1–3 min to get going)"];
+}
+const isImg = f => /\.(jpe?g|png|gif|webp)$/i.test(f);
+function msgHtml(m){
+  const t = d => d ? new Date(d).toLocaleString("en-GB",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}) : "";
+  if(m.stage) return `<div class="pp-msg stage">${esc(m.text)}</div>`;
+  const body = esc(m.text||"").replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+  const files = (m.files||[]).map(f => { const n = (f.name||f).replace(/^[a-z0-9]+-/, ""), u = f.url;
+    return u && isImg(f.name) ? `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="${esc(n)}" loading="lazy"></a>`
+      : u ? `<div>📄 <a href="${esc(u)}" target="_blank" rel="noopener">${esc(n)}</a></div>` : `<div>📄 ${esc(n)}</div>`; }).join("");
+  const you = m.from === "you";
+  const meta = you ? `${esc(m.by||"You")} · ${t(m.at)} · ${m.pending ? "sending…" : m.seen ? "✓ read by Claude" : "⏳ waiting for Claude"}` : `Claude · ${t(m.at)}`;
+  return `<div class="pp-msg ${you?"you":"claude"}">${body}${files}<span class="meta">${meta}</span></div>`;
+}
+function threadHtml(job){
+  const msgs = job.chat || [];
+  return msgs.length ? msgs.map(msgHtml).join("")
+    : `<p class="hint" style="margin:auto;text-align:center">Claude writes here as it works. Say anything, any time — add screenshots, videos or files for inspiration.</p>`;
+}
+function attHtml(){
+  const m = S.mounted || {}, fs = m.chatFiles || [];
+  return fs.map((f, i) => `<span>${isImg(f.name)?"🖼️":/\.(mp4|mov|m4v|webm)$/i.test(f.name)?"🎞️":"📄"} ${esc(f.name)}${f.err?` — ${esc(f.err)}`:f.file?"":` ${f.pct||0}%`}<button data-att-x="${i}" title="Remove">✕</button></span>`).join("");
+}
+function chatBox(job, me){
+  const [on, txt] = chatState(job), m = S.mounted || {};
+  const quick = me.canRun && job.status === "proposal_ready" ? `<div class="pp-quick"><button class="btn sm" data-say="OK — build it">👍 OK — build it</button></div>` : "";
+  return `<div class="pp-chat" data-pp-chat>
+    <div class="pp-chat-h"><b>💬 Chat with Claude</b><span class="pp-dot${on?" on":""}" data-chat-dot></span><span class="hint" data-chat-state>${esc(txt)}</span>
+      <span style="margin-left:auto">${chatBtn(job)}</span></div>
+    <div class="pp-thread" data-pp-thread>${threadHtml(job)}</div>
+    ${me.canRun?`<div class="pp-compose">
+      <div class="pp-att" data-pp-att>${attHtml()}</div>
+      <textarea data-chat-in data-plain placeholder="Tell Claude what to change, ask anything, or paste a screenshot… (Enter sends, Shift+Enter for a new line)">${esc(m.chatDraft||"")}</textarea>
+      <div class="pp-row" style="margin:6px 0 0"><label class="btn sm" style="cursor:pointer" title="Screenshots, videos, files">📎 Add files<input type="file" multiple data-chat-file hidden></label>
+        <span class="hint">or drop / paste them</span><button class="btn pri sm" data-chat-send style="margin-left:auto">Send</button></div>
+      ${quick}</div>`:`<p class="hint" style="margin:8px 12px">Only editors can talk to Claude here.</p>`}
+  </div>`;
+}
+function paintChat(job){
+  const m = S.mounted; if(!m || !job) return;
+  const sig = chatSig(job); if(sig === m.csig) return; m.csig = sig;
+  const th = m.host.querySelector("[data-pp-thread]"); if(!th) return;
+  const atEnd = th.scrollHeight - th.scrollTop - th.clientHeight < 40;
+  th.innerHTML = threadHtml(job); if(atEnd) th.scrollTop = th.scrollHeight;
+  const [on, txt] = chatState(job), d = m.host.querySelector("[data-chat-dot]"), st = m.host.querySelector("[data-chat-state]");
+  if(d) d.classList.toggle("on", on); if(st) st.textContent = txt;
+}
+
+// 📎 the edit brief's files: screenshots, reference videos, docs — in the card's refs folder; Claude gets them when the
+// edit starts (pipe.py start → <work>/refs) and they open the card chat. Drawn inside the card's 📝 Edit brief box.
+S.refs = {};
+const kbOf = n => n >= 1e6 ? (n/1e6).toFixed(1) + " MB" : Math.max(1, Math.round(n/1e3)) + " KB";
+const icOf = f => /\.(jpe?g|png|gif|webp|heic)$/i.test(f) ? "🖼️" : /\.(mp4|mov|m4v|webm)$/i.test(f) ? "🎞️" : "📄";
+function loadRefs(id){
+  return call("/api/pipeline/storage?team=" + encodeURIComponent(team()) + "&job=" + encodeURIComponent(id) + "&refs=1")
+    .then(j => { S.refs[id] = { list: j.data || [] }; }).catch(() => { S.refs[id] = { list: [] }; }).then(paintBrief);
+}
+function paintBrief(){
+  const b = S.brief; if(!b || !b.host.isConnected) return;
+  const { host, card:c, h } = b, me = S.me || {}, r = S.refs[c.id] || {}, list = r.list || [], up = r.up || [];
+  const can = me.canRun !== false && S.mode !== "off";
+  host.innerHTML = `<div class="bf-drop" data-bfdrop>${can?`<label class="btn sm" style="cursor:pointer">📎 Add photos, videos or files<input type="file" multiple data-bffile hidden></label>
+      <span class="hint">or drop / paste them here</span>`:`<span class="hint">Only editors can add files.</span>`}</div>
+    ${r.list ? "" : `<div class="hint" style="margin:6px 0">Loading the files…</div>`}
+    ${up.length||list.length?`<ul class="bf-list">${up.map(u=>`<li>${icOf(u.name)} ${esc(u.name)} <span class="hint">${u.err?esc(u.err):"uploading… "+(u.pct||0)+"%"}</span></li>`).join("")}
+      ${list.map(f=>`<li>${icOf(f.file)} <a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.file.replace(/^[a-z0-9]+-/,""))}</a> <span class="hint">${kbOf(f.size)}</span>
+      ${can?`<button type="button" class="linkbtn" data-bfdel="${esc(f.file)}">remove</button>`:""}</li>`).join("")}</ul>`:""}`;
+  const add = async files => {
+    const box = S.refs[c.id] = S.refs[c.id] || { list: [] }; box.up = box.up || [];
+    for(const f of files){
+      const u = { name: f.name || "pasted-image.png", pct: 0 }; box.up.push(u); paintBrief();
+      try{ const { data } = await call("/api/pipeline/upload-url", { team: team(), job: c.id, kind: "ref", name: u.name, size: f.size });
+        await putFile(data.url, f, pc => { u.pct = pc; paintBrief(); });
+        box.up.splice(box.up.indexOf(u), 1); }
+      catch(e){ u.err = e.message; paintBrief(); }
+    }
+    await loadRefs(c.id);
+  };
+  b.add = add;
+  const fi = host.querySelector("[data-bffile]"); if(fi) fi.onchange = () => { if(fi.files.length) add([...fi.files]); };
+  const dz = host.querySelector("[data-bfdrop]");
+  if(dz && can){
+    dz.ondragover = e => { e.preventDefault(); e.stopPropagation(); dz.classList.add("over"); };
+    dz.ondragleave = () => dz.classList.remove("over");
+    dz.ondrop = e => { e.preventDefault(); e.stopPropagation(); dz.classList.remove("over"); const fs = [...(e.dataTransfer.files||[])]; if(fs.length) add(fs); };
+  }
+  host.querySelectorAll("[data-bfdel]").forEach(x => x.onclick = async () => {
+    if(!confirm("Remove this file from the edit brief?")) return;
+    try{ await call("/api/pipeline/storage", { team: team(), job: c.id, op: "delete_ref", file: x.dataset.bfdel }); await loadRefs(c.id); }
+    catch(e){ (h.toast || alert)(e.message); } });
+}
+
 /* ------------------------------------------------------------ events */
 function wire(){
   const m = S.mounted, { host, card:c, h } = m, job = S.jobs[c.id];
@@ -422,22 +611,60 @@ function wire(){
   const notes = () => { const t=q("[data-pp-notes]"); return t ? t.value.trim() : ""; };
   const run = async (b, act, extra) => {
     b.disabled = true; const label = b.textContent; b.textContent = "…";
-    try{ await action(c.id, act, Object.assign({ card_info: cardInfo(c, h) }, extra||{})); m.draft = null; if(act==="start") m.raw = null; render(); poll(); }
+    try{ await action(c.id, act, Object.assign({ card_info: cardInfo(c, h) }, extra||{})); m.draft = null; if(act==="start") m.raw = null;
+      if(S.sent === "chat") toast("Sent to Claude in the chat ✓"); render(); poll(); }
     catch(e){ b.disabled = false; b.textContent = label; toast(e.message); }
   };
 
   host.querySelectorAll("[data-pp-pv]").forEach(b=>b.onclick=()=>{ m.pv = b.dataset.ppPv; render(); });
-  const sb = q("[data-pp-studio]");
-  if(sb) sb.onclick = async () => {
-    sb.disabled = true; sb.textContent = "…";
-    try{
-      const { data } = await call("/api/pipeline/action", { team: team(), job: c.id, action: "studio" });
-      const qq = v => "'" + String(v).replace(/'/g, "'\\''") + "'";
-      m.studioCmd = { job: c.id, cmd: `bash <(curl -fsSL ${/\.vercel\.app$/.test(location.hostname) ? "https://tools.dubuddy.in" : location.origin}/studio/dubuddy-studio.sh) ${qq(c.id)} ${qq(data.get)} ${qq(data.put)} ${qq(data.done)}` };
-      render();
-    }catch(e){ sb.disabled = false; sb.textContent = "🎬 Open in Studio"; toast(e.message); }
+  // 💬 the chat
+  const th = q("[data-pp-thread]"); if(th){ th.scrollTop = th.scrollHeight; m.csig = chatSig(job); }
+  const att = () => { const a = q("[data-pp-att]"); if(a){ a.innerHTML = attHtml(); a.querySelectorAll("[data-att-x]").forEach(x=>x.onclick=()=>{ m.chatFiles.splice(+x.dataset.attX, 1); att(); }); } };
+  att();
+  const addFiles = async files => {
+    m.chatFiles = m.chatFiles || [];
+    for(const f of files){
+      const e = { name: f.name || "screenshot.png", pct: 0 }; m.chatFiles.push(e); att();
+      try{ const { data } = await call("/api/pipeline/upload-url", { team: team(), job: c.id, kind: "ref", name: e.name, size: f.size });
+        await putFile(data.url, f, pc => { e.pct = pc; att(); }); e.file = data.file; }
+      catch(err){ e.err = err.message; }
+      att();
+    }
   };
-
+  const ci = q("[data-chat-in]"), box = q("[data-pp-chat]");
+  const say = async text => {
+    const fs = m.chatFiles || [];
+    if(fs.some(f => !f.file && !f.err)) return toast("Wait a moment — the files are still uploading");
+    const files = fs.filter(f => f.file).map(f => f.file);
+    text = String(text || "").trim();
+    if(!text && !files.length) return;
+    const sb = q("[data-chat-send]"); if(sb) sb.disabled = true;
+    const local = { from: "you", by: "You", text, at: new Date().toISOString(), files: files.map(n => ({ name: n })), pending: true, id: "local" };
+    try{
+      await action(c.id, "say", { text, files, card_info: cardInfo(c, h) });
+      m.chatDraft = ""; m.chatFiles = [];
+      const j = S.jobs[c.id]; if(j) j.chat = (j.chat||[]).concat(local);
+      if(S.sent === "woke") toast("Claude is starting up again — it has the whole chat. Give it a minute or two.");
+      render(); poll();
+    }catch(e){ toast(e.message); if(sb) sb.disabled = false; }
+  };
+  if(ci){
+    ci.oninput = () => { m.chatDraft = ci.value; };
+    ci.onkeydown = e => { if(e.key === "Enter" && !e.shiftKey && !e.isComposing){ e.preventDefault(); say(ci.value); } };
+    ci.onpaste = e => { const fs = [...((e.clipboardData && e.clipboardData.files) || [])]; if(fs.length){ e.preventDefault(); addFiles(fs); } };
+  }
+  const cs = q("[data-chat-send]"); if(cs) cs.onclick = () => say(ci ? ci.value : "");
+  const cf = q("[data-chat-file]"); if(cf) cf.onchange = () => { if(cf.files.length) addFiles([...cf.files]); cf.value = ""; };
+  host.querySelectorAll("[data-say]").forEach(b => b.onclick = () => say(b.dataset.say));
+  if(box && (S.me||{}).canRun){
+    box.ondragover = e => { e.preventDefault(); e.stopPropagation(); box.classList.add("over"); };
+    box.ondragleave = e => { if(!box.contains(e.relatedTarget)) box.classList.remove("over"); };
+    box.ondrop = e => { e.preventDefault(); e.stopPropagation(); box.classList.remove("over"); const fs = [...(e.dataTransfer.files||[])]; if(fs.length) addFiles(fs); };
+  }
+  host.querySelectorAll("[data-forget]").forEach(b=>b.onclick=async()=>{
+    if(!confirm("Remove this rule? It leaves the skill (on GitHub, so everywhere) when the next edit starts.")) return;
+    try{ const j = await call("/api/pipeline/action", { team: team(), job: "_skill", action: "forget_note", id: b.dataset.forget });
+      S.skill = j.data.notes; S.skillSig = JSON.stringify(S.skill); render(); }catch(e){ toast(e.message); } });
   host.querySelectorAll("[data-copy]").forEach(b=>b.onclick=async()=>{
     try{ await navigator.clipboard.writeText(b.dataset.copy); b.textContent="Copied"; setTimeout(()=>b.textContent="Copy",1400); }catch(_){ }
   });
@@ -476,7 +703,17 @@ function wire(){
       if(h.beforeStart) h.beforeStart();     // keeps the card's typed changes
       return run(b, "start", { raw_file: m.raw.file, raw_name: m.raw.name });
     }
-    if(act==="request_changes" || act==="back_to_edit"){
+    if(act==="approve_plan") return run(b, act, { notes: notes() });
+    if(act==="render"){
+      const vs = (b.dataset.vs||"").split(",").filter(Boolean);
+      return run(b, "approve_edit", { targets: vs });
+    }
+    if(act==="edit_again"){
+      const vs = [...host.querySelectorAll("[data-again]:checked")].map(x=>x.dataset.again);
+      if(!vs.length) return toast("Tick at least one version");
+      return run(b, "edit_again", { targets: vs, notes: notes() });
+    }
+    if(act==="request_changes" || act==="back_to_edit" || act==="change_plan"){
       if(!notes()) return toast("Write what should change first");
       return run(b, act, { notes: notes() });
     }
@@ -558,6 +795,14 @@ window.PIPE = {
   async script(card, h){ await action(card.id + "__s", "script", { card_info: cardInfo(card, h||{}) }); poll(); },
   // "🔎 Fill with vidIQ": a small research job of its own (<card>__r)
   async research(card, h){ await action(card.id + "__r", "research", { card_info: cardInfo(card, h||{}) }); poll(); },
+  // 📝 the edit brief's files, drawn into the card's brief box; paste: a file pasted anywhere in the brief box
+  briefFiles(host, card, helpers){
+    if(!host) return;
+    S.brief = { host, card, h: helpers||{} };
+    if(!S.refs[card.id] || !S.refs[card.id].list){ S.refs[card.id] = S.refs[card.id] || {}; loadRefs(card.id); }
+    paintBrief();
+  },
+  addBriefFiles(files){ if(S.brief && S.brief.add) S.brief.add(files); },
   badge(cardId){ return `<span data-pipe-badge="${esc(cardId)}">${badgeHtml(S.jobs[cardId])}</span>`; },
   mount(host, card, helpers){
     if(!host) return;
@@ -566,7 +811,7 @@ window.PIPE = {
     const cr = helpers && helpers.raw && helpers.raw();
     // always the card's own raw file (it can change in the card's Raw video step); keep the preview thumb if it's the same file
     const raw = cr && cr.kind === "file" && cr.file ? Object.assign({}, keep.raw && keep.raw.file === cr.file ? keep.raw : {}, { file: cr.file, name: cr.name, size: cr.size }) : undefined;
-    S.mounted = { host, card, h: helpers||{}, raw, draft: keep.draft, rsig: keep.rsig, studioCmd: keep.studioCmd, pv: keep.pv };
+    S.mounted = { host, card, h: helpers||{}, raw, draft: keep.draft, rsig: keep.rsig, pv: keep.pv, chatDraft: keep.chatDraft, chatFiles: keep.chatFiles };
     ensurePolling(); render(); poll();     // fresh status as soon as a card opens
   },
 };

@@ -6,6 +6,24 @@
     python3 pipe.py finish                 upload this step's results and report "done"
     python3 pipe.py fail "<reason>"        report that the step could not be finished
 
+  Chat runs (the edit chat in claude.ai — Claude stays in the session and reports each stage):
+    python3 pipe.py busy proposing|building|rendering "<what>"   the card shows Claude is working on it
+    python3 pipe.py waiting "<question>"   the card shows Claude is waiting for you in the chat
+    python3 pipe.py stage proposal         uploads OUT/proposal.json (+ the edit folder) → card: "Plan ready"
+    python3 pipe.py stage built            uploads brief, plan_result, live preview, edit folder → card: ▶ live player
+    python3 pipe.py stage rendered         uploads the rendered versions (+ edit folder) → card: the videos
+    python3 pipe.py refs                   downloads the "Files for Claude" on the card into <W>/refs
+    python3 pipe.py restore                after a pause, if the work folder is gone: downloads raw + edit again
+
+  The card chat (the owner writes to you from the card, and reads your answers there):
+    python3 pipe.py listen [minutes]       wait for the owner's next card message (default 9 min; prints it, files in <W>/refs)
+    python3 pipe.py inbox                  any card messages right now? (doesn't wait)
+    python3 pipe.py say "<text>"           your answer, shown in the card chat
+    python3 pipe.py heard "<text>"         copy what the owner typed here in claude.ai into the card chat
+    python3 pipe.py remember "<rule>"      ONLY when the owner says "remember this" / "for every video": saves the rule
+                                           to the team's skill notes (every later run gets them)
+    python3 pipe.py sleep                  stop listening; the owner's next card message starts a fresh session with the chat
+
 The work folder is $PIPE_WORK (default /tmp/dubuddy/job). It always has the same layout, so files
 written by one step are where the next step expects them:
     <W>/payload.json        this run's payload
@@ -55,11 +73,40 @@ def upload(url, src):
                 time.sleep(3 * (i + 1))
 
 
-def report(event, message="", result=None, uploaded=None):
+def post(body):
     p = load()
-    body = json.dumps({"event": event, "message": message, "result": result, "uploaded": uploaded or []}).encode()
-    with http("POST", p["callback"], data=body, headers={"content-type": "application/json"}) as r:
-        return json.loads(r.read() or b"{}")
+    with http("POST", p["callback"], data=json.dumps(body).encode(), headers={"content-type": "application/json"}) as r:
+        out = json.loads(r.read() or b"{}")
+    d = out.get("data") or {}
+    if d.get("ignored"):   # cancelled on the card, or a newer edit took over: say so plainly, don't keep working
+        sys.exit("STOP: " + (d.get("why") or "the card no longer listens to this run") + " Tell the owner in the chat.")
+    if out.get("error"):
+        sys.exit("The website said: " + out["error"])
+    return out
+
+
+def report(event, message="", result=None, uploaded=None):
+    return post({"event": event, "message": message, "result": result, "uploaded": uploaded or []})
+
+
+def links_for(names):
+    return (post({"event": "uploads", "names": names}).get("data") or {}).get("links") or {}
+
+
+def edit_tar():
+    """the whole edit folder, so the next step / a later 'Edit again' continues from it (minus things rebuilt anyway)"""
+    if not os.path.isdir(os.path.join(W, "raw", "edit")):
+        return None
+    t = os.path.join(W, "in", "edit-out.tar.gz"); os.makedirs(os.path.dirname(t), exist_ok=True)
+    skip = ("/node_modules", "/renders", "/.cache", "studio_backups", "/output/", "/final_", "/final.mp4", "/qc_", ".proxy.mp4")
+    with tarfile.open(t, "w:gz") as tf:
+        tf.add(os.path.join(W, "raw", "edit"), arcname="edit", filter=lambda i: None if any(s in i.name for s in skip) else i)
+    return t
+
+
+def targets():
+    t = load().get("targets") or ["yt", "ig"]
+    return [x for x in t if x in ("yt", "ig")] or ["yt", "ig"]
 
 
 # the skill reads the SFX library where OneDrive keeps it on the Mac, so put it at the same path here
@@ -106,7 +153,7 @@ def start(src):
     with open(P, "w") as f:
         json.dump(p, f, indent=1)
     got = []
-    if p["step"] == "plan" and "edit" not in (p.get("inputs") or {}):
+    if p["step"] in ("chat", "propose", "plan") and "edit" not in (p.get("inputs") or {}):
         shutil.rmtree(os.path.join(W, "raw"), ignore_errors=True)   # a fresh edit: nothing left over from an earlier clip
     notes = {}
     for name, url in (p.get("inputs") or {}).items():
@@ -122,6 +169,8 @@ def start(src):
                 tf.extractall(os.path.join(W, "raw"), filter="data")
         elif name == "plan_result":
             download(url, os.path.join(W, "out", "plan_result.json"))
+        elif name == "proposal":   # the plan the owner approved at Check 1
+            download(url, os.path.join(W, "out", "proposal.json"))
         elif name in ("yt", "ig"):
             download(url, os.path.join(W, "in", f"final_{name}.mp4"))
         elif name == "clean_audio":
@@ -129,10 +178,58 @@ def start(src):
         got.append(name)
     if "clean_audio" in got and "raw" in got:
         notes["clean_audio"] = use_clean_audio(p)
+    elif "raw" in got:
+        notes["clean_audio"] = "none uploaded: edit with the camera audio"
+    if p.get("chat") or p["step"] == "propose":   # the edit brief's photos / videos / files ("Files for Claude")
+        try: notes["brief_files"] = fetch_refs() or "none"
+        except (RuntimeError, SystemExit) as e: notes["brief_files"] = f"couldn't fetch: {e}"
     os.makedirs(os.path.join(W, "out"), exist_ok=True)
+    gone = []
+    for rule in p.get("skill_forget") or []:   # removed from the 🧠 list on the website: out of the skill on main too
+        try:
+            if skill_rules("remove", rule).get("ok"): post({"event": "forgot", "message": rule}); gone.append(rule)
+        except SystemExit: pass
+    if gone: notes["skill_rules_removed"] = gone
+    sn = [x for x in (p.get("skill_notes") or []) if str(x).strip()]   # only rules that didn't reach the skill file
+    if sn:   # rules the owner asked to remember for every video: part of the skill
+        with open(os.path.join(W, "SKILL_NOTES.md"), "w") as f:
+            f.write("# Skill notes — the owner's standing rules for EVERY video (newest last; a newer note wins)\n\n" + "\n".join(f"- {x}" for x in sn) + "\n")
+        notes["skill_notes"] = os.path.join(W, "SKILL_NOTES.md") + f" ({len(sn)} rules — part of the skill, read with SKILL.md)"
+    ctx = card_context(p.get("card") or {})
+    if ctx:
+        with open(os.path.join(W, "CARD_CONTEXT.md"), "w") as f: f.write(ctx)
+        notes["card_context"] = os.path.join(W, "CARD_CONTEXT.md") + " (the edit brief + every box on the card and its idea — read it first)"
+    hist = p.get("history") or []
+    if hist:   # the card chat so far (a new session picks the conversation up)
+        with open(os.path.join(W, "CHAT_HISTORY.md"), "w") as f:
+            for m in hist:
+                who = "Claude" if m.get("from") == "claude" else (m.get("by") or "Owner")
+                f.write(f"**{who}** ({m.get('at', '')[:16]}): {m.get('text') or ''}" + (f"  [files: {', '.join(m.get('files') or [])}]" if m.get("files") else "") + "\n\n")
+        notes["chat_history"] = os.path.join(W, "CHAT_HISTORY.md") + f" ({len(hist)} messages — read it first)"
     report("progress", f"{p['step']}: inputs ready")
     print(json.dumps({"step": p["step"], "work": W, "edit_folder": ed(), "raw": os.path.join(W, "raw"),
-                      "inputs": got, "out": os.path.join(W, "out"), **notes}, indent=1))
+                      "inputs": got, "out": os.path.join(W, "out"), "targets": targets(), "chat": bool(p.get("chat")),
+                      "reedit": p.get("reedit"), **notes}, indent=1))
+
+
+def card_context(card):
+    """the owner's package, readable: the edit brief, then every box on the card (by step) and on its idea, by label"""
+    out = []
+    if (card.get("edit_brief") or "").strip():
+        out += ["# Edit brief (the owner, for this edit)", card["edit_brief"].strip(), ""]
+    sec = card.get("sections") or {}
+    for g in sec.get("card") or []:
+        out.append(f"# Card → {g.get('step', '')}")
+        out += [f"- **{b.get('box', '')}**: {b.get('value', '')}" for b in g.get("boxes") or []]
+        out.append("")
+    if sec.get("idea"):
+        out.append("# The idea this card came from")
+        out += [f"- **{b.get('box', '')}**: {b.get('value', '')}" for b in sec["idea"]]
+        out.append("")
+    if not sec:   # an older page: the fixed fields
+        keep = ["idea", "title", "description", "hashtags", "hook", "talking_points", "cta", "shooting_notes", "keywords", "why"]
+        out += ["# Card"] + [f"- **{k}**: {card[k]}" for k in keep if card.get(k)]
+    return "\n".join(out).strip() + "\n" if out else ""
 
 
 def use_clean_audio(p):
@@ -158,32 +255,58 @@ def first(*paths):
     return next((x for x in paths if x and os.path.isfile(x)), None)
 
 
-def upload_preview(E):
-    """▶ live player on the card: hf_yt/ and hf_ig/ go up file by file (the card plays index.html itself)."""
+def upload_preview(E, variants=None):
+    """▶ live player on the card: hf_yt/ and/or hf_ig/ go up file by file (the card plays index.html itself)."""
     skip = ("node_modules", "renders", ".cache", ".built_sha", ".DS_Store")
     names = []
-    for hf in ("hf_yt", "hf_ig"):
+    for hf in ["hf_" + v for v in (variants or ["yt", "ig"])]:
         base = os.path.join(E, hf)
         for d, subs, fs in os.walk(base):
             subs[:] = [x for x in subs if x not in skip]
             names += [os.path.relpath(os.path.join(d, f), E) for f in fs if f not in skip]
     if not names:
         return False
+    # smooth on a phone: a light 720p copy of every big .mp4 (the player downloads it before playing); renders keep the originals
+    proxied, made = {}, {}
+    for n in [x for x in names if x.lower().endswith(".mp4") and ".proxy." not in x and os.path.getsize(os.path.join(E, x)) > 15e6]:
+        src = os.path.join(E, n); dst = src[:-4] + ".proxy.mp4"
+        try:
+            if not (os.path.isfile(dst) and os.path.getmtime(dst) >= os.path.getmtime(src)):
+                subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", src, "-vf", "scale=-2:1280", "-c:v", "libx264", "-preset", "veryfast",
+                                "-crf", "28", "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", dst], check=True, timeout=900)
+            made[n] = os.path.relpath(dst, E)
+        except Exception as e:
+            print("preview copy skipped for", n, e)
+    names += [m for m in made.values() if m not in names]
+    for hfdir in sorted({n.split("/")[0] for n in names if n.endswith("/index.html")}):
+        ix = os.path.join(E, hfdir, "index.html"); html = open(ix, encoding="utf-8").read(); changed = False
+        for orig, prox in made.items():
+            if not orig.startswith(hfdir + "/"): continue
+            rel, prel = orig[len(hfdir) + 1:], prox[len(hfdir) + 1:]
+            for q in ('"', "'"):
+                k = f"src={q}{rel}{q}"
+                if k in html: html = html.replace(k, f"{k} data-proxy={q}{prel}{q}"); changed = True
+        if changed:
+            tmp = os.path.join(W, "in", f"preview-{hfdir}-index.html"); os.makedirs(os.path.dirname(tmp), exist_ok=True)
+            open(tmp, "w", encoding="utf-8").write(html); proxied[f"{hfdir}/index.html"] = tmp
     p = load()
     body = json.dumps({"event": "links", "names": names}).encode()
     with http("POST", p["callback"], data=body, headers={"content-type": "application/json"}) as r:
         links = (json.loads(r.read() or b"{}").get("data") or {}).get("links") or {}
-    if "hf_yt/index.html" not in links:
+    if not any(f"hf_{v}/index.html" in links for v in (variants or ["yt", "ig"])):
         return False
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(6) as ex:
-        list(ex.map(lambda n: upload(links[n], os.path.join(E, n)), [n for n in names if n in links]))
+        list(ex.map(lambda n: upload(links[n], os.path.join(E, n)), [n for n in names if n in links and n not in proxied]))
+    for n, tmp in proxied.items():   # index.html with data-proxy pointers (the edit folder's own file is untouched)
+        if n in links: upload(links[n], tmp)
     return True
 
 
 def finish():
     p = load(); step = p["step"]; outs = p.get("outputs") or {}; E = ed(); O = os.path.join(W, "out")
     files = {
+        "propose": {"proposal": first(f"{O}/proposal.json")},
         "plan":   {"brief_sheet": first(f"{E}/brief/sheet.jpg"), "brief_md": first(f"{E}/brief/brief.md"),
                    "plan_result": first(f"{O}/plan_result.json")},
         "render": {"yt": first(f"{E}/output/youtube/final_yt.mp4", f"{E}/final_yt.mp4"),
@@ -194,10 +317,13 @@ def finish():
         "research": {"research": first(f"{O}/research.json")},
         "script": {"script": first(f"{O}/script.json")},
     }[step]
-    if step in ("plan", "render") and os.path.isdir(os.path.join(W, "raw", "edit")):
+    if step == "render":   # only the versions asked for (an older render of the other one may still be in the folder)
+        for v in ("yt", "ig"):
+            if v not in targets(): files[v] = None
+    if step in ("propose", "plan", "render") and os.path.isdir(os.path.join(W, "raw", "edit")):
         # the whole edit folder travels to the next step (minus things that are rebuilt anyway)
         t = os.path.join(W, "in", "edit-out.tar.gz"); os.makedirs(os.path.dirname(t), exist_ok=True)
-        skip = ("/node_modules", "/renders", "/.cache", "studio_backups")
+        skip = ("/node_modules", "/renders", "/.cache", "studio_backups", "/output/", "/final_", "/final.mp4", "/qc_", ".proxy.mp4")
         with tarfile.open(t, "w:gz") as tf:
             tf.add(os.path.join(W, "raw", "edit"), arcname="edit", filter=lambda i: None if any(s in i.name for s in skip) else i)
         files["edit"] = t
@@ -212,7 +338,7 @@ def finish():
         if path and name in outs:
             report("progress", f"uploading {name}…") if name in ("yt", "ig", "edit") else None
             upload(outs[name], path); uploaded.append(name)
-    rf = {"plan": "plan_result", "render": "render_result", "seo": "seo", "post": "post_result", "research": "research", "script": "script"}[step]
+    rf = {"propose": "proposal", "plan": "plan_result", "render": "render_result", "seo": "seo", "post": "post_result", "research": "research", "script": "script"}[step]
     result = None
     if files.get(rf):
         with open(files[rf]) as f:
@@ -221,10 +347,140 @@ def finish():
     print(json.dumps({"uploaded": uploaded, "server": r}, indent=1))
 
 
+def stage(name):
+    """chat runs: hand one stage to the card, then carry on chatting"""
+    p = load(); E = ed(); O = os.path.join(W, "out"); tv = targets()
+    files, result = {}, {}
+    if name == "proposal":
+        files = {"proposal": first(f"{O}/proposal.json")}
+        if not files["proposal"]: sys.exit("Write OUT/proposal.json first")
+        result = json.load(open(files["proposal"]))
+    elif name == "built":
+        files = {"brief_sheet": first(f"{E}/brief/sheet.jpg"), "brief_md": first(f"{E}/brief/brief.md"), "plan_result": first(f"{O}/plan_result.json")}
+        if not files["plan_result"]: sys.exit("Write OUT/plan_result.json first")
+        result = json.load(open(files["plan_result"]))
+        result["variants"] = [v for v in tv if os.path.isfile(os.path.join(E, f"hf_{v}", "index.html"))]
+    elif name == "rendered":
+        files = {"yt": first(f"{E}/output/youtube/final_yt.mp4", f"{E}/final_yt.mp4") if "yt" in tv else None,
+                 "ig": first(f"{E}/output/instagram/final_ig.mp4", f"{E}/final_ig.mp4") if "ig" in tv else None,
+                 "render_result": first(f"{O}/render_result.json")}
+        if not (files["yt"] or files["ig"]): sys.exit("No rendered video found for " + " / ".join(tv))
+        result = json.load(open(files["render_result"])) if files["render_result"] else {}
+        result["variants"] = [v for v in ("yt", "ig") if files.get(v)]
+    else:
+        sys.exit("stage is proposal | built | rendered")
+    t = edit_tar()
+    if t: files["edit"] = t
+    names = [n for n, f in files.items() if f]
+    links = links_for(names); uploaded = []
+    if name == "built":
+        report("progress", "uploading the live preview…")
+        try:
+            if upload_preview(E, result["variants"]): uploaded.append("preview")
+        except Exception as e:
+            print("live preview upload skipped:", e)
+    for n in names:
+        if n in links:
+            if n in ("yt", "ig", "edit"): report("progress", f"uploading {n}…")
+            upload(links[n], files[n]); uploaded.append(n)
+    r = post({"event": "stage", "stage": name, "result": result, "uploaded": uploaded})
+    print(json.dumps({"stage": name, "uploaded": uploaded, "server": r}, indent=1))
+
+
+def downloads():
+    return post({"event": "downloads"}).get("data") or {}
+
+
+def fetch_refs():
+    d = downloads(); out = []
+    for f in d.get("refs") or []:
+        dest = os.path.join(W, "refs", f["name"]); download(f["url"], dest); out.append(dest)
+    return out
+
+
+def refs():
+    out = fetch_refs()
+    print(json.dumps({"refs": out, "count": len(out)}, indent=1))
+
+
+def restore():
+    """a chat picked up after a pause: the cloud computer may be new, so bring the work folder back from storage"""
+    if os.path.isdir(ed()) and os.listdir(ed()):
+        print(json.dumps({"restored": False, "edit_folder": ed(), "note": "still here"})); return
+    d = downloads(); L = d.get("links") or {}; p = load()
+    if "raw" in L: download(L["raw"], os.path.join(W, "raw", os.path.basename(p.get("raw_name") or "raw.mp4")))
+    if "edit" in L:
+        t = os.path.join(W, "in", "edit.tar.gz"); download(L["edit"], t)
+        with tarfile.open(t) as tf: tf.extractall(os.path.join(W, "raw"), filter="data")
+    for n in ("proposal", "plan_result"):
+        if n in L: download(L[n], os.path.join(W, "out", n + ".json"))
+    print(json.dumps({"restored": True, "edit_folder": ed(), "got": sorted(L), "targets": d.get("targets")}, indent=1))
+
+
+def skill_rules(op, rule):
+    """the skill's remember.py: writes the rule into SKILL.md and pushes it to GitHub main (every copy of the skill)"""
+    if load().get("mode") == "fake":   # test runs never touch the real skill on GitHub
+        return {"ok": False, "error": "test mode: not written to the skill"}
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for d in (os.path.join(here, "skills", "dubuddy-short"), os.environ.get("DUBUDDY_SKILL", ""), os.path.expanduser("~/.agents/skills/dubuddy-short")):
+        sc = os.path.join(d, "scripts", "remember.py") if d else ""
+        if sc and os.path.isfile(sc):
+            r = subprocess.run(["python3", sc, op, rule], capture_output=True, text=True)
+            try: return json.loads(r.stdout.strip().splitlines()[-1])
+            except (ValueError, IndexError): return {"ok": False, "error": (r.stderr or r.stdout).strip()[-300:] or "remember.py failed"}
+    return {"ok": False, "error": "the skill's remember.py wasn't found"}
+
+
+def remember(rule):
+    res = skill_rules("add", rule)
+    post({"event": "remember", "message": rule, "synced": res.get("commit") or (res.get("note") if res.get("ok") else None),
+          "error": None if res.get("ok") else res.get("error")})
+    print(json.dumps({"rule": rule, **res, "card": "listed under 🧠 Skill notes"}, ensure_ascii=False))
+
+
+def forget(rule):
+    res = skill_rules("remove", rule)
+    if res.get("ok"): post({"event": "forgot", "message": rule})
+    print(json.dumps({"rule": rule, **res}, ensure_ascii=False))
+
+
+def inbox(listening=True):
+    msgs = (post({"event": "inbox", "listening": listening}).get("data") or {}).get("msgs") or []
+    for m in msgs:   # files attached to a card message: into <W>/refs, the same place as "Files for Claude"
+        paths = []
+        for f in m.get("files") or []:
+            dest = os.path.join(W, "refs", f["name"])
+            try: download(f["url"], dest); paths.append(dest)
+            except RuntimeError as e: paths.append(f"{f['name']} (download failed: {e})")
+        m["files"] = paths
+    return msgs
+
+
+def listen(minutes):
+    end = time.time() + minutes * 60
+    while True:
+        msgs = inbox(True)
+        if msgs or time.time() > end:
+            print(json.dumps({"msgs": msgs, "timeout": not msgs}, indent=1, ensure_ascii=False)); return
+        time.sleep(15)
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     if cmd == "start" and len(sys.argv) > 2: start(sys.argv[2])
     elif cmd == "progress": report("progress", " ".join(sys.argv[2:])); print("ok")
     elif cmd == "finish": finish()
     elif cmd == "fail": print(report("failed", " ".join(sys.argv[2:]) or "The step failed"))
+    elif cmd == "busy" and len(sys.argv) > 2: print(post({"event": "busy", "what": sys.argv[2], "message": " ".join(sys.argv[3:])}))
+    elif cmd == "waiting": print(post({"event": "waiting", "message": " ".join(sys.argv[2:])}))
+    elif cmd == "stage" and len(sys.argv) > 2: stage(sys.argv[2])
+    elif cmd == "refs": refs()
+    elif cmd == "restore": restore()
+    elif cmd == "listen": listen(min(9.5, float(sys.argv[2]) if len(sys.argv) > 2 else 9))
+    elif cmd == "inbox": print(json.dumps({"msgs": inbox(False)}, indent=1, ensure_ascii=False))
+    elif cmd == "say" and len(sys.argv) > 2: post({"event": "say", "message": " ".join(sys.argv[2:])}); print("ok")
+    elif cmd == "heard" and len(sys.argv) > 2: post({"event": "say", "from": "you", "message": " ".join(sys.argv[2:])}); print("ok")
+    elif cmd == "remember" and len(sys.argv) > 2: remember(" ".join(sys.argv[2:]))
+    elif cmd == "forget" and len(sys.argv) > 2: forget(" ".join(sys.argv[2:]))
+    elif cmd == "sleep": post({"event": "sleep"}); print("ok — the next card message starts a fresh session with this chat")
     else: print(__doc__); sys.exit(1)

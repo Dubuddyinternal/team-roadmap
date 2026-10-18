@@ -33,18 +33,81 @@ video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 <video id="aroll" src="assets/cut.mp4" data-start="0" data-duration="6" muted playsinline></video>
 <div class="card clip" id="hook" data-start="0.5" data-duration="3">${label} hook</div>
 <audio id="aroll-audio" src="assets/cut.mp4" data-start="0" data-duration="6" data-volume="1"></audio>
-</div><script>window.__timelines = window.__timelines || {}; const tl = gsap.timeline({ paused: true });
+</div><script>const tl = gsap.timeline({ paused: true });   // like build.py: no __timelines setup (the runtime does it)
 tl.fromTo("#hook", { scale: .5, rotation: -8 }, { scale: 1, rotation: 0, duration: .6, ease: "back.out(2)" }, 0.5);
 window.__timelines["main"] = tl;</script></body></html>`);
 }
 const sleep = s => execFileSync("sleep", [String(s)]);
 const json = (f, o) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, JSON.stringify(o, null, 1)); };
 
+// ---- chat runs: stay alive and act on the owner's card-chat messages (pipe.py listen), like the real session does:
+// "ok"/"build" → build · "render" (or the Render button) → render · "plan…" → a new plan · anything else → change the edit.
+// After FAKE_IDLE seconds without a message it goes to sleep (pipe.py sleep); the next card message starts a new run.
+if (p.chat) {
+  try {
+    const info = JSON.parse(pipe("start", fire)); const ED = info.edit_folder, OUT = info.out, tv = info.targets;
+    const proposal = notes => { fs.mkdirSync(ED, { recursive: true }); fs.writeFileSync(path.join(ED, "plan.json"), JSON.stringify({ fake: true, draft: true }));
+      json(path.join(OUT, "proposal.json"), { summary: (notes ? `[changed: ${notes}] ` : "") + `Fake plan for “${p.card.title || p.card.idea || "card"}” — versions: ${tv.join(" + ")}.`,
+        hook: { text: "SRCC cutoff *gira*?", why: "The number is the surprise." }, length: "32 s (from 47 s)", cuts: [{ what: "2 false starts", why: "repeats" }],
+        brief_used: (p.card.edit_brief ? [`Your brief: “${p.card.edit_brief.slice(0, 60)}” → at 0:06`] : []),
+        precautions: ["Shoot plan said to close on “Comment your doubt 👇” — the video ends on “bye guys”; I end on the CTA card instead (fake)"],
+        transcript: [{ at: "0:00", text: "Haan toh… ek second", cut: true }, { at: "0:02", text: "SRCC ka cutoff is baar gira hai kya?", cut: false },
+          { at: "0:06", text: "2025 me 98.7 tha, aur is baar…", cut: false }, { at: "0:11", text: "sorry, phir se bolta hoon", cut: true }, { at: "0:13", text: "Comment karo apna doubt.", cut: false }],
+        scenes: [{ at: "0:00", said: "SRCC ka cutoff…", scene: "Falling arrow over a college gate", display: "float" }], broll: [], captions: "Hinglish", cta: "Comment cards", audio: "-14 LUFS",
+        questions: [], warnings: [] });
+      pipe("stage", "proposal"); };
+    const build = msg => { pipe("busy", "building", "building (fake)"); sleep(1);
+      fs.mkdirSync(path.join(ED, "brief"), { recursive: true });
+      ff(["-f", "lavfi", "-i", "testsrc2=s=1200x400:d=1", "-frames:v", "1", path.join(ED, "brief/sheet.jpg")]);
+      fs.writeFileSync(path.join(ED, "brief/brief.md"), "# Brief (fake chat run)\n");
+      fs.appendFileSync(path.join(ED, "CHAT_NOTES.md"), `- ${new Date().toISOString()}: ${msg}\n`);
+      tv.forEach(v => demoComposition(path.join(ED, "hf_" + v), v === "yt" ? "YouTube" : "Instagram"));
+      const refs = JSON.parse(pipe("refs")).count;
+      json(path.join(OUT, "plan_result.json"), { summary: `Fake build (${msg}) · ${refs} file(s) from “Files for Claude”`, hook: "SRCC cutoff *gira*?", storyboard: [], captions: "…", questions: [], warnings: [] });
+      pipe("stage", "built"); };
+    const render = () => { pipe("busy", "rendering", "rendering (fake)"); sleep(1);
+      const dir = { yt: "youtube", ig: "instagram" };
+      tv.forEach(v => { fs.mkdirSync(path.join(ED, "output", dir[v]), { recursive: true });
+        ff(["-f", "lavfi", "-i", (v === "yt" ? "testsrc2" : "smptebars") + "=s=540x960:d=4", "-f", "lavfi", "-i", "sine=d=4", "-shortest", "-pix_fmt", "yuv420p", path.join(ED, "output", dir[v], `final_${v}.mp4`)]); });
+      json(path.join(OUT, "render_result.json"), { qc: tv.map(v => v + " ok").join(" · ") + " (fake)" });
+      pipe("stage", "rendered"); };
+    const say = t => pipe("say", t);
+    if (p.step === "chat") { proposal(""); say("Plan's ready (fake): hook on the number, 32 s, one scene. The full plan is on the card — OK to build?"); pipe("waiting", "OK to build, or what should change?"); }
+    else { say(`Back again (fake) — I read the chat so far (${(p.history || []).length} messages).`); }
+    let idle = Date.now();
+    while (Date.now() - idle < Number(process.env.FAKE_IDLE || 900) * 1000) {
+      sleep(1);
+      for (const m of JSON.parse(pipe("listen", "0")).msgs) {
+        idle = Date.now(); const msg = m.text || "";
+        if (m.files.length) say(`Got ${m.files.length} file(s): ${m.files.map(f => path.basename(f)).join(", ")}`);
+        if (/^remember\b/i.test(msg)) { pipe("remember", msg.replace(/^remember\W*/i, "")); say("Saved to the skill (fake)."); continue; }
+        if (m.cmd === "render" || /render/i.test(msg)) { tv.splice(0, tv.length, ...(m.targets || tv)); render(); say("Rendered (fake): " + tv.join(" + ")); }
+        else if (/^(ok|go|build)/i.test(msg)) { build(msg); say("Built it (fake) — watch it above."); }
+        else if (/plan/i.test(msg)) { proposal(msg); say("Changed the plan (fake)."); }
+        else { if (m.targets) tv.splice(0, tv.length, ...m.targets); build(msg); say("Changed it (fake): " + msg.slice(0, 80)); }
+      }
+    }
+    pipe("sleep");
+  } catch (e) { try { pipe("fail", "Fake chat: " + String(e.message).slice(0, 300)); } catch {} }
+  process.exit(0);
+}
+
 try {
   const info = JSON.parse(pipe("start", fire));
   const ED = info.edit_folder, OUT = info.out;
   sleep(2);
-  if (p.step === "plan") {
+  if (p.step === "propose") {
+    pipe("progress", "transcribed (fake)"); sleep(2);
+    fs.mkdirSync(ED, { recursive: true }); fs.writeFileSync(path.join(ED, "plan.json"), JSON.stringify({ fake: true, draft: true, notes: p.notes }));
+    json(path.join(OUT, "proposal.json"), { summary: (p.notes ? `[changed: ${p.notes}] ` : "") + "Fake plan for “" + (p.card.title || p.card.idea || "card") + "”: a 32 s short that opens on the key number.",
+      hook: { text: "SRCC cutoff *gira*?", why: "The number is the surprise — it stops the scroll." }, length: "32 s (from 47 s)",
+      cuts: [{ what: "2 false starts and the second take of the intro", why: "repeats" }],
+      scenes: [{ at: "0:00", said: "SRCC ka cutoff…", scene: "A falling arrow over a college gate, dust drifting", display: "float" },
+               { at: "0:08", said: "2025 me 98.7 tha", scene: "A counter rolling up to 98.7 on a notebook page", display: "split" }],
+      broll: [{ at: "0:15", what: "dubuddy.in predictor on a phone", display: "full", source: "dubuddy.in capture" }],
+      captions: "Hinglish, every word pops", cta: "Comment cards + Subscribe / Follow", audio: "-14 LUFS, pop on the number",
+      questions: ["Kept the teaser at the start"], warnings: [] });
+  } else if (p.step === "plan") {
     pipe("progress", "transcribed (fake)"); sleep(2);
     fs.mkdirSync(path.join(ED, "brief"), { recursive: true });
     ff(["-f", "lavfi", "-i", "testsrc2=s=1200x400:d=1", "-frames:v", "1", path.join(ED, "brief/sheet.jpg")]);
@@ -59,8 +122,9 @@ try {
     if (!fs.existsSync(path.join(ED, "plan.json"))) throw new Error("edit folder didn't come back from the plan step");
     pipe("progress", "rendering YouTube (fake)"); sleep(2);
     fs.mkdirSync(path.join(ED, "output/youtube"), { recursive: true }); fs.mkdirSync(path.join(ED, "output/instagram"), { recursive: true });
-    ff(["-f", "lavfi", "-i", "testsrc2=s=540x960:d=4", "-f", "lavfi", "-i", "sine=d=4", "-shortest", "-pix_fmt", "yuv420p", path.join(ED, "output/youtube/final_yt.mp4")]);
-    ff(["-f", "lavfi", "-i", "smptebars=s=540x960:d=4", "-f", "lavfi", "-i", "sine=d=4", "-shortest", "-pix_fmt", "yuv420p", path.join(ED, "output/instagram/final_ig.mp4")]);
+    const tv = p.targets || ["yt", "ig"];   // only the versions asked for
+    if (tv.includes("yt")) ff(["-f", "lavfi", "-i", "testsrc2=s=540x960:d=4", "-f", "lavfi", "-i", "sine=d=4", "-shortest", "-pix_fmt", "yuv420p", path.join(ED, "output/youtube/final_yt.mp4")]);
+    if (tv.includes("ig")) ff(["-f", "lavfi", "-i", "smptebars=s=540x960:d=4", "-f", "lavfi", "-i", "sine=d=4", "-shortest", "-pix_fmt", "yuv420p", path.join(ED, "output/instagram/final_ig.mp4")]);
     json(path.join(OUT, "render_result.json"), { qc: "yt ok · ig ok (fake)", duration_s: 4 });
   } else if (p.step === "seo") {
     if (!fs.existsSync(path.join(OUT, "plan_result.json"))) throw new Error("plan_result.json didn't arrive");
