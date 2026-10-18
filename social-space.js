@@ -322,9 +322,9 @@ details.isec .hint{font-size:12px}
 .pp-chk input{margin:0}
 .fld .pp-chk{display:flex;margin:0;text-transform:none;letter-spacing:0;font-family:var(--sans);font-size:12.5px;font-weight:500;color:var(--ink)}
 .pp-chk input[type=checkbox]{width:auto;accent-color:var(--accent)}
-.pp-mini{display:flex;gap:10px;margin:0 0 10px}
-.pp-mini>div{width:118px}.pp-mini video{width:118px;aspect-ratio:9/16;background:#000;border-radius:8px;display:block}
-.pp-mini .lbl{margin-bottom:3px}
+.pp-mini{display:grid;grid-template-columns:repeat(2,minmax(0,280px));gap:16px;margin:0 0 14px}
+.pp-mini>div{min-width:0}.pp-mini video{width:100%;aspect-ratio:9/16;background:#000;border-radius:12px;display:block}
+.pp-mini .lbl{margin-bottom:5px}
 .pp-dl{display:inline-block;margin-top:4px;font-size:12px;color:var(--accent-ink)}
 .pub-list{margin:0 0 10px}
 .pub-row{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px;min-width:0}
