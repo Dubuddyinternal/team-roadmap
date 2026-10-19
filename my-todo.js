@@ -30,10 +30,10 @@
    ===================================================================== */
 var TODO = { team: null, loaded: false, loading: false, local: false, why: null, whyMin: false, over: {}, planner: { groups: [], tasks: [] }, rest: {} };
 var todoTab = "plan";          // plan | why — the two tabs at the top
-var todoLevel = "month";       // month | quarter | week | day
+var todoLevel = "quarter";     // quarter | month | week | day
 var todoAt = {};               // level -> the ISO day it is looking at (unset = around today)
 var todoQuickFocus = null;     // keep the cursor in a group's "＋ Add task…" box across the redraw
-var TODO_LEVELS = [["month", "Month"], ["quarter", "Quarter"], ["week", "Week"], ["day", "Day"]];
+var TODO_LEVELS = [["quarter", "Quarter"], ["month", "Month"], ["week", "Week"], ["day", "Day"]];   // top-down: quarter first
 
 function todoCan() { try { return !!currentUser() && hasPerm("my_todo"); } catch (_) { return false; } }
 function todoEl(tag, cls, txt) { var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
