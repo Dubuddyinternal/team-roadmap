@@ -1346,6 +1346,32 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .td-tick.on{background:#16a34a;border-color:#16a34a;opacity:1}
 /* My To-do planner (my-todo.js): Month / Quarter / Week Gantt + Day list */
 .td-why-tools{display:inline-flex;gap:6px}
+.td-ideas{max-width:900px}
+.td-idea-cap{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:12px}
+.td-idea-kinds{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.td-idea-kind{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:4px 11px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--muted)}
+.td-idea-kind.on{background:var(--indigo);border-color:var(--indigo);color:#fff}
+.td-idea-caprow{display:flex;gap:8px;align-items:flex-end}
+.td-idea-in{flex:1;width:100%;box-sizing:border-box;font:inherit;font-size:14px;line-height:1.45;border:1px solid var(--line-strong);border-radius:10px;padding:9px 11px;resize:vertical;background:var(--card);color:var(--ink)}
+.td-idea-in:focus{outline:none;border-color:var(--indigo)}
+.td-idea-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:10px}
+.td-idea-q{flex:1;min-width:160px;max-width:280px;border:1px solid var(--line-strong);border-radius:99px;padding:6px 12px;font:inherit;font-size:13px;background:var(--card)}
+.td-idea-empty{color:var(--muted);font-size:13.5px;padding:18px 4px}
+.td-idea-day{background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:12px;overflow:hidden}
+.td-idea-dh{padding:8px 14px;background:var(--paper);border-bottom:1px solid var(--line);font-family:var(--mono);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.td-idea{display:flex;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.td-idea:last-child{border-bottom:0}
+.td-idea:hover{background:var(--paper)}
+.td-idea.pin{background:#FFFBEB}
+.td-idea-k{font-size:16px;line-height:1.4;flex:none}
+.td-idea-b{flex:1;min-width:0}
+.td-idea-t{font-size:14px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.td-idea-m{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:3px;font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.td-idea-on{color:var(--indigo);font-weight:600}
+.td-idea-acts{display:flex;flex-wrap:wrap;gap:4px;margin-left:auto;font-family:var(--sans,inherit);opacity:0;transition:opacity .12s}
+.td-idea-b>.td-idea-acts{margin:6px 0 0}
+.td-idea:hover .td-idea-acts,.td-idea:focus-within .td-idea-acts,.td-idea-acts.on{opacity:1}
+@media(hover:none){.td-idea-acts{opacity:1}}
 .td-logtag{font-family:var(--mono);font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:#7C5BB5;background:#F1EBFA;border-radius:99px;padding:1px 7px;white-space:nowrap}
 .td-gantt .rmg-blk.td-open{background-image:linear-gradient(90deg,transparent 60%,rgba(255,255,255,.55))!important;border-radius:99px 3px 3px 99px}
 .td-why-mini{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-left:4px solid #ff9933;border-radius:12px;padding:10px 14px;margin:0 0 12px;font:inherit;font-weight:700;font-size:14px;cursor:pointer;color:var(--ink)}

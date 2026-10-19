@@ -20,6 +20,13 @@
 
    🇮🇳 Why do I exist? has its own tab, next to My plan.
 
+   💡 Ideas warehouse (third tab): one private place for every idea,
+   imagination, question or note — instead of writing them in a WhatsApp
+   group. Type (or speak, with the mic) and press Enter; each is kept with
+   its time, newest first, grouped by day, pinned ones on top. Filter by
+   kind, search, edit, pin, delete, or "→ Plan it" to put it on My plan.
+   Stored in data.ideas: [{ id, text, kind, at (ISO time), pin, task }].
+
    A task: { id, title, group, start, end, done, note, ref }
      ref = { k:"asg", key } — an "assigned to me" card (todoAssigned keys)
          | { k:"tid", tid } — any item on a board (allTasks registry)
@@ -35,7 +42,12 @@
    renderAll, rmlModal, rmlTreeLines, rmgColResizer, allTasks, effStatus,
    dNum, dISO, fmtD, toast …).
    ===================================================================== */
-var TODO = { team: null, loaded: false, loading: false, local: false, why: null, whyMin: false, over: {}, planner: { groups: [], tasks: [] }, rest: {} };
+var TODO = { team: null, loaded: false, loading: false, local: false, why: null, whyMin: false, over: {}, planner: { groups: [], tasks: [] }, ideas: [], rest: {} };
+var TODO_IDEA_KINDS = [["idea", "💡", "Idea"], ["imagine", "🌌", "Imagination"], ["question", "❓", "Question"], ["note", "📝", "Note"]];
+var todoIdeaKind = "idea";     // the kind picked for the next one I write
+var todoIdeaFilter = "";       // "" = all, else a kind
+var todoIdeaQ = "";            // search text
+var todoIdeaEdit = null;       // id of the idea being edited in place
 var todoTab = "plan";          // plan | why — the two tabs at the top
 var todoLevel = "quarter";     // quarter | month | week | day
 var todoAt = {};               // level -> the ISO day it is looking at (unset = around today)
@@ -67,11 +79,12 @@ function todoPlannerNorm(p) {
 function todoApply(d) {
   d = d && typeof d === "object" ? d : {};
   TODO.rest = {};
-  Object.keys(d).forEach(function (k) { if (["why", "whyMin", "planner", "over"].indexOf(k) < 0) TODO.rest[k] = d[k]; });   // older My To-do data: kept untouched
+  Object.keys(d).forEach(function (k) { if (["why", "whyMin", "planner", "over", "ideas"].indexOf(k) < 0) TODO.rest[k] = d[k]; });   // older My To-do data: kept untouched
   TODO.why = todoWhyNorm(d.why);
   TODO.whyMin = !!d.whyMin;
   TODO.over = d.over && typeof d.over === "object" ? d.over : {};
   TODO.planner = todoPlannerNorm(d.planner);
+  TODO.ideas = Array.isArray(d.ideas) ? d.ideas.filter(function (x) { return x && x.id && x.text; }) : [];
 }
 async function todoLoad() {
   if (TODO.loading) return;
@@ -92,7 +105,7 @@ async function todoLoad() {
 }
 var _todoSaveT = null;
 function todoSave() {
-  var data = Object.assign({}, TODO.rest, { why: TODO.why, whyMin: TODO.whyMin, over: TODO.over, planner: TODO.planner });
+  var data = Object.assign({}, TODO.rest, { why: TODO.why, whyMin: TODO.whyMin, over: TODO.over, planner: TODO.planner, ideas: TODO.ideas });
   clearTimeout(_todoSaveT);
   _todoSaveT = setTimeout(async function () {
     if (!TODO.local && SUPA) {
@@ -702,6 +715,113 @@ function todoDayList(S) {
   return box;
 }
 
+/* ---------- 💡 ideas warehouse ---------- */
+function todoIdeaKindOf(k) { return TODO_IDEA_KINDS.find(function (x) { return x[0] === k; }) || TODO_IDEA_KINDS[0]; }
+function todoLocalDay(iso) { var d = new Date(iso); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function todoIdeaTime(iso) { var d = new Date(iso); return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); }
+function todoIdeaPlan(x) {
+  var groups = TODO.planner.groups;
+  var put = function (gid) {
+    var title = x.text.split("\n")[0].slice(0, 140), t0 = todoToday();
+    var t = todoNewTask(title, gid, t0, todoIsLog(gid) ? t0 : todoAddDays(t0, 6));
+    if (x.text.length > title.length) t.note = x.text;
+    x.task = t.id; todoSave(); toast("Put on My plan — “" + todoGroup(gid).name + "”");
+  };
+  if (groups.length === 1) { put(groups[0].id); return; }
+  openChoice("Which group on My plan?", groups.map(function (g) { return { label: g.name + (g.kind === "log" ? " (ongoing log)" : ""), value: g.id }; }), put);
+}
+function todoIdeaItem(x) {
+  var K = todoIdeaKindOf(x.kind);
+  var row = todoEl("div", "td-idea" + (x.pin ? " pin" : ""));
+  row.appendChild(todoEl("span", "td-idea-k", K[1])).title = K[2];
+  var body = todoEl("div", "td-idea-b");
+  if (todoIdeaEdit === x.id) {
+    var ta = todoEl("textarea", "td-idea-in"); ta.dataset.plain = "1"; ta.value = x.text; ta.rows = Math.min(8, x.text.split("\n").length + 1);
+    var done = function () { var v = ta.value.trim(); if (v) x.text = v; todoIdeaEdit = null; todoSave(); };
+    ta.onkeydown = function (ev) { if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); done(); } else if (ev.key === "Escape") { todoIdeaEdit = null; renderAll(); } };
+    body.appendChild(ta);
+    var bt = todoEl("div", "td-idea-acts on"), sv = todoEl("button", "td-act", "Save"), cn = todoEl("button", "td-act", "Cancel");
+    sv.onclick = done; cn.onclick = function () { todoIdeaEdit = null; renderAll(); };
+    bt.append(sv, cn); body.appendChild(bt);
+    setTimeout(function () { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }, 0);
+    row.appendChild(body); return row;
+  }
+  body.appendChild(todoEl("div", "td-idea-t", x.text));
+  var meta = todoEl("div", "td-idea-m");
+  meta.appendChild(todoEl("span", "", todoIdeaTime(x.at)));
+  if (x.task && TODO.planner.tasks.some(function (t) { return t.id === x.task; })) meta.appendChild(todoEl("span", "td-idea-on", "🗓 on My plan"));
+  body.appendChild(meta);
+  var acts = todoEl("div", "td-idea-acts");
+  var mk = function (txt, tip, fn, cls) { var b = todoEl("button", "td-act" + (cls ? " " + cls : ""), txt); b.title = tip; b.onclick = function (ev) { ev.stopPropagation(); fn(); }; acts.appendChild(b); };
+  mk(x.pin ? "📌 Unpin" : "📌 Pin", x.pin ? "Take it off the top" : "Keep it at the top", function () { if (x.pin) delete x.pin; else x.pin = true; todoSave(); });
+  mk("✎ Edit", "Change the words", function () { todoIdeaEdit = x.id; renderAll(); });
+  mk("Kind…", "Idea, imagination, question or note", function () {
+    openChoice("What kind is it?", TODO_IDEA_KINDS.map(function (k) { return { label: k[1] + " " + k[2], value: k[0] }; }), function (k) { x.kind = k; todoSave(); });
+  });
+  if (!(x.task && TODO.planner.tasks.some(function (t) { return t.id === x.task; }))) mk("→ Plan it", "Put it on My plan as a task", function () { todoIdeaPlan(x); });
+  mk("Delete", "Delete it for good", function () { if (!confirm("Delete this " + K[2].toLowerCase() + "?")) return; TODO.ideas = TODO.ideas.filter(function (y) { return y !== x; }); todoSave(); }, "danger");
+  meta.appendChild(acts);   // the buttons sit on the time line, shown on hover
+  row.appendChild(body);
+  return row;
+}
+function todoIdeas() {
+  var box = todoEl("div", "td-ideas");
+  // write box: pick a kind, type (or speak), Enter keeps it
+  var cap = todoEl("div", "td-idea-cap");
+  var kinds = todoEl("div", "td-idea-kinds");
+  TODO_IDEA_KINDS.forEach(function (k) {
+    var b = todoEl("button", "td-idea-kind" + (todoIdeaKind === k[0] ? " on" : ""), k[1] + " " + k[2]);
+    b.onclick = function () { todoIdeaKind = k[0]; kinds.querySelectorAll(".td-idea-kind").forEach(function (z) { z.classList.toggle("on", z === b); }); inp.focus(); };
+    kinds.appendChild(b);
+  });
+  cap.appendChild(kinds);
+  var inp = todoEl("textarea", "td-idea-in"); inp.rows = 2; inp.dataset.plain = "1";   // plain text, no rich-text toolbar
+  inp.placeholder = "Write anything that comes to mind… (Enter to keep it, Shift+Enter for a new line)";
+  var keep = function () {
+    var v = inp.value.trim(); if (!v) return;
+    TODO.ideas.unshift({ id: todoId(), text: v, kind: todoIdeaKind, at: new Date().toISOString() });
+    todoQuickFocus = { key: "ideas", until: Date.now() + 2000 };
+    todoSave();
+  };
+  inp.onkeydown = function (ev) { if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); keep(); } };
+  var row = todoEl("div", "td-idea-caprow"); row.appendChild(inp);
+  var go = todoEl("button", "btn save", "Keep it"); go.onclick = keep; row.appendChild(go);
+  cap.appendChild(row);
+  box.appendChild(cap);
+  if (todoQuickFocus && todoQuickFocus.key === "ideas" && Date.now() < todoQuickFocus.until) setTimeout(function () { inp.focus(); }, 0);
+  // filter: all / by kind, and search
+  var bar = todoEl("div", "td-idea-bar");
+  var seg = todoEl("span", "rmg-seg");
+  [["", "", "All"]].concat(TODO_IDEA_KINDS).forEach(function (k) {
+    var n = TODO.ideas.filter(function (x) { return !k[0] || (x.kind || "idea") === k[0]; }).length;
+    var b = todoEl("button", todoIdeaFilter === k[0] ? "on" : "", (k[1] ? k[1] + " " : "") + k[2] + (n ? " " + n : ""));
+    b.onclick = function () { todoIdeaFilter = k[0]; renderAll(); };
+    seg.appendChild(b);
+  });
+  bar.appendChild(seg);
+  var q = todoEl("input", "td-idea-q"); q.type = "search"; q.placeholder = "Search…"; q.value = todoIdeaQ; q.dataset.nodictate = "1";
+  q.oninput = function () { todoIdeaQ = q.value; var pos = q.selectionStart; renderAll(); var q2 = document.querySelector(".td-idea-q"); if (q2) { q2.focus(); try { q2.setSelectionRange(pos, pos); } catch (_) { } } };
+  bar.appendChild(q);
+  box.appendChild(bar);
+  // the list: pinned first, then by day, newest first
+  var s = todoIdeaQ.trim().toLowerCase();
+  var list = TODO.ideas.filter(function (x) { return (!todoIdeaFilter || (x.kind || "idea") === todoIdeaFilter) && (!s || x.text.toLowerCase().indexOf(s) >= 0); })
+    .sort(function (a, b) { return a.at < b.at ? 1 : a.at > b.at ? -1 : 0; });
+  if (!list.length) { box.appendChild(todoEl("div", "td-idea-empty", TODO.ideas.length ? "Nothing matches." : "Nothing here yet. Everything you'd post in the WhatsApp group — write it here instead. Only you see it.")); return box; }
+  var sec = function (title, items) {
+    if (!items.length) return;
+    var g = todoEl("div", "td-idea-day");
+    g.appendChild(todoEl("div", "td-idea-dh", title));
+    items.forEach(function (x) { g.appendChild(todoIdeaItem(x)); });
+    box.appendChild(g);
+  };
+  sec("📌 Pinned", list.filter(function (x) { return x.pin; }));
+  var t0 = todoToday(), y0 = todoAddDays(t0, -1), byDay = {}, order = [];
+  list.filter(function (x) { return !x.pin; }).forEach(function (x) { var d = todoLocalDay(x.at); if (!byDay[d]) { byDay[d] = []; order.push(d); } byDay[d].push(x); });
+  order.forEach(function (d) { sec(d === t0 ? "Today" : d === y0 ? "Yesterday" : new Date(d + "T00:00:00Z").toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" }) + " " + fmtD(d), byDay[d]); });
+  return box;
+}
+
 /* ---------- counts (sidebar and Summary) ---------- */
 function todoCounts() {
   var S = todoSources(), t = todoToday(), c = { todo: 0, progress: 0, done: 0 };
@@ -716,7 +836,7 @@ function todoCounts() {
 /* ---------- the page ---------- */
 // the tab strip at the top of the page (index.html renderTabs calls this on My To-do)
 function todoTabs(strip) {
-  [["plan", "🗓 My plan"], ["why", "🇮🇳 Why do I exist?"]].forEach(function (T) {
+  [["plan", "🗓 My plan"], ["ideas", "💡 Ideas warehouse"], ["why", "🇮🇳 Why do I exist?"]].forEach(function (T) {
     var b = todoEl("button", "tab" + (todoTab === T[0] ? " active" : ""), T[1]);
     b.onclick = function () { if (todoTab === T[0]) return; todoTab = T[0]; renderAll(); };
     strip.appendChild(b);
@@ -733,6 +853,7 @@ function renderContentTodo() {
   }
   if (TODO.local) wrap.appendChild(todoEl("div", "td-note", "Couldn't reach the database — your plan is saved in this browser for now."));
   if (todoTab === "why") { wrap.appendChild(todoWhyCard(false)); return; }
+  if (todoTab === "ideas") { wrap.appendChild(todoIdeas()); return; }
   var S = todoSources();
   // the bar: Month · Quarter · Week · Day, ‹ Today ›, and where things come from
   var head = todoEl("section", "module-block rm-bar");
