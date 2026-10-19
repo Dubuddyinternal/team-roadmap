@@ -11,7 +11,7 @@
      ✅ Day — the list of what runs on that day (and, on today, what's past
         its end and not done), with tick boxes.
 
-   🇮🇳 Why do I exist? sits on top and can be minimised (TODO.whyMin).
+   🇮🇳 Why do I exist? has its own tab, next to My plan.
 
    A task: { id, title, group, start, end, done, note, ref }
      ref = { k:"asg", key } — an "assigned to me" card (todoAssigned keys)
@@ -29,6 +29,7 @@
    dNum, dISO, fmtD, toast …).
    ===================================================================== */
 var TODO = { team: null, loaded: false, loading: false, local: false, why: null, whyMin: false, over: {}, planner: { groups: [], tasks: [] }, rest: {} };
+var todoTab = "plan";          // plan | why — the two tabs at the top
 var todoLevel = "month";       // month | quarter | week | day
 var todoAt = {};               // level -> the ISO day it is looking at (unset = around today)
 var todoQuickFocus = null;     // keep the cursor in a group's "＋ Add task…" box across the redraw
@@ -674,19 +675,13 @@ function todoCounts() {
 }
 
 /* ---------- the page ---------- */
-function todoWhyBlock() {
-  if (TODO.whyMin) {
-    var mini = todoEl("button", "td-why-mini", "🇮🇳 Why do I exist? — " + TODO.why.goal + "  ▾");
-    mini.title = "Show it again"; mini.onclick = function () { TODO.whyMin = false; todoSave(); };
-    return mini;
-  }
-  var card = todoWhyCard(false), hd = card.querySelector(".td-why-hd");
-  var mn = todoEl("button", "td-act", "▴ Minimise"); mn.title = "Fold it into one line";
-  mn.onclick = function () { TODO.whyMin = true; todoSave(); };
-  var tools = todoEl("span", "td-why-tools");
-  while (hd.children.length > 1) tools.appendChild(hd.children[1]);
-  tools.appendChild(mn); hd.appendChild(tools);
-  return card;
+// the tab strip at the top of the page (index.html renderTabs calls this on My To-do)
+function todoTabs(strip) {
+  [["plan", "🗓 My plan"], ["why", "🇮🇳 Why do I exist?"]].forEach(function (T) {
+    var b = todoEl("button", "tab" + (todoTab === T[0] ? " active" : ""), T[1]);
+    b.onclick = function () { if (todoTab === T[0]) return; todoTab = T[0]; renderAll(); };
+    strip.appendChild(b);
+  });
 }
 function renderContentTodo() {
   var wrap = $("content");
@@ -698,7 +693,7 @@ function renderContentTodo() {
     todoLoad(); return;
   }
   if (TODO.local) wrap.appendChild(todoEl("div", "td-note", "Couldn't reach the database — your plan is saved in this browser for now."));
-  wrap.appendChild(todoWhyBlock());
+  if (todoTab === "why") { wrap.appendChild(todoWhyCard(false)); return; }
   var S = todoSources();
   // the bar: Month · Quarter · Week · Day, ‹ Today ›, and where things come from
   var head = todoEl("section", "module-block rm-bar");
@@ -727,7 +722,6 @@ function renderContentTodo() {
   head.appendChild(row);
   wrap.appendChild(head);
   wrap.appendChild(todoLevel === "day" ? todoDayList(S) : todoGantt(S));
-  if (todoLevel !== "day") wrap.appendChild(todoEl("div", "td-hint", "Month / Quarter: lay out what you'll get done. Week: fix the days. Day: tick things off. Drag a bar to move it, its right end to stretch it."));
 }
 /* the sidebar entry, at the top of Spaces */
 function todoSideItem() {
