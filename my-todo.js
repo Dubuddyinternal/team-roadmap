@@ -402,10 +402,16 @@ function todoClosable(inp, close) {
 function todoSubInput(t) {
   return todoClosable(todoQuickInput("sub:" + t.id, function (v) { todoNewSub(t, v); }, "＋ Add subtask to “" + (t.title || "").slice(0, 40) + "”…"), function () { todoSubAdd = null; });
 }
+// ▾ / ▸ in front of a group's name: fold its tasks away (g.fold), the summary line stays
+function todoGroupFold(g) {
+  var b = todoEl("button", "td-fold td-gfold", g.fold ? "▸" : "▾"); b.title = g.fold ? "Show this group's tasks" : "Minimise this group";
+  b.onclick = function (ev) { ev.stopPropagation(); if (g.fold) delete g.fold; else { g.fold = true; if (todoAddIn === g.id) todoAddIn = null; } todoSave(); };
+  return b;
+}
 // the small ＋ in front of a group's name: opens its "＋ Add task…" box
 function todoAddBtn(g) {
   var b = todoEl("button", "td-gadd", "＋"); b.title = g.kind === "log" ? "Jot something in “" + g.name + "”" : "Add a task to “" + g.name + "”";
-  b.onclick = function (ev) { ev.stopPropagation(); todoAddIn = g.id; todoQuickFocus = { key: todoLevel + ":" + g.id, until: Date.now() + 2000 }; renderAll(); };
+  b.onclick = function (ev) { ev.stopPropagation(); todoAddIn = g.id; delete g.fold; todoQuickFocus = { key: todoLevel + ":" + g.id, until: Date.now() + 2000 }; renderAll(); };
   return b;
 }
 function todoGroup(gid) { return TODO.planner.groups.find(function (g) { return g.id === gid; }) || null; }
@@ -660,6 +666,7 @@ function todoGantt(S) {
     rows = rows.filter(function (r) { return r.show; });
     var items = rows.map(function (r) { return r.t; });
     var lab = todoEl("div", "rmg-phase"); lab.style.gridRow = String(rIdx); lab.dataset.lane = g.id;
+    lab.appendChild(todoGroupFold(g));
     lab.appendChild(todoAddBtn(g));
     lab.appendChild(todoEl("span", "rmg-pname", g.name));
     if (log) { var lg = todoEl("span", "td-logtag", "ongoing log"); lg.title = "Jot things as they come; a bar grows until you tick it done"; lab.appendChild(lg); }
@@ -679,6 +686,7 @@ function todoGantt(S) {
       a.appendChild(todoSubInput(p)); rmlTreeLines(a, 2, [rows.slice(rows.indexOf(rows.filter(function (r) { return r.t === p || r.t.parent === p.id; }).pop()) + 1).some(function (r) { return !r.depth; }) || todoAddIn === g.id], true, 6, 18);
       grid.appendChild(a); cellsRow(rIdx, g.id, "addrow"); rIdx++;
     };
+    if (g.fold) return;   // minimised: just the header and its summary line
     rows.forEach(function (R, ri) {
       var t = R.t, I = R.I, tEnd = R.end, open = log && !I.done, dep = R.depth;
       var nm = todoEl("div", "rmg-task" + (I.done ? " done" : "") + (dep ? " td-sub" : "")); nm.style.gridRow = String(rIdx); nm.dataset.lane = g.id;
@@ -809,11 +817,13 @@ function todoDayList(S) {
     total += items.length;
     var sec = todoEl("div", "td-day-g");
     var hd = todoEl("div", "td-day-h");
+    hd.appendChild(todoGroupFold(g));
     hd.appendChild(todoAddBtn(g));
     hd.appendChild(todoEl("b", "", g.name));
     if (log) hd.appendChild(todoEl("span", "td-logtag", "ongoing log"));
     hd.appendChild(todoEl("span", "rmg-pct", items.length ? String(items.length) : ""));
     sec.appendChild(hd);
+    if (g.fold) { box.appendChild(sec); return; }   // minimised: just the header
     nodes.forEach(function (n, ni) {
       var t = n.t, dep = n.depth;
       var I = todoInfo(t, S), late = !log && !I.done && t.end < day;
