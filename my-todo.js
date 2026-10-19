@@ -27,6 +27,18 @@
    on a task adds them; they sit indented under it, follow it to another
    group and go when it's removed. ▾ / ▸ folds them (t.fold).
 
+   The Day view is the day's list next to an hour-by-hour timeline (from
+   the wake-up target to bedtime): 🕘 on a task, or dragging it onto the
+   timeline, gives it a time on that day (t.slots[day] = { at, dur });
+   drag a block up / down to move it, its bottom edge to make it longer,
+   click an empty time to write a new task there. A red line marks now.
+
+   Task types (t.type) say what a task needs from me, so I can plan the
+   right kind of time for it: 🔁 Follow-up, ✅ Approval, ⚖️ Decision,
+   🔍 Research, 👀 Review, 👥 Meeting, 🛠 Do it, 📚 Learn. A small tag on
+   each task (click to change), a line on the Day view adding up what the
+   day needs, and a type's usual length when it goes on the timeline.
+
    The Day view starts with ⏰ Wake up and ends with 🌙 Go to bed: two small
    clocks with a target time (click to change), "I'm up" / "Going to bed"
    to log now (or ✎ to type the time), how early / late that was, hours
@@ -459,6 +471,7 @@ function todoEditTask(t, S) {
     { k: "group", label: "Group", type: "select", value: t.group, opts: TODO.planner.groups.map(function (g) { return [g.id, g.name]; }), show: function () { return !t.parent; } },
     { k: "start", label: "Starts", type: "date", value: t.start, half: true },
     { k: "end", label: todoIsLog(t.group) ? "Finished on" : "Done by", type: "date", value: t.end, half: true },
+    { k: "type", label: "Type — what it needs from you", type: "select", value: t.type || "", opts: [["", "— no type —"]].concat(TODO_TYPES.map(function (y) { return [y.k, y.i + " " + y.l + " — " + y.need]; })) },
     { k: "done", label: "Status", type: "select", value: t.done ? "done" : "open", opts: [["open", "Not done yet"], ["done", "✓ Done"]] },
     { k: "note", label: "Note (optional)", type: "area", value: t.note || "" }
   );
@@ -478,6 +491,7 @@ function todoEditTask(t, S) {
     var wasDone = !!t.done;
     if (!t.parent && v.group) { t.group = v.group; todoKids(t).forEach(function (k) { k.group = t.group; }); }
     t.start = v.start; t.end = v.end;
+    if (v.type) t.type = v.type; else delete t.type;
     if (v.done === "done") { t.done = true; if (!wasDone && todoIsLog(t.group) && v.end === t.start) todoSetDone(t, true); }
     else { delete t.done; if (todoIsLog(t.group)) t.end = t.start; }
     var n = (v.note || "").trim(); if (n) t.note = n; else delete t.note;
@@ -707,7 +721,8 @@ function todoGantt(S) {
         fo.onclick = function (ev) { ev.stopPropagation(); if (t.fold) delete t.fold; else t.fold = true; todoSave(); };
         tt.appendChild(fo);
       }
-      tt.appendChild(document.createTextNode((I.done ? "✓ " : "") + I.title));
+      var ty = todoType(t);
+      tt.appendChild(document.createTextNode((I.done ? "✓ " : "") + (ty ? ty.i + " " : "") + I.title));
       nm.appendChild(tt);
       var kd = !dep ? todoKidsDone(t, S) : "";
       nm.appendChild(todoEl("span", "rmg-td", todoSpan(t, I.done) + (kd ? " · " + kd : "") + (I.src ? " · " + I.src : "")));
@@ -809,9 +824,19 @@ function todoQuickInput(gid, add, ph) {
 }
 
 /* ---------- the day list ---------- */
+function todoDayTasks(S, day) {
+  var today = todoToday();
+  return TODO.planner.tasks.filter(function (t) {
+    var dn = todoInfo(t, S).done;
+    if (t.start <= day && todoEnd(t, dn) >= day) return true;
+    if (todoSlot(t, day)) return true;
+    return !todoIsLog(t.group) && day === today && t.end < today && !dn;
+  });
+}
 function todoDayList(S) {
   var day = todoWindow().from, today = todoToday();
   var box = todoEl("div", "td-day");
+  var nd = todoNeeds(todoDayTasks(S, day), S, day); if (nd) box.appendChild(nd);
   var total = 0;
   TODO.planner.groups.forEach(function (g) {
     var log = g.kind === "log";
@@ -842,11 +867,21 @@ function todoDayList(S) {
       var cb = todoEl("input"); cb.type = "checkbox"; cb.checked = I.done; cb.title = I.done ? "Mark not done" : "Mark done";
       cb.onchange = function () { todoSetDone(t, cb.checked, day); todoSave(); };
       var tx = todoEl("div", "td-day-tx");
+      var tl1 = todoEl("div", "td-day-tl");
       var nm = todoEl("span", "td-day-t", I.title); nm.onclick = function () { todoEditTask(t, S); };
-      tx.appendChild(nm);
+      tl1.append(nm, todoTypeChip(t));
+      tx.appendChild(tl1);
       var kd = !dep ? todoKidsDone(t, S) : "";
       tx.appendChild(todoEl("span", "td-day-m" + (late ? " late" : ""), (late ? "⚠ was due " + fmtD(t.end) : todoSpan(t, I.done)) + (kd ? " · " + kd : "") + (I.src ? " · " + I.src : "")));
       row.append(cb, tx);
+      var sl = todoSlot(t, day);
+      var tb = todoEl("button", "td-timechip" + (sl ? " on" : ""), sl ? "🕘 " + todoHM12(sl.at) : "🕘");
+      tb.title = sl ? "On the timeline at " + todoHM12(sl.at) + " for " + todoMins(sl.dur) + " — change" : "Give it a time on the timeline (or drag it there)";
+      tb.onclick = function () { todoSlotDialog(t, day); };
+      row.appendChild(tb);
+      row.draggable = true;
+      row.addEventListener("dragstart", function (ev) { try { ev.dataTransfer.setData("text/plain", "todo-task:" + t.id); ev.dataTransfer.effectAllowed = "move"; } catch (_) { } row.classList.add("dragging"); });
+      row.addEventListener("dragend", function () { row.classList.remove("dragging"); });
       if (!dep) { var sb = todoEl("button", "td-gadd td-subbtn", "＋"); sb.title = "Add a subtask"; sb.onclick = function () { todoOpenSub(t); }; row.appendChild(sb); }
       if (I.open) { var op = todoEl("button", "td-day-open", "Open ↗"); op.onclick = function () { I.open(); }; row.appendChild(op); }
       sec.appendChild(row);
@@ -866,6 +901,169 @@ function todoDayList(S) {
   });
   if (!total) box.insertBefore(todoEl("div", "td-day-empty", "Nothing planned for this day yet. Click ＋ next to a group to add something, or plan it on the Week / Month chart."), box.firstChild);
   return box;
+}
+
+/* ---------- task types: what a task needs from me ---------- */
+var TODO_TYPES = [
+  { k: "followup", i: "🔁", l: "Follow-up", need: "a quick nudge — a message or a call", m: 15, c: "#0E7490", bg: "#E0F2F7" },
+  { k: "approval", i: "✅", l: "Approval", need: "a yes / no from you — read and sign off", m: 15, c: "#047857", bg: "#DCFCE7" },
+  { k: "decision", i: "⚖️", l: "Decision", need: "quiet thinking time and the facts in front of you", m: 45, c: "#B45309", bg: "#FEF3C7" },
+  { k: "research", i: "🔍", l: "Research", need: "a focused block — reading, digging, no interruptions", m: 90, c: "#6D28D9", bg: "#EDE9FE" },
+  { k: "review", i: "👀", l: "Review", need: "a careful read and your feedback", m: 30, c: "#1D4ED8", bg: "#DBEAFE" },
+  { k: "meeting", i: "👥", l: "Meeting", need: "a fixed time with people", m: 60, c: "#BE185D", bg: "#FCE7F3" },
+  { k: "doing", i: "🛠", l: "Do it", need: "a work block where you make it yourself", m: 60, c: "#374151", bg: "#F3F4F6" },
+  { k: "learning", i: "📚", l: "Learn", need: "time to read, watch or practise", m: 45, c: "#9A3412", bg: "#FFEDD5" },
+];
+function todoType(t) { return t && TODO_TYPES.find(function (y) { return y.k === t.type; }) || null; }
+// the small tag on a task; click to pick a type
+function todoTypeChip(t) {
+  var y = todoType(t), b = todoEl("button", "td-type" + (y ? "" : " none"), y ? y.i + " " + y.l : "＋ type");
+  if (y) { b.style.color = y.c; b.style.background = y.bg; b.title = y.l + " — needs " + y.need + " (click to change)"; }
+  else b.title = "What kind of task is it? Follow-up, approval, decision, research…";
+  b.onclick = function (ev) {
+    ev.stopPropagation();
+    openChoice("What does “" + (t.title || "this task").slice(0, 50) + "” need?", TODO_TYPES.map(function (x) { return { label: x.i + " " + x.l + " — " + x.need, value: x.k }; }).concat([{ label: "No type", value: "" }]),
+      function (k) { if (k) t.type = k; else delete t.type; todoSave(); });
+  };
+  return b;
+}
+// what the day needs, added up by type
+function todoNeeds(tasks, S, day) {
+  var open = tasks.filter(function (t) { return !todoInfo(t, S).done; });
+  var bar = todoEl("div", "td-needs");
+  bar.appendChild(todoEl("b", "", "This day needs"));
+  var any = false;
+  TODO_TYPES.forEach(function (y) {
+    var ts = open.filter(function (t) { return t.type === y.k; }); if (!ts.length) return;
+    any = true;
+    var mins = ts.reduce(function (m, t) { var sl = todoSlot(t, day); return m + (sl ? sl.dur : y.m); }, 0);
+    var c = todoEl("span", "td-need", y.i + " " + ts.length + " " + y.l.toLowerCase() + (ts.length > 1 && y.k !== "research" && y.k !== "learning" ? "s" : "") + " · ~" + todoMins(mins));
+    c.style.color = y.c; c.style.background = y.bg; c.title = y.l + ": " + y.need + "\n" + ts.map(function (t) { return "• " + (t.title || ""); }).join("\n");
+    bar.appendChild(c);
+  });
+  var un = open.filter(function (t) { return !todoType(t); }).length;
+  if (un) bar.appendChild(todoEl("span", "td-need none", un + " without a type"));
+  if (!any && !un) return null;
+  return bar;
+}
+
+/* ---------- the day's timeline (hours) ---------- */
+var TODO_PXM = 1;   // pixels per minute: one hour = 60px
+function todoSlot(t, day) { var x = t.slots && t.slots[day]; return x && /^\d{2}:\d{2}$/.test(x.at || "") ? { at: x.at, dur: Math.max(15, Number(x.dur) || 60) } : null; }
+function todoSetSlot(t, day, at, dur) {
+  if (!at) { if (t.slots) { delete t.slots[day]; if (!Object.keys(t.slots).length) delete t.slots; } return; }
+  t.slots = t.slots || {}; t.slots[day] = { at: at, dur: Math.max(15, Math.round(dur || 60)) };
+}
+function todoM2HM(m) { m = Math.max(0, Math.min(24 * 60 - 15, Math.round(m))); return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0"); }
+var TODO_DURS = [[15, "15 min"], [30, "30 min"], [45, "45 min"], [60, "1 hour"], [90, "1.5 hours"], [120, "2 hours"], [180, "3 hours"], [240, "4 hours"]];
+function todoSlotDialog(t, day, at) {
+  var sl = todoSlot(t, day), cur = sl ? sl.dur : (todoType(t) ? todoType(t).m : 60);
+  var opts = TODO_DURS.slice(); if (!opts.some(function (o) { return o[0] === cur; })) opts.push([cur, todoMins(cur)]);
+  rmlModal("🕘 When on " + (day === todoToday() ? "today" : fmtD(day)) + "?", [
+    { k: "at", label: "Starts at", type: "time", value: at || (sl ? sl.at : todoM2HM(Math.ceil((todoHMm(todoNowHM()) + 1) / 15) * 15)), half: true },
+    { k: "dur", label: "For", type: "select", value: String(cur), opts: opts.map(function (o) { return [String(o[0]), o[1]]; }), half: true },
+  ], function (v) {
+    if (!/^\d{2}:\d{2}$/.test(v.at || "")) { toast("Pick a time"); return false; }
+    todoSetSlot(t, day, v.at, Number(v.dur)); todoSave();
+  }, { sub: t.title, extra: sl ? [["Take off the timeline", "Keep it on the day without a time", function () { todoSetSlot(t, day, ""); todoSave(); }, true]] : [] });
+}
+// click an empty time: write a new task there
+function todoSlotNew(day, at) {
+  var gs = TODO.planner.groups;
+  rmlModal("New task at " + todoHM12(at), [
+    { k: "title", label: "Task", type: "text", value: "" },
+    { k: "group", label: "Group", type: "select", value: gs[0].id, opts: gs.map(function (g) { return [g.id, g.name]; }) },
+    { k: "type", label: "Type", type: "select", value: "", opts: [["", "— no type —"]].concat(TODO_TYPES.map(function (y) { return [y.k, y.i + " " + y.l]; })), half: true },
+    { k: "dur", label: "For", type: "select", value: "60", opts: TODO_DURS.map(function (o) { return [String(o[0]), o[1]]; }), half: true },
+  ], function (v) {
+    var nm = (v.title || "").trim(); if (!nm) { toast("Give it a name"); return false; }
+    var t = todoNewTask(nm, v.group, day, day); if (v.type) t.type = v.type; todoSetSlot(t, day, at, Number(v.dur)); todoSave();
+  }, { sub: day === todoToday() ? "Today" : fmtD(day) });
+}
+function todoTimeline(S, day, tasks) {
+  var today = todoToday();
+  var timed = tasks.map(function (t) { var sl = todoSlot(t, day); return sl ? { t: t, at: todoHMm(sl.at), dur: sl.dur, I: todoInfo(t, S) } : null; }).filter(Boolean)
+    .sort(function (a, b) { return a.at - b.at || b.dur - a.dur; });
+  var from = Math.floor(Math.min(todoHMm(TODO.clock.wake), timed.length ? timed[0].at : 24 * 60) / 60) * 60;
+  var to = Math.ceil(Math.max(todoBedM(TODO.clock.sleep), timed.reduce(function (m, x) { return Math.max(m, x.at + x.dur); }, 0)) / 60) * 60;
+  if (to <= from) to = from + 60;
+  to = Math.min(to, 24 * 60 + 5 * 60);
+  var wrap = todoEl("div", "td-tl");
+  var hd = todoEl("div", "td-tl-h");
+  hd.appendChild(todoEl("b", "", "🕘 Timeline"));
+  hd.appendChild(todoEl("span", "", timed.length ? timed.length + " on the clock · click a free time to add · drag to move" : "Drag a task here, use its 🕘, or click a time"));
+  wrap.appendChild(hd);
+  var body = todoEl("div", "td-tl-b"); body.style.height = ((to - from) * TODO_PXM) + "px";
+  for (var m = from; m <= to; m += 60) {
+    var ln = todoEl("div", "td-tl-hr"); ln.style.top = ((m - from) * TODO_PXM) + "px";
+    var hh = m % (24 * 60), h12 = (Math.floor(hh / 60) % 12 || 12) + (hh < 12 * 60 ? " AM" : " PM");
+    ln.appendChild(todoEl("span", "", h12)); body.appendChild(ln);
+    if (m + 30 < to) { var hf = todoEl("div", "td-tl-half"); hf.style.top = ((m + 30 - from) * TODO_PXM) + "px"; body.appendChild(hf); }
+  }
+  // the wake-up and bedtime targets
+  [["wake", "⏰ wake up", todoHMm(TODO.clock.wake)], ["sleep", "🌙 bed", todoBedM(TODO.clock.sleep)]].forEach(function (x) {
+    if (x[2] < from || x[2] > to) return;
+    var mk = todoEl("div", "td-tl-mark " + x[0]); mk.style.top = ((x[2] - from) * TODO_PXM) + "px"; mk.appendChild(todoEl("span", "", x[1])); body.appendChild(mk);
+  });
+  if (day === today) {
+    var nowM = todoHMm(todoNowHM()); if (nowM < 5 * 60 && from > 5 * 60) nowM += 24 * 60;
+    if (nowM >= from && nowM <= to) { var nl = todoEl("div", "td-tl-now"); nl.style.top = ((nowM - from) * TODO_PXM) + "px"; body.appendChild(nl); }
+  }
+  // overlapping blocks share the width
+  var cols = [];
+  timed.forEach(function (x) { var c = 0; while (cols[c] && cols[c] > x.at) c++; cols[c] = x.at + x.dur; x.col = c; });
+  timed.forEach(function (x) { x.n = 1 + Math.max.apply(null, timed.filter(function (y) { return y.at < x.at + x.dur && x.at < y.at + y.dur; }).map(function (y) { return y.col; })); });
+  timed.forEach(function (x) {
+    var t = x.t, blk = todoEl("div", "td-tl-blk" + (x.I.done ? " done" : "") + (x.dur <= 30 ? " short" : "")), ty = todoType(t);
+    blk.style.top = ((x.at - from) * TODO_PXM) + "px"; blk.style.height = Math.max(18, x.dur * TODO_PXM - 2) + "px";
+    blk.style.left = "calc(64px + (100% - 72px) * " + (x.col / x.n) + ")"; blk.style.width = "calc((100% - 72px) / " + x.n + " - 3px)";
+    blk.style.background = todoGroupColor(t.group);
+    blk.appendChild(todoEl("b", "", (x.I.done ? "✓ " : "") + (ty ? ty.i + " " : "") + x.I.title));
+    blk.appendChild(todoEl("small", "", todoHM12(todoM2HM(x.at % (24 * 60))) + " – " + todoHM12(todoM2HM((x.at + x.dur) % (24 * 60))) + " · " + todoMins(x.dur)));
+    blk.title = x.I.title + "\nDrag to move · drag the bottom edge to change how long · click to change the time";
+    blk.appendChild(todoEl("i", "td-tl-grip"));
+    todoTlDrag(blk, t, day, x.at, x.dur);
+    body.appendChild(blk);
+  });
+  var yToM = function (ev) { var r = body.getBoundingClientRect(); return from + Math.round((ev.clientY - r.top) / TODO_PXM / 15) * 15; };
+  body.addEventListener("click", function (ev) { if (ev.target !== body && !ev.target.classList.contains("td-tl-hr") && !ev.target.classList.contains("td-tl-half")) return; todoSlotNew(day, todoM2HM(yToM(ev) % (24 * 60))); });
+  body.addEventListener("dragover", function (ev) { ev.preventDefault(); body.classList.add("over"); });
+  body.addEventListener("dragleave", function () { body.classList.remove("over"); });
+  body.addEventListener("drop", function (ev) {
+    ev.preventDefault(); body.classList.remove("over");
+    var k = ""; try { k = ev.dataTransfer.getData("text/plain"); } catch (_) { }
+    if (k.indexOf("todo-task:") !== 0) return;
+    var t = TODO.planner.tasks.find(function (x) { return x.id === k.slice(10); }); if (!t) return;
+    var sl = todoSlot(t, day);
+    todoSetSlot(t, day, todoM2HM(yToM(ev) % (24 * 60)), sl ? sl.dur : (todoType(t) ? todoType(t).m : 60)); todoSave();
+  });
+  wrap.appendChild(body);
+  return wrap;
+}
+// drag a block up / down (15-minute steps), its bottom edge to change how long it takes
+function todoTlDrag(blk, t, day, at0, dur0) {
+  blk.addEventListener("pointerdown", function (e) {
+    if (e.button !== 0) return;
+    e.preventDefault(); e.stopPropagation();
+    var r = blk.getBoundingClientRect(), resize = e.clientY > r.bottom - 8, sy = e.clientY, moved = false, dm = 0;
+    blk.setPointerCapture(e.pointerId);
+    var mv = function (ev) {
+      var dy = ev.clientY - sy; if (!moved && Math.abs(dy) < 4) return;
+      moved = true; blk.classList.add("drag");
+      dm = Math.round(dy / TODO_PXM / 15) * 15;
+      if (resize) blk.style.height = Math.max(13, (dur0 + dm) * TODO_PXM - 2) + "px";
+      else blk.style.transform = "translateY(" + (dm * TODO_PXM) + "px)";
+    };
+    var up = function () {
+      blk.removeEventListener("pointermove", mv); blk.removeEventListener("pointerup", up); blk.classList.remove("drag");
+      if (!moved) { todoSlotDialog(t, day); return; }
+      if (!dm) { renderAll(); return; }
+      if (resize) todoSetSlot(t, day, todoM2HM(at0 % (24 * 60)), Math.max(15, dur0 + dm));
+      else todoSetSlot(t, day, todoM2HM((at0 + dm) % (24 * 60)), dur0);
+      todoSave();
+    };
+    blk.addEventListener("pointermove", mv); blk.addEventListener("pointerup", up);
+  });
 }
 
 /* ---------- ⏰ wake up · 🌙 go to bed: the two clocks on the Day view ---------- */
@@ -1124,7 +1322,11 @@ function renderContentTodo() {
   if (todoLevel === "day") {   // the day starts with waking up and ends with going to bed
     var dd = todoWindow().from;
     wrap.appendChild(todoClock("wake", dd));
-    wrap.appendChild(todoDayList(S));
+    var two = todoEl("div", "td-dayx");
+    var lst = todoDayList(S);
+    two.appendChild(lst);
+    two.appendChild(todoTimeline(S, dd, todoDayTasks(S, dd)));
+    wrap.appendChild(two);
     wrap.appendChild(todoClock("sleep", dd));
   } else wrap.appendChild(todoGantt(S));
 }
