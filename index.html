@@ -1257,6 +1257,29 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .td-daynote span{font-size:13px;color:var(--muted)}
 .td-all-add{margin-top:8px;width:100%}
 .td-all-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;align-items:start}
+/* All to be done as a task list (same look as the Gantt's left column) */
+.td-all-list{display:flex;flex-direction:column;margin:0 -14px -12px}
+.td-all-list .td-card{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:10px;row-gap:1px;margin:0;padding:6px 14px 6px 34px;border:0;border-top:1px solid var(--line);border-radius:0;box-shadow:none;background:var(--card)}
+.td-all-list .td-card:hover{background:var(--paper)}
+.td-all-list .td-card::before{content:"";position:absolute;left:18px;top:0;bottom:0;border-left:1px solid #B4BCC8}
+.td-all-list .td-card::after{content:"";position:absolute;left:18px;top:0;height:50%;width:10px;border-bottom:1px solid #B4BCC8}
+.td-all-list .td-card .kt{grid-column:1;font-size:13.5px;font-weight:400;line-height:1.35;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.td-all-list .td-card .kn{grid-column:1;font-size:11.5px;color:var(--muted);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.td-all-list .td-card .kcard-meta{grid-column:1;display:flex;flex-wrap:nowrap;gap:0;margin:0;min-width:0;overflow:hidden;white-space:nowrap}
+.td-all-list .kcard-meta>*{font-family:var(--mono);font-size:10.5px;font-weight:400;color:var(--muted);background:none!important;border:0!important;padding:0;border-radius:0;flex:none;max-width:none}
+.td-all-list .kcard-meta>*+*::before{content:"·";margin:0 6px;color:var(--muted);font-weight:400}
+.td-all-list .kcard-meta .td-src{max-width:40%;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto}
+.td-all-list .kcard-meta .td-src:hover{color:var(--ink);text-decoration:underline}
+.td-all-list .kcard-meta .td-due.late{color:var(--blocked);font-weight:600}
+.td-all-list .kcard-meta .td-plan.now,.td-all-list .kcard-meta .td-due.today{color:var(--indigo);font-weight:600}
+.td-all-list .td-acts{grid-column:2;grid-row:1 / span 3;margin:0;flex-wrap:nowrap;opacity:0;transition:opacity .12s}
+.td-all-list .td-card:hover .td-acts,.td-all-list .td-card:focus-within .td-acts{opacity:1}
+@media(hover:none),(max-width:700px){.td-all-list .td-card{grid-template-columns:minmax(0,1fr)}.td-all-list .td-acts{grid-column:1;grid-row:auto;opacity:1;flex-wrap:wrap;margin-top:4px}}
+.td-all-addrow{position:relative;padding:4px 14px 6px 34px;border-top:1px solid var(--line)}
+.td-all-addrow::after{content:"";position:absolute;left:18px;top:0;height:50%;width:10px;border-left:1px solid #B4BCC8;border-bottom:1px solid #B4BCC8}
+.td-all-qadd{width:100%;border:0;background:none;padding:4px 0;font:inherit;font-size:13px;color:var(--ink)}
+.td-all-qadd::placeholder{color:var(--accent,#E8622C);font-weight:600}
+.td-all-qadd:focus{outline:none}
 .td-learn{background:var(--card);border:2px solid #F59E0B;border-radius:14px;padding:14px 16px;margin-bottom:14px}
 .td-learn.ok{border:1px solid var(--line)}
 .td-learn-h{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px}
