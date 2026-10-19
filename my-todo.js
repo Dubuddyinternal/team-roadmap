@@ -18,6 +18,11 @@
    growing until I tick it done, then it ends on the day I finished, so the
    Week / Month / Quarter charts show what I actually did.
 
+   🗺 From roadmaps: every task on the team's roadmap charts (Gantt,
+   Swimlane, Lanes…), listed by roadmap › phase with owner and dates, mine
+   first; placed with the chart's dates in a group named after the roadmap,
+   linked (ref.map) so it shows "🗺 Roadmap › Phase" and its done state.
+
    A task can have subtasks (t.parent = the task's id, one level): "＋ Sub"
    on a task adds them; they sit indented under it, follow it to another
    group and go when it's removed. ▾ / ▸ folds them (t.fold).
@@ -355,6 +360,8 @@ function todoInfo(t, S) {
   } else if (r && r.k === "tid") {
     var x = S.reg[r.tid];
     if (x) { i.title = x.task.title || x.task.name || i.title; i.src = "🔗 " + x.path; try { i.done = i.done || effStatus(x.task) === "done"; } catch (_) { } }
+    var rm = r.map && todoRoadmapItem(r.map, r.tid);
+    if (rm) { i.src = "🗺 " + rm.where; i.open = rm.open; }
     else i.src = "🔗 not on its board any more";
   }
   return i;
@@ -536,6 +543,41 @@ function todoPickAssigned() {
     ps.forEach(function (p) { var en = p.e.due && p.e.due >= st ? p.e.due : todoAddDays(st, 6); todoNewTask(p.title, gid, st, en, { k: "asg", key: p.id }); });
     todoSave(); toast(ps.length + " placed on your plan — drag them to the right days");
   });
+}
+// a task on a roadmap chart: where it sits (roadmap › phase) and how to open the chart
+function todoRoadmapItem(mapId, tid) {
+  var m = ((typeof RMAPS !== "undefined" && RMAPS.maps) || []).find(function (x) { return x.id === mapId; });
+  var it = m && (m.items || []).find(function (x) { return x.tid === tid; });
+  if (!it) return null;
+  var ln = (m.lanes || []).find(function (l) { return l.id === it.lane; }) || (m.lanes || [])[0];
+  var ph = ln ? (typeof rmwLanePath === "function" ? rmwLanePath(m, ln) : ln.name) : "";
+  return { m: m, it: it, where: m.name + (ph ? " › " + ph : ""), open: function () { view = "rmap"; activeRmap = m.id; renderAll(); } };
+}
+function todoPickRoadmaps() {
+  var on = {}; TODO.planner.tasks.forEach(function (t) { if (t.ref && t.ref.k === "tid") on[t.ref.tid] = 1; });
+  var reg = {}; try { allTasks().forEach(function (x) { if (x.tid) reg[x.tid] = x; }); } catch (_) { }
+  var me = todoMe(), rows = [];
+  ((typeof RMAPS !== "undefined" && RMAPS.maps) || []).forEach(function (m) {
+    (m.items || []).forEach(function (it) {
+      var x = reg[it.tid]; if (!x) return;
+      try { if (effStatus(x.task) === "done") return; } catch (_) { }
+      var rm = todoRoadmapItem(m.id, it.tid);
+      var owner = it.owner || it.team || "";
+      var mine = !!owner && me.names.some(function (n) { return owner.toLowerCase().indexOf(n.split(" ")[0]) >= 0; });
+      rows.push({ id: it.tid, title: x.task.title || x.task.name || "(untitled)", mine: mine,
+        sub: (mine ? "⭐ yours · " : "") + rm.where + (it.start ? " · " + fmtD(it.start) + (it.end && it.end !== it.start ? " → " + fmtD(it.end) : "") : "") + (owner ? " · 👤 " + owner : ""),
+        on: !!on[it.tid], m: m, it: it });
+    });
+  });
+  rows.sort(function (a, b) { return (b.mine ? 1 : 0) - (a.mine ? 1 : 0); });
+  todoPickDialog("🗺 From roadmaps", "Tasks on the team's roadmap charts — yours (⭐) first. They keep the chart's dates; search by name, phase or owner.", rows, function (ps) {
+    var st = todoPlaceStart();
+    ps.forEach(function (p) {
+      var gid = todoGroupFor(p.m.name), a = p.it.start || st, b = p.it.end && p.it.end >= a ? p.it.end : a;
+      todoNewTask(p.title, gid, a, b, { k: "tid", tid: p.id, map: p.m.id });
+    });
+    todoSave(); toast(ps.length + " placed on your plan with their roadmap dates");
+  }, true);
 }
 function todoPickBoards() {
   var on = {}; TODO.planner.tasks.forEach(function (t) { if (t.ref && t.ref.k === "tid") on[t.ref.tid] = 1; });
@@ -967,6 +1009,7 @@ function renderContentTodo() {
   var nAsg = 0; try { var onP = {}; TODO.planner.tasks.forEach(function (t) { if (t.ref && t.ref.k === "asg") onP[t.ref.key] = 1; }); nAsg = Object.keys(S.asg).filter(function (k) { return S.asg[k].col !== "done" && !onP[k]; }).length; } catch (_) { }
   var mk = function (txt, tip, fn, cls) { var b = todoEl("button", "tool sm" + (cls ? " " + cls : ""), txt); b.title = tip; b.onclick = fn; row.appendChild(b); };
   mk("📥 Assigned to me" + (nAsg ? " (" + nAsg + ")" : ""), "Cards on the team's boards that are yours — place them on your timeline", todoPickAssigned, "primary");
+  mk("🗺 From roadmaps", "Pick tasks from the team's roadmap charts (Gantt etc.) — with their phase, owner and dates", todoPickRoadmaps);
   mk("＋ From boards", "Pick anything from any board to plan it here", todoPickBoards);
   mk("＋ Group", "Add a group (like a phase)", function () { todoEditGroup(null); });
   head.appendChild(row);
