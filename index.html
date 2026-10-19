@@ -8012,6 +8012,8 @@ function selectWorkTab(key){
 }
 function renderTabs(){
   const strip=$("tabstrip"); if(!strip) return;
+  // My To-do: no title or Summary; just its own two tabs (my-todo.js)
+  if(view==="todo" && typeof todoTabs==="function"){ strip.innerHTML=""; paneTab="work"; applyPaneTab(); todoTabs(strip); return; }
   const sig=[view,activeCspace,activeModule,activeSection,devSpace,devSprint,activeRmap,activeCycle].join("|");
   if(sig!==_lastNavSig){ _lastNavSig=sig; paneTab="work"; }
   strip.innerHTML="";
@@ -8035,7 +8037,7 @@ function renderHeader(){
   const _rm = view==="rmap" ? RMAPS.maps.find(m=>m.id===activeRmap) : null;
   $("rm-title").textContent = view==="todo" ? "My To-do" : view==="admin" ? "Administration" : view==="okr" ? "Team OKRs" : view==="content" ? "Educational Content Roadmap" : view==="ideas" ? "Team Ideas" : view==="dev" ? "Development Board" : view==="bugs" ? "Bugs & Issues" : view==="cbugs" ? ((CSPACES.list.find(x=>x.id===activeCspace)||{}).name || "Bugs board") : view==="disc" ? (((currentDisc()||{}).name) || "Product roadmap") : view==="social" ? (((currentSocial()||{}).name) || "Social Media") : view==="campaign" ? (((currentCampaign()||{}).name) || "Campaign") : view==="watch" ? (((currentWatch()||{}).name) || "Keep an Eye") : view==="horizon" ? (((currentHorizon()||{}).name) || "Widen our Horizon") : view==="pdt" ? (((currentPdt()||{}).name) || "Product All in One") : view==="rmap" ? ((_rm && _rm.name) || "Roadmap") : (DATA.title || "Product Roadmap");
   $("rm-subtitle").textContent = view==="todo"
-    ? "Plan your work top-down: the month or quarter on a Gantt, then the week, then today's list — your own tasks, what's assigned to you, and anything from the team's boards. Only you see this."
+    ? ""
     : view==="okr"
     ? "Objectives for this cycle and the measurable key results that tell us if we're getting there."
     : view==="content"
@@ -16381,7 +16383,8 @@ function renderAll(){
   }catch(_){ }
   renderCompanyVision();
   if($("space-crumb")) $("space-crumb").textContent = view==="okr" ? "OKRs" : view==="admin" ? "Administration" : "Workspace";
-  if($("vision-toggle")) $("vision-toggle").style.display = (DATA.companyVision || editMode) ? "" : "none";
+  if($("vision-toggle")) $("vision-toggle").style.display = view!=="todo" && (DATA.companyVision || editMode) ? "" : "none";
+  const _ph = document.querySelector(".pane-head"); if(_ph) _ph.style.display = view==="todo" ? "none" : "";   // My To-do starts straight with its tabs
   const WORKSPACE_VIEWS = WORKSPACE_GROUPS.flatMap(g=>g.items);
   // top-right: Workspace vs OKRs, active one filled
   $("nav-a").classList.toggle("ghost", view==="okr");
