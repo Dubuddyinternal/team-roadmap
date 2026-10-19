@@ -1346,8 +1346,15 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .td-tick.on{background:#16a34a;border-color:#16a34a;opacity:1}
 /* My To-do planner (my-todo.js): Month / Quarter / Week Gantt + Day list */
 .td-why-tools{display:inline-flex;gap:6px}
+.td-gadd{flex:none;width:20px;height:20px;border-radius:6px;border:1px solid var(--line-strong);background:var(--card);color:var(--indigo);font-size:13px;font-weight:700;line-height:1;padding:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;margin-right:2px}
+.td-gadd:hover{background:var(--indigo);border-color:var(--indigo);color:#fff}
+.rmg-phase .td-gadd{margin-right:6px}
+.td-gantt .rmg-phase{justify-content:flex-start;gap:6px}
+.td-gantt .rmg-phase .rml-mini{margin-left:auto}
 .td-gantt .rmg-task{position:relative}
-.td-gantt .rmg-task .td-subbtn{position:absolute;right:8px;top:50%;transform:translateY(-50%);opacity:0;background:var(--card)}
+.td-gantt .rmg-task:not(.rmg-add){padding-right:32px}
+.td-gantt .rmg-task .td-subbtn{position:absolute;right:8px;top:50%;transform:translateY(-50%);opacity:.5}
+.td-subbtn:hover{opacity:1!important}
 .td-gantt .rmg-task:hover .td-subbtn{opacity:1}
 .td-fold{border:0;background:none;padding:0 4px 0 0;margin-left:-2px;font-size:11px;color:var(--muted);cursor:pointer}
 .td-fold:hover{color:var(--indigo)}
@@ -1357,7 +1364,7 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .td-day-row.sub::before{left:36px}
 .td-day-row.sub::after{left:36px}
 .td-day-row.sub+.td-day-row:not(.sub)::before,.td-day-row.sub::before{border-left-color:#B4BCC8}
-.td-day-row .td-subbtn{opacity:0}
+.td-day-row .td-subbtn{opacity:.5}
 .td-day-row:hover .td-subbtn{opacity:1}
 @media(hover:none){.td-gantt .rmg-task .td-subbtn,.td-day-row .td-subbtn{opacity:1}}
 .td-ideas{max-width:900px}
