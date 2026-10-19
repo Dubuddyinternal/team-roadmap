@@ -27,6 +27,13 @@
    on a task adds them; they sit indented under it, follow it to another
    group and go when it's removed. ▾ / ▸ folds them (t.fold).
 
+   The Day view starts with ⏰ Wake up and ends with 🌙 Go to bed: two small
+   clocks with a target time (click to change), "I'm up" / "Going to bed"
+   to log now (or ✎ to type the time), how early / late that was, hours
+   slept, and live "awake for…" / "…till bed". TODO.clock = { wake, sleep }
+   targets; TODO.sleepLog = { "YYYY-MM-DD": { wake, sleep } } (a bedtime
+   after midnight counts for the evening before).
+
    🇮🇳 Why do I exist? has its own tab, next to My plan.
 
    💡 Ideas warehouse (third tab): one private place for every idea,
@@ -51,7 +58,7 @@
    renderAll, rmlModal, rmlTreeLines, rmgColResizer, allTasks, effStatus,
    dNum, dISO, fmtD, toast …).
    ===================================================================== */
-var TODO = { team: null, loaded: false, loading: false, local: false, why: null, whyMin: false, over: {}, planner: { groups: [], tasks: [] }, ideas: [], rest: {} };
+var TODO = { team: null, loaded: false, loading: false, local: false, why: null, whyMin: false, over: {}, planner: { groups: [], tasks: [] }, ideas: [], clock: { wake: "06:00", sleep: "22:00" }, sleepLog: {}, rest: {} };
 var TODO_IDEA_KINDS = [["idea", "💡", "Idea"], ["imagine", "🌌", "Imagination"], ["question", "❓", "Question"], ["note", "📝", "Note"]];
 var todoIdeaKind = "idea";     // the kind picked for the next one I write
 var todoIdeaFilter = "";       // "" = all, else a kind
@@ -90,11 +97,15 @@ function todoPlannerNorm(p) {
 function todoApply(d) {
   d = d && typeof d === "object" ? d : {};
   TODO.rest = {};
-  Object.keys(d).forEach(function (k) { if (["why", "whyMin", "planner", "over", "ideas"].indexOf(k) < 0) TODO.rest[k] = d[k]; });   // older My To-do data: kept untouched
+  Object.keys(d).forEach(function (k) { if (["why", "whyMin", "planner", "over", "ideas", "clock", "sleepLog"].indexOf(k) < 0) TODO.rest[k] = d[k]; });   // older My To-do data: kept untouched
   TODO.why = todoWhyNorm(d.why);
   TODO.whyMin = !!d.whyMin;
   TODO.over = d.over && typeof d.over === "object" ? d.over : {};
   TODO.planner = todoPlannerNorm(d.planner);
+  // wake / sleep: targets (older My To-do kept them in settings) and the log, which carries over
+  var hm = function (v) { return /^\d{2}:\d{2}$/.test(v || "") ? v : ""; }, os = d.settings || {}, ck = d.clock || {};
+  TODO.clock = { wake: hm(ck.wake) || hm(os.wakeAt) || "06:00", sleep: hm(ck.sleep) || hm(os.sleepAt) || "22:00" };
+  TODO.sleepLog = d.sleepLog && typeof d.sleepLog === "object" ? d.sleepLog : {};
   TODO.ideas = Array.isArray(d.ideas) ? d.ideas.filter(function (x) { return x && x.id && x.text; }) : [];
 }
 async function todoLoad() {
@@ -116,7 +127,7 @@ async function todoLoad() {
 }
 var _todoSaveT = null;
 function todoSave() {
-  var data = Object.assign({}, TODO.rest, { why: TODO.why, whyMin: TODO.whyMin, over: TODO.over, planner: TODO.planner, ideas: TODO.ideas });
+  var data = Object.assign({}, TODO.rest, { why: TODO.why, whyMin: TODO.whyMin, over: TODO.over, planner: TODO.planner, ideas: TODO.ideas, clock: TODO.clock, sleepLog: TODO.sleepLog });
   clearTimeout(_todoSaveT);
   _todoSaveT = setTimeout(async function () {
     if (!TODO.local && SUPA) {
@@ -857,6 +868,92 @@ function todoDayList(S) {
   return box;
 }
 
+/* ---------- ⏰ wake up · 🌙 go to bed: the two clocks on the Day view ---------- */
+function todoHMm(v) { var p = String(v || "").split(":"); return Number(p[0]) * 60 + Number(p[1] || 0); }
+function todoHM12(v) { var m = todoHMm(v), h = Math.floor(m / 60), x = m % 60; return (h % 12 || 12) + ":" + String(x).padStart(2, "0") + (h < 12 ? " AM" : " PM"); }
+function todoMins(m) { m = Math.max(0, Math.round(m)); var h = Math.floor(m / 60), x = m % 60; return (h ? h + "h " : "") + (x || !h ? x + "m" : "").trim(); }
+function todoNowHM() { var d = new Date(); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
+// bedtime minutes on a scale where 1 AM is 25:00, so late nights compare right
+function todoBedM(v) { var m = todoHMm(v); return m < 5 * 60 ? m + 24 * 60 : m; }
+function todoVs(actual, target, bed) {
+  var d = bed ? todoBedM(actual) - todoBedM(target) : todoHMm(actual) - todoHMm(target);
+  return Math.abs(d) <= 10 ? { t: "on time ✓", c: "ok" } : d > 0 ? { t: todoMins(d) + " late", c: "late" } : { t: todoMins(-d) + " early", c: "ok" };
+}
+function todoSlept(day) {   // last night: bedtime logged on the day before → wake-up on this day
+  var w = (TODO.sleepLog[day] || {}).wake, b = (TODO.sleepLog[todoAddDays(day, -1)] || {}).sleep;
+  if (!w || !b) return "";
+  return todoMins(todoHMm(w) + 24 * 60 - todoBedM(b));
+}
+function todoClockFace(v) {
+  var m = todoHMm(v), h = (m / 60) % 12, a1 = h * 30, a2 = (m % 60) * 6;
+  var hand = function (a, len, w) { var r = a * Math.PI / 180; return '<line x1="18" y1="18" x2="' + (18 + len * Math.sin(r)).toFixed(1) + '" y2="' + (18 - len * Math.cos(r)).toFixed(1) + '" stroke-width="' + w + '" stroke-linecap="round"/>'; };
+  var ticks = ""; for (var i = 0; i < 12; i++) { var r = i * 30 * Math.PI / 180; ticks += '<line x1="' + (18 + 13.5 * Math.sin(r)).toFixed(1) + '" y1="' + (18 - 13.5 * Math.cos(r)).toFixed(1) + '" x2="' + (18 + 15.5 * Math.sin(r)).toFixed(1) + '" y2="' + (18 - 15.5 * Math.cos(r)).toFixed(1) + '" stroke-width="' + (i % 3 ? 0.8 : 1.6) + '"/>'; }
+  return '<svg viewBox="0 0 36 36" width="36" height="36" aria-hidden="true"><circle cx="18" cy="18" r="17" class="td-clk-dial"/><g class="td-clk-hands">' + ticks + hand(a1, 8, 2.4) + hand(a2, 12, 1.6) + '</g><circle cx="18" cy="18" r="1.6" class="td-clk-pin"/></svg>';
+}
+// the live line: awake for … / … till bed (kept fresh by a timer while the page is open)
+function todoClockLive(el) {
+  var now = todoNowHM(), k = el.dataset.k, at = el.dataset.at, m;
+  if (k === "awake") { m = todoHMm(now) - todoHMm(at); el.textContent = m >= 0 ? "awake for " + todoMins(m) : ""; return; }
+  m = todoBedM(at) - todoBedM(now);
+  el.textContent = m >= 0 ? todoMins(m) + " till bed" : "bedtime was " + todoMins(-m) + " ago";
+  el.className = "td-clk-live " + (m < 0 ? "late" : m <= 30 ? "soon" : "");
+}
+setInterval(function () { document.querySelectorAll(".td-clk-live").forEach(todoClockLive); }, 30000);
+function todoClock(kind, day) {
+  var wake = kind === "wake", today = todoToday(), target = TODO.clock[kind];
+  var logDay = day, logged = (TODO.sleepLog[day] || {})[kind];
+  var box = todoEl("div", "td-clk " + kind + (logged ? " done" : ""));
+  var face = todoEl("div", "td-clk-face"); face.innerHTML = todoClockFace(logged || (day === today && !wake ? todoNowHM() : target));
+  box.appendChild(face);
+  var mid = todoEl("div", "td-clk-mid");
+  var top = todoEl("div", "td-clk-top");
+  top.appendChild(todoEl("b", "", wake ? "⏰ Wake up" : "🌙 Go to bed"));
+  var tg = todoEl("label", "td-clk-tgt"); tg.appendChild(todoEl("span", "", "target"));
+  var ti = todoEl("input"); ti.type = "time"; ti.value = target; ti.title = "Change the target";
+  ti.onchange = function () { if (/^\d{2}:\d{2}$/.test(ti.value)) { TODO.clock[kind] = ti.value; todoSave(); } };
+  tg.appendChild(ti); top.appendChild(tg);
+  mid.appendChild(top);
+  var st = todoEl("div", "td-clk-st");
+  if (logged) {
+    var vs = todoVs(logged, target, !wake);
+    st.appendChild(todoEl("span", "", (wake ? "Woke up " : "Went to bed ") + todoHM12(logged)));
+    st.appendChild(todoEl("span", "td-clk-vs " + vs.c, vs.t));
+    if (wake && todoSlept(day)) st.appendChild(todoEl("span", "", "slept " + todoSlept(day)));
+    if (wake && day === today && !(TODO.sleepLog[day] || {}).sleep) { var lv = todoEl("span", "td-clk-live"); lv.dataset.k = "awake"; lv.dataset.at = logged; todoClockLive(lv); st.appendChild(lv); }
+  } else if (day === today) {
+    if (wake) st.appendChild(todoEl("span", "td-clk-muted", "When did you get up? Log it now or type the time."));
+    else { var lb = todoEl("span", "td-clk-live"); lb.dataset.k = "bed"; lb.dataset.at = target; todoClockLive(lb); st.appendChild(lb); }
+  } else st.appendChild(todoEl("span", "td-clk-muted", day < today ? "Not logged" : "—"));
+  mid.appendChild(st);
+  box.appendChild(mid);
+  var acts = todoEl("div", "td-clk-acts");
+  var put = function (v) {
+    var d = logDay;
+    if (!wake && v && todoHMm(v) < 5 * 60 && d === today && todoHMm(todoNowHM()) < 5 * 60) d = todoAddDays(d, -1);   // after midnight: last night's bedtime
+    var L = TODO.sleepLog[d] = TODO.sleepLog[d] || {};
+    if (v) L[kind] = v; else delete L[kind];
+    if (!Object.keys(L).length) delete TODO.sleepLog[d];
+    todoSave();
+  };
+  if (!logged && day === today) {
+    var now = todoEl("button", "btn save td-clk-now", wake ? "✓ I'm up" : "✓ Going to bed");
+    now.onclick = function () { put(todoNowHM()); };
+    acts.appendChild(now);
+  }
+  if (day <= today) {
+    var ed = todoEl("button", "td-act", logged ? "✎" : "✎ Time…"); ed.title = logged ? "Change or clear the time" : "Type the time";
+    ed.onclick = function () {
+      rmlModal(wake ? "⏰ When did you wake up?" : "🌙 When did you go to bed?", [{ k: "t", label: "Time", type: "time", value: logged || todoNowHM() }], function (v) {
+        if (!/^\d{2}:\d{2}$/.test(v.t || "")) { toast("Pick a time"); return false; }
+        put(v.t);
+      }, { sub: day === today ? "Today" : fmtD(day), extra: logged ? [["Clear", "Remove this time", function () { put(""); }, true]] : [] });
+    };
+    acts.appendChild(ed);
+  }
+  box.appendChild(acts);
+  return box;
+}
+
 /* ---------- 💡 ideas warehouse ---------- */
 function todoIdeaKindOf(k) { return TODO_IDEA_KINDS.find(function (x) { return x[0] === k; }) || TODO_IDEA_KINDS[0]; }
 function todoLocalDay(iso) { var d = new Date(iso); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
@@ -1024,7 +1121,12 @@ function renderContentTodo() {
   mk("＋ Group", "Add a group (like a phase)", function () { todoEditGroup(null); });
   head.appendChild(row);
   wrap.appendChild(head);
-  wrap.appendChild(todoLevel === "day" ? todoDayList(S) : todoGantt(S));
+  if (todoLevel === "day") {   // the day starts with waking up and ends with going to bed
+    var dd = todoWindow().from;
+    wrap.appendChild(todoClock("wake", dd));
+    wrap.appendChild(todoDayList(S));
+    wrap.appendChild(todoClock("sleep", dd));
+  } else wrap.appendChild(todoGantt(S));
 }
 /* the sidebar entry, at the top of Spaces */
 function todoSideItem() {

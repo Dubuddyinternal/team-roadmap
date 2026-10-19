@@ -1346,6 +1346,28 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .td-tick.on{background:#16a34a;border-color:#16a34a;opacity:1}
 /* My To-do planner (my-todo.js): Month / Quarter / Week Gantt + Day list */
 .td-why-tools{display:inline-flex;gap:6px}
+.td-clk{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 14px;margin-bottom:12px}
+.td-clk.wake{background:linear-gradient(90deg,#FFF7E6,var(--card) 55%)}
+.td-clk.sleep{background:linear-gradient(90deg,#EEF0FB,var(--card) 55%)}
+.td-clk-face{flex:none;width:36px;height:36px}
+.td-clk-dial{fill:var(--card);stroke:var(--line-strong);stroke-width:1.2}
+.td-clk.wake .td-clk-hands{stroke:#C77700}
+.td-clk.sleep .td-clk-hands{stroke:#4B4FA8}
+.td-clk-pin{fill:var(--ink)}
+.td-clk-mid{flex:1;min-width:0}
+.td-clk-top{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+.td-clk-top b{font-size:14.5px}
+.td-clk-tgt{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.td-clk-tgt input{font:inherit;font-family:var(--mono);font-size:12px;text-transform:none;border:1px solid var(--line);border-radius:8px;padding:2px 6px;background:var(--card);color:var(--ink)}
+.td-clk-st{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:3px;font-size:12.5px}
+.td-clk-vs.ok{color:#047857;font-weight:600}
+.td-clk-vs.late{color:var(--blocked);font-weight:600}
+.td-clk-muted{color:var(--muted)}
+.td-clk-live{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.td-clk-live.soon{color:#B45309;font-weight:600}
+.td-clk-live.late{color:var(--blocked);font-weight:600}
+.td-clk-acts{display:flex;gap:6px;align-items:center;flex:none}
+.td-clk-now{padding:6px 12px;font-size:13px}
 .td-gadd{flex:none;width:20px;height:20px;border-radius:6px;border:1px solid var(--line-strong);background:var(--card);color:var(--indigo);font-size:13px;font-weight:700;line-height:1;padding:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;margin-right:2px}
 .td-gadd:hover{background:var(--indigo);border-color:var(--indigo);color:#fff}
 .rmg-phase .td-gadd{margin-right:6px}
