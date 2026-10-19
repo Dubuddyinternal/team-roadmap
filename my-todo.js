@@ -934,6 +934,7 @@ function todoHatMenu(anchor, hat) {
   } else todoWithHat(B, todoFixedSetup);
 }
 /* ---------- All to be done: every open thing, hat by hat ---------- */
+var todoQuickFocus = null;   // keep the cursor in a hat's "＋ Add task…" box across the redraw after adding
 function todoAllOpen(assigned) {
   var wrap = todoEl("div", "td-up");
   var today = todoToday();
@@ -972,14 +973,26 @@ function todoAllOpen(assigned) {
     more.onclick = function (ev) { ev.stopPropagation(); todoHatMenu(more, H.key); };
     hd.appendChild(more);
     sec.appendChild(hd);
-    if (cards.length) {
-      var grid = todoEl("div", "td-all-grid");
-      cards.forEach(function (c) { grid.appendChild(c.el()); });
-      sec.appendChild(grid);
-    }
-    var add = todoEl("button", "addline k-add td-all-add", "＋ Add to-do — " + H.label);
-    add.onclick = function () { todoEdit(null, "todo", H.key); };   // no day yet: it waits here until I pick one
-    sec.appendChild(add);
+    // a task list like the Gantt's: one slim row per thing (name + a small line of details),
+    // its buttons show on hover, and "＋ Add task…" at the end
+    var list = todoEl("div", "td-all-list");
+    cards.forEach(function (c) { list.appendChild(c.el()); });
+    var addRow = todoEl("div", "td-all-addrow");
+    var inp = todoEl("input", "td-all-qadd"); inp.type = "text"; inp.placeholder = "＋ Add task…";
+    inp.title = "Type a to-do and press Enter — it waits here until you pick a day";
+    var hk = H.key;
+    inp.onkeydown = function (ev) {
+      if (ev.key === "Escape") { inp.value = ""; inp.blur(); return; }
+      if (ev.key !== "Enter") return;
+      var v = inp.value.trim(); if (!v) return;
+      TODO.items.push({ id: todoId(), title: v, note: "", col: "todo", hat: hk, created: todayISO() });
+      todoQuickFocus = { hat: hk, until: Date.now() + 2000 };
+      todoSave();
+    };
+    addRow.appendChild(inp);
+    if (todoQuickFocus && todoQuickFocus.hat === hk && Date.now() < todoQuickFocus.until) setTimeout(function () { inp.focus(); }, 0);
+    list.appendChild(addRow);
+    sec.appendChild(list);
     wrap.appendChild(sec);
   });
   return wrap;
