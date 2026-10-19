@@ -18,6 +18,10 @@
    growing until I tick it done, then it ends on the day I finished, so the
    Week / Month / Quarter charts show what I actually did.
 
+   A task can have subtasks (t.parent = the task's id, one level): "＋ Sub"
+   on a task adds them; they sit indented under it, follow it to another
+   group and go when it's removed. ▾ / ▸ folds them (t.fold).
+
    🇮🇳 Why do I exist? has its own tab, next to My plan.
 
    💡 Ideas warehouse (third tab): one private place for every idea,
@@ -52,6 +56,7 @@ var todoTab = "plan";          // plan | why — the two tabs at the top
 var todoLevel = "quarter";     // quarter | month | week | day
 var todoAt = {};               // level -> the ISO day it is looking at (unset = around today)
 var todoQuickFocus = null;     // keep the cursor in a group's "＋ Add task…" box across the redraw
+var todoSubAdd = null;         // id of the task whose "＋ Add subtask…" box is open
 var TODO_LEVELS = [["quarter", "Quarter"], ["month", "Month"], ["week", "Week"], ["day", "Day"]];   // top-down: quarter first
 
 function todoCan() { try { return !!currentUser() && hasPerm("my_todo"); } catch (_) { return false; } }
@@ -357,6 +362,34 @@ function todoTasksIn(gid) {
   return TODO.planner.tasks.filter(function (t) { return t.group === gid; })
     .sort(function (a, b) { return a.start < b.start ? -1 : a.start > b.start ? 1 : a.end < b.end ? -1 : 1; });
 }
+// a group's tasks in order, each followed by its subtasks: [{ t, depth, kids }]
+function todoTree(list) {
+  var ids = {}; list.forEach(function (t) { ids[t.id] = 1; });
+  var out = [];
+  list.filter(function (t) { return !t.parent || !ids[t.parent]; }).forEach(function (t) {
+    var kids = list.filter(function (k) { return k.parent === t.id; });
+    out.push({ t: t, depth: 0, kids: kids });
+    if (!t.fold) kids.forEach(function (k) { out.push({ t: k, depth: 1, kids: [] }); });
+  });
+  return out;
+}
+function todoGroupTask(id) { return TODO.planner.tasks.find(function (x) { return x.id === id; }); }
+function todoKids(t) { return TODO.planner.tasks.filter(function (k) { return k.parent === t.id; }); }
+function todoKidsDone(t, S) { var ks = todoKids(t); return ks.length ? ks.filter(function (k) { return todoInfo(k, S).done; }).length + "/" + ks.length + " subtasks done" : ""; }
+function todoNewSub(p, title) {
+  var log = todoIsLog(p.group), st = log ? todoToday() : p.start;
+  var k = todoNewTask(title, p.group, st, log ? st : (todoLevel === "week" || todoLevel === "day" ? st : p.end));
+  k.parent = p.id; delete p.fold;
+  return k;
+}
+function todoOpenSub(t) { todoSubAdd = t.id; delete t.fold; todoQuickFocus = { key: todoLevel + ":sub:" + t.id, until: Date.now() + 2000 }; renderAll(); }
+// the "＋ Add subtask…" box under a task (Esc closes it)
+function todoSubInput(t) {
+  var inp = todoQuickInput("sub:" + t.id, function (v) { todoNewSub(t, v); }, "＋ Add subtask to “" + (t.title || "").slice(0, 40) + "”…");
+  var prev = inp.onkeydown;
+  inp.onkeydown = function (ev) { if (ev.key === "Escape") { todoSubAdd = null; renderAll(); return; } prev(ev); };
+  return inp;
+}
 function todoGroup(gid) { return TODO.planner.groups.find(function (g) { return g.id === gid; }) || null; }
 function todoIsLog(gid) { var g = todoGroup(gid); return !!g && g.kind === "log"; }
 // the day a task's bar ends: an open log item runs up to today
@@ -388,7 +421,7 @@ function todoEditTask(t, S) {
   var fields = [];
   if (!t.ref) fields.push({ k: "title", label: "Task", type: "text", value: t.title || "" });
   fields.push(
-    { k: "group", label: "Group", type: "select", value: t.group, opts: TODO.planner.groups.map(function (g) { return [g.id, g.name]; }) },
+    { k: "group", label: "Group", type: "select", value: t.group, opts: TODO.planner.groups.map(function (g) { return [g.id, g.name]; }), show: function () { return !t.parent; } },
     { k: "start", label: "Starts", type: "date", value: t.start, half: true },
     { k: "end", label: todoIsLog(t.group) ? "Finished on" : "Done by", type: "date", value: t.end, half: true },
     { k: "done", label: "Status", type: "select", value: t.done ? "done" : "open", opts: [["open", "Not done yet"], ["done", "✓ Done"]] },
@@ -396,9 +429,11 @@ function todoEditTask(t, S) {
   );
   var extra = [];
   if (i.open) extra.push(["Open ↗", "Open it on its board", function () { i.open(); }]);
+  if (!t.parent) extra.push(["＋ Subtask", "Add subtasks under it", function () { todoOpenSub(t); }]);
   extra.push(["Remove", t.ref ? "Take it off my plan (the card on its board stays)" : "Delete this task", function () {
-    if (!confirm((t.ref ? "Take “" + i.title + "” off your plan?" : "Delete “" + i.title + "”?"))) return false;
-    TODO.planner.tasks = TODO.planner.tasks.filter(function (x) { return x !== t; });
+    var nk = todoKids(t).length;
+    if (!confirm((t.ref ? "Take “" + i.title + "” off your plan?" : "Delete “" + i.title + "”?") + (nk ? " Its " + nk + " subtask(s) go too." : ""))) return false;
+    TODO.planner.tasks = TODO.planner.tasks.filter(function (x) { return x !== t && x.parent !== t.id; });
     todoSave();
   }, true]);
   rmlModal(t.ref ? i.title : "Edit task", fields, function (v) {
@@ -406,7 +441,8 @@ function todoEditTask(t, S) {
     if (!v.start || !v.end) { toast("Pick both dates"); return false; }
     if (v.end < v.start) { toast("“Done by” is before the start"); return false; }
     var wasDone = !!t.done;
-    t.group = v.group; t.start = v.start; t.end = v.end;
+    if (!t.parent && v.group) { t.group = v.group; todoKids(t).forEach(function (k) { k.group = t.group; }); }
+    t.start = v.start; t.end = v.end;
     if (v.done === "done") { t.done = true; if (!wasDone && todoIsLog(t.group) && v.end === t.start) todoSetDone(t, true); }
     else { delete t.done; if (todoIsLog(t.group)) t.end = t.start; }
     var n = (v.note || "").trim(); if (n) t.note = n; else delete t.note;
@@ -564,8 +600,11 @@ function todoGantt(S) {
   var rIdx = 2;
   TODO.planner.groups.forEach(function (g) {
     var log = g.kind === "log";
-    var rows = todoTasksIn(g.id).map(function (t) { var I = todoInfo(t, S); return { t: t, I: I, end: todoEnd(t, I.done) }; })
-      .filter(function (r) { return !(dayOf(r.end) < 0 || dayOf(r.t.start) > nD - 1); });
+    var inView = function (t, end) { return !(dayOf(end) < 0 || dayOf(t.start) > nD - 1); };
+    var rows = todoTree(todoTasksIn(g.id)).map(function (n) { var I = todoInfo(n.t, S), end = todoEnd(n.t, I.done); return { t: n.t, I: I, end: end, depth: n.depth, kids: n.kids, show: inView(n.t, end) }; });
+    // a task stays when any of its subtasks is in view
+    rows.forEach(function (r) { if (!r.show && !r.depth) r.show = r.kids.some(function (k) { return inView(k, todoEnd(k, todoInfo(k, S).done)); }); });
+    rows = rows.filter(function (r) { return r.show; });
     var items = rows.map(function (r) { return r.t; });
     var lab = todoEl("div", "rmg-phase"); lab.style.gridRow = String(rIdx); lab.dataset.lane = g.id;
     lab.appendChild(todoEl("span", "rmg-pname", g.name));
@@ -581,14 +620,29 @@ function todoGantt(S) {
       grid.appendChild(sm);
     }
     rIdx++;
-    rows.forEach(function (R) {
-      var t = R.t, I = R.I, tEnd = R.end, open = log && !I.done;
-      var nm = todoEl("div", "rmg-task" + (I.done ? " done" : "")); nm.style.gridRow = String(rIdx); nm.dataset.lane = g.id;
-      nm.appendChild(todoEl("span", "rmg-tt", (I.done ? "✓ " : "") + I.title));
-      nm.appendChild(todoEl("span", "rmg-td", todoSpan(t, I.done) + (I.src ? " · " + I.src : "")));
+    var subRow = function (p) {   // "＋ Add subtask…" under a task
+      var a = todoEl("div", "rmg-task rmg-add"); a.style.gridRow = String(rIdx); a.dataset.lane = g.id; a.style.paddingLeft = "44px";
+      a.appendChild(todoSubInput(p)); rmlTreeLines(a, 2, [true], true, 6, 18);
+      grid.appendChild(a); cellsRow(rIdx, g.id, "addrow"); rIdx++;
+    };
+    rows.forEach(function (R, ri) {
+      var t = R.t, I = R.I, tEnd = R.end, open = log && !I.done, dep = R.depth;
+      var nm = todoEl("div", "rmg-task" + (I.done ? " done" : "") + (dep ? " td-sub" : "")); nm.style.gridRow = String(rIdx); nm.dataset.lane = g.id;
+      var tt = todoEl("span", "rmg-tt");
+      if (!dep && R.kids.length) {
+        var fo = todoEl("button", "td-fold", t.fold ? "▸" : "▾"); fo.title = t.fold ? "Show its subtasks" : "Hide its subtasks";
+        fo.onclick = function (ev) { ev.stopPropagation(); if (t.fold) delete t.fold; else t.fold = true; todoSave(); };
+        tt.appendChild(fo);
+      }
+      tt.appendChild(document.createTextNode((I.done ? "✓ " : "") + I.title));
+      nm.appendChild(tt);
+      var kd = !dep ? todoKidsDone(t, S) : "";
+      nm.appendChild(todoEl("span", "rmg-td", todoSpan(t, I.done) + (kd ? " · " + kd : "") + (I.src ? " · " + I.src : "")));
       nm.title = I.title + (I.src ? "\n" + I.src : "") + (t.note ? "\n" + t.note : "");
       nm.onclick = function () { todoEditTask(t, S); }; nm.style.cursor = "pointer";
-      rmlTreeLines(nm, 1, [], false, 6, 18);
+      if (!dep) { var sb = todoEl("button", "rml-mini td-subbtn", "＋ Sub"); sb.title = "Add a subtask"; sb.onclick = function (ev) { ev.stopPropagation(); todoOpenSub(t); }; nm.appendChild(sb); }
+      if (dep) nm.style.paddingLeft = "44px";
+      rmlTreeLines(nm, dep + 1, dep ? [true] : [], false, 6, 18);
       grid.appendChild(nm); cellsRow(rIdx, g.id, "");
       var s = Math.max(0, dayOf(t.start)), e = Math.min(nD - 1, Math.max(s, dayOf(tEnd)));
       var bar = todoEl("div", "rmg-blk rmg-line" + (I.done ? " done" : "") + (open ? " td-open" : "") + (!I.done && !log && t.end < today ? " td-late" : ""));
@@ -596,9 +650,13 @@ function todoGantt(S) {
       bar.style.background = todoGroupColor(g.id);
       bar.title = nm.title + "\n" + todoSpan(t, I.done) + (open ? "\nStill going — tick it done (Day view or click) to end the bar" : "\nDrag to move · drag the right end to stretch");
       if (!open) bar.appendChild(todoEl("i", "td-grip"));
+      if (dep) bar.classList.add("td-subbar");
       todoBarDrag(bar, grid, t, function () { todoEditTask(t, S); });
       grid.appendChild(bar);
       rIdx++;
+      // after a task's last subtask: its "＋ Add subtask…" box, if open
+      var nx = rows[ri + 1], pid = dep ? t.parent : t.id;
+      if (todoSubAdd === pid && !(nx && nx.depth && nx.t.parent === pid)) subRow(dep ? todoGroupTask(pid) : t);
     });
     var add = todoEl("div", "rmg-task rmg-add"); add.style.gridRow = String(rIdx); add.dataset.lane = g.id;
     add.appendChild(todoQuickInput(g.id, function (v) {
@@ -652,7 +710,7 @@ function todoBarDrag(bar, grid, t, onClick) {
       else {
         if (dd) { t.start = dISO(dNum(t.start) + dd); t.end = dISO(dNum(t.end) + dd); if (bar.classList.contains("td-open")) t.end = t.start; }
         var lane = target && target.dataset.lane;
-        if (lane && lane !== t.group && TODO.planner.groups.some(function (g) { return g.id === lane; })) t.group = lane;
+        if (lane && lane !== t.group && !t.parent && TODO.planner.groups.some(function (g) { return g.id === lane; })) { t.group = lane; todoKids(t).forEach(function (k) { k.group = lane; }); }
       }
       todoSave();
     };
@@ -681,11 +739,16 @@ function todoDayList(S) {
   var total = 0;
   TODO.planner.groups.forEach(function (g) {
     var log = g.kind === "log";
-    var items = todoTasksIn(g.id).filter(function (t) {
+    var onDay = function (t) {
       var dn = todoInfo(t, S).done;
       if (t.start <= day && todoEnd(t, dn) >= day) return true;
       return !log && day === today && t.end < today && !dn;   // past its end and not done: still on today
-    });
+    };
+    var tree = todoTree(todoTasksIn(g.id));
+    var keep = {}; tree.forEach(function (n) { if (onDay(n.t)) { keep[n.t.id] = 1; if (n.t.parent) keep[n.t.parent] = 1; } });
+    if (todoSubAdd) keep[todoSubAdd] = keep[todoSubAdd] || tree.some(function (n) { return n.t.id === todoSubAdd; }) ? 1 : 0;
+    var nodes = tree.filter(function (n) { return keep[n.t.id]; });
+    var items = nodes.map(function (n) { return n.t; });
     total += items.length;
     var sec = todoEl("div", "td-day-g");
     var hd = todoEl("div", "td-day-h");
@@ -693,18 +756,27 @@ function todoDayList(S) {
     if (log) hd.appendChild(todoEl("span", "td-logtag", "ongoing log"));
     hd.appendChild(todoEl("span", "rmg-pct", items.length ? String(items.length) : ""));
     sec.appendChild(hd);
-    items.forEach(function (t) {
+    nodes.forEach(function (n, ni) {
+      var t = n.t, dep = n.depth;
       var I = todoInfo(t, S), late = !log && !I.done && t.end < day;
-      var row = todoEl("div", "td-day-row" + (I.done ? " done" : ""));
+      var row = todoEl("div", "td-day-row" + (I.done ? " done" : "") + (dep ? " sub" : ""));
       var cb = todoEl("input"); cb.type = "checkbox"; cb.checked = I.done; cb.title = I.done ? "Mark not done" : "Mark done";
       cb.onchange = function () { todoSetDone(t, cb.checked, day); todoSave(); };
       var tx = todoEl("div", "td-day-tx");
       var nm = todoEl("span", "td-day-t", I.title); nm.onclick = function () { todoEditTask(t, S); };
       tx.appendChild(nm);
-      tx.appendChild(todoEl("span", "td-day-m" + (late ? " late" : ""), (late ? "⚠ was due " + fmtD(t.end) : todoSpan(t, I.done)) + (I.src ? " · " + I.src : "")));
+      var kd = !dep ? todoKidsDone(t, S) : "";
+      tx.appendChild(todoEl("span", "td-day-m" + (late ? " late" : ""), (late ? "⚠ was due " + fmtD(t.end) : todoSpan(t, I.done)) + (kd ? " · " + kd : "") + (I.src ? " · " + I.src : "")));
       row.append(cb, tx);
+      if (!dep) { var sb = todoEl("button", "td-day-open td-subbtn", "＋ Sub"); sb.title = "Add a subtask"; sb.onclick = function () { todoOpenSub(t); }; row.appendChild(sb); }
       if (I.open) { var op = todoEl("button", "td-day-open", "Open ↗"); op.onclick = function () { I.open(); }; row.appendChild(op); }
       sec.appendChild(row);
+      var nx = nodes[ni + 1], pid = dep ? t.parent : t.id;
+      if (todoSubAdd === pid && !(nx && nx.depth && nx.t.parent === pid)) {
+        var sr = todoEl("div", "td-day-row td-day-addrow sub");
+        sr.appendChild(todoSubInput(dep ? todoGroupTask(pid) : t));
+        sec.appendChild(sr);
+      }
     });
     var add = todoEl("div", "td-day-row td-day-addrow");
     add.appendChild(todoQuickInput(g.id, function (v) { todoNewTask(v, g.id, day, day); }, log ? "＋ Jot something — an article, a question, where you're stuck…" : "＋ Add task for this day…"));
