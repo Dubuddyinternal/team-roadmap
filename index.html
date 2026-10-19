@@ -1344,6 +1344,42 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .td-tick{position:absolute;top:8px;right:8px;width:22px;height:22px;padding:0;border-radius:50%;border:2px solid var(--muted);background:var(--card);color:#fff;font-size:13px;font-weight:700;line-height:18px;cursor:pointer;opacity:.7}
 .td-tick:hover{opacity:1;border-color:#16a34a}
 .td-tick.on{background:#16a34a;border-color:#16a34a;opacity:1}
+/* My To-do planner (my-todo.js): Month / Quarter / Week Gantt + Day list */
+.td-why-tools{display:inline-flex;gap:6px}
+.td-why-mini{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-left:4px solid #ff9933;border-radius:12px;padding:10px 14px;margin:0 0 12px;font:inherit;font-weight:700;font-size:14px;cursor:pointer;color:var(--ink)}
+.td-why-mini:hover{background:var(--paper)}
+.td-gantt .rmg-blk.rmg-line{position:relative}
+.td-gantt .td-grip{position:absolute;right:0;top:0;bottom:0;width:10px;cursor:ew-resize;border-radius:0 99px 99px 0}
+.td-gantt .td-grip:hover{background:rgba(255,255,255,.35)}
+.td-gantt .rmg-blk.drag{z-index:20;opacity:.85;box-shadow:0 6px 16px rgba(0,0,0,.22)}
+.td-gantt .rmg-blk.td-late{outline:2px solid var(--blocked);outline-offset:1px}
+.td-hint{font-size:12px;color:var(--muted);margin:-4px 2px 12px}
+.td-pick{max-width:620px}
+.td-pick-q{width:100%;box-sizing:border-box;margin:8px 0}
+.td-pick-list{max-height:55vh;overflow:auto;border:1px solid var(--line);border-radius:10px;margin:8px 0 4px}
+.td-pick-row{display:flex;align-items:flex-start;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);cursor:pointer}
+.td-pick-row:last-child{border-bottom:0}
+.td-pick-row:hover{background:var(--paper)}
+.td-pick-row.on{opacity:.55;cursor:default}
+.td-pick-row input{margin-top:3px}
+.td-pick-tx{display:flex;flex-direction:column;gap:2px;min-width:0}
+.td-pick-tx b{font-weight:500;font-size:13.5px}
+.td-pick-tx small{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.td-day{background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:12px;overflow:hidden}
+.td-day-empty{padding:12px 16px;color:var(--muted);font-size:13px;border-bottom:1px solid var(--line)}
+.td-day-h{display:flex;align-items:center;gap:8px;padding:9px 14px;background:var(--paper);border-bottom:1px solid var(--line);font-size:13.5px}
+.td-day-row{position:relative;display:flex;align-items:center;gap:10px;padding:6px 14px 6px 34px;border-bottom:1px solid var(--line)}
+.td-day-row::before{content:"";position:absolute;left:18px;top:0;bottom:0;border-left:1px solid #B4BCC8}
+.td-day-row::after{content:"";position:absolute;left:18px;top:0;height:50%;width:10px;border-bottom:1px solid #B4BCC8}
+.td-day-addrow::before{bottom:50%}
+.td-day-row:hover{background:var(--paper)}
+.td-day-row input[type=checkbox]{width:16px;height:16px;flex:none;cursor:pointer}
+.td-day-tx{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1}
+.td-day-t{font-size:13.5px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.td-day-row.done .td-day-t{color:var(--muted);text-decoration:line-through}
+.td-day-m{font-family:var(--mono);font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.td-day-m.late{color:var(--blocked);font-weight:600}
+.td-day-open{border:1px solid var(--line);background:none;border-radius:6px;padding:2px 8px;font-size:11px;color:var(--muted);cursor:pointer;flex:none}
 .td-why{background:var(--card);border:1px solid var(--line);border-left:4px solid #ff9933;border-radius:12px;padding:12px 14px;margin:0 0 12px}
 .td-why.pop{border:0;padding:0;margin:0;background:none}
 .td-why-hd{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
@@ -7999,7 +8035,7 @@ function renderHeader(){
   const _rm = view==="rmap" ? RMAPS.maps.find(m=>m.id===activeRmap) : null;
   $("rm-title").textContent = view==="todo" ? "My To-do" : view==="admin" ? "Administration" : view==="okr" ? "Team OKRs" : view==="content" ? "Educational Content Roadmap" : view==="ideas" ? "Team Ideas" : view==="dev" ? "Development Board" : view==="bugs" ? "Bugs & Issues" : view==="cbugs" ? ((CSPACES.list.find(x=>x.id===activeCspace)||{}).name || "Bugs board") : view==="disc" ? (((currentDisc()||{}).name) || "Product roadmap") : view==="social" ? (((currentSocial()||{}).name) || "Social Media") : view==="campaign" ? (((currentCampaign()||{}).name) || "Campaign") : view==="watch" ? (((currentWatch()||{}).name) || "Keep an Eye") : view==="horizon" ? (((currentHorizon()||{}).name) || "Widen our Horizon") : view==="pdt" ? (((currentPdt()||{}).name) || "Product All in One") : view==="rmap" ? ((_rm && _rm.name) || "Roadmap") : (DATA.title || "Product Roadmap");
   $("rm-subtitle").textContent = view==="todo"
-    ? "Personal, CEO and Product Head work in one place: fixed routines, your own to-dos, and everything assigned to you. Only you see this."
+    ? "Plan your work top-down: the month or quarter on a Gantt, then the week, then today's list — your own tasks, what's assigned to you, and anything from the team's boards. Only you see this."
     : view==="okr"
     ? "Objectives for this cycle and the measurable key results that tell us if we're getting there."
     : view==="content"
