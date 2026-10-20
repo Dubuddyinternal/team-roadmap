@@ -12606,6 +12606,51 @@ function devSprintDeadline(sp, spCards){
   return box;
 }
 /* ---- the engineering Summary tab, below the numbers ---- */
+/* Marketing → Timeline: first what's already scheduled in the spaces inside (read-only — Social Media's posts on
+   their Schedule days, each campaign's period and its pieces on their days), then Marketing's own plan. */
+const MKT_SCHED = {};   /* per Marketing space (session): the read-only chart, kept so its 1/2/3-month choice sticks */
+function mktScheduleMap(mk){
+  const m = MKT_SCHED[mk.id] || (MKT_SCHED[mk.id] = { id:"mktv-"+mk.id, name:"📅 From the spaces inside", view:"gantt", gWin:8, spaceOf: mk.id });
+  const byTid = {}, lanes = [], items = [], today = todayISO();
+  const add = (laneId, key, title, start, end, path, extra)=>{
+    const tid = "mktv:" + key;
+    byTid[tid] = { tid, task:{ title, status: (end||start) < today ? "done" : "planned" }, path, kind:"virtual" };
+    items.push(Object.assign({ rid:"rv-"+key, tid, start, end: end || start, lane: laneId }, extra||{}));
+  };
+  (CSPACES.list||[]).filter(x=> x.parent===mk.id && canViewSpace(csRef(x))).forEach(x=>{
+    if(x.type==="social"){
+      const ln = { id:"mv-"+x.id, name:"🎯 " + x.name + " · Schedule", kind:"project" }; lanes.push(ln);
+      (x.events||[]).filter(e=> e.date).forEach(e=> add(ln.id, x.id+":"+e.id, (e.title || "Post") + (e.time ? " · " + e.time : ""), e.date, e.date, x.name + " → Schedule", { owner: e.owner || undefined, color:"#8A55C2" }));
+      (x.cards||[]).filter(c=> c.scheduled && !c.eventId).forEach(c=> add(ln.id, x.id+":c:"+c.id, (c.pre && c.pre.title) || c.idea || "Post", c.scheduled, c.scheduled, x.name + " → Content Process", { color:"#8A55C2" }));
+    } else if(x.type==="campaign"){
+      const ln = { id:"mv-"+x.id, name:"📣 " + x.name, kind:"project" }; lanes.push(ln);
+      const d = x.details || {};
+      if(d.start) add(ln.id, x.id+":period", "Campaign period", d.start, d.end || d.start, x.name, { color:"#D9682B" });
+      (x.items||[]).filter(it=> it.date).forEach(it=>{
+        const ow = it.ownerId ? (USERS.find(u=> u.id===it.ownerId) || null) : null;
+        add(ln.id, x.id+":"+it.id, (it.name || "Piece") + (it.platform ? " · " + it.platform : ""), it.date, it.date, x.name + " → Contents", { owner: ow ? userDisplayName(ow) : undefined, color:"#C8473B" });
+      });
+    }
+  });
+  m.lanes = lanes; m.items = items;
+  return { m, byTid };
+}
+function mktTimelinePane(mk){
+  const wrap = $("content");
+  const { m, byTid } = mktScheduleMap(mk);
+  if(m.lanes.length){
+    const hint = document.createElement("div"); hint.className = "hint"; hint.style.margin = "0 0 8px";
+    hint.textContent = "What’s already scheduled in the spaces inside, on its dates. Change it in that space (Social Media → Schedule, the campaign’s Calendar); it shows here by itself.";
+    wrap.appendChild(hint);
+    const em = editMode; editMode = false;   /* read-only chart: no add rows, no drag, no edit dialog */
+    try{ renderRmapGantt(m, wrap, byTid); } finally { editMode = em; }
+  }
+  const own = discGantt(mk);
+  own.name = m.lanes.length ? "Marketing plan" : "Timeline";
+  const reg = {}; allTasks().forEach(x=> reg[x.tid] = x);
+  own.items = own.items.filter(it=> reg[it.tid]);
+  renderRmapGantt(own, wrap, reg);
+}
 /* Marketing → Summary: the spaces inside it, and what's late / coming up on its Timeline */
 function mktRenderSummary(pane, show){
   let box = document.getElementById("mkt-summary");
@@ -16525,7 +16570,7 @@ function renderContentDisc(){
   const cs = currentDisc();
   if(!cs){ view = "roadmap"; renderAll(); return; }
 
-  if(cs.type==="marketing") return discGanttPane(cs);
+  if(cs.type==="marketing") return mktTimelinePane(cs);
   if(cs.type==="procdept"){
     if(!canViewSpace(csRef(cs))) return procRequestPane(cs);
     if(discView==="timeline") return procDeptTimeline(cs);
