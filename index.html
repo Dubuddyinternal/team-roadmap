@@ -14553,7 +14553,8 @@ function renderRmapGantt(m, wrap, byTid){
       nm.lastChild.textContent = rmlFmt(it.start) + (it.end && it.end!==it.start ? " → " + rmlFmt(it.end) : "") + (it.owner ? " · 👤 " + it.owner : "") + (kd ? " · ☑ " + kd : "");
       nm.title = (en.task.title||"") + (it.owner ? "\nOwner: " + it.owner : "") + (it.team ? "\nTeam: " + it.team : "") + "\n" + en.path;
       if(ed){ nm.onclick = ()=> rmlEditItem(M, it, en); nm.style.cursor = "pointer"; }
-      else if(it.open){ nm.onclick = it.open; nm.style.cursor = "pointer"; nm.title += "\n↗ Click to open it in its space"; }
+      else { nm.onclick = ()=> rmgRowDialog(m, it, byTid); nm.style.cursor = "pointer"; nm.title += it.open ? "\nClick for details · right-click to open it in its space" : "\nClick for details"; }
+      nm.oncontextmenu = e=> rmgRowMenu(e, m, M, it, en, byTid, ed);
       const tacts = document.createElement("span"); tacts.className = "rmg-tacts";
       if(it.doc){
         const db = document.createElement("button"); db.className = "rmg-doc"; db.textContent = "📄";
@@ -14582,9 +14583,9 @@ function renderRmapGantt(m, wrap, byTid){
       blk.title = nm.title + "\n" + rmlFmt(it.start) + " → " + rmlFmt(it.end);
       barEls[it.tid] = blk; blk.dataset.tid = it.tid; if(RMG_LINK && RMG_LINK.from===it.tid) blk.classList.add("rmg-linkfrom");
       if(ed) rmgItemDrag(blk, M, it, ()=> weekPx()/7, 1, ()=> rmlEditItem(M, it, en));
-      else if(editMode && it.move) rmgItemDrag(blk, M, it, ()=> weekPx()/7, 1, ()=>{ if(it.open) it.open(); }, { virtual:true });   /* lives in another space: moved there */
-      else if(it.open){ blk.onclick = it.open; blk.style.cursor = "pointer"; }
-      else blk.style.cursor = "default";
+      else if(editMode && it.move) rmgItemDrag(blk, M, it, ()=> weekPx()/7, 1, ()=> rmgRowDialog(m, it, byTid), { virtual:true });   /* lives in another space: moved there */
+      else { blk.onclick = ()=> rmgRowDialog(m, it, byTid); blk.style.cursor = "pointer"; }
+      blk.oncontextmenu = e=> rmgRowMenu(e, m, M, it, en, byTid, ed);
       grid.appendChild(blk);
       rIdx++;
     });
@@ -14781,6 +14782,78 @@ function ownLanesFix(own){
   if(n && editMode) pushLater();
 }
 /* open a space on one of its tabs (then e.g. open the item there) — used by rows shown from that space */
+/* right-click a row: open it in its space, edit it, or say what it's blocked by */
+function rmgRowMenu(e, m, M, it, en, byTid, ed){
+  e.preventDefault(); e.stopPropagation();
+  const items = [];
+  if(it.open) items.push({ label:"↗ Open in its space", onClick: it.open });
+  if(ed) items.push({ label:"✏️ Edit", onClick: ()=> rmlEditItem(M, it, en) });
+  else items.push({ label:"ℹ️ Details", onClick: ()=> rmgRowDialog(m, it, byTid) });
+  if(editMode) items.push({ label:"🔒 Blocked by…", onClick: ()=> ed ? rmlBlockers(en, M) : rmgRowDialog(m, it, byTid) });
+  const x = e.clientX, y = e.clientY;
+  openRowMenu({ getBoundingClientRect: ()=> ({ top:y, bottom:y, left:x, right:x + 200 }) }, items);
+}
+/* a row shown from another space: what it is, and what it's blocked by (ticked from anything on this chart).
+   Between real tasks that's the task's own "blocked by"; otherwise the link is kept on the chart. */
+function rmgRowDialog(m, it, byTid){
+  const en = byTid[it.tid]; if(!en) return;
+  const store = m.linkStore || (m.mapOf ? m.mapOf({}) : m);
+  const real = x=> x && x.kind!=="virtual" && x.task;
+  const t = en.task;
+  const has = bt=> (real(en) && (t.blockedBy||[]).includes(bt)) || ((store && store.links)||[]).some(l=> l.from===bt && l.to===it.tid);
+  const ov = document.createElement("div"); ov.className = "overlay show";
+  const dg = document.createElement("div"); dg.className = "dialog"; dg.style.maxWidth = "560px";
+  const h = document.createElement("h3"); h.textContent = t.title || "(untitled)"; dg.appendChild(h);
+  const meta = document.createElement("div"); meta.className = "hint"; meta.style.margin = "-6px 0 10px";
+  meta.textContent = [en.path, rmlFmt(it.start) + (it.end && it.end!==it.start ? " → " + rmlFmt(it.end) : ""), it.owner ? "👤 " + it.owner : ""].filter(Boolean).join(" · ");
+  dg.appendChild(meta);
+  const sh = document.createElement("div"); sh.className = "ta-h"; sh.textContent = "🔒 Blocked by"; dg.appendChild(sh);
+  const search = document.createElement("input"); search.type = "text"; search.placeholder = "Search this chart…"; search.className = "rmb-search";
+  const list = document.createElement("div"); list.className = "rmb-list";
+  const sel = new Set(m.items.map(x=> x.tid).filter(has));
+  const lanes = m.lanes || [];
+  const label = ln=> m.laneLabel ? m.laneLabel(ln) : ln.name;
+  const draw = ()=>{
+    const q = search.value.trim().toLowerCase(); list.innerHTML = ""; let any = false;
+    lanes.forEach(ln=>{
+      const its = m.items.filter(x=> x.tid!==it.tid && x.lane===ln.id && byTid[x.tid] && (!q || (byTid[x.tid].task.title||"").toLowerCase().includes(q)))
+        .sort((a,b)=> dNum(a.start||todayISO()) - dNum(b.start||todayISO()));
+      if(!its.length) return; any = true;
+      const g = document.createElement("div"); g.className = "rmb-grp"; g.textContent = label(ln); list.appendChild(g);
+      its.forEach(x=>{
+        const row = document.createElement("label"); row.className = "rmb-row";
+        const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = sel.has(x.tid); cb.disabled = !editMode;
+        cb.onchange = ()=>{ if(cb.checked) sel.add(x.tid); else sel.delete(x.tid); };
+        const tx = document.createElement("span"); tx.className = "rmb-t"; tx.textContent = byTid[x.tid].task.title || "(untitled)";
+        const mt = document.createElement("span"); mt.className = "rmb-m"; mt.textContent = rmlFmt(x.start) + (x.end && x.end!==x.start ? " → " + rmlFmt(x.end) : "");
+        row.append(cb, tx, mt); list.appendChild(row);
+      });
+    });
+    if(!any){ const e = document.createElement("div"); e.className = "rmb-empty"; e.textContent = q ? "Nothing on this chart matches." : "No other tasks on this chart."; list.appendChild(e); }
+  };
+  search.oninput = draw; draw();
+  dg.append(search, list);
+  const btns = document.createElement("div"); btns.className = "btns";
+  const close = ()=> ov.remove();
+  if(it.open){ const go = document.createElement("button"); go.className = "btn"; go.textContent = "↗ Open in its space"; go.onclick = ()=>{ close(); it.open(); }; btns.appendChild(go); }
+  const sp = document.createElement("span"); sp.style.flex = "1"; btns.appendChild(sp);
+  const cancel = document.createElement("button"); cancel.className = "btn"; cancel.textContent = editMode ? "Cancel" : "Close"; cancel.onclick = close; btns.appendChild(cancel);
+  if(editMode && store){
+    const save = document.createElement("button"); save.className = "btn save"; save.textContent = "Save";
+    save.onclick = ()=>{
+      store.links = (store.links||[]).filter(l=> l.to!==it.tid || !m.items.some(x=> x.tid===l.from));   /* this chart's links into it, redone below */
+      if(real(en)) t.blockedBy = (t.blockedBy||[]).filter(bt=> !m.items.some(x=> x.tid===bt));
+      sel.forEach(bt=>{ if(real(en) && real(byTid[bt])) (t.blockedBy = t.blockedBy || []).push(bt); else store.links.push({ from: bt, to: it.tid }); });
+      if(t.blockedBy && !t.blockedBy.length) delete t.blockedBy;
+      close(); saveRmaps(); toast(sel.size ? "🔒 Blocked by " + sel.size + " task" + (sel.size===1 ? "" : "s") : "Not blocked by anything here");
+    };
+    btns.appendChild(save);
+  }
+  dg.appendChild(btns);
+  ov.appendChild(dg); ov.addEventListener("mousedown", e=>{ if(e.target===ov) close(); });
+  document.body.appendChild(ov);
+  setTimeout(()=> search.focus(), 30);
+}
 function goSpace(cs, tab, after){
   if(!cs) return;
   document.querySelectorAll(".overlay.show").forEach(o=> o.classList.remove("show"));
