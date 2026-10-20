@@ -284,6 +284,7 @@ function renderAdminLms(wrap) {
   }
   wrap.appendChild(head);
   if (LMS.ui.edit) lmsComposer(wrap, LMS.ui.edit);
+  if (typeof lmsSubsAdminCard === "function") lmsSubsAdminCard(wrap);   /* sent from the spaces (index.html) */
   var list = lmsEl("div", "ntf-card");
   list.appendChild(lmsEl("h3", "", "Your drops"));
   var holder = lmsEl("div", "hint", "Loading…"); list.appendChild(holder);
