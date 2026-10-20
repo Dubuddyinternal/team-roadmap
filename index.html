@@ -2799,6 +2799,9 @@ body.rm-chart #pane-work > .controls{display:none}
 .mag-in{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:12.5px;color:var(--muted)}
 .mag-in input{width:110px;padding:4px 8px;border:1px solid var(--line-strong);border-radius:6px;font:inherit}
 .mag-edit{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.rmg-lfold{border:0;background:transparent;cursor:pointer;font-size:12px;color:var(--muted);padding:0 4px 0 0;margin-left:-4px;line-height:1}
+.rmg-lfold:hover{color:var(--ink)}
+.rmg-lfold{flex:none}.rmg-lfold + .rmg-pname{margin-right:auto}
 .proc-tl-tabs{display:inline-flex;gap:4px;padding:4px;border:1px solid var(--line);border-radius:12px;background:var(--card);margin:0 0 14px}
 .proc-tl-tab{border:0;background:transparent;padding:7px 16px;border-radius:9px;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer}
 .proc-tl-tab.on{background:var(--indigo);color:#fff}
@@ -12991,23 +12994,23 @@ function mktMergePicker(mk){
 function mktTimelinePane(mk){
   const wrap = $("content");
   const { m, byTid } = mktScheduleMap(mk);
-  const top = document.createElement("div"); top.className = "mkt-tltop";
-  const hint = document.createElement("div"); hint.className = "hint";
-  hint.textContent = m.lanes.length
-    ? "Merged from the spaces inside, on their dates. Change things in that space (Social Media → Schedule, the campaign’s Calendar, Process improvements → Timeline); it shows here by itself."
-    : "Nothing merged from the spaces inside yet.";
-  top.appendChild(hint);
-  if(editMode){ const mb = document.createElement("button"); mb.className = "tool sm"; mb.textContent = "⚙ Choose what to merge"; mb.onclick = ()=> mktMergePicker(mk); top.appendChild(mb); }
-  wrap.appendChild(top);
-  if(m.lanes.length){
-    const em = editMode; editMode = false;   /* read-only chart: no add rows, no drag, no edit dialog */
-    try{ renderRmapGantt(m, wrap, byTid); } finally { editMode = em; }
-  }
-  const own = discGantt(mk);
-  own.name = m.lanes.length ? "Marketing plan" : "Timeline";
-  const reg = {}; allTasks().forEach(x=> reg[x.tid] = x);
+  const hint = document.createElement("div"); hint.className = "hint"; hint.style.margin = "0 0 8px";
+  hint.textContent = "One Timeline: what’s scheduled in the spaces inside (change those in that space — Social Media → Schedule, the campaign’s Calendar, Process improvements → Timeline) and Marketing’s own plan below. ▾ on a section minimizes it.";
+  wrap.appendChild(hint);
+  /* Marketing's own plan shares the chart, in its own rows below (stored on the space's own Timeline) */
+  const own = discGantt(mk), reg = {}; allTasks().forEach(x=> reg[x.tid] = x);
   own.items = own.items.filter(it=> reg[it.tid]);
-  renderRmapGantt(own, wrap, reg);
+  own.lanes.forEach(ln=> m.lanes.push(ln));
+  own.items.forEach(it=>{ byTid[it.tid] = reg[it.tid]; m.items.push(it); });
+  const ownIds = new Set(own.lanes.map(l=> l.id));
+  m.name = "🗓 " + mk.name + " — Timeline";
+  m.mapOf = ln=> ownIds.has(ln.id) ? own : null;
+  m.barButtons = row=>{
+    rmlBarButtons(row, own, "Phase");
+    const mb = document.createElement("button"); mb.className = "tool sm"; mb.textContent = "⚙ Merge"; mb.title = "Choose which spaces inside show here";
+    mb.onclick = ()=> mktMergePicker(mk); row.appendChild(mb);
+  };
+  renderRmapGantt(m, wrap, byTid);
 }
 /* ================================================================
    MARKETING → 🤝 OUR AGREEMENT: Marketing-wide targets (revenue, games, processes improved, posts…)
@@ -14203,6 +14206,10 @@ const RMG_COLORS = ["#C8473B","#D9A030","#2F6DB5","#2E9466","#8A55C2","#D9682B",
 let rmgFrom = {};   /* per roadmap (session): first day of the window when a window size is picked */
 const RMG_WINDOWS = [[4,"1 month"],[8,"2 months"],[13,"3 months"],[0,"All"]];
 function rmgWeekStart(n){ const dow = (new Date(n*86400000).getUTCDay()+6)%7; return n - dow; }   /* Monday */
+/* minimized sections of a chart, remembered on this device: "<chart id>:<lane id>" */
+let RMG_FOLD = {}; try{ RMG_FOLD = JSON.parse(localStorage.getItem("rmgFold") || "{}") || {}; }catch(e){}
+function rmgFolded(m, ln){ return !!RMG_FOLD[m.id + ":" + ln.id]; }
+function rmgSetFold(m, ln, on){ const k = m.id + ":" + ln.id; if(on) RMG_FOLD[k] = 1; else delete RMG_FOLD[k]; try{ localStorage.setItem("rmgFold", JSON.stringify(RMG_FOLD)); }catch(e){} }
 function renderRmapGantt(m, wrap, byTid){
   rmlEnsureLanes(m);
   const live = m.items.filter(it=> byTid[it.tid]);
@@ -14313,7 +14320,7 @@ function renderRmapGantt(m, wrap, byTid){
     })
     .sort((x,y)=> dNum(x.start||todayISO()) - dNum(y.start||todayISO()));
   const order = [];
-  const walk = (pid, d)=> rmwLaneKids(m, pid).forEach(l=>{ order.push([l, d]); walk(l.id, d+1); });
+  const walk = (pid, d)=> rmwLaneKids(m, pid).forEach(l=>{ order.push([l, d]); if(!rmgFolded(m, l)) walk(l.id, d+1); });
   walk(null, 0);
   order.forEach(([ln, depth])=>{
     /* a chart can mix in rows that live on another chart (m.mapOf(lane) → that chart): only those are editable */
@@ -14322,6 +14329,11 @@ function renderRmapGantt(m, wrap, byTid){
     const all = rmwDescLanes(m, ln).flatMap(laneItems);   /* this phase and everything inside it */
     const lab = document.createElement("div"); lab.className = "rmg-phase" + (depth ? " sub d" + Math.min(depth, 2) : ""); lab.style.gridRow = String(rIdx); lab.dataset.lane = ln.id;
     if(depth){ lab.style.paddingLeft = (12 + depth*18) + "px"; rmlTreeLines(lab, depth, [], false, 6, 18); }
+    /* ▾ / ▸ minimizes a section (its rows and the sections inside), so you can focus on the others */
+    const _fd = rmgFolded(m, ln), fb = document.createElement("button"); fb.className = "rmg-lfold"; fb.textContent = _fd ? "▸" : "▾";
+    fb.title = _fd ? "Show “" + ln.name + "”" : "Minimize “" + ln.name + "”";
+    fb.onclick = e=>{ e.stopPropagation(); rmgSetFold(m, ln, !_fd); renderAll(); };
+    lab.appendChild(fb);
     const lt = document.createElement("span"); lt.className = "rmg-pname"; lt.textContent = ln.name; lab.appendChild(lt);
     const ct = document.createElement("span"); ct.className = "rmg-pct"; ct.textContent = all.length || ""; lab.appendChild(ct);
     if(ln.doc){
@@ -14352,6 +14364,7 @@ function renderRmapGantt(m, wrap, byTid){
       grid.appendChild(sm);
     }
     rIdx++;
+    if(_fd) return;   /* minimized: just its header and summary line */
     /* rows: each top-level task, then its sub-tasks (one level, foldable), then its open "＋ Add sub-task…" box */
     const tops = items.filter(it=> items.indexOf(rmgParentOf(m, it)) < 0);
     const rows = [];
