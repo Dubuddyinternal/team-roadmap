@@ -2904,6 +2904,21 @@ body.rm-chart #pane-work > .controls{display:none}
 .rm-rename:hover{background:var(--indigo-soft)}
 .rm-rename-pen{font-size:14px;color:var(--muted);opacity:0;transition:opacity .12s}
 .rm-rename:hover .rm-rename-pen{opacity:1;color:var(--indigo)}
+.ia-board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start}
+.ia-col{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;min-height:200px;transition:background .12s}
+.ia-col.over{background:var(--indigo-soft);border-color:var(--indigo)}
+.ia-h{display:flex;justify-content:space-between;align-items:center;padding:4px 6px 10px;font-size:14px}
+.ia-h span{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.ia-will .ia-h b{color:var(--done)}.ia-wont .ia-h b{color:var(--blocked)}
+.ia-list{display:flex;flex-direction:column;gap:8px}
+.ia-card{border:1px solid var(--line-strong);border-radius:10px;padding:9px 11px;background:var(--paper);cursor:grab}
+.ia-card.drag{opacity:.45}.ia-card:active{cursor:grabbing}
+.ia-t{font-weight:600;font-size:14px;line-height:1.35}.ia-m{font-size:12px;color:var(--muted);margin-top:3px}
+.ia-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+.ia-btn{border:1px solid var(--line-strong);background:var(--card);border-radius:7px;font-size:11.5px;padding:3px 8px;cursor:pointer}
+.ia-btn:hover{border-color:var(--indigo)}
+.ia-empty{font-size:13px;color:var(--muted);padding:18px 6px;text-align:center;border:1px dashed var(--line-strong);border-radius:10px}
+@media(max-width:760px){.ia-board{grid-template-columns:1fr}}
 .rmg-blk.rmg-dragable{cursor:grab}.rmg-blk.rmg-dragable:active{cursor:grabbing}
 .rmg-blk.rmg-line.rmg-dragable::before{content:"";position:absolute;left:-4px;right:-4px;top:-9px;bottom:-9px}
 .rmg-hl,.rmg-hr{position:absolute;top:50%;width:12px;height:12px;margin-top:-6px;border-radius:50%;background:#fff;border:2px solid rgba(0,0,0,.35);cursor:ew-resize;opacity:0;transition:opacity .12s;z-index:2}
@@ -8394,7 +8409,7 @@ function workTabs(){
       ? [{key:"ideas",label:"⚙️ Process improvements"},{key:"timeline",label:"Timeline"}] : [{key:"ideas",label:"🔒 Request access"}];
     if(_ct==="process") return [{key:"ideas",label:"All ideas"},{key:"timeline",label:"Timeline"},{key:"team",label:"👥 From team"}];
     const _t = _ct==="discovery"
-      ? [{key:"ideas",label:"All ideas"},{key:"timeline",label:"Timeline"}]
+      ? [{key:"ideas",label:"All ideas"},{key:"approval",label:"✅ Idea approval"},{key:"timeline",label:"Timeline"}]
       : [{key:"ideas",label:"All ideas"},{key:"roadmap",label:"Roadmap"},{key:"timeline",label:"Timeline"}];
     // the product space also gets the students' inbox (student-ideas.js)
     if(typeof sidIsTarget === "function" && sidIsTarget(currentDisc()) && sidCanSee()) _t.push({key:"students",label:sidTabLabel()});
@@ -13126,7 +13141,7 @@ function spaceTabsFor(cs){
     case "campaign":  return window.CX ? campTabs(cs) : [];
     case "watch":     return window.WX ? WX.tabs : [];
     case "horizon":   return window.HX ? HX.tabs : [];
-    case "discovery": return S.concat([["ideas","All ideas"],["timeline","Timeline"]],
+    case "discovery": return S.concat([["ideas","All ideas"],["approval","✅ Idea approval"],["timeline","Timeline"]],
       (typeof sidIsTarget==="function" && sidIsTarget(cs)) ? [["students", typeof sidTabLabel==="function" ? sidTabLabel() : "🎓 From students"]] : []);
     case "process":   return S.concat([["ideas","All ideas"],["timeline","Timeline"],["team","👥 From team"]]);
     case "procdept":  return S.concat([["ideas","⚙️ Process improvements"],["timeline","Timeline"]]);
@@ -15532,7 +15547,7 @@ function spaceTimelineMap(cs){
   if(ideaGanttSync(cs) && editMode) pushLater();
   const g = discGantt(cs), byTid = {}; allTasks().forEach(x=> byTid[x.tid] = x);
   g.items = g.items.filter(it=> byTid[it.tid]);
-  return { m: g, byTid };
+  return { m: ideaTlView(cs, g), byTid };
 }
 /* the names on a row: its owner, and the task's owner / assignee */
 function rowPeople(it, en){
@@ -17611,6 +17626,7 @@ function renderContentDisc(){
   if(discView === "roadmap" && (cs.type==="discovery" || cs.type==="process")) discView = "ideas";
   if(discView === "roadmap") return discRoadmapPane(cs);
   if(discView === "timeline") return discTimelinePane(cs);
+  if(discView === "approval" && cs.type==="discovery") return ideaApprovalPane(cs);
   if(discView === "students" && typeof sidIsTarget === "function" && sidIsTarget(cs) && sidCanSee()) return sidPane(cs);
   return discIdeasPane(cs);
 }
@@ -18241,7 +18257,70 @@ function discGanttPane(cs){
   const m = discGantt(cs), byTid = {};
   allTasks().forEach(x=> byTid[x.tid] = x);
   m.items = m.items.filter(it=> byTid[it.tid]);
-  renderRmapGantt(m, $("content"), byTid);
+  if(cs.type==="discovery"){
+    const n = (cs.ideas||[]).filter(i=> ideaApproval(i)!=="will").length;
+    if(n){ const h = document.createElement("div"); h.className = "hint"; h.style.margin = "0 0 8px";
+      h.textContent = "Only ideas marked ✅ Will do show here — " + n + " more are waiting or marked Won’t do in ✅ Idea approval."; $("content").appendChild(h); }
+  }
+  renderRmapGantt(ideaTlView(cs, m), $("content"), byTid);
+}
+/* Product Roadmap: an idea's call — "will" (Will do and every stage after it), "wont", or "" (still to decide) */
+const IDEA_WILL = ["now","implres","ready","building","done"];
+function ideaApproval(i){ return i.stage==="wont" ? "wont" : IDEA_WILL.includes(i.stage) ? "will" : ""; }
+/* the Timeline as shown: rows of ideas not (yet) a Will do are hidden — kept, so their dates come back with a yes */
+function ideaTlView(cs, m){
+  if(cs.type!=="discovery") return m;
+  const byId = {}; (cs.ideas||[]).forEach(i=> byId[i.id] = i);
+  const shown = m.items.filter(it=>{ const i = byId[it.tid]; if(!i) { const par = it.parent && m.items.find(x=> x.rid===it.parent); const pi = par && byId[par.tid]; return !pi || ideaApproval(pi)==="will"; } return ideaApproval(i)==="will"; });
+  return new Proxy(m, { get:(t, k)=> k==="items" ? shown : k==="mapOf" ? (()=> m) : t[k], set:(t, k, v)=>{ if(k!=="items") t[k] = v; return true; } });
+}
+/* ✅ Idea approval: a simple board — To decide · Will do · Won't do. Will do ideas go on the Timeline. */
+function ideaApprovalPane(cs){
+  const wrap = $("content");
+  const hint = document.createElement("div"); hint.className = "hint"; hint.style.margin = "0 0 12px";
+  hint.textContent = "Drag an idea to ✅ Will do to put it on the Timeline, or to ❌ Won’t do to park it. Ideas further along (research, engineering, done) stay under Will do.";
+  wrap.appendChild(hint);
+  const board = document.createElement("div"); board.className = "ia-board";
+  const cols = [["","🤔 To decide","backlog"],["will","✅ Will do","now"],["wont","❌ Won’t do","wont"]];
+  const stLabel = k=> (PIPE_STAGES.find(x=> x.key===k) || {}).label || k;
+  const move = (idea, to)=>{
+    if(!editMode){ toast("You can view this space but not change it"); return; }
+    const want = cols.find(c=> c[0]===to);
+    if(ideaApproval(idea)===to) return;
+    discSetStage(cs, idea, want[2]);
+    if(to==="will" && ideaGanttSync(cs)) saveRmaps();
+    toast(to==="will" ? "✅ Will do — it’s on the Timeline now" : to==="wont" ? "❌ Won’t do" : "Back to To decide");
+    renderAll();
+  };
+  cols.forEach(([key, label])=>{
+    const L = (cs.ideas||[]).filter(i=> ideaApproval(i)===key);
+    const col = document.createElement("div"); col.className = "ia-col ia-" + (key || "todo");
+    const h = document.createElement("div"); h.className = "ia-h"; h.innerHTML = "<b></b><span></span>";
+    h.firstChild.textContent = label; h.lastChild.textContent = L.length; col.appendChild(h);
+    const list = document.createElement("div"); list.className = "ia-list";
+    col.addEventListener("dragover", e=>{ if(!editMode) return; e.preventDefault(); col.classList.add("over"); });
+    col.addEventListener("dragleave", e=>{ if(!col.contains(e.relatedTarget)) col.classList.remove("over"); });
+    col.addEventListener("drop", e=>{ e.preventDefault(); col.classList.remove("over"); const id = e.dataTransfer.getData("text/idea"); const idea = (cs.ideas||[]).find(i=> i.id===id); if(idea) move(idea, key); });
+    L.forEach(idea=>{
+      const c = document.createElement("div"); c.className = "ia-card"; c.draggable = editMode;
+      c.addEventListener("dragstart", e=>{ e.dataTransfer.setData("text/idea", idea.id); e.dataTransfer.effectAllowed = "move"; c.classList.add("drag"); });
+      c.addEventListener("dragend", ()=> c.classList.remove("drag"));
+      const t = document.createElement("div"); t.className = "ia-t"; t.textContent = idea.title || "(untitled)"; c.appendChild(t);
+      const meta = document.createElement("div"); meta.className = "ia-m";
+      const who = idea.assignee || idea.owner || "";
+      meta.textContent = [key==="will" && idea.stage!=="now" ? stLabel(idea.stage) : (key==="" ? stLabel(idea.stage) : ""), who ? "👤 " + who : ""].filter(Boolean).join(" · ");
+      if(meta.textContent) c.appendChild(meta);
+      if(editMode){
+        const acts = document.createElement("div"); acts.className = "ia-acts";
+        cols.filter(o=> o[0]!==key).forEach(([k2, l2])=>{ const b = document.createElement("button"); b.className = "ia-btn"; b.textContent = l2.split(" ")[0] + " " + (k2==="will" ? "Will do" : k2==="wont" ? "Won’t do" : "To decide"); b.onclick = ()=> move(idea, k2); acts.appendChild(b); });
+        c.appendChild(acts);
+      }
+      list.appendChild(c);
+    });
+    if(!L.length){ const e = document.createElement("div"); e.className = "ia-empty"; e.textContent = key==="" ? "Nothing waiting for a call" : "Drop ideas here"; list.appendChild(e); }
+    col.appendChild(list); board.appendChild(col);
+  });
+  wrap.appendChild(board);
 }
 
 function bugSrcChip(t){
