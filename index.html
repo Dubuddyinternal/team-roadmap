@@ -3570,6 +3570,7 @@ body.rm-chart #pane-work > .controls{display:none}
       <button class="ss-tab" data-sstab="people">👥 People</button>
       <button class="ss-tab" data-sstab="perms">🔐 Permissions</button>
       <button class="ss-tab" data-sstab="proc" style="display:none">⚙️ Process improvements</button>
+      <button class="ss-tab" data-sstab="kids" style="display:none">📂 Spaces inside</button>
     </div>
     <div class="dlg-body" id="ssettings-body"></div>
     <div class="btns">
@@ -17370,13 +17371,7 @@ function renderAll(){
           if(cs.type==="scrum") _items.push({label:"\uFF0B New dev team", onClick: devNewTeam});
           _items.push({label:"\uD83D\uDE48 Hide from my sidebar", onClick:()=> setHiddenForMe("cs:"+cs.id, true, cs.name)});
           _items.push({label: cs.okr ? "Change linked OKR\u2026" : "Link to an OKR\u2026", onClick:()=> csOkrOpen(cs)});
-          if(hasPerm("add_spaces")){   // put a space inside a Marketing space, or take it out
-            const _par = mktParentOf(cs);
-            if(_par) _items.push({label:"Move out of \u201C"+_par.name+"\u201D", onClick:()=>{ delete cs.parent; pushAll(); toast("\u201C"+cs.name+"\u201D moved back to the sidebar"); }});
-            else if(cs.type!=="marketing" && cs.type!=="watch" && cs.type!=="horizon") CSPACES.list.filter(x=>x.type==="marketing" && x.id!==cs.id).forEach(m=>{
-              _items.push({label:"Move into \u201C"+m.name+"\u201D", onClick:()=>{ cs.parent = m.id; MKT_OPEN[m.id] = true; pushAll(); toast("\u201C"+cs.name+"\u201D is now inside \u201C"+m.name+"\u201D"); }});
-            });
-          }
+          /* which spaces sit inside a Marketing space is set in that Marketing space's Settings → 📂 Spaces inside */
           if(hasPerm("delete_spaces")) _items.push({label:"Delete\u2026", danger:true, onClick: doDelete});   // only roles given "Delete spaces"
           openRowMenu(menu, _items); };
           b.appendChild(menu);
@@ -24272,12 +24267,17 @@ function drawSpaceSettings(){
   const _pt = document.querySelector('#spacesettings-overlay .ss-tab[data-sstab="proc"]');
   if(_pt){ _pt.style.display = _pd ? "" : "none"; const n = _pd ? (_pd.requests||[]).length : 0; _pt.textContent = "⚙️ Process improvements" + (n ? " (" + n + ")" : ""); }
   if(ssTab === "proc" && !_pd) ssTab = "people";
+  const _mk = ssRef && ssRef.obj && ssRef.obj.type==="marketing" ? ssRef.obj : null;
+  const _kt = document.querySelector('#spacesettings-overlay .ss-tab[data-sstab="kids"]');
+  if(_kt) _kt.style.display = _mk ? "" : "none";
+  if(ssTab === "kids" && !_mk) ssTab = "people";
   document.querySelectorAll("#spacesettings-overlay .ss-tab").forEach(t=>{
     t.classList.toggle("active", t.getAttribute("data-sstab")===ssTab);
   });
   const body = $("ssettings-body");
   body.innerHTML = "";
   if(ssTab === "proc") return procAccessPanel(_pd, body, drawSpaceSettings);
+  if(ssTab === "kids") return drawMarketingKids(_mk, body);
   if(ssTab === "perms") return drawSpacePerms(body);
   return drawSpacePeople(body);
 }
@@ -24381,6 +24381,49 @@ function drawSpacePerms(body){
       body.appendChild(r);
     });
   });
+}
+/* Marketing → Settings → 📂 Spaces inside: move existing spaces in or out, or make a new one inside */
+function drawMarketingKids(mk, body){
+  const L = CSPACES.list || [];
+  const can = hasPerm("add_spaces");
+  const note = document.createElement("div"); note.className = "ss-note";
+  note.textContent = "Spaces listed here show inside “" + mk.name + "” in the sidebar." + (can ? "" : " Moving spaces in or out needs the “Add spaces” permission.");
+  body.appendChild(note);
+  const sec = t=>{ const h = document.createElement("div"); h.className = "proc-sech"; h.textContent = t; body.appendChild(h); };
+  const row = (cs, btn)=>{
+    const r = document.createElement("div"); r.className = "ss-member";
+    const main = document.createElement("div"); main.className = "person-main";
+    const nm = document.createElement("div"); nm.className = "person-name"; nm.textContent = cs.name;
+    const ty = document.createElement("div"); ty.className = "person-email"; ty.textContent = cs.type==="procdept" ? "Process improvements" : cs.type==="campaign" ? "Campaign" : csTypeLabel(cs.type);
+    main.append(nm, ty); r.appendChild(main); if(btn) r.appendChild(btn); body.appendChild(r);
+  };
+  const inside = L.filter(x=> x.parent===mk.id);
+  sec("Inside now (" + inside.length + ")");
+  inside.forEach(cs=>{
+    let b = null;
+    /* campaigns only exist inside Marketing; a department process space belongs to its department */
+    if(can && cs.type!=="campaign" && cs.type!=="procdept"){
+      b = document.createElement("button"); b.className = "person-del"; b.textContent = "Move out";
+      b.onclick = ()=>{ delete cs.parent; pushAll(); drawSpaceSettings(); renderAll(); toast("“"+cs.name+"” moved back to the sidebar"); };
+    }
+    row(cs, b);
+  });
+  if(!inside.length){ const e = document.createElement("div"); e.className = "hint"; e.textContent = "Nothing inside yet."; body.appendChild(e); }
+  if(!can) return;
+  const out = L.filter(x=> !x.parent && x.id!==mk.id && !["marketing","watch","horizon","process","procdept","module"].includes(x.type) && canViewSpace(csRef(x)));
+  sec("Add an existing space");
+  if(out.length){
+    const r = document.createElement("div"); r.className = "ss-access-row";
+    const sel = document.createElement("select"); sel.className = "person-role"; sel.style.flex = "1";
+    const o0 = document.createElement("option"); o0.value = ""; o0.textContent = "Pick a space…"; sel.appendChild(o0);
+    out.forEach(x=>{ const o = document.createElement("option"); o.value = x.id; o.textContent = x.name + " · " + csTypeLabel(x.type); sel.appendChild(o); });
+    const go = document.createElement("button"); go.className = "btn save"; go.textContent = "Move in";
+    go.onclick = ()=>{ const cs = L.find(x=> x.id===sel.value); if(!cs) return; cs.parent = mk.id; MKT_OPEN[mk.id] = true; pushAll(); drawSpaceSettings(); renderAll(); toast("“"+cs.name+"” is now inside “"+mk.name+"”"); };
+    r.append(sel, go); body.appendChild(r);
+  } else { const e = document.createElement("div"); e.className = "hint"; e.textContent = "No other spaces to move in."; body.appendChild(e); }
+  const nw = document.createElement("button"); nw.className = "btn"; nw.style.marginTop = "12px"; nw.textContent = "＋ Make a new space inside";
+  nw.onclick = ()=>{ $("spacesettings-overlay").classList.remove("show"); openMarketingTemplates(mk); };
+  body.appendChild(nw);
 }
 // persist a space's members: cspaces ride in teamPayload; dev/bugs host spaces need their own push
 function persistSpace(ref){
