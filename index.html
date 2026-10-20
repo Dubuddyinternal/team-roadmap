@@ -2930,6 +2930,11 @@ body.rm-chart #pane-work > .controls{display:none}
 .rmg-ttpl{flex:none;font-size:11px;background:#EAF0FB;border-radius:99px;padding:1px 6px;cursor:help}
 .rmd-row{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;text-align:left;border:1px solid var(--line-strong);background:var(--paper);border-radius:10px;padding:9px 12px;margin-bottom:8px;cursor:pointer}
 .rmd-row:hover{border-color:var(--indigo)}.rmd-row span{font-size:12px;color:var(--muted)}
+.rml-sugg{position:fixed;z-index:500;background:var(--card);border:1px solid var(--line-strong);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.16);padding:6px;max-height:320px;overflow:auto}
+.rml-sugg-h{font-size:11.5px;color:var(--muted);padding:4px 8px 6px}
+.rml-sugg-i{display:flex;justify-content:space-between;gap:10px;width:100%;text-align:left;border:0;background:transparent;padding:7px 9px;border-radius:7px;cursor:pointer;font-size:13.5px}
+.rml-sugg-i span{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.rml-sugg-i:hover,.rml-sugg-i.on{background:var(--indigo-soft)}
 .rmg-blk.rmg-dragable{cursor:grab}.rmg-blk.rmg-dragable:active{cursor:grabbing}
 .rmg-blk.rmg-line.rmg-dragable::before{content:"";position:absolute;left:-4px;right:-4px;top:-9px;bottom:-9px}
 .rmg-hl,.rmg-hr{position:absolute;top:50%;width:12px;height:12px;margin-top:-6px;border-radius:50%;background:#fff;border:2px solid rgba(0,0,0,.35);cursor:ew-resize;opacity:0;transition:opacity .12s;z-index:2}
@@ -14101,6 +14106,7 @@ function rmlQuickAddInput(m, ln, cls){
     saveRmaps();
   };
   box.appendChild(inp);
+  ideaSuggest(inp, m, idea=> ideaPlace(m, idea, { lane: ln.id }));   /* or pick one of the space's ideas (even from the Backlog) */
   /* the page can redraw more than once after a save: keep the cursor in this box for each redraw */
   if(rmlQuickFocus && rmlQuickFocus.key === m.id + ":" + ln.id && Date.now() < rmlQuickFocus.until) setTimeout(()=> inp.focus(), 0);
   return box;
@@ -14128,9 +14134,65 @@ function rmgSubInput(m, p){
     rmlQuickFocus = { key: m.id + ":sub:" + p.rid, until: Date.now() + 2000 };
     saveRmaps();
   };
-  inp.addEventListener("blur", ()=> setTimeout(()=>{ if(inp.isConnected && !inp.value.trim() && document.activeElement!==inp && rmgSubAdd===p.rid) close(); }, 200));
+  inp.addEventListener("blur", ()=> setTimeout(()=>{ if(inp.isConnected && !inp.value.trim() && document.activeElement!==inp && rmgSubAdd===p.rid && !document.querySelector(".rml-sugg")) close(); }, 200));
+  ideaSuggest(inp, m, idea=>{ rmgSubAdd = null; ideaPlace(m, idea, { parent: p }); });   /* club an existing idea under this one */
   if(rmlQuickFocus && rmlQuickFocus.key === m.id + ":sub:" + p.rid && Date.now() < rmlQuickFocus.until) setTimeout(()=> inp.focus(), 0);
   return inp;
+}
+/* the ideas of the Product Roadmap space a chart belongs to */
+function ideaSpaceOf(m){ const cs = m && (CSPACES.list||[]).find(x=> x.id===m.spaceOf); return cs && cs.type==="discovery" ? cs : null; }
+/* put an idea on a chart: in a phase ({lane}) or under a task ({parent}). Not yet a "Will do"? It becomes one. */
+function ideaPlace(m, idea, where){
+  const cs = ideaSpaceOf(m); if(!cs) return;
+  if(!IDEA_WILL.includes(idea.stage)) discSetStage(cs, idea, "now");
+  ideaGanttSync(cs);
+  const it = m.items.find(x=> x.tid===idea.id); if(!it) return;
+  if(where.parent){
+    const p = where.parent; if(p===it) return;
+    m.items.forEach(k=>{ if(k.parent===it.rid) k.parent = p.rid; });   /* its own sub-tasks come along */
+    it.parent = p.rid; it.lane = p.lane;
+    if(!it.start){ it.start = p.start || todayISO(); it.end = p.end || dISO(dNum(it.start) + 13); }
+    toast("“" + idea.title + "” is now under “" + (((allTasks().find(x=> x.tid===p.tid)||{}).task||{}).title || "it") + "”");
+  } else {
+    delete it.parent; it.lane = where.lane;
+    if(!it.start){ it.start = todayISO(); it.end = dISO(dNum(it.start) + 13); }
+    toast("💡 “" + idea.title + "” added here");
+  }
+  saveRmaps();
+}
+/* suggestions under an add box: the space's ideas that match what's typed — pick one instead of writing a new task */
+function ideaSuggest(inp, m, onPick){
+  const cs = ideaSpaceOf(m); if(!cs || !editMode) return;
+  let box = null, hi = -1, shown = [];
+  const stLabel = k=> (PIPE_STAGES.find(x=> x.key===k) || {}).label || k;
+  const close = ()=>{ if(box){ box.remove(); box = null; } hi = -1; };
+  const pick = idea=>{ close(); inp.value = ""; onPick(idea); };
+  const draw = ()=>{
+    const q = inp.value.trim().toLowerCase();
+    shown = (cs.ideas||[]).filter(i=> !q || (i.title||"").toLowerCase().includes(q)).slice(0, 8);
+    if(!shown.length){ close(); return; }
+    if(!box){ box = document.createElement("div"); box.className = "rml-sugg"; document.body.appendChild(box); }
+    const r = inp.getBoundingClientRect();
+    Object.assign(box.style, { left: r.left + "px", top: (r.bottom + 4) + "px", width: Math.max(300, r.width) + "px" });
+    box.innerHTML = "";
+    const h = document.createElement("div"); h.className = "rml-sugg-h"; h.textContent = "💡 Pick an idea — or keep typing and press Enter for a new task"; box.appendChild(h);
+    shown.forEach((i, k)=>{
+      const b = document.createElement("button"); b.className = "rml-sugg-i" + (k===hi ? " on" : "");
+      b.innerHTML = "<b></b><span></span>"; b.firstChild.textContent = i.title || "(untitled)"; b.lastChild.textContent = i.stage==="wont" ? "Won’t do" : stLabel(i.stage);
+      b.onmousedown = e=>{ e.preventDefault(); pick(i); };
+      box.appendChild(b);
+    });
+  };
+  inp.addEventListener("focus", draw);
+  inp.addEventListener("input", ()=>{ hi = -1; draw(); });
+  inp.addEventListener("blur", ()=> setTimeout(close, 150));
+  inp.addEventListener("keydown", e=>{
+    if(!box) return;
+    if(e.key==="ArrowDown"){ e.preventDefault(); hi = Math.min(shown.length - 1, hi + 1); draw(); }
+    else if(e.key==="ArrowUp"){ e.preventDefault(); hi = Math.max(-1, hi - 1); draw(); }
+    else if(e.key==="Enter" && hi >= 0){ e.preventDefault(); e.stopImmediatePropagation(); pick(shown[hi]); }
+    else if(e.key==="Escape") close();
+  }, true);
 }
 /* an item leaves the chart: its sub-tasks stay, as plain tasks */
 function rmgDropItem(m, it){
