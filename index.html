@@ -2771,6 +2771,9 @@ body.rm-chart #pane-work > .controls{display:none}
 .proc-depts{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 18px}
 .proc-dept{border:1px solid var(--line-strong);background:var(--paper);border-radius:99px;padding:6px 12px;font-size:12.5px;cursor:pointer}
 .proc-dept:hover{border-color:var(--indigo)}
+.mkt-line{display:flex;align-items:baseline;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
+.mkt-line:last-child{border-bottom:0}
+.mkt-line span{color:var(--muted);font-size:12.5px;margin-left:auto;text-align:right}
 .ss-heads{border:1px solid var(--line);border-radius:12px;background:var(--paper);padding:12px 14px;margin:0 0 14px}
 .ss-heads-t{font-weight:700;font-size:14px;margin-bottom:2px}
 .ss-heads-c{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px}
@@ -6421,7 +6424,7 @@ const PERM_CAPS = [
   {key:"invite",  label:"Invite / remove members", roles:["owner","admin"]},
   {key:"team",    label:"Create & delete teams",   roles:["owner"]},
 ];
-function currentDisc(){ return CSPACES.list.find(x=>x.id===activeCspace && (x.type==="discovery" || x.type==="process" || x.type==="procdept")) || null; }
+function currentDisc(){ return CSPACES.list.find(x=>x.id===activeCspace && (x.type==="discovery" || x.type==="process" || x.type==="procdept" || x.type==="marketing")) || null; }
 function saveDisc(){
   // linked student ideas / team pitches: tell them when an idea moves (student-ideas.js)
   if(typeof ideaStatusSync === "function"){ try{ ideaStatusSync(); }catch(_){ } }
@@ -8109,6 +8112,7 @@ function devBoardIsEmpty(){
   return sp===0 && spr===0 && cd===0;
 }
 function csIsActive(cs){
+  if(cs.type==="marketing" && view==="disc" && activeCspace===cs.id) return true;
   if(view==="disc" && cs.type!=="procdept" && (CSPACES.list||[]).some(x=> x.type==="procdept" && x.parent===cs.id && x.id===activeCspace)) return true;
   if(cs.type==="marketing") return (CSPACES.list||[]).some(x=>x.parent===cs.id && csIsActive(x));
   if(cs.type==="campaign") return view==="campaign" && activeCspace===cs.id;
@@ -8124,11 +8128,9 @@ function csIsActive(cs){
     : (view==="dev" && devSpace===cs.devId);
 }
 function navToSpace(cs){
-  if(cs.type==="marketing"){   // the parent opens / closes; opening it goes to the first space inside
-    const open = !mktOpen(cs) || !csIsActive(cs);
-    MKT_OPEN[cs.id] = open;
-    const first = open && !csIsActive(cs) ? (CSPACES.list||[]).find(x=>x.parent===cs.id && canViewSpace(csRef(x))) : null;
-    if(first) return navToSpace(first);
+  if(cs.type==="marketing"){   // its own page (Summary · Timeline); the ▾ in the sidebar folds the spaces inside
+    MKT_OPEN[cs.id] = true;
+    view = "disc"; activeCspace = cs.id; discView = "timeline";
     renderAll(); return;
   }
   if(cs.type==="campaign"){ view = "campaign"; activeCspace = cs.id; campView = "details"; renderAll(); return; }
@@ -8223,6 +8225,7 @@ function workTabs(){
   if(view==="disc"){
     // Product Roadmap spaces: no stage board (an idea's stage is set from All ideas); Timeline is a Gantt
     const _ct = (currentDisc() || {}).type;
+    if(_ct==="marketing") return [{key:"timeline",label:"Timeline"}];
     if(_ct==="procdept") return procHasAccess(currentDisc()) || canViewSpace(csRef(currentDisc()))
       ? [{key:"ideas",label:"⚙️ Process improvements"},{key:"timeline",label:"Timeline"}] : [{key:"ideas",label:"🔒 Request access"}];
     if(_ct==="process") return [{key:"ideas",label:"All ideas"},{key:"timeline",label:"Timeline"},{key:"team",label:"👥 From team"}];
@@ -8304,6 +8307,8 @@ function renderHeader(){
     ? "Sprint work moving left to right \u2014 pick a card, build it, get it reviewed, ship it."
     : view==="admin"
     ? "Manage who can access this team and what each role can do."
+    : view==="disc" && (currentDisc()||{}).type==="marketing"
+    ? "Everything marketing in one place: the spaces inside it, and one Timeline for what the team is doing and when."
     : view==="disc" && (currentDisc()||{}).type==="process"
     ? "How the team works, getting better: improvements come in from each department, get reviewed, piloted, rolled out and measured."
     : view==="disc" && (currentDisc()||{}).type==="procdept"
@@ -8397,6 +8402,14 @@ function renderHeader(){
       mkStat(doneN,"Done"),
     );
     updated = DEV.updated || "\u2014";
+  } else if(view==="disc" && (currentDisc()||{}).type==="marketing"){
+    const _mk = currentDisc(), g = discGantt(_mk), reg = {}; allTasks().forEach(x=> reg[x.tid] = x);
+    const its = g.items.filter(it=> reg[it.tid]), today = dNum(todayISO());
+    const isDone = it=> effStatus(reg[it.tid].task)==="done";
+    const inside = (CSPACES.list||[]).filter(x=> x.parent===_mk.id && x.type!=="procdept" && canViewSpace(csRef(x)));
+    stats.append(mkStat(inside.length,"Spaces inside"), mkStat(its.length,"On the Timeline"), mkStat(its.filter(isDone).length,"Done"),
+      mkStat(its.filter(it=> !isDone(it) && it.end && dNum(it.end) < today).length,"Overdue"));
+    pct = its.length ? Math.round(its.filter(isDone).length / its.length * 100) : 0; updated = "\u2014";
   } else if(view==="disc"){
     const _cd = currentDisc() || {};
     const ideas = _cd.type==="procdept" ? procEntries(_cd) : (_cd.ideas || []);
@@ -8449,6 +8462,7 @@ function renderHeader(){
   }
   if(typeof todoRenderSummary==="function") todoRenderSummary($("pane-summary"), view==="todo");   // My To-do history (my-todo.js); removed on other views
   devRenderSummary($("pane-summary"), view==="dev");   // engineering: sprint deadline, Epics → Backlog → Sprint, epics, types, review
+  mktRenderSummary($("pane-summary"), view==="disc" && (currentDisc()||{}).type==="marketing");
   const ov = document.createElement("div");
   ov.className = "overall";
   ov.innerHTML = `<label>${view==="okr"?"Cycle score":"Overall completion"} — <b>${pct}%</b></label>
@@ -8663,6 +8677,9 @@ function allTasks(){
   (CSPACES.list||[]).filter(x=>x.type==="discovery" || x.type==="process").forEach(cs=>{
     (cs.ideas||[]).forEach(i=> out.push({tid:i.id, task:i, path:cs.name+" · Ideas", kind:"idea"}));
     if(cs.gantt) (cs.gantt.own||[]).forEach(t=> out.push({tid:t.tid, task:t, path:cs.name+" \u00B7 written on the Timeline", kind:"own", map:cs.gantt}));
+  });
+  (CSPACES.list||[]).filter(x=>x.type==="marketing" && x.gantt).forEach(cs=>{
+    (cs.gantt.own||[]).forEach(t=> out.push({tid:t.tid, task:t, path:cs.name+" \u00B7 Timeline", kind:"own", map:cs.gantt}));
   });
   (CSPACES.list||[]).filter(x=>x.type==="procdept" && x.gantt).forEach(cs=>{
     (cs.gantt.own||[]).forEach(t=> out.push({tid:t.tid, task:t, path:procDeptName(cs.id)+" \u00B7 process Timeline", kind:"own", map:cs.gantt}));
@@ -12589,6 +12606,40 @@ function devSprintDeadline(sp, spCards){
   return box;
 }
 /* ---- the engineering Summary tab, below the numbers ---- */
+/* Marketing → Summary: the spaces inside it, and what's late / coming up on its Timeline */
+function mktRenderSummary(pane, show){
+  let box = document.getElementById("mkt-summary");
+  if(!show){ if(box) box.remove(); return; }
+  if(!pane) return;
+  if(!box){ box = document.createElement("div"); box.id = "mkt-summary"; box.className = "dv-sum"; pane.appendChild(box); }
+  box.innerHTML = "";
+  const mk = currentDisc(), g = discGantt(mk), reg = {}; allTasks().forEach(x=> reg[x.tid] = x);
+  const card = title=>{ const c = document.createElement("section"); c.className = "dv-sumcard"; const h = document.createElement("h3"); h.textContent = title; c.appendChild(h); box.appendChild(c); return c; };
+  const line = (c, text, sub, go)=>{
+    const r = document.createElement("div"); r.className = "mkt-line"; if(go){ r.style.cursor = "pointer"; r.onclick = go; }
+    const t = document.createElement("b"); t.textContent = text; r.appendChild(t);
+    if(sub){ const s = document.createElement("span"); s.textContent = sub; r.appendChild(s); }
+    c.appendChild(r);
+  };
+  const inside = (CSPACES.list||[]).filter(x=> x.parent===mk.id && x.type!=="procdept" && canViewSpace(csRef(x)));
+  const c1 = card("📂 Spaces inside");
+  inside.forEach(x=>{
+    const n = x.type==="campaign" ? (x.items||[]).length + " item(s)" : x.type==="social" ? (x.cards||[]).length + " in Content Process" : csTypeLabel(x.type);
+    line(c1, x.name + " ↗", n, ()=> navToSpace(x));
+  });
+  if(!inside.length) line(c1, "Nothing inside yet", "Add spaces from ⋯ → Settings → Spaces inside");
+  const today = dNum(todayISO());
+  const open = g.items.filter(it=> reg[it.tid] && effStatus(reg[it.tid].task)!=="done" && it.end);
+  const late = open.filter(it=> dNum(it.end) < today).sort((a,b)=> dNum(a.end)-dNum(b.end));
+  const soon = open.filter(it=> dNum(it.end) >= today && dNum(it.end) <= today + 14).sort((a,b)=> dNum(a.end)-dNum(b.end));
+  const toTl = ()=>{ paneTab = "work"; discView = "timeline"; renderAll(); };
+  const c2 = card("⏰ Late on the Timeline (" + late.length + ")");
+  late.slice(0, 8).forEach(it=> line(c2, reg[it.tid].task.title || "(untitled)", "was due " + rmlFmt(it.end) + (it.owner ? " · 👤 " + it.owner : ""), toTl));
+  if(!late.length) line(c2, "Nothing late", "");
+  const c3 = card("🗓 Due in the next 2 weeks (" + soon.length + ")");
+  soon.slice(0, 8).forEach(it=> line(c3, reg[it.tid].task.title || "(untitled)", "by " + rmlFmt(it.end) + (it.owner ? " · 👤 " + it.owner : ""), toTl));
+  if(!soon.length) line(c3, "Nothing due soon", "");
+}
 function devRenderSummary(pane, show){
   let box = document.getElementById("dev-summary");
   if(!show){ if(box) box.remove(); return; }
@@ -16474,6 +16525,7 @@ function renderContentDisc(){
   const cs = currentDisc();
   if(!cs){ view = "roadmap"; renderAll(); return; }
 
+  if(cs.type==="marketing") return discGanttPane(cs);
   if(cs.type==="procdept"){
     if(!canViewSpace(csRef(cs))) return procRequestPane(cs);
     if(discView==="timeline") return procDeptTimeline(cs);
@@ -17370,12 +17422,15 @@ function renderAll(){
         if(hiddenForMe("cs:"+cs.id)) return;    // I hid it from my sidebar (Administration → My hidden boards)
         const active = csIsActive(cs);
         const b = document.createElement("button");
-        b.className = "ws-item"+(active && cs.type!=="marketing"?" active":"")+(_nested?" ws-nested":"")+(cs.type==="marketing"?" ws-parent":"");
+        const _mOwn = cs.type==="marketing" && view==="disc" && activeCspace===cs.id;   /* Marketing's own page */
+        b.className = "ws-item"+(active && (cs.type!=="marketing" || _mOwn)?" active":"")+(_nested?" ws-nested":"")+(cs.type==="marketing"?" ws-parent":"");
         b.innerHTML = '<span class="dot cs"></span><span></span>';
         b.querySelector("span:nth-child(2)").textContent = cs.name + (cs.type==="procdept" && !procHasAccess(cs) ? " 🔒" : "");
         b.onclick = ()=> navToSpace(cs);
         if(cs.type==="marketing"){
           const chev = document.createElement("span"); chev.className = "ws-chev"+(mktOpen(cs)?" open":""); chev.textContent = "\u25BE";
+          chev.title = mktOpen(cs) ? "Hide the spaces inside" : "Show the spaces inside";
+          chev.onclick = e=>{ e.stopPropagation(); MKT_OPEN[cs.id] = !mktOpen(cs); renderAll(); };
           b.insertBefore(chev, b.firstChild);
           b.querySelector(".dot").outerHTML = '<span class="ws-kid-ico">📢</span>';
         } else if(_nested){
