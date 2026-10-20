@@ -14122,6 +14122,9 @@ function rmlQuickAddInput(m, ln, cls){
 /* sub-tasks (Simple Gantt): an item with it.parent = a top-level item's rid sits under that item,
    in its phase, and moves with it. One level deep. */
 let rmgSubAdd = null;   /* rid of the task whose "＋ Add sub-task…" box is open */
+/* the phase a row sits in: a sub-task follows its main task, unless it has been moved on to a phase of its own
+   (it stays linked — still counted as its sub-task, and marked "↳ part of …") */
+function rmgRowLane(m, it){ const p = rmgParentOf(m, it); return (p && it.lane && it.lane!==p.lane && m.lanes.some(l=> l.id===it.lane)) ? rmlLaneOf(m, it) : rmlLaneOf(m, p || it); }
 function rmgParentOf(m, it){ return it.parent ? m.items.find(x=> x.rid===it.parent && !x.parent && x!==it) || null : null; }
 function rmgOpenSub(m, it){ rmgSubAdd = it.rid; delete it.fold; rmlQuickFocus = { key: m.id + ":sub:" + it.rid, until: Date.now() + 2000 }; renderAll(); }
 function rmgSubInput(m, p){
@@ -14331,7 +14334,7 @@ function rmgTplApply(holder, id){
    first time the task is in it; moving on keeps them, so a task that went through 5 phases carries 5 documents */
 function rmgTaskDocs(m, it){
   const tpls = RMAPS.templates || []; if(!tpls.length) return false;
-  let ln = rmlLaneOf(m, rmgParentOf(m, it) || it), g = 0, changed = false;
+  let ln = rmgRowLane(m, it), g = 0, changed = false;
   while(ln && g++ < 8){
     if(ln.taskTpl){
       it.docs = it.docs || [];
@@ -14595,7 +14598,7 @@ function renderRmapGantt(m, wrap, byTid){
   const barEls = {};
   /* left column reads like a task list: phase header, its tasks, "＋ Add task…", then its
      sub-phases (and their sub-phases) the same way, indented */
-  const laneItems = ln => live.filter(it=> rmlLaneOf(m, rmgParentOf(m, it) || it)===ln)
+  const laneItems = ln => live.filter(it=> rmgRowLane(m, it)===ln)
     .filter(it=>{ /* in a window, drop tasks entirely outside it */
       const s0 = dayOf(dNum(it.start || it.end || todayISO())), e0 = dayOf(dNum(it.end || it.start || todayISO()));
       return !(e0 < 0 || s0 > nD-1);
@@ -14680,8 +14683,11 @@ function renderRmapGantt(m, wrap, byTid){
         nm.firstChild.appendChild(fo);
       }
       nm.firstChild.appendChild(document.createTextNode((st==="done" ? "✓ " : locked ? "🔒 " : "") + (en.task.title || "(untitled)")));
-      const kd = R.kids.length ? R.kids.filter(k=> byTid[k.tid] && effStatus(byTid[k.tid].task)==="done").length + "/" + R.kids.length + " sub-tasks" : "";
-      nm.lastChild.textContent = rmlFmt(it.start) + (it.end && it.end!==it.start ? " → " + rmlFmt(it.end) : "") + (it.owner ? " · 👤 " + it.owner : "") + (kd ? " · ☑ " + kd : "");
+      const allKids = dep ? [] : m.items.filter(k=> rmgParentOf(m, k)===it && byTid[k.tid]);
+      const kd = allKids.length ? allKids.filter(k=> effStatus(byTid[k.tid].task)==="done").length + "/" + allKids.length + " sub-tasks" + (allKids.length > R.kids.length ? " (" + (allKids.length - R.kids.length) + " in other phases)" : "") : "";
+      const _away = !dep && rmgParentOf(m, it);   /* a sub-task that has moved on to another phase */
+      const _awayT = _away && byTid[_away.tid] ? "↳ part of “" + (byTid[_away.tid].task.title || "") + "”" : "";
+      nm.lastChild.textContent = (_awayT ? _awayT + " · " : "") + rmlFmt(it.start) + (it.end && it.end!==it.start ? " → " + rmlFmt(it.end) : "") + (it.owner ? " · 👤 " + it.owner : "") + (kd ? " · ☑ " + kd : "");
       nm.title = (en.task.title||"") + (it.owner ? "\nOwner: " + it.owner : "") + (it.team ? "\nTeam: " + it.team : "") + "\n" + en.path;
       if(ed){ nm.onclick = ()=> rmlEditItem(M, it, en); nm.style.cursor = "pointer"; }
       else { nm.onclick = ()=> rmgRowDialog(m, it, byTid); nm.style.cursor = "pointer"; nm.title += it.open ? "\nClick for details · right-click to open it in its space" : "\nClick for details"; }
@@ -14889,8 +14895,9 @@ function rmgItemDrag(el, m, it, unitPx, unitDays, onClick, opt){
       } else {
         const lane = laneMode && target && target.dataset.lane;
         const par = rmgParentOf(m, it), kids = par ? [] : m.items.filter(k=> rmgParentOf(m, k)===it);
-        if(lane && lane !== rmlLaneOf(m, par || it).id && m.lanes.some(l=> l.id===lane)){
-          it.lane = lane; delete it.parent; kids.forEach(k=> k.lane = lane); changed = true;
+        if(lane && lane !== rmgRowLane(m, it).id && m.lanes.some(l=> l.id===lane)){
+          const was = rmgRowLane(m, it).id;
+          it.lane = lane; kids.forEach(k=>{ if(rmlLaneOf(m, k).id===was) k.lane = lane; }); changed = true;   /* a sub-task keeps its main task */
         }
         if(shift){
           [it].concat(kids).forEach(x=>{
@@ -15419,14 +15426,14 @@ function rmlEditItem(m, it, en){
     if(v.start && v.end && dNum(v.end) < dNum(v.start)){ toast("“Done by” is before the start date"); return false; }
     if(named){ const nm=(v.title||"").trim(); if(!nm){ toast("Give it a title"); return false; } en.task.title = nm; }
     if(own) en.task.status = v.status || "planned";
-    const oldLane = rmlLaneOf(m, rmgParentOf(m, it) || it).id;
+    const oldLane = rmgRowLane(m, it).id;
     it.lane = v.lane; if(v.start) it.start = v.start; if(v.end) it.end = v.end;
     if(subOf && "parent" in v){
       const p = v.parent && m.items.find(x=> x.rid===v.parent);
-      /* picking a parent puts it in the parent's phase; moving a sub-task's phase takes it out */
-      if(p && !(it.parent===p.rid && v.lane!==oldLane)){ it.parent = p.rid; it.lane = p.lane; } else delete it.parent;
+      /* a new main task puts it in that task's phase; a sub-task can sit in another phase and stay linked */
+      if(p){ if(it.parent!==p.rid && v.lane===oldLane) it.lane = p.lane; it.parent = p.rid; } else delete it.parent;
     }
-    m.items.forEach(k=>{ if(k!==it && rmgParentOf(m, k)===it) k.lane = it.lane; });
+    m.items.forEach(k=>{ if(k!==it && rmgParentOf(m, k)===it && k.lane===oldLane) k.lane = it.lane; });   /* the sub-tasks that were with it */
     const _ow = rmlOwnerValue(v, "owner"); if(_ow) it.owner = _ow; else delete it.owner;
     ["team","progress","next"].forEach(k=>{ const s=(v[k]||"").trim(); if(s) it[k]=s; else delete it[k]; });
     if(rmgIsGrid(m) || m.view==="wbs"){ if(v.color) it.color = v.color; else delete it.color; }
@@ -18546,7 +18553,7 @@ function ideaGanttSync(cs){
 }
 function ideaPhaseChip(cs, idea){
   const m = discGantt(cs), it = m.items.find(x=> x.tid===idea.id);
-  const ln = it ? rmlLaneOf(m, rmgParentOf(m, it) || it) : null;
+  const ln = it ? rmgRowLane(m, it) : null;
   const c = document.createElement("button");
   const unpl = !ln || ln.id==="ln-unplanned";
   c.className = "disc-chip phase" + (unpl ? " none" : "");
@@ -18557,7 +18564,7 @@ function ideaPhaseChip(cs, idea){
     if(!editMode || !it) return;
     openDiscPick(c, { search: m.lanes.length > 6, current: ln && ln.id,
       options: m.lanes.map(l=>({ key:l.id, label: rmwLanePath(m, l) })),
-      onPick: k=>{ if(!k) return; it.lane = k; delete it.parent; m.items.forEach(x=>{ if(x.parent===it.rid) x.lane = k; }); saveRmaps(); toast("Moved to “" + ((m.lanes.find(l=> l.id===k)||{}).name||"") + "” on the Timeline"); } });
+      onPick: k=>{ if(!k) return; const was = rmgRowLane(m, it).id; it.lane = k; m.items.forEach(x=>{ if(x.parent===it.rid && x.lane===was) x.lane = k; }); saveRmaps(); toast("Moved to “" + ((m.lanes.find(l=> l.id===k)||{}).name||"") + "” on the Timeline"); } });
   };
   return c;
 }
@@ -18619,7 +18626,7 @@ function ideaApprovalPane(cs){
         if(!g.lanes.some(l=> l.id===phases[0].id)) g.lanes.push(phases[0]);
         if(!IDEA_WILL.includes(idea.stage) || idea.stage==="done") discSetStage(cs, idea, "now");
         const it = rowOf(idea); if(!it) return;
-        it.start = v.start; it.end = v.end; it.lane = v.lane; delete it.parent;
+        it.start = v.start; it.end = v.end; it.lane = v.lane;   /* a sub-task keeps its main task */
         saveRmaps(); toast("🗓 On the Timeline, " + rmlFmt(v.start) + " → " + rmlFmt(v.end));
       }, { width: 460 });
       return;
