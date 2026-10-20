@@ -14148,13 +14148,20 @@ function rmwBarDrag(bar, lab, it, pxd, onClick){
 
 /* ---- item dialog: lane, due date, owner, team, progress, next, blockers, rule ---- */
 /* owner is free text; suggest team members' names and owners already used on this chart */
-function rmlOwnerSuggestions(m){
-  const out = [];
-  const add = x=>{ x = (x||"").trim(); if(x && out.indexOf(x)<0) out.push(x); };
-  (m.items||[]).forEach(it=> add(it.owner));
-  assigneeMembers().forEach(u=> add(userDisplayName(u)));
-  return out;
+/* owner picker: the team's members from the database, plus "Someone else…" (a typed name) and any name
+   already there that isn't a member. Two fields: k_pick (select) and k (text, shown for "Someone else"). */
+function rmlOwnerFields(k, label, current){
+  const names = assigneeMembers().map(userDisplayName).filter((n,i,a)=> n && a.indexOf(n)===i).sort((a,b)=> a.localeCompare(b));
+  const cur = (current||"").trim(), known = !cur || names.includes(cur);
+  const opts = [["","— nobody —"]].concat(names.map(n=>[n, "👤 " + n]));
+  if(!known) opts.push([cur, cur + " (typed earlier)"]);
+  opts.push(["__other", "✏️ Someone else…"]);
+  return [
+    { k: k + "_pick", label, type:"select", value: cur, opts },
+    { k, label:"Their name", type:"text", value:"", ph:"Type a name", show: v=> v[k + "_pick"]==="__other" },
+  ];
 }
+function rmlOwnerValue(v, k){ const p = v[k + "_pick"]; return (p==="__other" ? (v[k]||"") : (p||"")).trim(); }
 function rmlEditItem(m, it, en){
   const own = en.kind==="own";
   /* the title can be edited here for anything saved with the team (a linked card's own title changes
@@ -14167,7 +14174,7 @@ function rmlEditItem(m, it, en){
     { k:"lane", label: {gantt:"Phase", swimlane:"Swimlane", wbs:"Group"}[m.view] || "Lane", type:"select", value: rmlLaneOf(m, it).id, opts: m.lanes.map(l=>[l.id, (m.view==="wbs" || m.view==="gantt" ? rmwLanePath(m, l) : l.name) + (l.kind==="ongoing" ? " (ongoing)" : "")]) },
     { k:"start", label:"Starts", type:"date", value: it.start || todayISO(), half:true },
     { k:"end", label:"Done by", type:"date", value: it.end || it.start || todayISO(), half:true },
-    { k:"owner", label:"Owner", type:"text", value: it.owner || "", ph:"Type a name, e.g. Shivam", list: rmlOwnerSuggestions(m) },
+    ...rmlOwnerFields("owner", "Owner", it.owner),
     { k:"team", label: m.view==="gantt" ? "Team (sets the colour)" : m.view==="swimlane" ? "Owner / team" : "Team involved", type:"text", value: it.team || "", ph:"e.g. Product + Marketing, Shivam" },
     { k:"pct", label:"% complete", type:"number", value: it.pct ?? 0, show: ()=> m.view==="wbs" },
     { k:"progress", label:"What’s done so far", type:"area", value: it.progress || "" },
@@ -14199,7 +14206,8 @@ function rmlEditItem(m, it, en){
       if(p && !(it.parent===p.rid && v.lane!==oldLane)){ it.parent = p.rid; it.lane = p.lane; } else delete it.parent;
     }
     m.items.forEach(k=>{ if(k!==it && rmgParentOf(m, k)===it) k.lane = it.lane; });
-    ["owner","team","progress","next"].forEach(k=>{ const s=(v[k]||"").trim(); if(s) it[k]=s; else delete it[k]; });
+    const _ow = rmlOwnerValue(v, "owner"); if(_ow) it.owner = _ow; else delete it.owner;
+    ["team","progress","next"].forEach(k=>{ const s=(v[k]||"").trim(); if(s) it[k]=s; else delete it[k]; });
     if(rmgIsGrid(m) || m.view==="wbs"){ if(v.color) it.color = v.color; else delete it.color; }
     if(m.view==="gantt") rmgTplApply(it, v.tpl);
     if(m.view==="wbs"){ const pc = Math.max(0, Math.min(100, Math.round(Number(v.pct)||0))); if(pc) it.pct = pc; else delete it.pct; }
@@ -16725,10 +16733,10 @@ function procWrite(dept, idea, forDept){
     { k:"problem", label:"What’s wrong with it today", type:"area", rows:3, value: P.problem || "" },
     { k:"change",  label:"What you’re changing", type:"area", rows:3, value: P.change || "" },
     { k:"gain",    label:"Expected gain", type:"text", value: P.gain || "", ph:"e.g. saves 3 hrs a week, fewer missed follow-ups" },
-    { k:"owner",   label:"Who’s doing it", type:"text", value: P.owner || (me ? userDisplayName(me) : ""), list: (USERS||[]).map(userDisplayName) },
+    ...rmlOwnerFields("owner", "Who’s doing it", P.owner || (idea ? "" : (me ? userDisplayName(me) : ""))),
   ], v=>{
     const title = (v.title||"").trim(); if(!title){ toast("Name the process"); return false; }
-    const proc = { problem:(v.problem||"").trim(), change:(v.change||"").trim(), gain:(v.gain||"").trim(), owner:(v.owner||"").trim() };
+    const proc = { problem:(v.problem||"").trim(), change:(v.change||"").trim(), gain:(v.gain||"").trim(), owner: rmlOwnerValue(v, "owner") };
     const note = [proc.problem && "Today: " + proc.problem, proc.change && "Change: " + proc.change, proc.gain && "Gain: " + proc.gain, proc.owner && "Owner: " + proc.owner].filter(Boolean).join("\n");
     if(idea){ idea.title = title; idea.proc = proc; idea.note = note; }
     else {
