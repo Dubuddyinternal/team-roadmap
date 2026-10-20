@@ -707,7 +707,7 @@ tr.in-mvp .an-rowhead{border-left:3px solid var(--indigo)}
 .ws-item.ws-add{color:var(--muted);font-family:var(--mono);font-size:12px;border:1.5px dashed var(--line-strong);justify-content:center}
 body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 /* Marketing mega space: a parent with its spaces nested under it */
-.ws-item.ws-parent{border-color:var(--indigo);color:var(--indigo);box-shadow:0 0 0 1px var(--indigo) inset}
+.ws-item.ws-parent.ws-in{color:var(--indigo)}   /* you're in one of the spaces inside it; its own page gets .active */
 .ws-chev{font-size:10px;color:var(--muted);width:10px;flex:none;transition:transform .14s;transform:rotate(-90deg)}
 .ws-chev.open{transform:none}
 .ws-kids{display:flex;flex-direction:column;gap:4px;margin:2px 0 6px 10px;padding-left:9px;border-left:1.5px dashed var(--line-strong)}
@@ -17632,7 +17632,7 @@ function renderAll(){
         const active = csIsActive(cs);
         const b = document.createElement("button");
         const _mOwn = cs.type==="marketing" && view==="disc" && activeCspace===cs.id;   /* Marketing's own page */
-        b.className = "ws-item"+(active && (cs.type!=="marketing" || _mOwn)?" active":"")+(_nested?" ws-nested":"")+(cs.type==="marketing"?" ws-parent":"");
+        b.className = "ws-item"+(active && (cs.type!=="marketing" || _mOwn)?" active":"")+(_nested?" ws-nested":"")+(cs.type==="marketing"?" ws-parent":"")+(cs.type==="marketing" && active && !_mOwn?" ws-in":"");
         b.innerHTML = '<span class="dot cs"></span><span></span>';
         b.querySelector("span:nth-child(2)").textContent = cs.name + (cs.type==="procdept" && !procHasAccess(cs) ? " 🔒" : "");
         b.onclick = ()=> navToSpace(cs);
