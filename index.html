@@ -2912,7 +2912,9 @@ body.rm-chart #pane-work > .controls{display:none}
 .ia-h span{font-family:var(--mono);font-size:12px;color:var(--muted)}
 .ia-will .ia-h b{color:var(--done)}.ia-wont .ia-h b{color:var(--blocked)}
 .ia-list{display:flex;flex-direction:column;gap:8px}
-.ia-card{border:1px solid var(--line-strong);border-radius:10px;padding:9px 11px;background:var(--paper);cursor:grab}
+.ia-card{position:relative;border:1px solid var(--line-strong);border-radius:10px;padding:9px 30px 9px 11px;background:var(--paper);cursor:grab}
+.ia-del{position:absolute;top:6px;right:6px;border:0;background:transparent;cursor:pointer;font-size:13px;opacity:.35;padding:2px 4px;border-radius:6px}
+.ia-card:hover .ia-del{opacity:.8}.ia-del:hover{opacity:1;background:var(--blocked-bg)}
 .ia-card.drag{opacity:.45}.ia-card:active{cursor:grabbing}
 .ia-t{font-weight:600;font-size:14px;line-height:1.35}.ia-m{font-size:12px;color:var(--muted);margin-top:3px}
 .ia-acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
@@ -18494,6 +18496,16 @@ function ideaApprovalPane(cs){
       c.addEventListener("dragstart", e=>{ e.dataTransfer.setData("text/idea", idea.id); e.dataTransfer.effectAllowed = "move"; c.classList.add("drag"); });
       c.addEventListener("dragend", ()=> c.classList.remove("drag"));
       const t = document.createElement("div"); t.className = "ia-t"; t.textContent = idea.title || "(untitled)"; c.appendChild(t);
+      if(editMode){
+        const del = document.createElement("button"); del.className = "ia-del"; del.textContent = "🗑"; del.title = "Delete this idea";
+        del.onclick = e=>{ e.stopPropagation();
+          if(!confirm("Delete the idea “" + (idea.title||"") + "”? Its row on the Timeline goes too.")) return;
+          cs.ideas.splice(cs.ideas.indexOf(idea), 1);
+          if(ideaGanttSync(cs)) saveRmaps(); else saveDisc();
+          toast("Idea deleted");
+        };
+        c.appendChild(del);
+      }
       const meta = document.createElement("div"); meta.className = "ia-m";
       const who = idea.assignee || idea.owner || "";
       const row = key==="tl" ? discGantt(cs).items.find(x=> x.tid===idea.id) : null;
