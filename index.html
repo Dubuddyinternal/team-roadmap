@@ -2760,6 +2760,18 @@ body.rm-chart #pane-work > .controls{display:none}
 .rmg-linkrow:last-child{border-bottom:0}
 .rmg-linkrow small{margin-left:auto;color:var(--muted);font-family:var(--mono);font-size:10.5px}
 .rmg-doc:hover{border-color:var(--indigo)}
+.proc-row{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:12px 14px;margin:0 0 10px}
+.proc-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.proc-top b{font-size:15px}
+.proc-top .rml-mini{margin-left:auto;opacity:1}
+.proc-line{font-size:13.5px;margin-top:5px;line-height:1.45}
+.proc-line span{display:inline-block;min-width:64px;font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.proc-line.pre{white-space:pre-wrap;color:var(--muted)}
+.proc-by,.proc-from{font-size:12px;color:var(--muted);margin-top:6px}
+.proc-depts{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 18px}
+.proc-dept{border:1px solid var(--line-strong);background:var(--paper);border-radius:99px;padding:6px 12px;font-size:12.5px;cursor:pointer}
+.proc-dept:hover{border-color:var(--indigo)}
+.proc-fh{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:6px 0 10px}
 .rml-docview{max-height:65vh;overflow:auto;font-size:14px;line-height:1.55;padding:4px 2px}
 .rml-docview ul,.rml-docview ol{margin:2px 0 2px 20px;padding:0}
 .rmg-cell.phase{background:var(--paper)}
@@ -4739,6 +4751,12 @@ body.rm-chart #pane-work > .controls{display:none}
           <span class="tpl-desc">Collect ideas, sort them into Now / Next / Later, and see them on a timeline — like Jira Product Discovery.</span>
           <span class="tpl-by">All ideas · Roadmap · Timeline</span>
         </button>
+        <button class="tpl-card" data-tpl="process">
+          <span class="tpl-emoji">⚙️</span>
+          <span class="tpl-name">Process Optimization</span>
+          <span class="tpl-desc">Improve how the team works. Departments write what they’re optimizing in their own space; it lands here to review, pilot, roll out and measure.</span>
+          <span class="tpl-by">All ideas · Timeline · From team</span>
+        </button>
         <button class="tpl-card" data-tpl="content">
           <span class="tpl-emoji">📚</span>
           <span class="tpl-name">Educational content</span>
@@ -6034,8 +6052,18 @@ const PIPE_STAGES = [
 ];
 // Next / Later are gone from Product Roadmaps: Next ideas were already a "yes", Later ones go back to Backlog
 const PIPE_FROM_OLD = { next:"now", later:"backlog" };
-function discStages(cs){ return cs && cs.type==="discovery" ? PIPE_STAGES : DISC_STAGES; }
-function discDefaultStage(cs){ return discStages(cs)[0].key==="backlog" ? "backlog" : "later"; }
+// Process Optimization spaces (and the department "Process improvements" spaces feeding them)
+const PROC_STAGES = [
+  {key:"proposed",  label:"Proposed"},
+  {key:"review",    label:"Under review"},
+  {key:"approved",  label:"Approved"},
+  {key:"rejected",  label:"Rejected"},
+  {key:"piloting",  label:"Piloting"},
+  {key:"rolledout", label:"Rolled out to team"},
+  {key:"measured",  label:"Measured"},
+];
+function discStages(cs){ return cs && cs.type==="discovery" ? PIPE_STAGES : cs && (cs.type==="process" || cs.type==="procdept") ? PROC_STAGES : DISC_STAGES; }
+function discDefaultStage(cs){ const st = discStages(cs); return st===DISC_STAGES ? "later" : st[0].key; }
 // Product Roadmap ideas carry one timeline slot per phase (tl item .phase):
 //   primary  — set automatically: 7 days to decide Will do / Won't do from the day it enters Primary research
 //   implres  — asked for when it enters Implementation research
@@ -6118,6 +6146,7 @@ function discSetStage(cs, idea, stage){
   idea.stage = stage;
   saveDisc();
   discOnEnter(cs, idea, was);
+  if(cs.type==="process" && was!==stage) procPing(cs, idea);
 }
 function openIdeaDates(cs, idea, phase){
   const ph = discPhase(phase) || PIPE_PHASES[1];
@@ -6169,7 +6198,7 @@ function normalizeCspaces(c){
   c.list = c.list || [];
   c.list.forEach(x=>{
     if(!x.id) x.id = "cs-" + Math.random().toString(36).slice(2,8);
-    x.type = ["scrum","discovery","content","module","research","competitor","social","pdt","marketing","campaign","watch","horizon"].includes(x.type) ? x.type : "bugs";
+    x.type = ["scrum","discovery","content","module","research","competitor","social","pdt","marketing","campaign","watch","horizon","process","procdept"].includes(x.type) ? x.type : "bugs";
     if(x.type === "campaign" && window.CX) CX.normalize(x);   // campaign-space.js
     if(x.type === "watch"){ delete x.parent; if(window.WX) WX.normalize(x); }
     if(x.type === "horizon"){ delete x.parent; if(window.HX) HX.normalize(x); }   // horizon-space.js — its own space   // watch-space.js — its own space, never inside Marketing
@@ -6209,7 +6238,8 @@ function normalizeCspaces(c){
       x.culture = typeof x.culture==="string" ? x.culture : "";
       if(x.themes!==undefined && !Array.isArray(x.themes)) delete x.themes;
     }
-    if(x.type === "discovery" || x.type === "social" || x.type === "pdt"){
+    if(x.type === "procdept") x.ideas = [];   /* its entries live in the Process Optimization space it feeds */
+    if(x.type === "discovery" || x.type === "social" || x.type === "pdt" || x.type === "process"){
       x.ideas = x.ideas || [];
       if(Array.isArray(x.themes)){
         x.themes = x.themes.filter(function(t){ return t && (t.label||t.key); })
@@ -6363,7 +6393,7 @@ const PERM_CAPS = [
   {key:"invite",  label:"Invite / remove members", roles:["owner","admin"]},
   {key:"team",    label:"Create & delete teams",   roles:["owner"]},
 ];
-function currentDisc(){ return CSPACES.list.find(x=>x.id===activeCspace && x.type==="discovery") || null; }
+function currentDisc(){ return CSPACES.list.find(x=>x.id===activeCspace && (x.type==="discovery" || x.type==="process" || x.type==="procdept")) || null; }
 function saveDisc(){
   // linked student ideas / team pitches: tell them when an idea moves (student-ideas.js)
   if(typeof ideaStatusSync === "function"){ try{ ideaStatusSync(); }catch(_){ } }
@@ -8056,7 +8086,7 @@ function csIsActive(cs){
   if(cs.type==="watch") return view==="watch" && activeCspace===cs.id;
   if(cs.type==="horizon") return view==="horizon" && activeCspace===cs.id;
   return cs.type==="bugs" ? (view==="cbugs" && activeCspace===cs.id)
-    : cs.type==="discovery" ? (view==="disc" && activeCspace===cs.id)
+    : (cs.type==="discovery" || cs.type==="process" || cs.type==="procdept") ? (view==="disc" && activeCspace===cs.id)
     : cs.type==="social" ? (view==="social" && activeCspace===cs.id)
     : cs.type==="pdt" ? (view==="pdt" && activeCspace===cs.id)
     : cs.type==="content" ? (view==="content" && activeSection===cs.sectionKey)
@@ -8076,7 +8106,7 @@ function navToSpace(cs){
   if(cs.type==="watch"){ view = "watch"; activeCspace = cs.id; watchView = "companies"; renderAll(); return; }
   if(cs.type==="horizon"){ view = "horizon"; activeCspace = cs.id; horizonView = "topics"; renderAll(); return; }
   if(cs.type==="bugs"){ view = "cbugs"; activeCspace = cs.id; }
-  else if(cs.type==="discovery"){ view = "disc"; activeCspace = cs.id; discView = "ideas"; }
+  else if(cs.type==="discovery" || cs.type==="process" || cs.type==="procdept"){ view = "disc"; activeCspace = cs.id; discView = "ideas"; }
   else if(cs.type==="social"){ view = "social"; activeCspace = cs.id; socialView = "summary"; }
   else if(cs.type==="pdt"){ view = "pdt"; activeCspace = cs.id; pdtView = "ideation"; pdtBoardId = { dev:null, qa:null, bugs:null }; }
   else if(cs.type==="content"){ view = "content"; activeSection = cs.sectionKey; }
@@ -8163,7 +8193,10 @@ let _lastNavSig = "";
 function workTabs(){
   if(view==="disc"){
     // Product Roadmap spaces: no stage board (an idea's stage is set from All ideas); Timeline is a Gantt
-    const _t = (currentDisc() || {}).type==="discovery"
+    const _ct = (currentDisc() || {}).type;
+    if(_ct==="procdept") return [{key:"ideas",label:"⚙️ Process improvements"}];
+    if(_ct==="process") return [{key:"ideas",label:"All ideas"},{key:"timeline",label:"Timeline"},{key:"team",label:"👥 From team"}];
+    const _t = _ct==="discovery"
       ? [{key:"ideas",label:"All ideas"},{key:"timeline",label:"Timeline"}]
       : [{key:"ideas",label:"All ideas"},{key:"roadmap",label:"Roadmap"},{key:"timeline",label:"Timeline"}];
     // the product space also gets the students' inbox (student-ideas.js)
@@ -8241,6 +8274,10 @@ function renderHeader(){
     ? "Sprint work moving left to right \u2014 pick a card, build it, get it reviewed, ship it."
     : view==="admin"
     ? "Manage who can access this team and what each role can do."
+    : view==="disc" && (currentDisc()||{}).type==="process"
+    ? "How the team works, getting better: improvements come in from each department, get reviewed, piloted, rolled out and measured."
+    : view==="disc" && (currentDisc()||{}).type==="procdept"
+    ? "Write down a process you\u2019re improving. It goes straight to " + ((procTarget(currentDisc())||{}).name || "Process Optimization") + ", and you see where it stands here."
     : view==="disc"
     ? "Collect ideas, research them, decide Will do / Won\u2019t do, then take them through to Ready to implement, engineering and Done."
     : view==="social"
@@ -8332,7 +8369,7 @@ function renderHeader(){
     updated = DEV.updated || "\u2014";
   } else if(view==="disc"){
     const _cd = currentDisc() || {};
-    const ideas = _cd.ideas || [];
+    const ideas = _cd.type==="procdept" ? procEntries(_cd) : (_cd.ideas || []);
     stats.append(mkStat(ideas.length,"Ideas"));
     discStages(_cd).filter(st=>st.key!=="wont").forEach(st=>{
       stats.append(mkStat(ideas.filter(i=>i.stage===st.key).length, st.label.replace(/ \/ discussion$/,"")));
@@ -8593,7 +8630,7 @@ function allTasks(){
   teamBugs().forEach(t=>{
     out.push({tid:t.id, task:t, path:"Bugs · "+(t.source==="student" ? "Student-reported" : "Team"), kind:"bug"});
   });
-  (CSPACES.list||[]).filter(x=>x.type==="discovery").forEach(cs=>{
+  (CSPACES.list||[]).filter(x=>x.type==="discovery" || x.type==="process").forEach(cs=>{
     (cs.ideas||[]).forEach(i=> out.push({tid:i.id, task:i, path:cs.name+" · Ideas", kind:"idea"}));
     if(cs.gantt) (cs.gantt.own||[]).forEach(t=> out.push({tid:t.tid, task:t, path:cs.name+" \u00B7 written on the Timeline", kind:"own", map:cs.gantt}));
   });
@@ -16395,7 +16432,9 @@ function renderContentDisc(){
   const cs = currentDisc();
   if(!cs){ view = "roadmap"; renderAll(); return; }
 
-  if(discView === "roadmap" && cs.type==="discovery") discView = "ideas";
+  if(cs.type==="procdept") return procDeptPane(cs);
+  if(cs.type==="process" && discView==="team") return procTeamPane(cs);
+  if(discView === "roadmap" && (cs.type==="discovery" || cs.type==="process")) discView = "ideas";
   if(discView === "roadmap") return discRoadmapPane(cs);
   if(discView === "timeline") return discTimelinePane(cs);
   if(discView === "students" && typeof sidIsTarget === "function" && sidIsTarget(cs) && sidCanSee()) return sidPane(cs);
@@ -16423,7 +16462,8 @@ function discIdeasPane(cs){
   hr.className = "dt-row dt-head";
   const _noState = (cs && cs.type==="social");
   if(_noState) hr.classList.add("dt-nostate");
-  (_noState ? ["Summary","\uD83D\uDCAC",discThemeLabel(cs),"Roadmap",""] : ["Summary","\uD83D\uDCAC",discThemeLabel(cs),"Roadmap","State",""]).forEach(t=>{
+  const _stgH = cs && cs.type==="process" ? "Stage" : "Roadmap";
+  (_noState ? ["Summary","\uD83D\uDCAC",discThemeLabel(cs),_stgH,""] : ["Summary","\uD83D\uDCAC",discThemeLabel(cs),_stgH,"State",""]).forEach(t=>{
     const c = document.createElement("div");
     c.className = "dt-cell";
     c.textContent = t;
@@ -16443,6 +16483,7 @@ function discIdeasPane(cs){
     if(idea.note){ const n = document.createElement("div"); n.className = "dt-note"; n.textContent = idea.note; cSum.appendChild(n); }
     const _ips = photoStrip(idea.photos); if(_ips) cSum.appendChild(_ips);
     if(typeof sidBadge === "function"){ const _sb = sidBadge(idea); if(_sb) cSum.appendChild(_sb); }
+    if(idea.dept){ const _db = document.createElement("div"); _db.className = "proc-from"; _db.textContent = procFromText(idea); cSum.appendChild(_db); }
     if(cs.type==="discovery" && (idea.assignee || editMode)){ const _ow = document.createElement("div"); _ow.style.marginTop = "6px"; _ow.appendChild(discOwnerChip(cs, idea)); cSum.appendChild(_ow); }   // 🎓 student ▲ votes / 💡 pitched by
     const cCmt = document.createElement("div");
     cCmt.className = "dt-cell dt-c";
@@ -16574,7 +16615,7 @@ function discRoadmapPane(cs){
 
 /* ---- Timeline: the full roadmap engine (drag, zoom, stretch, markers, range) on this space's ideas ---- */
 function discTimelinePane(cs){
-  if(cs.type==="discovery") return discGanttPane(cs);
+  if(cs.type==="discovery" || cs.type==="process") return discGanttPane(cs);
   cs.tl = cs.tl || { id:"rmtl-"+cs.id, items:[], markers:[] };
   cs.tl.items = cs.tl.items || [];
   cs.tl.markers = cs.tl.markers || [];
@@ -16590,6 +16631,166 @@ function discTimelinePane(cs){
   const ideaIds = new Set(cs.ideas.map(i=>i.id));
   cs.tl.items = cs.tl.items.filter(it=> ideaIds.has(it.tid));
   renderContentRmap(cs.tl, {disc:true});
+}
+
+/* ================================================================
+   PROCESS OPTIMIZATION
+   A "process" space works like a Product Roadmap (All ideas · Timeline Gantt) with process stages, and a
+   👥 From team tab. Each department gets a "procdept" space ("Process improvements") inside its own space
+   in the sidebar (cs.parent; any space can hold one, Marketing nests as before). What people write there
+   goes straight into the process space's All ideas as an idea with .dept = that space and .by = the writer;
+   the department space lists its own entries with their live stage. Moving the stage pings the writer's 🔔
+   (sent when the person moving it may send notifications). Who sees a department space is its normal
+   access setting (chosen when it's made; ⋯ → Settings later).
+   ================================================================ */
+let PROC_OPEN = {};   /* per session: which groups show their department spaces (open by default) */
+function procOpen(cs){ return PROC_OPEN[cs.id] !== false; }
+function procKidsOf(cs){ return (CSPACES.list||[]).filter(x=> x.type==="procdept" && x.parent===cs.id); }
+function procParentOf(cs){ return cs && cs.type==="procdept" && cs.parent ? ((CSPACES.list||[]).find(x=> x.id===cs.parent && x.type!=="marketing") || null) : null; }
+function procTarget(cs){
+  if(!cs) return null;
+  if(cs.type==="process") return cs;
+  const L = (CSPACES.list||[]).filter(x=> x.type==="process");
+  return L.find(x=> x.id===cs.procOf) || L[0] || null;
+}
+function procEntries(dept){ const t = procTarget(dept); return t ? (t.ideas||[]).filter(i=> i.dept===dept.id) : []; }
+function procDeptName(id){
+  const d = (CSPACES.list||[]).find(x=> x.id===id); if(!d) return "a department";
+  const par = (CSPACES.list||[]).find(x=> x.id===d.parent);
+  return par ? par.name : d.name;
+}
+function procFromText(idea){ return "⚙️ from " + procDeptName(idea.dept) + (idea.by && idea.by.name ? " · " + idea.by.name : "") + (idea.created ? " · " + fmtD(idea.created) : ""); }
+function procStageLabel(idea){ const st = PROC_STAGES.find(x=> x.key===idea.stage); return st ? st.label : "Proposed"; }
+function procPing(cs, idea){
+  const me = currentUser();
+  if(!idea.by || !idea.by.id || !me || idea.by.id===me.id) return;
+  if(!SUPA || window.LOCAL_MODE || !hasPerm("send_notifications")) return;
+  SUPA.from("team_notifications").insert({
+    team_slug: TEAM, title: ("⚙️ " + idea.title).slice(0, 140),
+    body: "Your process improvement is now “" + procStageLabel(idea) + "” in " + cs.name + ".",
+    audience: "people", recipients: [idea.by.id], popup: false, bell: true, created_by: me.id
+  }).then(r=>{ if(r && r.error) console.warn("process ping:", r.error.message); });
+}
+/* write / edit one improvement (the department space, or the process space for its own feed) */
+function procWrite(dept, idea){
+  const t = procTarget(dept);
+  if(!t){ toast("There's no Process Optimization space to send to yet"); return; }
+  const P = (idea && idea.proc) || {}, me = currentUser();
+  rmlModal(idea ? "Edit process improvement" : "⚙️ New process improvement", [
+    { k:"title",   label:"Which process?", type:"text", value: idea ? idea.title : "", ph:"e.g. Weekly content approval" },
+    { k:"problem", label:"What’s wrong with it today", type:"area", rows:3, value: P.problem || "" },
+    { k:"change",  label:"What you’re changing", type:"area", rows:3, value: P.change || "" },
+    { k:"gain",    label:"Expected gain", type:"text", value: P.gain || "", ph:"e.g. saves 3 hrs a week, fewer missed follow-ups" },
+    { k:"owner",   label:"Who’s doing it", type:"text", value: P.owner || (me ? userDisplayName(me) : ""), list: (USERS||[]).map(userDisplayName) },
+  ], v=>{
+    const title = (v.title||"").trim(); if(!title){ toast("Name the process"); return false; }
+    const proc = { problem:(v.problem||"").trim(), change:(v.change||"").trim(), gain:(v.gain||"").trim(), owner:(v.owner||"").trim() };
+    const note = [proc.problem && "Today: " + proc.problem, proc.change && "Change: " + proc.change, proc.gain && "Gain: " + proc.gain, proc.owner && "Owner: " + proc.owner].filter(Boolean).join("\n");
+    if(idea){ idea.title = title; idea.proc = proc; idea.note = note; }
+    else {
+      t.ideas = t.ideas || [];
+      t.ideas.push({ id:"idea-"+Math.random().toString(36).slice(2,8), title, note, proc, stage:"proposed", state:"Pending", status:"planned",
+                     dept: dept.id, by: me ? { id: me.id, name: userDisplayName(me) } : null, created: todayISO() });
+    }
+    saveDisc(); toast(idea ? "Saved" : "Sent to “" + t.name + "”");
+  }, { width: 560, sub: idea ? "" : "It goes straight into “" + t.name + "” → All ideas." });
+}
+/* the department space: write improvements, see where each one stands */
+function procDeptPane(cs){
+  const wrap = $("content"), t = procTarget(cs);
+  const block = document.createElement("section"); block.className = "module-block";
+  const head = document.createElement("div"); head.className = "module-head";
+  const h2 = document.createElement("h2"); h2.textContent = "⚙️ Process improvements";
+  const pc = document.createElement("span"); pc.className = "pct";
+  const list = procEntries(cs).slice().sort((a,b)=> String(b.created||"").localeCompare(String(a.created||"")));
+  pc.textContent = list.length + " sent";
+  head.append(h2, pc);
+  if(editMode && t){
+    const sp = document.createElement("span"); sp.className = "spacer"; head.appendChild(sp);
+    const add = document.createElement("button"); add.className = "tool sm primary"; add.textContent = "＋ Write an improvement";
+    add.onclick = ()=> procWrite(cs, null); head.appendChild(add);
+  }
+  block.appendChild(head);
+  if(!t){ const e = document.createElement("div"); e.className = "empty"; e.textContent = "There's no Process Optimization space yet. Make one from ＋ Add space, then entries here go to it."; block.appendChild(e); wrap.appendChild(block); return; }
+  const hint = document.createElement("div"); hint.className = "hint"; hint.style.margin = "0 0 12px";
+  hint.textContent = "Each one goes to “" + t.name + "”. Its stage below updates as it’s reviewed, piloted, rolled out and measured.";
+  block.appendChild(hint);
+  list.forEach(idea=>{
+    const r = document.createElement("div"); r.className = "proc-row";
+    const top = document.createElement("div"); top.className = "proc-top";
+    const ti = document.createElement("b"); ti.textContent = idea.title;
+    const st = document.createElement("span"); st.className = "disc-chip stage st-" + idea.stage; st.textContent = procStageLabel(idea);
+    top.append(ti, st);
+    if(editMode){ const e = document.createElement("button"); e.className = "rml-mini"; e.textContent = "✎"; e.title = "Edit"; e.onclick = ()=> procWrite(cs, idea); top.appendChild(e); }
+    r.appendChild(top);
+    const P = idea.proc || {};
+    [["Today", P.problem], ["Change", P.change], ["Gain", P.gain], ["Owner", P.owner]].forEach(([k, v])=>{
+      if(!v) return; const d = document.createElement("div"); d.className = "proc-line"; d.innerHTML = "<span></span>"; d.firstChild.textContent = k; d.appendChild(document.createTextNode(v)); r.appendChild(d);
+    });
+    const by = document.createElement("div"); by.className = "proc-by"; by.textContent = (idea.by && idea.by.name ? idea.by.name + " · " : "") + (idea.created ? fmtD(idea.created) : "");
+    r.appendChild(by);
+    block.appendChild(r);
+  });
+  if(!list.length){ const e = document.createElement("div"); e.className = "empty"; e.style.padding = "24px"; e.textContent = editMode ? "Nothing yet. Press ＋ Write an improvement for a process you’re making better." : "Nothing sent yet."; block.appendChild(e); }
+  wrap.appendChild(block);
+}
+/* 👥 From team (in the process space): everything the departments sent, and the department spaces */
+function procTeamPane(cs){
+  const wrap = $("content");
+  const block = document.createElement("section"); block.className = "module-block";
+  const head = document.createElement("div"); head.className = "module-head";
+  const h2 = document.createElement("h2"); h2.textContent = "👥 From team";
+  head.appendChild(h2);
+  if(hasPerm("add_spaces")){
+    const sp = document.createElement("span"); sp.className = "spacer"; head.appendChild(sp);
+    const add = document.createElement("button"); add.className = "tool sm primary"; add.textContent = "＋ Connect a department";
+    add.title = "Add a “Process improvements” space inside a department’s space";
+    add.onclick = ()=> procConnect(cs); head.appendChild(add);
+  }
+  block.appendChild(head);
+  const depts = (CSPACES.list||[]).filter(x=> x.type==="procdept" && procTarget(x)===cs);
+  const dl = document.createElement("div"); dl.className = "proc-depts";
+  depts.forEach(d=>{
+    const b = document.createElement("button"); b.className = "proc-dept";
+    const vis = d.access==="private" ? "🔒 chosen people" : d.access==="limited" ? "👁 team views · chosen edit" : "everyone";
+    b.textContent = "⚙️ " + procDeptName(d.id) + " · " + procEntries(d).length + " sent · " + vis;
+    b.title = "Open it. Change who can see it from ⋯ → Settings next to it in the sidebar.";
+    b.onclick = ()=> navToSpace(d);
+    dl.appendChild(b);
+  });
+  if(!depts.length){ const e = document.createElement("div"); e.className = "hint"; e.textContent = "No departments connected yet. Press ＋ Connect a department to add a “Process improvements” space inside, say, Engineering or Marketing."; dl.appendChild(e); }
+  block.appendChild(dl);
+  const feed = (cs.ideas||[]).filter(i=> i.dept).sort((a,b)=> String(b.created||"").localeCompare(String(a.created||"")));
+  const fh = document.createElement("div"); fh.className = "proc-fh"; fh.textContent = "Sent by the departments (" + feed.length + ") — they’re also in All ideas";
+  block.appendChild(fh);
+  feed.forEach(idea=>{
+    const r = document.createElement("div"); r.className = "proc-row";
+    const top = document.createElement("div"); top.className = "proc-top";
+    const ti = document.createElement("b"); ti.textContent = idea.title; ti.style.cursor = "pointer"; ti.onclick = ()=> openIdeaDialog(cs, idea);
+    top.append(ti, discStageChip(idea, cs));
+    r.appendChild(top);
+    const fr = document.createElement("div"); fr.className = "proc-by"; fr.textContent = procFromText(idea); r.appendChild(fr);
+    if(idea.note){ const n = document.createElement("div"); n.className = "proc-line pre"; n.textContent = idea.note; r.appendChild(n); }
+    block.appendChild(r);
+  });
+  if(!feed.length){ const e = document.createElement("div"); e.className = "empty"; e.style.padding = "24px"; e.textContent = "Nothing from the departments yet."; block.appendChild(e); }
+  wrap.appendChild(block);
+}
+/* ＋ Connect a department: pick the space it lives in, then who can see it */
+function procConnect(cs){
+  const homes = (CSPACES.list||[]).filter(x=> !["process","procdept","watch","horizon","campaign","module"].includes(x.type) && !x.parent && canViewSpace(csRef(x)));
+  if(!homes.length){ toast("No spaces to add it to"); return; }
+  openChoice("Add a “Process improvements” space inside which department?", homes.map(x=>({ label:x.name, value:x.id })), id=>{
+    const home = homes.find(x=> x.id===id); if(!home) return;
+    const name = "Process improvements";
+    chooseAccess(name + " — " + home.name, (access, members)=>{
+      const d = { id:"cs-"+Date.now().toString(36), name, type:"procdept", parent:home.id, procOf:cs.id, access, members: members||{}, ideas:[] };
+      CSPACES.list.push(d);
+      if(home.type==="marketing") MKT_OPEN[home.id] = true; else PROC_OPEN[home.id] = true;
+      renderAll(); pushAll();
+      toast("“" + name + "” added inside " + home.name);
+    });
+  });
 }
 
 /* ---- Product Roadmap Timeline: the same Simple Gantt as a roadmap (phases, tasks written straight in,
@@ -16882,7 +17083,7 @@ function renderAll(){
       });
       /* custom spaces created from templates */
       // spaces inside a Marketing space are drawn under it, not at the top level
-      const _allCs = CSPACES.list.filter(cs=>canViewSpace(csRef(cs)) && !mktParentOf(cs) && !hiddenForMe("cs:"+cs.id));
+      const _allCs = CSPACES.list.filter(cs=>canViewSpace(csRef(cs)) && !mktParentOf(cs) && !procParentOf(cs) && !hiddenForMe("cs:"+cs.id));
       const _shownCs = stableSidebar(_allCs, cs=>csIsActive(cs), SIDEBAR_CAP);
       const _drawCs = (cs, _host, _nested)=>{
         if(!canViewSpace(csRef(cs))) return;   // private spaces hidden from non-members
@@ -16898,7 +17099,15 @@ function renderAll(){
           b.insertBefore(chev, b.firstChild);
           b.querySelector(".dot").outerHTML = '<span class="ws-kid-ico">📢</span>';
         } else if(_nested){
-          b.querySelector(".dot").outerHTML = '<span class="ws-kid-ico">'+(cs.type==="social" ? "\uD83C\uDFAF" : cs.type==="campaign" ? "\uD83D\uDCE3" : cs.type==="watch" ? "\uD83D\uDC40" : cs.type==="horizon" ? "\uD83D\uDD2D" : "\u2022")+'</span>';
+          b.querySelector(".dot").outerHTML = '<span class="ws-kid-ico">'+(cs.type==="social" ? "\uD83C\uDFAF" : cs.type==="campaign" ? "\uD83D\uDCE3" : cs.type==="watch" ? "\uD83D\uDC40" : cs.type==="horizon" ? "\uD83D\uDD2D" : cs.type==="procdept" ? "⚙️" : "\u2022")+'</span>';
+        }
+        /* a space holding department "Process improvements" spaces: ▾ folds them, the name still opens the space */
+        const _pkids = cs.type!=="marketing" ? procKidsOf(cs) : [];
+        if(_pkids.length){
+          const chev = document.createElement("span"); chev.className = "ws-chev"+(procOpen(cs)?" open":""); chev.textContent = "\u25BE";
+          chev.title = procOpen(cs) ? "Hide the spaces inside" : "Show the spaces inside";
+          chev.onclick = e=>{ e.stopPropagation(); PROC_OPEN[cs.id] = !procOpen(cs); renderAll(); };
+          b.insertBefore(chev, b.firstChild); b.classList.add("ws-parent");
         }
         if(editMode){
           const doDelete = ()=>{
@@ -16914,6 +17123,10 @@ function renderAll(){
               ? "Delete \u201C"+cs.name+"\u201D? Its "+((cs.node&&cs.node.analyses)||[]).length+" analysis/analyses are deleted with it."
               : cs.type==="marketing"
               ? "Delete the \u201C"+cs.name+"\u201D space? The spaces inside it are NOT deleted \u2014 they go back to the sidebar."
+              : cs.type==="process"
+              ? "Delete \u201C"+cs.name+"\u201D? Its "+(cs.ideas||[]).length+" idea(s) and its Timeline are deleted with it. Department \u201CProcess improvements\u201D spaces stay, with nothing to send to."
+              : cs.type==="procdept"
+              ? "Remove \u201C"+cs.name+"\u201D? What it already sent stays in \u201C"+((procTarget(cs)||{}).name||"Process Optimization")+"\u201D."
               : cs.type==="campaign"
               ? "Delete the campaign \u201C"+cs.name+"\u201D and its "+((cs.items||[]).length)+" item(s)? This can't be undone."
               : cs.type==="horizon"
@@ -16927,7 +17140,7 @@ function renderAll(){
               if(view==="cbugs" && activeCspace===cs.id) view = "bugs";
               pushBugs();
             }
-            if(cs.type==="discovery" && view==="disc" && activeCspace===cs.id) view = "roadmap";
+            if((cs.type==="discovery" || cs.type==="process" || cs.type==="procdept") && view==="disc" && activeCspace===cs.id) view = "roadmap";
             if(cs.type==="content"){
               const si = CONTENT.sections.findIndex(x=>x.key===cs.sectionKey);
               if(si >= 0) CONTENT.sections.splice(si, 1);
@@ -17058,6 +17271,11 @@ function renderAll(){
             sub.onclick=()=>{ watchView=k; renderAll(); };
             _host.appendChild(sub);
           });
+        }
+        if(_pkids.length && procOpen(cs)){
+          const _kids = document.createElement("div"); _kids.className = "ws-kids";
+          _host.appendChild(_kids);
+          _pkids.forEach(k=> _drawCs(k, _kids, true));
         }
         if(cs.type==="marketing" && mktOpen(cs)){
           const _kids = document.createElement("div"); _kids.className = "ws-kids";
@@ -22196,7 +22414,7 @@ document.querySelectorAll("#tpl-overlay .tpl-card").forEach(card=>{
   card.onclick = ()=>{
     const type = card.getAttribute("data-tpl");
     $("tpl-overlay").classList.remove("show");
-    openDialog(type==="marketing" ? "New Marketing space" : type==="pdt" ? "New Product All in One space" : type==="social" ? "New Social Media space" : type==="scrum" ? "New Scrum space" : type==="discovery" ? "New Product roadmap space" : type==="content" ? "New Educational content space" : type==="research" ? "New Product Research space" : type==="competitor" ? "New Competitor Analysis space" : type==="watch" ? "New Keep an Eye space" : type==="horizon" ? "New Widen our Horizon space" : "New Bugs space", type==="watch" ? {title:"Keep an Eye"} : type==="horizon" ? {title:"Widen our Horizon"} : {}, v=>{
+    openDialog(type==="marketing" ? "New Marketing space" : type==="pdt" ? "New Product All in One space" : type==="social" ? "New Social Media space" : type==="scrum" ? "New Scrum space" : type==="discovery" ? "New Product roadmap space" : type==="process" ? "New Process Optimization space" : type==="content" ? "New Educational content space" : type==="research" ? "New Product Research space" : type==="competitor" ? "New Competitor Analysis space" : type==="watch" ? "New Keep an Eye space" : type==="horizon" ? "New Widen our Horizon space" : "New Bugs space", type==="watch" ? {title:"Keep an Eye"} : type==="horizon" ? {title:"Widen our Horizon"} : {}, v=>{
      chooseAccess(v.title, (access, members)=>{
       const cs = { id:"cs-"+Date.now().toString(36), name:v.title, type, access, members: members||{} };
       // made from a Marketing space's "＋ Add space": it lives inside that space (Keep an Eye is always its own space)
@@ -22219,7 +22437,7 @@ document.querySelectorAll("#tpl-overlay .tpl-card").forEach(card=>{
         CSPACES.list.push(cs);
         view = "dev"; devSpace = sp.id; devSprint = null;
         saveDev();   // renders + pushes (cspaces ride in the same payload)
-      } else if(type==="discovery"){
+      } else if(type==="discovery" || type==="process"){
         cs.ideas = [];
         CSPACES.list.push(cs);
         view = "disc"; activeCspace = cs.id; discView = "ideas";
@@ -22271,7 +22489,7 @@ document.querySelectorAll("#tpl-overlay .tpl-card").forEach(card=>{
       }
       toast("\u201C"+v.title+"\u201D added to Spaces");
      });
-    }, {hideExtras:true, titleLabel: type==="scrum" ? "Space name (e.g. DYNG Tech Team)" : type==="discovery" ? "Space name (e.g. Dubuddy Product Roadmap)" : type==="content" ? "Space name (e.g. NEET Content)" : type==="research" ? "Space name (e.g. Dubuddy Discovery)" : type==="competitor" ? "Space name (e.g. Test-prep landscape)" : type==="watch" ? "Space name (e.g. Keep an Eye)" : type==="horizon" ? "Space name (e.g. Widen our Horizon)" : "Space name (e.g. Panel Bugs)"});
+    }, {hideExtras:true, titleLabel: type==="scrum" ? "Space name (e.g. DYNG Tech Team)" : type==="discovery" ? "Space name (e.g. Dubuddy Product Roadmap)" : type==="process" ? "Space name (e.g. Process Optimization)" : type==="content" ? "Space name (e.g. NEET Content)" : type==="research" ? "Space name (e.g. Dubuddy Discovery)" : type==="competitor" ? "Space name (e.g. Test-prep landscape)" : type==="watch" ? "Space name (e.g. Keep an Eye)" : type==="horizon" ? "Space name (e.g. Widen our Horizon)" : "Space name (e.g. Panel Bugs)"});
   };
 });
 $("cmt-post").onclick = ()=> postComment();
