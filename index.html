@@ -8087,6 +8087,7 @@ function devBoardIsEmpty(){
   return sp===0 && spr===0 && cd===0;
 }
 function csIsActive(cs){
+  if(view==="disc" && cs.type!=="procdept" && (CSPACES.list||[]).some(x=> x.type==="procdept" && x.parent===cs.id && x.id===activeCspace)) return true;
   if(cs.type==="marketing") return (CSPACES.list||[]).some(x=>x.parent===cs.id && csIsActive(x));
   if(cs.type==="campaign") return view==="campaign" && activeCspace===cs.id;
   if(cs.type==="watch") return view==="watch" && activeCspace===cs.id;
@@ -16652,15 +16653,13 @@ function discTimelinePane(cs){
 /* ================================================================
    PROCESS OPTIMIZATION
    A "process" space works like a Product Roadmap (All ideas · Timeline Gantt) with process stages, and a
-   👥 From team tab. Each department gets a "procdept" space ("Process improvements") inside its own space
-   in the sidebar (cs.parent; any space can hold one, Marketing nests as before). What people write there
+   👥 From team tab. Each department gets a "procdept" space ("Process improvements") belonging to its own
+   space (cs.parent); it isn't drawn in the sidebar but opens from that space's ⋯ menu. What people write there
    goes straight into the process space's All ideas as an idea with .dept = that space and .by = the writer;
    the department space lists its own entries with their live stage. Moving the stage pings the writer's 🔔
    (sent when the person moving it may send notifications). Who sees a department space is its normal
    access setting (chosen when it's made; ⋯ → Settings later).
    ================================================================ */
-let PROC_OPEN = {};   /* per session: which groups show their department spaces (open by default) */
-function procOpen(cs){ return PROC_OPEN[cs.id] !== false; }
 function procKidsOf(cs){ return (CSPACES.list||[]).filter(x=> x.type==="procdept" && x.parent===cs.id); }
 function procParentOf(cs){ return cs && cs.type==="procdept" && cs.parent ? ((CSPACES.list||[]).find(x=> x.id===cs.parent && x.type!=="marketing") || null) : null; }
 function procTarget(cs){
@@ -16988,9 +16987,8 @@ function procConnect(cs){
     chooseAccess(name + " — " + home.name, (access, members)=>{
       const d = { id:"cs-"+Date.now().toString(36), name, type:"procdept", parent:home.id, procOf:cs.id, access, members: members||{}, ideas:[] };
       CSPACES.list.push(d);
-      if(home.type==="marketing") MKT_OPEN[home.id] = true; else PROC_OPEN[home.id] = true;
       renderAll(); pushAll();
-      toast("“" + name + "” added inside " + home.name);
+      toast("“" + name + "” added — open it from ⋯ next to " + home.name);
     });
   });
 }
@@ -17303,14 +17301,12 @@ function renderAll(){
         } else if(_nested){
           b.querySelector(".dot").outerHTML = '<span class="ws-kid-ico">'+(cs.type==="social" ? "\uD83C\uDFAF" : cs.type==="campaign" ? "\uD83D\uDCE3" : cs.type==="watch" ? "\uD83D\uDC40" : cs.type==="horizon" ? "\uD83D\uDD2D" : cs.type==="procdept" ? "⚙️" : "\u2022")+'</span>';
         }
-        /* a space holding department "Process improvements" spaces: ▾ folds them, the name still opens the space */
-        const _pkids = cs.type!=="marketing" ? procKidsOf(cs) : [];
-        if(_pkids.length){
-          const chev = document.createElement("span"); chev.className = "ws-chev"+(procOpen(cs)?" open":""); chev.textContent = "\u25BE";
-          chev.title = procOpen(cs) ? "Hide the spaces inside" : "Show the spaces inside";
-          chev.onclick = e=>{ e.stopPropagation(); PROC_OPEN[cs.id] = !procOpen(cs); renderAll(); };
-          b.insertBefore(chev, b.firstChild); b.classList.add("ws-parent");
-        }
+        /* a department's "Process improvements" space isn't drawn in the sidebar: it opens from this space's ⋯ menu */
+        const _pkids = procKidsOf(cs);
+        const _procItems = _pkids.map(k=>{
+          const rq = procCanManage(k) ? (k.requests||[]).length : 0;
+          return { label: "⚙️ Process improvements" + (procHasAccess(k) ? "" : " 🔒") + (rq ? " · 🙋 " + rq : ""), onClick:()=> navToSpace(k) };
+        });
         if(editMode){
           const doDelete = ()=>{
             const msg = cs.type==="bugs"
@@ -17364,6 +17360,7 @@ function renderAll(){
           const menu = document.createElement("span");
           menu.className = "ws-menu-btn"; menu.textContent = "\u22ef"; menu.title = "More";
           menu.onclick = e=>{ e.stopPropagation(); const _items = [
+            ..._procItems,
             {label:"Settings", onClick:()=> openSpaceSettings({key:"cs:"+cs.id, obj:cs, name:cs.name})},
             {label:"Set background", onClick:()=> openBgPicker({key:"cs:"+cs.id, obj:cs, name:cs.name})},
           ];
@@ -17374,6 +17371,11 @@ function renderAll(){
           /* which spaces sit inside a Marketing space is set in that Marketing space's Settings → 📂 Spaces inside */
           if(hasPerm("delete_spaces")) _items.push({label:"Delete\u2026", danger:true, onClick: doDelete});   // only roles given "Delete spaces"
           openRowMenu(menu, _items); };
+          b.appendChild(menu);
+        } else if(_procItems.length){   /* people who can't edit here still reach the department's process space */
+          const menu = document.createElement("span");
+          menu.className = "ws-menu-btn"; menu.textContent = "\u22ef"; menu.title = "More";
+          menu.onclick = e=>{ e.stopPropagation(); openRowMenu(menu, _procItems); };
           b.appendChild(menu);
         }
                 if(editMode && canManagePeople()){
@@ -17468,15 +17470,10 @@ function renderAll(){
             _host.appendChild(sub);
           });
         }
-        if(_pkids.length && procOpen(cs)){
-          const _kids = document.createElement("div"); _kids.className = "ws-kids";
-          _host.appendChild(_kids);
-          _pkids.forEach(k=> _drawCs(k, _kids, true));
-        }
         if(cs.type==="marketing" && mktOpen(cs)){
           const _kids = document.createElement("div"); _kids.className = "ws-kids";
           _host.appendChild(_kids);
-          const _list = CSPACES.list.filter(x=>x.parent===cs.id);
+          const _list = CSPACES.list.filter(x=>x.parent===cs.id && x.type!=="procdept");   /* its Process improvements opens from ⋯ */
           _list.forEach(k=> _drawCs(k, _kids, true));
           if(!_list.length){ const e=document.createElement("div"); e.className="ws-empty"; e.textContent="Nothing inside yet."; _kids.appendChild(e); }
           if(hasPerm("add_spaces")){
