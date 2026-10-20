@@ -24340,7 +24340,7 @@ function drawSpacePeople(body){
     // team owners/admins can't be demoted per-space (floor)
     if(u.super || roleRank(teamRole) <= roleRank("admin")){
       const tag = document.createElement("span"); tag.className = "ss-mrole";
-      tag.textContent = (u.super ? "Owner" : roleLabel(teamRole)) + " (team)";
+      tag.textContent = (isSpaceHead(u, ref) ? "👑 Head · " : "") + (u.super ? "Owner" : roleLabel(teamRole)) + " (team)";
       row.appendChild(tag);
     } else if(isSpaceHead(u, ref)){
       const tag = document.createElement("span"); tag.className = "ss-mrole"; tag.textContent = "👑 Head";
@@ -24398,7 +24398,8 @@ function drawSpaceHeads(ref, body){
   if(!own.length && !inherited.length){ const e = document.createElement("span"); e.className = "hint"; e.textContent = "No head yet."; chips.appendChild(e); }
   box.appendChild(chips);
   if(iAmTeamAdmin()){
-    const cand = USERS.filter(u=> (u.super || (u.teams && u.teams[TEAM])) && !own.includes(u.email) && !u.super && roleRank(roleOf(u, TEAM)) > roleRank("admin"));
+    /* team Owners/Admins can be named heads too, so everyone can see who heads it (their powers don't change) */
+    const cand = USERS.filter(u=> (u.super || (u.teams && u.teams[TEAM])) && !own.includes(u.email));
     if(cand.length){
       const r = document.createElement("div"); r.className = "ss-access-row";
       const sel = document.createElement("select"); sel.className = "person-role"; sel.style.flex = "1";
