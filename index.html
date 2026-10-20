@@ -8297,7 +8297,7 @@ function workTabs(){
   if(view==="disc"){
     // Product Roadmap spaces: no stage board (an idea's stage is set from All ideas); Timeline is a Gantt
     const _ct = (currentDisc() || {}).type;
-    if(_ct==="marketing") return [{key:"agreement",label:"🤝 Our agreement"},{key:"timeline",label:"Timeline"}].filter(t=> tabAllowed(currentDisc(), t.key));
+    if(_ct==="marketing") return [{key:"agreement",label:"🤝 Our agreement"},{key:"timeline",label:"Timeline"}];
     if(_ct==="procdept") return procHasAccess(currentDisc()) || canViewSpace(csRef(currentDisc()))
       ? [{key:"ideas",label:"⚙️ Process improvements"},{key:"timeline",label:"Timeline"}] : [{key:"ideas",label:"🔒 Request access"}];
     if(_ct==="process") return [{key:"ideas",label:"All ideas"},{key:"timeline",label:"Timeline"},{key:"team",label:"👥 From team"}];
@@ -8350,11 +8350,12 @@ function renderTabs(){
   const sig=[view,activeCspace,activeModule,activeSection,devSpace,devSprint,activeRmap,activeCycle].join("|");
   if(sig!==_lastNavSig){ _lastNavSig=sig; paneTab="work"; }
   strip.innerHTML="";
-  const _mkt = view==="disc" && (currentDisc()||{}).type==="marketing" ? currentDisc() : null;
-  if(_mkt) mktFixTab(_mkt);
+  const _th = tabHostCs();   /* 👁 Tab access: only the tabs you may see */
+  if(_th) tabFix(_th);
   const actKey = workTabActiveKey();
   let _prevFlow = false;
-  ((view==="social" || view==="campaign" || view==="watch" || view==="horizon" || (_mkt && !tabAllowed(_mkt, "summary"))) ? [] : [{summary:true,label:"Summary"}]).concat(workTabs()).forEach(t=>{
+  ((view==="social" || view==="campaign" || view==="watch" || view==="horizon" || (_th && !tabAllowed(_th, "summary"))) ? [] : [{summary:true,label:"Summary"}])
+    .concat(workTabs().filter(t=> !_th || tabAllowed(_th, t.key))).forEach(t=>{
     if(t.flow && _prevFlow){ const ar=document.createElement("span"); ar.className="tab-flow"; ar.textContent="\u2192"; ar.setAttribute("aria-hidden","true"); strip.appendChild(ar); }   // Epics → Backlog → Board
     _prevFlow = !!t.flow;
     const b=document.createElement("button");
@@ -12998,9 +12999,29 @@ function mktTimelinePane(mk){
      posts      — posts published in the period, across Marketing's Social Media spaces
      campaigns  — campaigns inside Marketing that start in the period
    ================================================================ */
-/* who can see each of Marketing's tabs: cs.tabAccess = { summary|agreement|timeline: [email] } — a missing key
-   means everyone who can see Marketing. Team Owners/Admins, its 👑 heads and its space admins always see them all. */
+/* who can see each tab of a space: cs.tabAccess = { <tab key>: [email] } — a missing key means everyone who can
+   see the space. Team Owners/Admins, its 👑 heads and its space admins always see them all. */
 const MKT_TABS = [["summary","📊 Summary"],["agreement","🤝 Our agreement"],["timeline","🗓 Timeline"]];
+const TAB_NOSUM = ["social","campaign","watch","horizon"];   /* these have no Summary pane: their tabs are all their own */
+/* a space's tabs, in the order they show, for 👁 Tab access */
+function spaceTabsFor(cs){
+  if(!cs) return [];
+  const S = [["summary","📊 Summary"]];
+  switch(cs.type){
+    case "marketing": return MKT_TABS;
+    case "social":    return window.SX ? SX.tabs : [];
+    case "campaign":  return window.CX ? campTabs(cs) : [];
+    case "watch":     return window.WX ? WX.tabs : [];
+    case "horizon":   return window.HX ? HX.tabs : [];
+    case "discovery": return S.concat([["ideas","All ideas"],["timeline","Timeline"]],
+      (typeof sidIsTarget==="function" && sidIsTarget(cs)) ? [["students", typeof sidTabLabel==="function" ? sidTabLabel() : "🎓 From students"]] : []);
+    case "process":   return S.concat([["ideas","All ideas"],["timeline","Timeline"],["team","👥 From team"]]);
+    case "procdept":  return S.concat([["ideas","⚙️ Process improvements"],["timeline","Timeline"]]);
+    case "scrum":     return S.concat([["epics","⚡ Epics"],["backlog","Backlog"],["board","Board"],["timeline","Timeline"]]);
+    case "bugs": case "content": case "module": return S.concat([["work","Board"]]);
+  }
+  return [];
+}
 function tabAllowed(cs, key){
   const acc = cs && cs.tabAccess && cs.tabAccess[key];
   if(!Array.isArray(acc)) return true;
@@ -13008,13 +13029,46 @@ function tabAllowed(cs, key){
   if(iAmTeamAdmin() || canInSpace("admin", csRef(cs))) return true;
   return acc.includes(me.email);
 }
-/* land on a tab you may see: Timeline, then the agreement, then the Summary */
-function mktFixTab(cs){
-  if(paneTab==="summary" && !tabAllowed(cs, "summary")) paneTab = "work";
-  if(paneTab!=="summary" && !tabAllowed(cs, discView)){
-    const k = ["timeline","agreement"].find(x=> tabAllowed(cs, x));
-    if(k) discView = k; else if(tabAllowed(cs, "summary")) paneTab = "summary";
+/* the space whose tabs are on screen right now */
+function tabHostCs(){
+  if(view==="disc") return currentDisc();
+  if(view==="social") return currentSocial();
+  if(view==="campaign") return currentCampaign();
+  if(view==="watch") return currentWatch();
+  if(view==="horizon") return currentHorizon();
+  if(view==="dev") return devHostCs();
+  if(view==="cbugs" || view==="content" || view==="roadmap"){ const r = currentSpaceRef(); return r && r.key.indexOf("cs:")===0 ? r.obj : null; }
+  return null;
+}
+function tabHasSummary(cs){ return !!cs && !TAB_NOSUM.includes(cs.type) && spaceTabsFor(cs).some(([k])=> k==="summary"); }
+function tabSetWork(k){
+  if(view==="disc") discView = k; else if(view==="dev") devView = k; else if(view==="social") socialView = k;
+  else if(view==="campaign") campView = k; else if(view==="watch") watchView = k; else if(view==="horizon") horizonView = k;
+}
+/* nothing of this space is open to you */
+function tabNoneAllowed(cs){ return !!(cs && cs.tabAccess) && !spaceTabsFor(cs).some(([k])=> tabAllowed(cs, k)); }
+/* land on a tab you may see: the first open work tab, else the Summary */
+function tabFix(cs){
+  cs = cs || tabHostCs();
+  if(!cs || !cs.tabAccess) return;
+  const sum = tabHasSummary(cs);
+  const work = spaceTabsFor(cs).map(([k])=> k).filter(k=> !(sum && k==="summary"));
+  if(paneTab==="summary" && (!sum || !tabAllowed(cs, "summary"))) paneTab = "work";
+  if(!tabAllowed(cs, workTabActiveKey())){
+    const k = work.find(x=> tabAllowed(cs, x));
+    if(k) tabSetWork(k); else if(sum && tabAllowed(cs, "summary")) paneTab = "summary";
   }
+}
+/* after the content is drawn: hide a tab you may not see; say so when nothing is open to you */
+function tabGate(){
+  const content = $("content"); if(!content) return;
+  let lock = $("tab-lock");
+  if(!lock){ lock = document.createElement("div"); lock.id = "tab-lock"; lock.className = "empty"; lock.style.padding = "40px"; content.parentNode.insertBefore(lock, content); }
+  const cs = tabHostCs();
+  const shut = !!(cs && cs.tabAccess) && !tabAllowed(cs, workTabActiveKey());
+  content.style.display = shut ? "none" : "";
+  lock.style.display = shut && tabNoneAllowed(cs) ? "" : "none";
+  if(shut) lock.textContent = "🔒 " + cs.name + "\u2019s tabs are only shown to chosen people. Ask a 👑 head of " + cs.name + " (or a team Admin) if you need to see them.";
 }
 function drawTabAccess(cs, body){
   const note = document.createElement("div"); note.className = "ss-note";
@@ -13022,7 +13076,7 @@ function drawTabAccess(cs, body){
   body.appendChild(note);
   const team = USERS.filter(u=> (u.super || (u.teams && u.teams[TEAM])) && !u.super && roleRank(roleOf(u, TEAM)) > roleRank("admin") && !isSpaceHead(u, csRef(cs)))
     .sort((a,b)=> userDisplayName(a).localeCompare(userDisplayName(b)));
-  MKT_TABS.forEach(([k, label])=>{
+  spaceTabsFor(cs).forEach(([k, label])=>{
     const box = document.createElement("div"); box.className = "ta-box";
     const h = document.createElement("div"); h.className = "ta-h"; h.textContent = label; box.appendChild(h);
     const acc = cs.tabAccess && cs.tabAccess[k];
@@ -17231,13 +17285,8 @@ function renderContentDisc(){
   if(!cs){ view = "roadmap"; renderAll(); return; }
 
   if(cs.type==="marketing"){
-    mktFixTab(cs);
-    if(!MKT_TABS.some(([k])=> tabAllowed(cs, k))){
-      const e = document.createElement("div"); e.className = "empty"; e.style.padding = "40px";
-      e.textContent = "🔒 Marketing’s Summary, agreement and Timeline are only shown to chosen people. Ask a 👑 head of Marketing if you need to see them.";
-      wrap.appendChild(e); return;
-    }
-    if(!tabAllowed(cs, discView)) return;   /* only the Summary is open to you: it's shown instead */
+    tabFix(cs);
+    if(!tabAllowed(cs, discView)) return;   /* tabGate says why */   /* only the Summary is open to you: it's shown instead */
     return discView==="agreement" ? mktAgreementPane(cs) : mktTimelinePane(cs);
   }
   if(cs.type==="procdept"){
@@ -18295,7 +18344,7 @@ function renderAll(){
           });
         }
         if(cs.type==="campaign" && view==="campaign" && activeCspace===cs.id && window.CX){
-          [["details","\uD83D\uDCDD Fill in Details"],["assign","\uD83D\uDC65 Assignment"],["calendar","\uD83D\uDDD3 Calendar"],["dash","\uD83D\uDCCA Dashboard"]].forEach(([k,lbl])=>{
+          [["details","\uD83D\uDCDD Fill in Details"],["assign","\uD83D\uDC65 Assignment"],["calendar","\uD83D\uDDD3 Calendar"],["dash","\uD83D\uDCCA Dashboard"]].filter(([k])=> tabAllowed(cs, k)).forEach(([k,lbl])=>{
             const sub=document.createElement("button");
             sub.className="ws-sub"+(_nested?" ws-sub-nested":"")+(campView===k?" active":"");
             sub.textContent=lbl;
@@ -18304,7 +18353,7 @@ function renderAll(){
           });
         }
         if(cs.type==="horizon" && view==="horizon" && activeCspace===cs.id && window.HX){
-          [["topics","\uD83D\uDD2D Topics"],["fill","\uD83D\uDCDD Fill this week"],["check","\u2705 Weekly check"],["learn","\uD83D\uDCA1 Learnings"]].forEach(([k,lbl])=>{
+          [["topics","\uD83D\uDD2D Topics"],["fill","\uD83D\uDCDD Fill this week"],["check","\u2705 Weekly check"],["learn","\uD83D\uDCA1 Learnings"]].filter(([k])=> tabAllowed(cs, k)).forEach(([k,lbl])=>{
             const sub=document.createElement("button");
             sub.className="ws-sub"+(_nested?" ws-sub-nested":"")+(horizonView===k?" active":"");
             sub.textContent=lbl;
@@ -18313,7 +18362,7 @@ function renderAll(){
           });
         }
         if(cs.type==="watch" && view==="watch" && activeCspace===cs.id && window.WX){
-          [["companies","\uD83C\uDFE2 Companies"],["fill","\uD83D\uDCDD Fill the template"],["updates","\uD83D\uDC40 What changed"],["compare","\u2696\uFE0F Compare"]].forEach(([k,lbl])=>{
+          [["companies","\uD83C\uDFE2 Companies"],["fill","\uD83D\uDCDD Fill the template"],["updates","\uD83D\uDC40 What changed"],["compare","\u2696\uFE0F Compare"]].filter(([k])=> tabAllowed(cs, k)).forEach(([k,lbl])=>{
             const sub=document.createElement("button");
             sub.className="ws-sub"+(_nested?" ws-sub-nested":"")+(watchView===k?" active":"");
             sub.textContent=lbl;
@@ -18334,7 +18383,7 @@ function renderAll(){
           _host.appendChild(_dk); devSideTree(_dk, cs);
         }
         if(cs.type==="social" && view==="social" && activeCspace===cs.id){
-          [["targets","🤝 Our agreement"],["summary","📊 Summary"],["ideation","💡 Ideation"],["process","🎬 Content Process"],["schedule","🗓 Schedule"],["rivals","👀 Keep an Eye on 2nd Love"]].forEach(([k,lbl])=>{
+          [["targets","🤝 Our agreement"],["summary","📊 Summary"],["ideation","💡 Ideation"],["process","🎬 Content Process"],["schedule","🗓 Schedule"],["rivals","👀 Keep an Eye on 2nd Love"]].filter(([k])=> tabAllowed(cs, k)).forEach(([k,lbl])=>{
             const sub=document.createElement("button");
             const on = socialView===k;
             sub.className="ws-sub"+(on?" active":"");
@@ -18360,6 +18409,7 @@ function renderAll(){
   // Educational Content sections now live as content-type spaces under SPACES.
   $("edu-switch").innerHTML = "";
   $("side-title").style.display = "";
+  tabFix();   /* 👁 Tab access: open on a tab you may see */
   if(view==="roadmap"){
     renderSidebarRoadmap();
     renderContentRoadmap();
@@ -18446,6 +18496,7 @@ function renderAll(){
       $("content").prepend(bar);
     }
   }
+  tabGate();
   applySpaceBg();
   noteRecent();
 }
@@ -25165,9 +25216,10 @@ function drawSpaceSettings(){
   const _kt = document.querySelector('#spacesettings-overlay .ss-tab[data-sstab="kids"]');
   if(_kt) _kt.style.display = _mk ? "" : "none";
   if(ssTab === "kids" && !_mk) ssTab = "people";
+  const _tc = ssRef && ssRef.obj && spaceTabsFor(ssRef.obj).length > 1 && (CSPACES.list||[]).includes(ssRef.obj) ? ssRef.obj : null;   /* 👁 Tab access: any space with tabs */
   const _tt = document.querySelector('#spacesettings-overlay .ss-tab[data-sstab="tabs"]');
-  if(_tt) _tt.style.display = _mk ? "" : "none";
-  if(ssTab === "tabs" && !_mk) ssTab = "people";
+  if(_tt) _tt.style.display = _tc ? "" : "none";
+  if(ssTab === "tabs" && !_tc) ssTab = "people";
   document.querySelectorAll("#spacesettings-overlay .ss-tab").forEach(t=>{
     t.classList.toggle("active", t.getAttribute("data-sstab")===ssTab);
   });
@@ -25175,7 +25227,7 @@ function drawSpaceSettings(){
   body.innerHTML = "";
   if(ssTab === "proc") return procAccessPanel(_pd, body, drawSpaceSettings);
   if(ssTab === "kids") return drawMarketingKids(_mk, body);
-  if(ssTab === "tabs") return drawTabAccess(_mk, body);
+  if(ssTab === "tabs") return drawTabAccess(_tc, body);
   if(ssTab === "perms") return drawSpacePerms(body);
   return drawSpacePeople(body);
 }
