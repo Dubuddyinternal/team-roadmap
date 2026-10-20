@@ -2796,6 +2796,14 @@ body.rm-chart #pane-work > .controls{display:none}
 .ss-heads-c{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px}
 .ss-head{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-strong);background:var(--card);border-radius:99px;padding:3px 10px;font-size:12.5px;font-weight:600}
 .ss-head button{border:0;background:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0}
+.tpl-subh{font-size:15px;margin:4px 0 8px}
+.au-acts .person-del{white-space:nowrap}
+.tpl-subrow{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.tpl-subrow:last-child{border-bottom:0}
+.tpl-subn{flex:1;min-width:0}
+.tpl-subn .hint{margin-top:2px}
+.tpl-suba{display:flex;gap:6px;flex:none}
+.tpl-suba .person-del{white-space:nowrap}
 .proc-dgroup{display:inline-flex;gap:4px}
 .proc-req{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1.5px dashed var(--line-strong);background:var(--paper);border-radius:12px;padding:12px 14px;margin:0 0 14px;font-size:14px}
 .proc-sech{font-weight:700;font-size:13px;margin:14px 0 6px;color:var(--ink)}
@@ -6520,6 +6528,7 @@ function normalizeRmaps(r){
   r.maps = r.maps || [];
   /* Administration → Templates: documents a phase can start from (r.templates = [{id, name, body}]) */
   if(!Array.isArray(r.templates)) r.templates = [{ id:"tpl-prd", name:"PRD — Problem briefing", body: TPL_PRD }];
+  if(!Array.isArray(r.templateSubs)) r.templateSubs = [];   /* sent from a space's ⋯ → Submit a template, waiting for approval */
   r.maps.forEach(m=>{
     if(!m.id) m.id = "rm-" + Math.random().toString(36).slice(2,9);
     if(!m.access) m.access = "open";      // access model: open | limited | private (mirrors spaces)
@@ -17836,6 +17845,7 @@ function renderAll(){
           if(cs.type==="pdt") _items.push({label:"Board mapping", onClick:()=>{ view="pdt"; activeCspace=cs.id; pdtView="mapping"; renderAll(); }});
           if(cs.type==="scrum") _items.push({label:"\uFF0B New dev team", onClick: devNewTeam});
           if(cs.type==="marketing" && hasPerm("add_spaces")) _items.push({label:"\uFF0B Add space inside", onClick:()=> openMarketingTemplates(cs)});
+          _items.push({label:"📄 Submit a template", onClick:()=> tplSubmit(cs)});
           _items.push({label:"\uD83D\uDE48 Hide from my sidebar", onClick:()=> setHiddenForMe("cs:"+cs.id, true, cs.name)});
           _items.push({label: cs.okr ? "Change linked OKR\u2026" : "Link to an OKR\u2026", onClick:()=> csOkrOpen(cs)});
           /* which spaces sit inside a Marketing space is set in that Marketing space's Settings → 📂 Spaces inside */
@@ -23401,7 +23411,8 @@ function adminSections(){
     { k:"request",     ico:"➕",       lbl:"Request a teammate",   show: hasPerm("request_members"),     group:"it", render: renderRequestTeammate },
     { k:"roadmaps",    ico:"🗺️", lbl:"Roadmaps",             show: hasPerm("add_roadmaps"),        group:"it", render: renderAdminRoadmaps },
     { k:"spaces",      ico:"🗂️", lbl:"Spaces",               show: hasPerm("add_spaces"),          group:"it", render: renderAdminSpaces },
-    { k:"templates",   ico:"📄", lbl:"Templates",            show: !!me && (sup || canEdit()),                  render: renderAdminTemplates },
+    { k:"templates",   ico:"📄", lbl:"Templates" + (iAmTeamAdmin() && (RMAPS.templateSubs||[]).length ? " (" + RMAPS.templateSubs.length + ")" : ""), crumb:"Templates",
+                                                                        show: !!me && (sup || canEdit()),                  render: renderAdminTemplates },
     { k:"systemstats", ico:"📊", lbl:"System stats",         show: sup || ["owner","admin"].includes(roleOf(me, TEAM)), group:"it", render: renderAdminSystemStats },
     { k:"reviewgames", ico:"\uD83D\uDD79\uFE0F", lbl:"Review games" + (gamesWaiting() ? " (" + gamesWaiting() + ")" : ""), crumb:"Review games",
                                                                         show: sup,                            group:"it", render: renderReviewGames },
@@ -23472,6 +23483,24 @@ function renderAdminRoadmaps(wrap){
   tip.textContent = "To change who can see a roadmap: turn on Edit, then ⋯ → Settings next to it in the sidebar." + (hasPerm("delete_roadmaps") ? " Deleting is in the same ⋯ menu." : "");
   wrap.appendChild(tip);
 }
+/* a space submits a template (its department's PRD, design brief, checklist…); team Owners/Admins approve it
+   in Administration → Templates, and then everyone can pick it on a phase or task */
+function tplSubmit(cs){
+  const me = currentUser();
+  rmlModal("📄 Submit a template — " + cs.name, [
+    { k:"name", label:"Name", type:"text", value:"", ph:"e.g. Campaign brief, Sprint retro, Bug report" },
+    { k:"body", label:"What it says — headings, prompts and examples to fill in", type:"area", rows:16, value:"" },
+  ], v=>{
+    const nm = (v.name||"").trim(); if(!nm){ toast("Give the template a name"); return false; }
+    if(!(v.body||"").trim()){ toast("Write what the template says"); return false; }
+    RMAPS.templateSubs = RMAPS.templateSubs || [];
+    RMAPS.templateSubs.push({ id:"ts-"+Date.now().toString(36), name:nm, body:v.body, from:cs.id, fromName:cs.name, by: me ? { id:me.id, name:userDisplayName(me) } : null, at: todayISO() });
+    saveRmaps(); toast("Sent for approval — it becomes a template once approved");
+  }, { width: 720, sub: "Once a team Owner or Admin approves it in Administration → Templates, anyone can pick it for a phase or task." });
+}
+function tplPreview(t, title){
+  rmlModal(title || ("📄 " + t.name), [], ()=>{}, { width: 760, noSave: true, z: 420, sub: t.fromName ? "From " + t.fromName + (t.by && t.by.name ? " · " + t.by.name : "") : "", html: window.RT ? RT.html(t.body || "") : mtEsc(t.body || "").replace(/\n/g, "<br>") });
+}
 // Administration → Templates: documents (e.g. a PRD) a Gantt phase can start from. Picking one when
 // making a phase gives that phase its own copy to fill in; changing a template later doesn't touch copies.
 function renderAdminTemplates(wrap){
@@ -23481,7 +23510,7 @@ function renderAdminTemplates(wrap){
   const left = document.createElement("div");
   const h2 = document.createElement("h2"); h2.textContent = "Templates"; h2.style.margin = "0";
   const sub = document.createElement("div"); sub.className = "hint"; sub.style.marginTop = "4px";
-  sub.textContent = "Pick one when you add a phase on a Gantt (e.g. Dubuddy Product Roadmap → Timeline → ＋ Phase). The phase gets its own copy to fill in, opened from 📄 on the phase row.";
+  sub.textContent = "Any space can send one from its ⋯ → 📄 Submit a template; approved ones join this list. Pick one when you add a phase on a Gantt (e.g. Dubuddy Product Roadmap → Timeline → ＋ Phase). The phase gets its own copy to fill in, opened from 📄 on the phase row.";
   left.append(h2, sub);
   const edit = tp=> rmlModal(tp ? "Edit template" : "New template", [
     { k:"name", label:"Name", type:"text", value: tp ? tp.name : "", ph:"e.g. PRD, Design brief, Launch checklist" },
@@ -23495,6 +23524,33 @@ function renderAdminTemplates(wrap){
   add.onclick = ()=> edit(null);
   head.append(left, add);
   wrap.appendChild(head);
+  /* submitted from the spaces: approve (it becomes a template) or decline */
+  const subs = RMAPS.templateSubs || [];
+  if(subs.length){
+    const sh = document.createElement("h3"); sh.className = "tpl-subh"; sh.textContent = "🙋 Waiting for approval (" + subs.length + ")";
+    wrap.appendChild(sh);
+    const sl = document.createElement("div"); sl.className = "admin-table"; sl.style.marginBottom = "18px";
+    subs.forEach(ts=>{
+      const r = document.createElement("div"); r.className = "tpl-subrow";
+      const n = document.createElement("div"); n.className = "tpl-subn";
+      const nb = document.createElement("b"); nb.textContent = ts.name; n.appendChild(nb);
+      const fr = document.createElement("div"); fr.className = "hint"; fr.textContent = "from " + (ts.fromName || "a space") + (ts.by && ts.by.name ? " · " + ts.by.name : "") + (ts.at ? " · sent " + fmtD(ts.at) : ""); n.appendChild(fr);
+      const f = document.createElement("span");
+      const a = document.createElement("div"); a.className = "tpl-suba";
+      const pv = document.createElement("button"); pv.className = "person-del"; pv.textContent = "Preview"; pv.onclick = ()=> tplPreview(ts);
+      a.appendChild(pv);
+      if(iAmTeamAdmin()){
+        const ok = document.createElement("button"); ok.className = "person-del"; ok.textContent = "✓ Approve"; ok.style.color = "var(--done)";
+        ok.onclick = ()=>{ T.push({ id:"tpl-"+Date.now().toString(36), name:ts.name, body:ts.body, from:ts.fromName || "" }); RMAPS.templateSubs = subs.filter(x=> x!==ts); saveRmaps(); renderAdminPage(); toast("“"+ts.name+"” is now a template"); };
+        const no = document.createElement("button"); no.className = "person-del"; no.textContent = "Decline";
+        no.onclick = ()=>{ if(!confirm("Decline “"+ts.name+"”?")) return; RMAPS.templateSubs = subs.filter(x=> x!==ts); saveRmaps(); renderAdminPage(); };
+        a.append(ok, no);
+      }
+      r.append(n, f, a); sl.appendChild(r);
+    });
+    wrap.appendChild(sl);
+    if(!iAmTeamAdmin()){ const h = document.createElement("div"); h.className = "hint"; h.style.margin = "-10px 0 16px"; h.textContent = "A team Owner or Admin approves these."; wrap.appendChild(h); }
+  }
   const list = document.createElement("div"); list.className = "admin-table";
   const hr = document.createElement("div"); hr.className = "au-row au-head";
   ["Template","Starts with",""].forEach(t=>{ const c = document.createElement("div"); c.className = "au-cell"; c.textContent = t; hr.appendChild(c); });
@@ -23502,6 +23558,7 @@ function renderAdminTemplates(wrap){
   T.forEach(tp=>{
     const r = document.createElement("div"); r.className = "au-row";
     const n = document.createElement("div"); n.className = "au-cell au-name"; n.textContent = tp.name;
+    if(tp.from){ const fr = document.createElement("div"); fr.className = "hint"; fr.textContent = "from " + tp.from; n.appendChild(fr); }
     const t = document.createElement("div"); t.className = "au-cell hint"; const _first = (tp.body||"").split("\n").find(x=> x.trim()) || ""; t.textContent = (window.RT ? RT.plain(_first) : _first) || "(empty)";
     const a = document.createElement("div"); a.className = "au-cell au-acts";
     const e = document.createElement("button"); e.className = "person-del"; e.textContent = "Edit"; e.onclick = ()=> edit(tp);
