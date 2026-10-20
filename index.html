@@ -2761,6 +2761,13 @@ body.rm-chart #pane-work > .controls{display:none}
 .rmg-tt{font-size:12.5px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rmg-td{font-family:var(--mono);font-size:9.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rmg-task.done .rmg-tt{color:var(--muted);text-decoration:line-through}
+.rmg-task.rmg-sub .rmg-tt{font-size:12px}
+.rmg-tt .td-fold{font-size:12px}
+.rmg-days .rmg-task:has(.rmg-subbtn){padding-right:32px}
+.rmg-task .rmg-subbtn{position:absolute;right:8px;top:50%;transform:translateY(-50%);opacity:.5}
+.rmg-task:hover .rmg-subbtn,.rmg-subbtn:focus-visible{opacity:1}
+@media(hover:none){.rmg-task .rmg-subbtn{opacity:1}}
+.rmg-blk.rmg-line.rmg-subbar{height:10px;opacity:.85}
 .rmg-days .rmg-cell{border-bottom:1px solid var(--line)}
 .rml-qadd{width:100%;box-sizing:border-box;border:1px dashed transparent;background:transparent;border-radius:6px;padding:4px 6px;font:inherit;font-size:12.5px;color:var(--ink,#172B4D)}
 .rml-qadd::placeholder{color:var(--indigo);opacity:.8;font-weight:600}
@@ -13063,6 +13070,38 @@ function rmlQuickAddInput(m, ln, cls){
   if(rmlQuickFocus && rmlQuickFocus.key === m.id + ":" + ln.id && Date.now() < rmlQuickFocus.until) setTimeout(()=> inp.focus(), 0);
   return box;
 }
+/* sub-tasks (Simple Gantt): an item with it.parent = a top-level item's rid sits under that item,
+   in its phase, and moves with it. One level deep. */
+let rmgSubAdd = null;   /* rid of the task whose "＋ Add sub-task…" box is open */
+function rmgParentOf(m, it){ return it.parent ? m.items.find(x=> x.rid===it.parent && !x.parent && x!==it) || null : null; }
+function rmgOpenSub(m, it){ rmgSubAdd = it.rid; delete it.fold; rmlQuickFocus = { key: m.id + ":sub:" + it.rid, until: Date.now() + 2000 }; renderAll(); }
+function rmgSubInput(m, p){
+  const inp = document.createElement("input"); inp.type = "text"; inp.className = "rml-qadd";
+  const en = allTasks().find(x=> x.tid===p.tid);
+  inp.placeholder = "＋ Add sub-task to “" + ((en && en.task.title) || "").slice(0, 40) + "”…";
+  inp.title = "Type a sub-task name and press Enter · Esc to close";
+  const close = ()=>{ rmgSubAdd = null; renderAll(); };
+  inp.onkeydown = e=>{
+    if(e.key==="Escape"){ close(); return; }
+    if(e.key!=="Enter") return;
+    const v = inp.value.trim(); if(!v) return;
+    /* starts and ends with its parent — drag or click it to adjust */
+    const tid = "rmo-"+Date.now().toString(36)+Math.random().toString(36).slice(2,4);
+    (m.own = m.own || []).push({ tid, title:v, status:"planned" });
+    const st = p.start || p.end || todayISO();
+    m.items.push({ rid:"ri-"+Math.random().toString(36).slice(2,7), tid, start:st, end:p.end || dISO(dNum(st)+6), lane:p.lane, parent:p.rid });
+    rmlQuickFocus = { key: m.id + ":sub:" + p.rid, until: Date.now() + 2000 };
+    saveRmaps();
+  };
+  inp.addEventListener("blur", ()=> setTimeout(()=>{ if(inp.isConnected && !inp.value.trim() && document.activeElement!==inp && rmgSubAdd===p.rid) close(); }, 200));
+  if(rmlQuickFocus && rmlQuickFocus.key === m.id + ":sub:" + p.rid && Date.now() < rmlQuickFocus.until) setTimeout(()=> inp.focus(), 0);
+  return inp;
+}
+/* an item leaves the chart: its sub-tasks stay, as plain tasks */
+function rmgDropItem(m, it){
+  m.items.splice(m.items.indexOf(it),1);
+  m.items.forEach(k=>{ if(k.parent===it.rid) delete k.parent; });
+}
 function rmlNewOwn(m, laneId){
   openDialog("New item on “"+m.name+"”", {}, v=>{
     const tid = "rmo-"+Date.now().toString(36);
@@ -13267,7 +13306,7 @@ function renderRmapGantt(m, wrap, byTid){
   const barEls = {};
   /* left column reads like a task list: phase header, its tasks, "＋ Add task…", then its
      sub-phases (and their sub-phases) the same way, indented */
-  const laneItems = ln => live.filter(it=> rmlLaneOf(m, it)===ln)
+  const laneItems = ln => live.filter(it=> rmlLaneOf(m, rmgParentOf(m, it) || it)===ln)
     .filter(it=>{ /* in a window, drop tasks entirely outside it */
       const s0 = dayOf(dNum(it.start || it.end || todayISO())), e0 = dayOf(dNum(it.end || it.start || todayISO()));
       return !(e0 < 0 || s0 > nD-1);
@@ -13304,22 +13343,56 @@ function renderRmapGantt(m, wrap, byTid){
       grid.appendChild(sm);
     }
     rIdx++;
-    items.forEach((it, ii)=>{
+    /* rows: each top-level task, then its sub-tasks (one level, foldable), then its open "＋ Add sub-task…" box */
+    const tops = items.filter(it=> items.indexOf(rmgParentOf(m, it)) < 0);
+    const rows = [];
+    tops.forEach(it=>{
+      const kids = items.filter(k=> rmgParentOf(m, k)===it);
+      rows.push({ it, dep:0, kids });
+      if(!it.fold) kids.forEach(k=> rows.push({ it:k, dep:1, kids:[] }));
+      if(editMode && rmgSubAdd===it.rid) rows.push({ it, dep:1, add:true });
+    });
+    rows.forEach((R, ri)=>{
+      const it = R.it, dep = R.dep;
+      const moreTop = rows.slice(ri+1).some(r=> !r.dep) || editMode;
+      if(R.add){
+        const a = document.createElement("div"); a.className = "rmg-task rmg-add"; a.style.gridRow = String(rIdx); a.dataset.lane = ln.id;
+        a.style.paddingLeft = (26 + (depth+1)*18) + "px";
+        a.appendChild(rmgSubInput(m, it));
+        const gd = []; gd[depth] = moreTop; rmlTreeLines(a, depth+2, gd, true, 6, 18);
+        grid.appendChild(a); cellsRow(rIdx, ln.id, "addrow"); rIdx++;
+        return;
+      }
       const en = byTid[it.tid], st = effStatus(en.task), locked = isLocked(en.task);
       const s = Math.max(0, dayOf(dNum(it.start || it.end || todayISO())));
       const e = Math.min(nD-1, Math.max(s, dayOf(dNum(it.end || it.start || todayISO()))));
-      const nm = document.createElement("div"); nm.className = "rmg-task" + (st==="done" ? " done" : ""); nm.style.gridRow = String(rIdx); nm.dataset.lane = ln.id;
+      const nm = document.createElement("div"); nm.className = "rmg-task" + (st==="done" ? " done" : "") + (dep ? " rmg-sub" : ""); nm.style.gridRow = String(rIdx); nm.dataset.lane = ln.id;
       nm.innerHTML = '<span class="rmg-tt"></span><span class="rmg-td"></span>';
-      nm.firstChild.textContent = (st==="done" ? "✓ " : locked ? "🔒 " : "") + (en.task.title || "(untitled)");
-      nm.lastChild.textContent = rmlFmt(it.start) + (it.end && it.end!==it.start ? " → " + rmlFmt(it.end) : "") + (it.owner ? " · 👤 " + it.owner : "");
+      if(R.kids.length){
+        const fo = document.createElement("button"); fo.className = "td-fold"; fo.textContent = it.fold ? "▸" : "▾";
+        fo.title = it.fold ? "Show its sub-tasks" : "Hide its sub-tasks";
+        fo.onclick = e=>{ e.stopPropagation(); if(it.fold) delete it.fold; else it.fold = true; saveRmaps(); };
+        nm.firstChild.appendChild(fo);
+      }
+      nm.firstChild.appendChild(document.createTextNode((st==="done" ? "✓ " : locked ? "🔒 " : "") + (en.task.title || "(untitled)")));
+      const kd = R.kids.length ? R.kids.filter(k=> byTid[k.tid] && effStatus(byTid[k.tid].task)==="done").length + "/" + R.kids.length + " sub-tasks" : "";
+      nm.lastChild.textContent = rmlFmt(it.start) + (it.end && it.end!==it.start ? " → " + rmlFmt(it.end) : "") + (it.owner ? " · 👤 " + it.owner : "") + (kd ? " · ☑ " + kd : "");
       nm.title = (en.task.title||"") + (it.owner ? "\nOwner: " + it.owner : "") + (it.team ? "\nTeam: " + it.team : "") + "\n" + en.path;
       if(editMode){ nm.onclick = ()=> rmlEditItem(m, it, en); nm.style.cursor = "pointer"; }
-      if(depth) nm.style.paddingLeft = (26 + depth*18) + "px";
-      rmlTreeLines(nm, depth+1, [], !editMode && ii===items.length-1, 6, 18);
+      if(editMode && !dep){
+        const sb = document.createElement("button"); sb.className = "td-gadd rmg-subbtn"; sb.textContent = "＋"; sb.title = "Add a sub-task under this";
+        sb.onclick = e=>{ e.stopPropagation(); rmgOpenSub(m, it); };
+        nm.appendChild(sb);
+      }
+      nm.style.paddingLeft = (26 + (depth+dep)*18) + "px";
+      if(dep){
+        const nx = rows[ri+1], gd = []; gd[depth] = moreTop;
+        rmlTreeLines(nm, depth+2, gd, !(nx && nx.dep), 6, 18);
+      } else rmlTreeLines(nm, depth+1, [], !moreTop && !(R.kids.length && !it.fold) && rmgSubAdd!==it.rid, 6, 18);
       grid.appendChild(nm);
       cellsRow(rIdx, ln.id, "");
       const blk = document.createElement("div");
-      blk.className = "rmg-blk rmg-line" + (st==="done" ? " done" : "") + (locked ? " locked" : "");
+      blk.className = "rmg-blk rmg-line" + (st==="done" ? " done" : "") + (locked ? " locked" : "") + (dep ? " rmg-subbar" : "");
       blk.style.gridRow = String(rIdx); blk.style.gridColumn = (s + 2) + " / " + (e + 3);
       blk.style.background = it.color || colorOf(it.team);
       blk.title = nm.title + "\n" + rmlFmt(it.start) + " → " + rmlFmt(it.end);
@@ -13448,10 +13521,16 @@ function rmgItemDrag(el, m, it, unitPx, unitDays, onClick){
       const shift = unitDays ? Math.round(dx / u) * unitDays : 0;
       const lane = target && target.dataset.lane;
       let changed = false;
-      if(lane && lane !== rmlLaneOf(m, it).id){ it.lane = lane; changed = true; }
+      const par = rmgParentOf(m, it), kids = par ? [] : m.items.filter(k=> rmgParentOf(m, k)===it);
+      if(lane && lane !== rmlLaneOf(m, par || it).id){
+        it.lane = lane; delete it.parent; kids.forEach(k=> k.lane = lane); changed = true;
+      }
       if(shift){
-        const s = dNum(it.start||it.end||todayISO()), en = dNum(it.end||it.start||todayISO());
-        it.start = dISO(s + shift); it.end = dISO(en + shift); changed = true;
+        [it].concat(kids).forEach(x=>{
+          const s = dNum(x.start||x.end||todayISO()), en = dNum(x.end||x.start||todayISO());
+          x.start = dISO(s + shift); x.end = dISO(en + shift);
+        });
+        changed = true;
       }
       if(changed){ saveRmaps(); toast("Moved"); }
     };
@@ -13854,10 +13933,24 @@ function rmlEditItem(m, it, en){
     { k:"why", label:"Why red? (optional)", type:"text", value: r.why || "", show: v=> v.rule==="manual" }
   );
   if(own) fields.splice(1, 0, { k:"status", label:"Status", type:"select", value: en.task.status || "planned", opts: Object.keys(STATUS_LABEL).map(k=>[k, STATUS_LABEL[k]]) });
+  /* Simple Gantt: make it a sub-task of another task (one level — a task with sub-tasks can't become one) */
+  const subOf = m.view==="gantt" && !m.items.some(k=> rmgParentOf(m, k)===it);
+  if(subOf){
+    const reg = {}; allTasks().forEach(x=> reg[x.tid] = x);
+    const opts = m.items.filter(x=> x!==it && !x.parent && reg[x.tid]).map(x=> [x.rid, reg[x.tid].task.title || "(untitled)"]);
+    if(opts.length) fields.splice(fields.findIndex(f=> f.k==="lane")+1, 0, { k:"parent", label:"Sub-task of", type:"select", value: (rmgParentOf(m, it) || {}).rid || "", opts: [["","— none (a main task) —"]].concat(opts) });
+  }
   rmlModal(own ? "Edit item" : (en.task.title||"Item"), fields, v=>{
     if(v.start && v.end && dNum(v.end) < dNum(v.start)){ toast("“Done by” is before the start date"); return false; }
     if(own){ const nm=(v.title||"").trim(); if(!nm){ toast("Give it a title"); return false; } en.task.title = nm; en.task.status = v.status || "planned"; }
+    const oldLane = rmlLaneOf(m, rmgParentOf(m, it) || it).id;
     it.lane = v.lane; if(v.start) it.start = v.start; if(v.end) it.end = v.end;
+    if(subOf && "parent" in v){
+      const p = v.parent && m.items.find(x=> x.rid===v.parent);
+      /* picking a parent puts it in the parent's phase; moving a sub-task's phase takes it out */
+      if(p && !(it.parent===p.rid && v.lane!==oldLane)){ it.parent = p.rid; it.lane = p.lane; } else delete it.parent;
+    }
+    m.items.forEach(k=>{ if(k!==it && rmgParentOf(m, k)===it) k.lane = it.lane; });
     ["owner","team","progress","next"].forEach(k=>{ const s=(v[k]||"").trim(); if(s) it[k]=s; else delete it[k]; });
     if(rmgIsGrid(m) || m.view==="wbs"){ if(v.color) it.color = v.color; else delete it.color; }
     if(m.view==="wbs"){ const pc = Math.max(0, Math.min(100, Math.round(Number(v.pct)||0))); if(pc) it.pct = pc; else delete it.pct; }
@@ -13873,7 +13966,7 @@ function rmlEditItem(m, it, en){
       ["🔒 Blocked by…", "Pick what this one is waiting on — tasks on this chart first, or cards on any board", ()=> rmlBlockers(en, m)],
       ["Remove", own ? "Delete this item" : "Remove from this roadmap (the card itself stays)", ()=>{
         if(!confirm(own ? "Delete “"+(en.task.title||"")+"”?" : "Remove “"+(en.task.title||"")+"” from this roadmap? The card itself is not deleted.")) return false;
-        m.items.splice(m.items.indexOf(it),1);
+        rmgDropItem(m, it);
         if(own && m.own) m.own = m.own.filter(x=>x.tid!==en.tid);
         saveRmaps();
       }, true],
@@ -14523,7 +14616,7 @@ function rmListRow(m, it, entry, dateTxt){
     if(!tlDiscMode){
       const acts = document.createElement("div"); acts.className = "acts";
       acts.appendChild(actBtn("trash","Remove from this roadmap",true, ()=>{
-        m.items.splice(m.items.indexOf(it),1); saveRmaps();
+        rmgDropItem(m, it); saveRmaps();
       }));
       meta.appendChild(acts);
     }
