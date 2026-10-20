@@ -12864,6 +12864,7 @@ function devTimelineMap(cs){
   own.items = own.items.filter(it=> reg[it.tid]);
   own.lanes.forEach(ln=> lanes.push(ln));
   own.items.forEach(it=>{ byTid[it.tid] = reg[it.tid]; items.push(it); });
+  ownLanesFix(own);
   const ownIds = new Set(own.lanes.map(l=> l.id));
   m.lanes = lanes; m.items = items;
   m.mapOf = ln=> ownIds.has(ln.id) ? own : null;
@@ -13107,6 +13108,7 @@ function mktTimelineMap(mk){
   own.items = own.items.filter(it=> reg[it.tid]);
   own.lanes.forEach(ln=> m.lanes.push(ln));
   own.items.forEach(it=>{ byTid[it.tid] = reg[it.tid]; m.items.push(it); });
+  ownLanesFix(own);
   const ownIds = new Set(own.lanes.map(l=> l.id));
   m.name = "🗓 " + mk.name + " — Timeline";
   m.mapOf = ln=> ownIds.has(ln.id) ? own : null;
@@ -14717,6 +14719,14 @@ function rmgItemDrag(el, m, it, unitPx, unitDays, onClick, opt){
   });
 }
 /* rows shown from another space: dragging them changes them there (if you may edit that space) */
+/* a chart's own row that ended up under a section it doesn't have (an older drag could drop it onto a merged
+   section, where it couldn't be picked any more): back to the chart's first section */
+function ownLanesFix(own){
+  const ids = new Set((own.lanes||[]).map(l=> l.id)); let n = 0;
+  if(!ids.size) return;
+  (own.items||[]).forEach(it=>{ if(!it.parent && !ids.has(it.lane)){ it.lane = own.lanes[0].id; n++; } });
+  if(n && editMode) pushLater();
+}
 function rmgWriteBack(copy, orig, cs){
   if(!orig || !cs || !canInSpace("editor", csRef(cs))) return copy;
   copy.move = d=>{ orig.start = dISO(dNum(orig.start||orig.end||todayISO()) + d); orig.end = dISO(dNum(orig.end||orig.start||todayISO()) + d); pushAll(); };
@@ -15583,6 +15593,7 @@ function rmapMergedPane(own, wrap, reg){
     });
   });
   own.lanes = own.lanes || []; rmlEnsureLanes(own);
+  ownLanesFix(own);
   const ownIds = new Set(own.lanes.map(l=> l.id));
   own.lanes.forEach(ln=>{ lanes.push(ln); if(!ln.parent) label[ln.id] = ln.name==="Planning" ? "🙋 Own plan" : "🙋 " + ln.name; });
   own.items.forEach(it=> items.push(it));
