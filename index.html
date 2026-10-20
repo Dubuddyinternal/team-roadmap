@@ -2771,6 +2771,8 @@ body.rm-chart #pane-work > .controls{display:none}
 .proc-depts{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 18px}
 .proc-dept{border:1px solid var(--line-strong);background:var(--paper);border-radius:99px;padding:6px 12px;font-size:12.5px;cursor:pointer}
 .proc-dept:hover{border-color:var(--indigo)}
+.mkt-tltop{display:flex;align-items:center;gap:12px;margin:0 0 8px}
+.mkt-tltop .hint{flex:1}
 .mkt-line{display:flex;align-items:baseline;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
 .mkt-line:last-child{border-bottom:0}
 .mkt-line span{color:var(--muted);font-size:12.5px;margin-left:auto;text-align:right}
@@ -12617,7 +12619,18 @@ function mktScheduleMap(mk){
     byTid[tid] = { tid, task:{ title, status: (end||start) < today ? "done" : "planned" }, path, kind:"virtual" };
     items.push(Object.assign({ rid:"rv-"+key, tid, start, end: end || start, lane: laneId }, extra||{}));
   };
-  (CSPACES.list||[]).filter(x=> x.parent===mk.id && canViewSpace(csRef(x))).forEach(x=>{
+  const reg = {}; allTasks().forEach(t=> reg[t.tid] = t);
+  mktMergeable(mk).filter(x=> mktMerged(mk, x) && canViewSpace(csRef(x))).forEach(x=>{
+    if(x.type==="procdept"){ const t = procTarget(x); if(t) procSync(t); procDeptGantt(x); }   /* its rows exist once approved improvements are synced */
+    if(x.gantt && x.type!=="social" && x.type!=="campaign"){
+      /* any space with a Timeline (e.g. Marketing's Process improvements): its rows, sub-tasks kept under their parent */
+      const ln = { id:"mv-"+x.id, name: (x.type==="procdept" ? "⚙️ Process improvements" : "🗓 " + x.name), kind:"project" }; lanes.push(ln);
+      (x.gantt.items||[]).filter(it=> reg[it.tid]).forEach(it=>{
+        byTid[it.tid] = reg[it.tid];
+        items.push(Object.assign({}, it, { lane: ln.id, color: it.color || "#3A9CA8" }));
+      });
+      return;
+    }
     if(x.type==="social"){
       const ln = { id:"mv-"+x.id, name:"🎯 " + x.name + " · Schedule", kind:"project" }; lanes.push(ln);
       mktSocialPosts(x).forEach(c=>{
@@ -12656,13 +12669,55 @@ function mktSocialPosts(x){
     (x.events||[]).filter(e=> e.date).forEach(e=> out.push({ id:"ev-"+e.id, title:(e.title || "Post") + (e.time ? " · " + e.time : ""), date:e.date, published:false }));
   return out;
 }
+/* which spaces inside Marketing can be merged into its Timeline, and whether each one is (mk.tlOff = {id:true} = left out) */
+function mktMergeKind(x){
+  return x.type==="social" ? "Scheduled posts" : x.type==="campaign" ? "Campaign period and pieces"
+    : x.type==="procdept" ? "Process improvements Timeline" : x.gantt ? "Its Timeline" : "";
+}
+function mktMergeable(mk){ return (CSPACES.list||[]).filter(x=> x.parent===mk.id); }
+function mktMerged(mk, x){ return !!mktMergeKind(x) && !(mk.tlOff && mk.tlOff[x.id]); }
+function mktMergePicker(mk){
+  const ov = document.createElement("div"); ov.className = "overlay show";
+  const dg = document.createElement("div"); dg.className = "dialog"; dg.setAttribute("role","dialog"); dg.style.maxWidth = "520px";
+  const h = document.createElement("h3"); h.textContent = "⚙ Merge into the Marketing Timeline"; dg.appendChild(h);
+  const hint = document.createElement("div"); hint.className = "hint"; hint.style.margin = "-6px 0 10px";
+  hint.textContent = "Tick the spaces whose plan shows on this Timeline. New spaces inside Marketing are merged by themselves; untick to leave one out.";
+  dg.appendChild(hint);
+  const list = document.createElement("div"); list.className = "rmg-linklist";
+  const off = Object.assign({}, mk.tlOff || {});
+  mktMergeable(mk).forEach(x=>{
+    const kind = mktMergeKind(x);
+    const r = document.createElement("label"); r.className = "rmg-linkrow";
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = !!kind && !off[x.id]; cb.disabled = !kind;
+    cb.onchange = ()=>{ if(cb.checked) delete off[x.id]; else off[x.id] = true; };
+    const t = document.createElement("span"); t.textContent = x.type==="procdept" ? "⚙️ Process improvements" : x.name;
+    const sb = document.createElement("small"); sb.textContent = kind || "nothing to merge yet";
+    r.append(cb, t, sb); list.appendChild(r);
+  });
+  if(!mktMergeable(mk).length){ const e = document.createElement("div"); e.className = "empty"; e.textContent = "No spaces inside Marketing yet."; list.appendChild(e); }
+  dg.appendChild(list);
+  const btns = document.createElement("div"); btns.className = "btns";
+  const sp = document.createElement("span"); sp.style.flex = "1"; btns.appendChild(sp);
+  const close = ()=> ov.remove();
+  const cancel = document.createElement("button"); cancel.className = "btn"; cancel.textContent = "Cancel"; cancel.onclick = close;
+  const save = document.createElement("button"); save.className = "btn save"; save.textContent = "Save";
+  save.onclick = ()=>{ if(Object.keys(off).length) mk.tlOff = off; else delete mk.tlOff; close(); pushAll(); renderAll(); toast("Timeline updated"); };
+  btns.append(cancel, save); dg.appendChild(btns);
+  ov.appendChild(dg); ov.addEventListener("mousedown", e=>{ if(e.target===ov) close(); });
+  document.body.appendChild(ov);
+}
 function mktTimelinePane(mk){
   const wrap = $("content");
   const { m, byTid } = mktScheduleMap(mk);
+  const top = document.createElement("div"); top.className = "mkt-tltop";
+  const hint = document.createElement("div"); hint.className = "hint";
+  hint.textContent = m.lanes.length
+    ? "Merged from the spaces inside, on their dates. Change things in that space (Social Media → Schedule, the campaign’s Calendar, Process improvements → Timeline); it shows here by itself."
+    : "Nothing merged from the spaces inside yet.";
+  top.appendChild(hint);
+  if(editMode){ const mb = document.createElement("button"); mb.className = "tool sm"; mb.textContent = "⚙ Choose what to merge"; mb.onclick = ()=> mktMergePicker(mk); top.appendChild(mb); }
+  wrap.appendChild(top);
   if(m.lanes.length){
-    const hint = document.createElement("div"); hint.className = "hint"; hint.style.margin = "0 0 8px";
-    hint.textContent = "What’s already scheduled in the spaces inside, on its dates. Change it in that space (Social Media → Schedule, the campaign’s Calendar); it shows here by itself.";
-    wrap.appendChild(hint);
     const em = editMode; editMode = false;   /* read-only chart: no add rows, no drag, no edit dialog */
     try{ renderRmapGantt(m, wrap, byTid); } finally { editMode = em; }
   }
