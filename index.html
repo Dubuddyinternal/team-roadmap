@@ -2803,6 +2803,8 @@ body.rm-chart #pane-work > .controls{display:none}
 .rmg-lfold{border:0;background:transparent;cursor:pointer;font-size:12px;color:var(--muted);padding:0 4px 0 0;margin-left:-4px;line-height:1}
 .rmg-lfold:hover{color:var(--ink)}
 .rmg-lfold{flex:none}.rmg-lfold + .rmg-pname{margin-right:auto}
+.rmm-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px;font-size:14px;font-weight:600}
+.rmm-bar select{max-width:240px}.rmm-bar .hint{font-weight:400}
 .lms-tgt{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:14px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper)}
 .lms-tgt .lms-tn{width:64px;padding:4px 6px}.lms-tgt select{padding:4px 6px}
 .lms-ppl{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px;margin-top:6px}
@@ -6654,6 +6656,10 @@ function normalizeRmaps(r){
   if(!Array.isArray(r.templateSubs)) r.templateSubs = [];   /* sent from a space's ⋯ → Submit a template, waiting for approval */
   r.maps.forEach(m=>{
     if(!m.id) m.id = "rm-" + Math.random().toString(36).slice(2,9);
+    if(m.id==="rm-mvc9vjcn" && !m.mergeInit){   /* asked for on 20 Oct: start empty, merged from the top spaces */
+      m.cleared = { at: new Date().toISOString(), items: m.items || [], lanes: m.lanes || [], own: m.own || [] };
+      m.items = []; m.lanes = []; m.own = []; m.merge = { from: null }; m.mergeInit = true;
+    }
     if(!m.access) m.access = "open";      // access model: open | limited | private (mirrors spaces)
     m.members = m.members || {};          // email -> per-roadmap role
     m.markers = m.markers || [];
@@ -12805,7 +12811,14 @@ function devSprintRange(sp){
 const DEV_SCHED = {};
 function devTimelinePane(){
   const wrap = $("content");
-  const cs = devHostCs();
+  const { m, byTid } = devTimelineMap(devHostCs());
+  const hint = document.createElement("div"); hint.className = "hint"; hint.style.margin = "0 0 8px";
+  hint.textContent = "Sprints by team (from their start and end dates), the Process improvements Timeline and the tasks you write here. Change a sprint where it lives — its ⋯ in the sidebar; it shows here by itself.";
+  wrap.appendChild(hint);
+  renderRmapGantt(m, wrap, byTid);
+}
+/* Engineering's one Timeline (also merged into roadmaps): sprints by team, Process improvements, then its own rows */
+function devTimelineMap(cs){
   const host = cs || (DEV.tlHost = DEV.tlHost || { id:"dev-core", name:"Engineering" });
   const m = DEV_SCHED[host.id] || (DEV_SCHED[host.id] = { id:"devv-"+host.id, name:"🏃 Sprints and process", view:"gantt", gWin:0, spaceOf: host.id });
   const byTid = {}, lanes = [], items = [], reg = {}; allTasks().forEach(t=> reg[t.tid] = t);
@@ -12837,10 +12850,7 @@ function devTimelinePane(){
     const b = document.createElement("button"); b.className = "tool sm"; b.textContent = "✏️ Write task"; b.title = "Write a new task on this Timeline";
     b.onclick = ()=> rmlNewOwn(own, own.lanes[0].id); row.appendChild(b);
   };
-  const hint = document.createElement("div"); hint.className = "hint"; hint.style.margin = "0 0 8px";
-  hint.textContent = "Sprints by team (from their start and end dates), the Process improvements Timeline and the tasks you write here. Change a sprint where it lives — its ⋯ in the sidebar; it shows here by itself.";
-  wrap.appendChild(hint);
-  renderRmapGantt(m, wrap, byTid);
+  return { m, byTid };
 }
 function devSprintDeadline(sp, spCards){
   if(!sp.end) return null;
@@ -13054,10 +13064,14 @@ function mktMergePicker(mk){
 }
 function mktTimelinePane(mk){
   const wrap = $("content");
-  const { m, byTid } = mktScheduleMap(mk);
   const hint = document.createElement("div"); hint.className = "hint"; hint.style.margin = "0 0 8px";
   hint.textContent = "One Timeline: what’s scheduled in the spaces inside (change those in that space — Social Media → Schedule, the campaign’s Calendar, Process improvements → Timeline) and Marketing’s own plan below. ▾ on a section minimizes it.";
   wrap.appendChild(hint);
+  const { m, byTid } = mktTimelineMap(mk);
+  renderRmapGantt(m, wrap, byTid);
+}
+function mktTimelineMap(mk){
+  const { m, byTid } = mktScheduleMap(mk);
   /* Marketing's own plan shares the chart, in its own rows below (stored on the space's own Timeline) */
   const own = discGantt(mk), reg = {}; allTasks().forEach(x=> reg[x.tid] = x);
   own.items = own.items.filter(it=> reg[it.tid]);
@@ -13071,7 +13085,7 @@ function mktTimelinePane(mk){
     const mb = document.createElement("button"); mb.className = "tool sm"; mb.textContent = "⚙ Merge"; mb.title = "Choose which spaces inside show here";
     mb.onclick = ()=> mktMergePicker(mk); row.appendChild(mb);
   };
-  renderRmapGantt(m, wrap, byTid);
+  return { m, byTid };
 }
 /* ================================================================
    MARKETING → 🤝 OUR AGREEMENT: Marketing-wide targets (revenue, games, processes improved, posts…)
@@ -15434,6 +15448,113 @@ function tlRerender(){
   if(view === "rmap") renderContentRmap();
   else if(view === "disc" && discView === "timeline") renderContentDisc();
 }
+/* ================= a roadmap that merges the top spaces' Timelines =================
+   m.merge = { from: [space ids] | null (= every top space) }. Each space's one Timeline (Product Roadmap's ideas,
+   Engineering's sprints, Marketing's merged plan, Process Optimization's departments) shows read-only under its own
+   ▾ section; change things where they live. The roadmap's own rows follow and stay editable. A 👤 filter shows only
+   the rows with that person's name.                                                                                */
+const MERGE_TYPES = ["discovery","scrum","marketing","process"];
+function rmapMergeable(){ return (CSPACES.list||[]).filter(x=> !x.parent && MERGE_TYPES.includes(x.type)); }
+function rmapMergedFrom(m){
+  const L = rmapMergeable().filter(x=> canViewSpace(csRef(x)) && !hiddenForMe("cs:"+x.id));
+  return m.merge && Array.isArray(m.merge.from) ? L.filter(x=> m.merge.from.includes(x.id)) : L;
+}
+/* one space's Timeline, as built for its own page */
+function spaceTimelineMap(cs){
+  if(cs.type==="scrum") return devTimelineMap(cs);
+  if(cs.type==="marketing") return mktTimelineMap(cs);
+  if(cs.type==="process") return procTopMap(cs);
+  if(ideaGanttSync(cs) && editMode) pushLater();
+  const g = discGantt(cs), byTid = {}; allTasks().forEach(x=> byTid[x.tid] = x);
+  g.items = g.items.filter(it=> byTid[it.tid]);
+  return { m: g, byTid };
+}
+/* the names on a row: its owner, and the task's owner / assignee */
+function rowPeople(it, en){
+  const t = (en && en.task) || {};
+  return [it.owner, t.owner, t.assignee, t.who].concat(Array.isArray(t.owners) ? t.owners : []).filter(Boolean).map(x=> String(x)).join(" · ");
+}
+function personMatches(text, u){
+  const T = String(text||"").toLowerCase(); if(!T) return false;
+  const nm = userDisplayName(u).toLowerCase().trim(), first = nm.split(/\s+/)[0], mail = (u.email||"").toLowerCase().split("@")[0];
+  return (nm && T.includes(nm)) || (first.length >= 3 && T.includes(first)) || (mail.length >= 3 && T.includes(mail));
+}
+const RMAP_MERGED = {}, RMAP_PERSON = {};
+function rmapMergedPane(own, wrap, reg){
+  const C = RMAP_MERGED[own.id] || (RMAP_MERGED[own.id] = { id:"rmm-"+own.id, view:"gantt", gWin: own.gWin || 0, spaceOf:"merge" });
+  C.name = own.name;
+  const lanes = [], items = [], byTid = {}, label = {};
+  Object.keys(reg).forEach(k=> byTid[k] = reg[k]);
+  rmapMergedFrom(own).forEach(cs=>{
+    let got; try{ got = spaceTimelineMap(cs); }catch(e){ return; }
+    const sm = got.m, P = "mg:" + cs.id + ":", head = { id:"mg:" + cs.id, name: csTypeIcon(cs.type) + " " + cs.name, kind:"project" };
+    lanes.push(head);
+    Object.keys(got.byTid).forEach(k=> byTid[k] = got.byTid[k]);
+    const ids = new Set((sm.lanes||[]).map(l=> l.id));
+    (sm.lanes||[]).forEach(ln=>{
+      const nm = sm.laneLabel ? sm.laneLabel(ln) : ln.name;
+      lanes.push({ id: P + ln.id, name: nm, kind: ln.kind || "project", parent: ln.parent && ids.has(ln.parent) ? P + ln.parent : head.id });
+    });
+    (sm.items||[]).forEach(it=>{
+      if(!byTid[it.tid]) return;
+      items.push(Object.assign({}, it, { rid: P + it.rid, lane: P + it.lane, parent: it.parent ? P + it.parent : undefined, _from: cs.name }));
+    });
+  });
+  own.lanes = own.lanes || []; rmlEnsureLanes(own);
+  const ownIds = new Set(own.lanes.map(l=> l.id));
+  own.lanes.forEach(ln=>{ lanes.push(ln); if(!ln.parent) label[ln.id] = ln.name==="Planning" ? "🙋 Own plan" : "🙋 " + ln.name; });
+  own.items.forEach(it=> items.push(it));
+  /* 👤 only one person's rows (and the sections they're in) */
+  const who = RMAP_PERSON[own.id] ? USERS.find(u=> u.email===RMAP_PERSON[own.id]) : null;
+  const I = who ? items.filter(it=> personMatches(rowPeople(it, byTid[it.tid]), who)) : items;
+  /* sections with rows in them (and the sections above those); the spaces' empty sections are left out */
+  const keep = new Set();
+  I.forEach(it=>{ let id = it.lane, g = 0; while(id && g++ < 12){ keep.add(id); const l = lanes.find(x=> x.id===id); id = l && l.parent; } });
+  const L = lanes.filter(l=> keep.has(l.id) || (!who && (ownIds.has(l.id) || /^mg:[^:]+$/.test(l.id))));
+  C.lanes = L.length ? L : [{ id:"mg-none", name: who ? "Nothing with " + userDisplayName(who) + "’s name" : "Nothing yet", kind:"project" }];
+  C.items = I;
+  C.mapOf = ln=> ownIds.has(ln.id) ? own : null;
+  C.laneLabel = ln=> label[ln.id] || ln.name;
+  C.barButtons = row=>{
+    rmlBarButtons(row, own, "Phase");
+    const mb = document.createElement("button"); mb.className = "tool sm"; mb.textContent = "⚙ Merge"; mb.title = "Choose which spaces’ Timelines show here";
+    mb.onclick = ()=> rmapMergePicker(own); row.appendChild(mb);
+  };
+  /* the filter bar */
+  const bar = document.createElement("div"); bar.className = "rmm-bar";
+  const lab = document.createElement("span"); lab.textContent = "👤 Show";
+  const sel = document.createElement("select"); sel.className = "person-role";
+  const o0 = document.createElement("option"); o0.value = ""; o0.textContent = "Everyone"; sel.appendChild(o0);
+  const me = currentUser();
+  const team = USERS.filter(u=> !u.super && u.teams && u.teams[TEAM]).sort((a,b)=> userDisplayName(a).localeCompare(userDisplayName(b)));
+  if(me && !team.some(u=> u.email===me.email)) team.unshift(me);
+  team.forEach(u=>{ const o = document.createElement("option"); o.value = u.email; o.textContent = (me && u.email===me.email ? "Only me — " : "") + userDisplayName(u); sel.appendChild(o); });
+  sel.value = who ? who.email : "";
+  sel.onchange = ()=>{ if(sel.value) RMAP_PERSON[own.id] = sel.value; else delete RMAP_PERSON[own.id]; renderAll(); };
+  const hint = document.createElement("span"); hint.className = "hint";
+  hint.textContent = who ? I.length + " row" + (I.length===1 ? "" : "s") + " with " + userDisplayName(who) + "’s name" : "Each space’s Timeline, merged — change things where they live. ▾ minimizes a section.";
+  bar.append(lab, sel, hint);
+  wrap.appendChild(bar);
+  renderRmapGantt(C, wrap, byTid);
+}
+function csTypeIcon(t){ return ({ discovery:"💡", scrum:"🏃", marketing:"📢", process:"⚙️" })[t] || "📁"; }
+function rmapMergePicker(m){
+  const all = rmapMergeable(), cur = rmapMergedFrom(m).map(x=> x.id);
+  rmlModal("⚙ Merge into “" + m.name + "”", [], ()=>{}, { width: 520, noSave: true,
+    sub: "Pick the spaces whose Timeline shows here. Each comes in as its own section, read-only — change things in that space." });
+  const dg = [...document.querySelectorAll(".overlay .dialog")].pop(), body = dg.querySelector(".dlg-body");
+  all.forEach(cs=>{
+    const r = document.createElement("label"); r.className = "ta-row";
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = cur.includes(cs.id);
+    cb.onchange = ()=>{
+      const now = new Set(rmapMergedFrom(m).map(x=> x.id)); if(cb.checked) now.add(cs.id); else now.delete(cs.id);
+      m.merge = { from: all.map(x=> x.id).filter(id=> now.has(id)) }; saveRmaps();
+    };
+    const nm = document.createElement("span"); nm.textContent = csTypeIcon(cs.type) + " " + cs.name;
+    r.append(cb, nm); body.appendChild(r);
+  });
+  if(!all.length){ const e = document.createElement("div"); e.className = "hint"; e.textContent = "No spaces to merge yet."; body.appendChild(e); }
+}
 function renderContentRmap(extMap, extOpts){
   tlDiscMode = !!(extOpts && extOpts.disc);
   const wrap = $("content");
@@ -15453,6 +15574,7 @@ function renderContentRmap(extMap, extOpts){
   reg.forEach(x=> byTid[x.tid] = x);
   const live = m.items.filter(it=> byTid[it.tid]);
   if(live.length !== m.items.length){ m.items = live; }
+  if(!extMap && !tlDiscMode && m.merge){ rmapMergedPane(m, wrap, byTid); return; }
   if(!extMap && !tlDiscMode && rmapViewOf(m)==="lanes"){ renderRmapLanes(m, wrap, byTid); return; }
   if(!extMap && !tlDiscMode && rmgIsGrid(m)){ renderRmapGantt(m, wrap, byTid); return; }
   if(!extMap && !tlDiscMode && rmapViewOf(m)==="wbs"){ renderRmapWbs(m, wrap, byTid); return; }
@@ -17878,8 +18000,17 @@ function procDeptTimeline(d){
 }
 /* the top board's Timeline: each department's plan (same data — edit it here too), then your own */
 function procTopTimeline(cs){
+  const wrap = $("content"), { m, byTid, depts } = procTopMap(cs);
+  if(depts.length){
+    const hint = document.createElement("div"); hint.className = "hint"; hint.style.margin = "0 0 8px";
+    hint.textContent = "One Timeline: each department’s plan (its rows start with the department’s name) and " + cs.name + "’s own. ▾ on a section minimizes it.";
+    wrap.appendChild(hint);
+  }
+  renderRmapGantt(m, wrap, byTid);
+}
+function procTopMap(cs){
   if(procSync(cs) && editMode) pushLater();
-  const wrap = $("content"), byTid = procByTid();
+  const byTid = procByTid();
   const depts = (CSPACES.list||[]).filter(x=> x.type==="procdept" && procTarget(x)===cs);
   if(ideaGanttSync(cs) && editMode) pushLater();
   /* one chart: each department's plan (its rows labelled with the department, edited right here), then this space's own */
@@ -17907,12 +18038,7 @@ function procTopTimeline(cs){
   m.mapOf = ln=> home[ln.id] || null;
   m.laneLabel = ln=> label[ln.id] || ln.name;
   m.barButtons = row=> rmlBarButtons(row, own, "Phase");
-  if(depts.length){
-    const hint = document.createElement("div"); hint.className = "hint"; hint.style.margin = "0 0 8px";
-    hint.textContent = "One Timeline: each department’s plan (its rows start with the department’s name) and " + cs.name + "’s own. ▾ on a section minimizes it.";
-    wrap.appendChild(hint);
-  }
-  renderRmapGantt(m, wrap, byTid);
+  return { m, byTid, depts };
 }
 const PROC_ALL = {};   /* per process space (session): the merged chart, so its 1/2/3-month choice sticks */
 /* 👥 From team (in the process space): everything the departments sent, and the department spaces */
