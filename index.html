@@ -12745,18 +12745,23 @@ function devTimelinePane(){
     const g = procDeptGantt(d), ln = { id:"dv-"+d.id, name:"⚙️ Process improvements", kind:"project" }; lanes.push(ln);
     (g.items||[]).filter(it=> reg[it.tid]).forEach(it=>{ byTid[it.tid] = reg[it.tid]; items.push(Object.assign({}, it, { lane: ln.id, color: it.color || "#3A9CA8" })); });
   });
-  m.lanes = lanes; m.items = items;
-  if(lanes.length){
-    const hint = document.createElement("div"); hint.className = "hint"; hint.style.margin = "0 0 8px";
-    hint.textContent = "Sprints by team (from their start and end dates) and the Process improvements Timeline. Change them where they live — a sprint from its ⋯ in the sidebar; it shows here by itself.";
-    wrap.appendChild(hint);
-    const em = editMode; editMode = false;
-    try{ renderRmapGantt(m, wrap, byTid); } finally { editMode = em; }
-  }
+  /* the team's own written tasks share this one chart, in their own rows below (stored on the space's own Timeline) */
   const own = discGantt(host);
-  own.name = lanes.length ? "Engineering plan" : "Timeline";
   own.items = own.items.filter(it=> reg[it.tid]);
-  renderRmapGantt(own, wrap, reg);
+  own.lanes.forEach(ln=> lanes.push(ln));
+  own.items.forEach(it=>{ byTid[it.tid] = reg[it.tid]; items.push(it); });
+  const ownIds = new Set(own.lanes.map(l=> l.id));
+  m.lanes = lanes; m.items = items;
+  m.mapOf = ln=> ownIds.has(ln.id) ? own : null;
+  m.barButtons = row=>{
+    const spx = document.createElement("span"); spx.className = "spacer"; row.appendChild(spx);
+    const b = document.createElement("button"); b.className = "tool sm"; b.textContent = "✏️ Write task"; b.title = "Write a new task on this Timeline";
+    b.onclick = ()=> rmlNewOwn(own, own.lanes[0].id); row.appendChild(b);
+  };
+  const hint = document.createElement("div"); hint.className = "hint"; hint.style.margin = "0 0 8px";
+  hint.textContent = "Sprints by team (from their start and end dates), the Process improvements Timeline and the tasks you write here. Change a sprint where it lives — its ⋯ in the sidebar; it shows here by itself.";
+  wrap.appendChild(hint);
+  renderRmapGantt(m, wrap, byTid);
 }
 function devSprintDeadline(sp, spCards){
   if(!sp.end) return null;
@@ -14227,7 +14232,7 @@ function renderRmapGantt(m, wrap, byTid){
     const wl = document.createElement("span"); wl.className = "rmg-wl"; wl.textContent = winLabel; ctl.appendChild(wl);
   }
   row.appendChild(ctl);
-  if(editMode) rmlBarButtons(row, m, m.view==="swimlane" ? "Swimlane" : "Phase");
+  if(editMode){ if(m.barButtons) m.barButtons(row); else rmlBarButtons(row, m, m.view==="swimlane" ? "Swimlane" : "Phase"); }
   head.appendChild(row); wrap.appendChild(head);
   if(m.view==="swimlane"){ rmgSwimlanes(m, wrap, byTid, live, w0, nW, today); return; }
 
@@ -14277,6 +14282,8 @@ function renderRmapGantt(m, wrap, byTid){
   const walk = (pid, d)=> rmwLaneKids(m, pid).forEach(l=>{ order.push([l, d]); walk(l.id, d+1); });
   walk(null, 0);
   order.forEach(([ln, depth])=>{
+    /* a chart can mix in rows that live on another chart (m.mapOf(lane) → that chart): only those are editable */
+    const M = (m.mapOf && m.mapOf(ln)) || m, ed = editMode && (!m.mapOf || M!==m);
     const items = laneItems(ln);
     const all = rmwDescLanes(m, ln).flatMap(laneItems);   /* this phase and everything inside it */
     const lab = document.createElement("div"); lab.className = "rmg-phase" + (depth ? " sub d" + Math.min(depth, 2) : ""); lab.style.gridRow = String(rIdx); lab.dataset.lane = ln.id;
@@ -14290,17 +14297,17 @@ function renderRmapGantt(m, wrap, byTid){
       lab.appendChild(db);
     }
     const plb = rmgLinksBtn(ln); if(plb) lab.appendChild(plb);
-    if(editMode){
+    if(ed){
       if(depth < RMG_MAX_DEPTH){
         const sb = document.createElement("button"); sb.className = "rml-mini"; sb.textContent = "＋ Sub"; sb.title = "Add a sub-phase inside “"+ln.name+"”";
-        sb.onclick = e=>{ e.stopPropagation(); rmlEditLane(m, null, { parent: ln.id }); };
+        sb.onclick = e=>{ e.stopPropagation(); rmlEditLane(M, null, { parent: ln.id }); };
         lab.appendChild(sb);
       }
-      const ed = document.createElement("button"); ed.className = "rml-mini"; ed.textContent = "✎"; ed.title = "Rename / move / delete phase";
-      ed.onclick = ()=> rmlEditLane(m, ln);
-      lab.appendChild(ed);
+      const eb = document.createElement("button"); eb.className = "rml-mini"; eb.textContent = "✎"; eb.title = "Rename / move / delete phase";
+      eb.onclick = ()=> rmlEditLane(M, ln);
+      lab.appendChild(eb);
     }
-    rmlLaneDrag(lab, m, ln);
+    if(ed) rmlLaneDrag(lab, M, ln);
     grid.appendChild(lab);
     cellsRow(rIdx, ln.id, "phase");
     /* thin summary line over the phase's tasks, sub-phases included */
@@ -14318,15 +14325,15 @@ function renderRmapGantt(m, wrap, byTid){
       const kids = items.filter(k=> rmgParentOf(m, k)===it);
       rows.push({ it, dep:0, kids });
       if(!it.fold) kids.forEach(k=> rows.push({ it:k, dep:1, kids:[] }));
-      if(editMode && rmgSubAdd===it.rid) rows.push({ it, dep:1, add:true });
+      if(ed && rmgSubAdd===it.rid) rows.push({ it, dep:1, add:true });
     });
     rows.forEach((R, ri)=>{
       const it = R.it, dep = R.dep;
-      const moreTop = rows.slice(ri+1).some(r=> !r.dep) || editMode;
+      const moreTop = rows.slice(ri+1).some(r=> !r.dep) || ed;
       if(R.add){
         const a = document.createElement("div"); a.className = "rmg-task rmg-add"; a.style.gridRow = String(rIdx); a.dataset.lane = ln.id;
         a.style.paddingLeft = (26 + (depth+1)*18) + "px";
-        a.appendChild(rmgSubInput(m, it));
+        a.appendChild(rmgSubInput(M, it));
         const gd = []; gd[depth] = moreTop; rmlTreeLines(a, depth+2, gd, true, 6, 18);
         grid.appendChild(a); cellsRow(rIdx, ln.id, "addrow"); rIdx++;
         return;
@@ -14346,7 +14353,7 @@ function renderRmapGantt(m, wrap, byTid){
       const kd = R.kids.length ? R.kids.filter(k=> byTid[k.tid] && effStatus(byTid[k.tid].task)==="done").length + "/" + R.kids.length + " sub-tasks" : "";
       nm.lastChild.textContent = rmlFmt(it.start) + (it.end && it.end!==it.start ? " → " + rmlFmt(it.end) : "") + (it.owner ? " · 👤 " + it.owner : "") + (kd ? " · ☑ " + kd : "");
       nm.title = (en.task.title||"") + (it.owner ? "\nOwner: " + it.owner : "") + (it.team ? "\nTeam: " + it.team : "") + "\n" + en.path;
-      if(editMode){ nm.onclick = ()=> rmlEditItem(m, it, en); nm.style.cursor = "pointer"; }
+      if(ed){ nm.onclick = ()=> rmlEditItem(M, it, en); nm.style.cursor = "pointer"; }
       const tacts = document.createElement("span"); tacts.className = "rmg-tacts";
       if(it.doc){
         const db = document.createElement("button"); db.className = "rmg-doc"; db.textContent = "📄";
@@ -14355,9 +14362,9 @@ function renderRmapGantt(m, wrap, byTid){
         tacts.appendChild(db);
       }
       const lb = rmgLinksBtn(it); if(lb) tacts.appendChild(lb);
-      if(editMode && !dep){
+      if(ed && !dep){
         const sb = document.createElement("button"); sb.className = "td-gadd rmg-subbtn"; sb.textContent = "＋"; sb.title = "Add a sub-task under this";
-        sb.onclick = e=>{ e.stopPropagation(); rmgOpenSub(m, it); };
+        sb.onclick = e=>{ e.stopPropagation(); rmgOpenSub(M, it); };
         tacts.appendChild(sb);
       }
       if(tacts.children.length){ nm.appendChild(tacts); nm.style.paddingRight = (12 + tacts.children.length*30) + "px"; }
@@ -14374,12 +14381,12 @@ function renderRmapGantt(m, wrap, byTid){
       blk.style.background = it.color || colorOf(it.team);
       blk.title = nm.title + "\n" + rmlFmt(it.start) + " → " + rmlFmt(it.end);
       barEls[it.tid] = blk;
-      if(editMode) rmgItemDrag(blk, m, it, ()=> weekPx()/7, 1, ()=> rmlEditItem(m, it, en)); else blk.style.cursor = "default";
+      if(ed) rmgItemDrag(blk, M, it, ()=> weekPx()/7, 1, ()=> rmlEditItem(M, it, en)); else blk.style.cursor = "default";
       grid.appendChild(blk);
       rIdx++;
     });
-    if(editMode){
-      const add = rmlQuickAddInput(m, ln, "rmg-task rmg-add");
+    if(ed){
+      const add = rmlQuickAddInput(M, ln, "rmg-task rmg-add");
       add.style.gridRow = String(rIdx); add.dataset.lane = ln.id;
       if(depth) add.style.paddingLeft = (26 + depth*18) + "px";
       rmlTreeLines(add, depth+1, [], true, 6, 18);
