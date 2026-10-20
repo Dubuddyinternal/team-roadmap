@@ -6359,7 +6359,10 @@ let watchView = "companies";   // Keep an Eye space: companies | fill | updates 
 const MKT_OPEN = {};           // Marketing spaces open in the sidebar (this visit)
 // the Marketing space a space lives inside (or null)
 function mktParentOf(cs){ return (cs && cs.parent) ? ((CSPACES.list||[]).find(x=>x.id===cs.parent && x.type==="marketing") || null) : null; }
-function mktOpen(cs){ return MKT_OPEN[cs.id] !== false; }
+/* a Marketing group is open while you're on it or one of its spaces; ▾ opens / folds it just for the page you're on
+   (MKT_OPEN[id] = {open, where}); anywhere else it goes back to that default, so it doesn't stay open by itself */
+function mktWhere(){ return view + ":" + (activeCspace || "") + ":" + (activeRmap || "") + ":" + (activeSection || ""); }
+function mktOpen(cs){ const v = MKT_OPEN[cs.id]; return v && typeof v==="object" && v.where===mktWhere() ? v.open : csIsActive(cs); }
 // "＋ Add space" inside a Marketing space: the marketing templates
 function openMarketingTemplates(parent){
   const T = [
@@ -6390,7 +6393,7 @@ function openMarketingTemplates(parent){
         openDialog("Name your campaign", {}, v=>{
           const cs = { id:"cs-"+Date.now().toString(36), name:v.title, type:"campaign", parent:parent.id, access:"open", members:{},
                        details:{ name:v.title, tagline:"", code:"", duration:"", days:"", messaging:"", other:"" }, extra:[], contentsLabel:"List of contents", items:[] };
-          CSPACES.list.push(cs); MKT_OPEN[parent.id] = true;
+          CSPACES.list.push(cs);
           view = "campaign"; activeCspace = cs.id; campView = "details";
           renderAll(); pushAll();
           toast("\u201C"+v.title+"\u201D created under "+parent.name);
@@ -8135,7 +8138,6 @@ function csIsActive(cs){
 }
 function navToSpace(cs){
   if(cs.type==="marketing"){   // its own page (Summary · Timeline); the ▾ in the sidebar folds the spaces inside
-    MKT_OPEN[cs.id] = true;
     view = "disc"; activeCspace = cs.id; discView = "timeline";
     renderAll(); return;
   }
@@ -17637,7 +17639,7 @@ function renderAll(){
         if(cs.type==="marketing"){
           const chev = document.createElement("span"); chev.className = "ws-chev"+(mktOpen(cs)?" open":""); chev.textContent = "\u25BE";
           chev.title = mktOpen(cs) ? "Hide the spaces inside" : "Show the spaces inside";
-          chev.onclick = e=>{ e.stopPropagation(); MKT_OPEN[cs.id] = !mktOpen(cs); renderAll(); };
+          chev.onclick = e=>{ e.stopPropagation(); MKT_OPEN[cs.id] = { open: !mktOpen(cs), where: mktWhere() }; renderAll(); };
           b.insertBefore(chev, b.firstChild);
           b.querySelector(".dot").outerHTML = '<span class="ws-kid-ico">📢</span>';
         } else if(_nested){
@@ -17708,6 +17710,7 @@ function renderAll(){
           ];
           if(cs.type==="pdt") _items.push({label:"Board mapping", onClick:()=>{ view="pdt"; activeCspace=cs.id; pdtView="mapping"; renderAll(); }});
           if(cs.type==="scrum") _items.push({label:"\uFF0B New dev team", onClick: devNewTeam});
+          if(cs.type==="marketing" && hasPerm("add_spaces")) _items.push({label:"\uFF0B Add space inside", onClick:()=> openMarketingTemplates(cs)});
           _items.push({label:"\uD83D\uDE48 Hide from my sidebar", onClick:()=> setHiddenForMe("cs:"+cs.id, true, cs.name)});
           _items.push({label: cs.okr ? "Change linked OKR\u2026" : "Link to an OKR\u2026", onClick:()=> csOkrOpen(cs)});
           /* which spaces sit inside a Marketing space is set in that Marketing space's Settings → 📂 Spaces inside */
@@ -17818,11 +17821,7 @@ function renderAll(){
           const _list = CSPACES.list.filter(x=>x.parent===cs.id && x.type!=="procdept");   /* its Process improvements opens from ⋯ */
           _list.forEach(k=> _drawCs(k, _kids, true));
           if(!_list.length){ const e=document.createElement("div"); e.className="ws-empty"; e.textContent="Nothing inside yet."; _kids.appendChild(e); }
-          if(hasPerm("add_spaces")){
-            const add=document.createElement("button"); add.className="ws-item ws-add ws-nested"; add.textContent="\uFF0B Add space";
-            add.onclick=()=> openMarketingTemplates(cs);
-            _kids.appendChild(add);
-          }
+          /* "＋ Add space inside" is in Marketing's ⋯ menu */
         }
         if(cs.type==="social" && view==="social" && activeCspace===cs.id){
           [["targets","🤝 Our agreement"],["summary","📊 Summary"],["ideation","💡 Ideation"],["process","🎬 Content Process"],["schedule","🗓 Schedule"],["rivals","👀 Keep an Eye on 2nd Love"]].forEach(([k,lbl])=>{
@@ -22953,11 +22952,10 @@ document.querySelectorAll("#tpl-overlay .tpl-card").forEach(card=>{
      chooseAccess(v.title, (access, members)=>{
       const cs = { id:"cs-"+Date.now().toString(36), name:v.title, type, access, members: members||{} };
       // made from a Marketing space's "＋ Add space": it lives inside that space (Keep an Eye is always its own space)
-      if(window._pendingParent && type!=="marketing" && type!=="watch" && type!=="horizon"){ cs.parent = window._pendingParent; MKT_OPEN[cs.parent] = true; }
+      if(window._pendingParent && type!=="marketing" && type!=="watch" && type!=="horizon"){ cs.parent = window._pendingParent; }
       window._pendingParent = null;
       if(type==="marketing"){
         CSPACES.list.push(cs);
-        MKT_OPEN[cs.id] = true;
         const _moved = CSPACES.list.filter(x=>x.type==="social" && !x.parent);   // Social Media becomes part of Marketing
         _moved.forEach(x=>{ x.parent = cs.id; });
         if(_moved[0]){ view = "social"; activeCspace = _moved[0].id; socialView = "summary"; }
@@ -24807,7 +24805,7 @@ function drawMarketingKids(mk, body){
     const o0 = document.createElement("option"); o0.value = ""; o0.textContent = "Pick a space…"; sel.appendChild(o0);
     out.forEach(x=>{ const o = document.createElement("option"); o.value = x.id; o.textContent = x.name + " · " + csTypeLabel(x.type); sel.appendChild(o); });
     const go = document.createElement("button"); go.className = "btn save"; go.textContent = "Move in";
-    go.onclick = ()=>{ const cs = L.find(x=> x.id===sel.value); if(!cs) return; cs.parent = mk.id; MKT_OPEN[mk.id] = true; pushAll(); drawSpaceSettings(); renderAll(); toast("“"+cs.name+"” is now inside “"+mk.name+"”"); };
+    go.onclick = ()=>{ const cs = L.find(x=> x.id===sel.value); if(!cs) return; cs.parent = mk.id; pushAll(); drawSpaceSettings(); renderAll(); toast("“"+cs.name+"” is now inside “"+mk.name+"”"); };
     r.append(sel, go); body.appendChild(r);
   } else { const e = document.createElement("div"); e.className = "hint"; e.textContent = "No other spaces to move in."; body.appendChild(e); }
   const nw = document.createElement("button"); nw.className = "btn"; nw.style.marginTop = "12px"; nw.textContent = "＋ Make a new space inside";
