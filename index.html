@@ -2799,6 +2799,18 @@ body.rm-chart #pane-work > .controls{display:none}
 .mag-in{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:12.5px;color:var(--muted)}
 .mag-in input{width:110px;padding:4px 8px;border:1px solid var(--line-strong);border-radius:6px;font:inherit}
 .mag-edit{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.lms-tgt{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:14px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper)}
+.lms-tgt .lms-tn{width:64px;padding:4px 6px}.lms-tgt select{padding:4px 6px}
+.lms-ppl{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px;margin-top:6px}
+.lms-pr{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:9px;border:1px solid var(--line);font-size:13.5px}
+.lms-pr small{color:var(--muted);font-size:11.5px}.lms-pr b{margin-left:auto;white-space:nowrap}
+.lms-pr.short b{color:var(--blocked)}.lms-pr.ok b{color:var(--done)}
+.lms-sub{padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin-top:8px}
+.lms-sub-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.lms-sub-top a{font-weight:700;color:var(--ink)}
+.lms-sub-k{font-size:12px;padding:2px 8px;border-radius:99px;background:var(--paper);border:1px solid var(--line)}
+.lms-st{margin-left:auto;font-size:12px;padding:2px 8px;border-radius:99px;background:#FFF1DB;color:#8A5A00}
+.lms-st.approved{background:#E3F4EA;color:#1E6B45}.lms-st.declined{background:#F3E9E6;color:var(--muted)}
+.lms-sub-note{font-size:13px;margin-top:4px;white-space:pre-wrap}.lms-sub-btns{display:flex;gap:6px;margin-top:8px}
 .ta-box{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 12px}
 .ta-h{font-weight:700;font-size:14px;margin-bottom:8px}
 .ta-list{max-height:220px;overflow:auto;margin-top:8px;border-top:1px solid var(--line);padding-top:6px}
@@ -15150,7 +15162,7 @@ function rmlModal(title, fields, onSave, o){
     const lb = document.createElement("label"); lb.textContent = f.label;
     let el;
     if(f.type==="select"){ el = document.createElement("select"); f.opts.forEach(([val,txt])=>{ const op=document.createElement("option"); op.value=val; op.textContent=txt; el.appendChild(op); }); el.value = f.value; }
-    else if(f.type==="area"){ el = document.createElement("textarea"); el.rows = f.rows || 2; el.value = f.value; if(f.ph) el.placeholder = f.ph; if(f.readOnly) el.readOnly = true; }
+    else if(f.type==="area"){ el = document.createElement("textarea"); el.rows = f.rows || 2; el.value = f.value; if(f.ph) el.placeholder = f.ph; if(f.readOnly) el.readOnly = true; if(f.plain) el.setAttribute("data-plain",""); }
     else if(f.type==="rich"){ el = richEditor(f.value); }
     else if(f.type==="color"){
       /* swatches + "Auto"; the value lives on a hidden input so read() stays the same */
@@ -18212,6 +18224,11 @@ function renderAll(){
           const rq = procCanManage(k) ? (k.requests||[]).length : 0;
           return { label: "⚙️ Process improvements" + (procHasAccess(k) ? "" : " 🔒") + (rq ? " · 🙋 " + rq : ""), onClick:()=> navToSpace(k) };
         });
+        const _lw = lmsWaiting(cs);
+        const _lmsItems = cs.type==="procdept" ? [] : [
+          {label:"🎓 Submit to LMS", onClick:()=> lmsSubmit(cs)},
+          {label:"🎓 LMS in this space" + (_lw ? " · " + _lw + " to approve" : ""), onClick:()=> lmsSpacePanel(cs)},
+        ];
         if(editMode || canInSpace("admin", csRef(cs))){
           const doDelete = ()=>{
             const msg = cs.type==="bugs"
@@ -18273,16 +18290,17 @@ function renderAll(){
           if(cs.type==="scrum") _items.push({label:"\uFF0B New dev team", onClick: devNewTeam});
           if(cs.type==="marketing" && hasPerm("add_spaces")) _items.push({label:"\uFF0B Add space inside", onClick:()=> openMarketingTemplates(cs)});
           _items.push({label:"📄 Submit a template", onClick:()=> tplSubmit(cs)});
+          _items.push(..._lmsItems);
           _items.push({label:"\uD83D\uDE48 Hide from my sidebar", onClick:()=> setHiddenForMe("cs:"+cs.id, true, cs.name)});
           _items.push({label: cs.okr ? "Change linked OKR\u2026" : "Link to an OKR\u2026", onClick:()=> csOkrOpen(cs)});
           /* which spaces sit inside a Marketing space is set in that Marketing space's Settings → 📂 Spaces inside */
           if(hasPerm("delete_spaces")) _items.push({label:"Delete\u2026", danger:true, onClick: doDelete});   // only roles given "Delete spaces"
           openRowMenu(menu, _items); };
           b.appendChild(menu);
-        } else if(_procItems.length){   /* people who can't edit here still reach the department's process space */
+        } else {   /* people who can't edit here still reach the department's process space and the LMS */
           const menu = document.createElement("span");
           menu.className = "ws-menu-btn"; menu.textContent = "\u22ef"; menu.title = "More";
-          menu.onclick = e=>{ e.stopPropagation(); openRowMenu(menu, _procItems); };
+          menu.onclick = e=>{ e.stopPropagation(); openRowMenu(menu, _procItems.concat(_lmsItems)); };
           b.appendChild(menu);
         }
                 if(editMode && canManagePeople()){
@@ -23851,7 +23869,7 @@ function adminSections(){
     { k:"hrequipment", ico:"🎒", lbl:"Equipment", group:"hr", show: !!me && !!SUPA && typeof renderAdminEquipment === "function" && (hasPerm("manage_hr") || hasPerm("view_hr")), render: renderAdminEquipment },
     { k:"hrrules",     ico:"📏", lbl:"Rules", group:"hr", show: !!me && !!SUPA && typeof renderAdminHrRules === "function" && (hasPerm("manage_hr") || hasPerm("view_hr")), render: renderAdminHrRules },
     { k:"hrsettings",  ico:"🏢", lbl:"Company and offer letter", group:"hr", show: !!me && !!SUPA && typeof renderAdminHrSettings === "function" && hasPerm("hr_settings"), render: renderAdminHrSettings },
-    { k:"lms",         ico:"🎓", lbl:"LMS", group:"hr",  show: hasPerm("manage_learning") && !!SUPA, render: renderAdminLms },
+    { k:"lms",         ico:"🎓", lbl:"LMS" + (iAmTeamAdmin() && lmsAdminWaiting() ? " (" + lmsAdminWaiting() + ")" : ""), group:"hr",  show: hasPerm("manage_learning") && !!SUPA, render: renderAdminLms },
     // Accounts: payment requests and payroll ("Accounts: payments & payroll")
     { k:"accoverview", ico:"📊", lbl:"Overview", group:"accounts", show: !!me && !!SUPA && typeof renderAdminAccOverview === "function" && hasPerm("accounts"), render: renderAdminAccOverview },
     { k:"accrequests", ico:"🧾", lbl:"Payment requests", group:"accounts", show: !!me && !!SUPA && typeof renderAdminAccRequests === "function" && hasPerm("accounts"), render: renderAdminAccRequests },
@@ -23929,6 +23947,180 @@ function tplSubmit(cs){
 }
 function tplPreview(t, title){
   rmlModal(title || ("📄 " + t.name), [], ()=>{}, { width: 860, noSave: true, z: 420, sub: t.fromName ? "From " + t.fromName + (t.by && t.by.name ? " · " + t.by.name : "") : "", html: docHtml(t.body, t.html) });
+}
+
+/* ================= LMS from the spaces =================
+   Anyone in a space sends a learning drop from its ⋯ → 🎓 Submit to LMS. It stays in that space (cs.lmsSubs) and goes
+   through two approvals: the space's admins/👑 heads first, then a team Owner/Admin, whose approval opens it in
+   Administration → LMS ready to send out. ⋯ → 🎓 LMS in this space shows who has made how many against the team's
+   target (RMAPS.lmsTarget = { n, per: "week"|"month" }), so space admins can make sure everyone makes theirs.
+   sub.status: "space" (waiting on the space) → "final" (waiting on a team Admin) → "approved" | "declined"          */
+const LMS_SUB_KINDS = [["video","🎬 Video"],["article","📰 Article"],["poll","🗳 Quick poll"],["quiz","🧠 Mini quiz"],["game","🎮 Game"]];
+const lmsSubKind = k=> (LMS_SUB_KINDS.find(x=> x[0]===k) || LMS_SUB_KINDS[0])[1];
+function lmsTarget(){ const t = RMAPS.lmsTarget || {}; return { n: Number(t.n) >= 0 && t.n !== undefined && t.n !== "" ? Number(t.n) : 2, per: t.per==="month" ? "month" : "week" }; }
+function lmsPeriodStart(per){ const t = dNum(todayISO()); if(per==="month") return dNum(todayISO().slice(0,8) + "01"); const d = new Date(todayISO()+"T00:00:00"); return t - ((d.getDay()+6)%7); }
+function lmsCanSpace(cs){ return iAmTeamAdmin() || canInSpace("admin", csRef(cs)); }
+function lmsAdminWaiting(){ return (CSPACES.list||[]).reduce((n, cs)=> n + (cs.lmsSubs||[]).filter(x=> x.status==="final").length, 0); }
+function lmsWaiting(cs){ return (cs.lmsSubs||[]).filter(x=> (x.status==="space" && lmsCanSpace(cs)) || (x.status==="final" && iAmTeamAdmin())).length; }
+/* "Best hook length? | 3s* | 10s | 30s" → one question; * marks the right answer */
+function lmsParseQs(txt){
+  return String(txt||"").split("\n").map(l=> l.trim()).filter(Boolean).map(l=>{
+    const parts = l.split("|").map(x=> x.trim()).filter(Boolean);
+    const q = parts.shift() || "", opts = parts.map(o=> o.replace(/\*$/,"").trim());
+    const ci = parts.findIndex(o=> /\*$/.test(o));
+    return { q, options: opts, correct: ci >= 0 ? ci : null, type: opts.length ? "choice" : "text" };
+  });
+}
+function lmsSubmit(cs){
+  const me = currentUser(); if(!me){ toast("Sign in first"); return; }
+  rmlModal("🎓 Submit to LMS — " + cs.name, [
+    { k:"kind", label:"What is it?", type:"select", value:"video", opts: LMS_SUB_KINDS },
+    { k:"title", label:"Headline", type:"text", value:"", ph:"e.g. The hook trick that doubled their views" },
+    { k:"url", label:"Link (YouTube video, article or game)", type:"text", value:"", ph:"https://…", show: v=> v.kind!=="poll" && v.kind!=="quiz" },
+    { k:"note", label:"Why the team should see it (optional)", type:"area", rows:2, value:"" },
+    { k:"qs", label:"Questions — one per line, choices after |, mark the right one with *", type:"area", rows:4, plain:true, value:"", ph:"Best hook length? | 3 seconds* | 10 seconds | 30 seconds" },
+  ], v=>{
+    const title = (v.title||"").trim(); if(!title){ toast("Give it a headline"); return false; }
+    const url = (v.url||"").trim();
+    if((v.kind==="video" || v.kind==="article" || v.kind==="game") && !/^https?:\/\//i.test(url)){ toast("Paste the link (starting with https://)"); return false; }
+    const qs = lmsParseQs(v.qs);
+    if((v.kind==="poll" || v.kind==="quiz") && !qs.some(q=> q.options.length >= 2)){ toast("Write at least one question with two choices"); return false; }
+    if(v.kind==="quiz" && qs.some(q=> q.options.length && q.correct===null)){ toast("Mark the right answer of each quiz question with *"); return false; }
+    cs.lmsSubs = cs.lmsSubs || [];
+    cs.lmsSubs.push({ id:"ls-"+Date.now().toString(36), kind:v.kind, title, url, note:(v.note||"").trim(), qs, by:{ id:me.id, email:me.email, name:userDisplayName(me) }, at: todayISO(), status:"space" });
+    pushAll(); renderAll(); toast("Sent — " + cs.name + "’s admins approve it first, then a team Admin");
+  }, { width: 640, sub: "It stays in " + cs.name + ". Its admins approve it, then a team Owner/Admin sends it to the team from Administration → LMS." });
+}
+/* a team Admin's approval: the drop opens in Administration → LMS, filled in, to choose who gets it and send */
+function lmsSubToDraft(sub){
+  if(typeof lmsBlankDraft!=="function") return null;
+  const kind = sub.kind==="game" ? "article" : sub.kind, d = lmsBlankDraft(kind);
+  d.title = (sub.kind==="game" ? "🎮 " : "") + sub.title;
+  if(sub.kind==="game") d.intro = "New game to play 🎮 — beat the team’s score?";
+  if(kind==="video") d.video = sub.url; else if(sub.url) d.url = sub.url;
+  d.note = (sub.note ? sub.note + "\n\n" : "") + "— from " + (sub.by && sub.by.name || "the team");
+  const qs = (sub.qs||[]).map(q=> ({ id: lmsQid(), type: q.type, q: q.q, options: q.options.slice(), correct: kind==="quiz" ? q.correct : null }));
+  if(qs.length) d.questions = qs;
+  return d;
+}
+function lmsDecide(cs, sub, ok){
+  const me = currentUser(), who = me ? userDisplayName(me) : "";
+  if(!ok){ if(!confirm("Decline “" + sub.title + "”?")) return; sub.status = "declined"; sub.decidedBy = who; pushAll(); return; }
+  if(sub.status==="space"){ sub.status = "final"; sub.spaceBy = who; sub.spaceAt = todayISO(); pushAll(); toast("Approved for " + cs.name + " — now a team Admin approves it"); return; }
+  if(sub.status==="final"){
+    sub.status = "approved"; sub.finalBy = who; sub.finalAt = todayISO(); pushAll();
+    const d = lmsSubToDraft(sub);
+    if(d && hasPerm("manage_learning") && SUPA){ LMS.ui.edit = d; document.querySelectorAll(".overlay.lms-ov").forEach(o=> o.remove()); openAdmin("lms"); toast("Approved — choose who gets it, then send"); }
+    else toast("Approved — it counts for " + (sub.by && sub.by.name || "them"));
+  }
+}
+/* people a space counts: its members with a role and its 👑 heads, plus whoever submitted; else the whole team */
+function lmsPeopleOf(cs){
+  const team = USERS.filter(u=> !u.super && u.teams && u.teams[TEAM]);
+  const em = new Set(Object.keys(cs.members||{}).filter(e=> cs.members[e] && cs.members[e]!=="viewer").concat(spaceHeadsOf(cs), (cs.lmsSubs||[]).map(x=> x.by && x.by.email).filter(Boolean)));
+  const L = team.filter(u=> em.has(u.email));
+  return (L.length ? L : team).sort((a,b)=> userDisplayName(a).localeCompare(userDisplayName(b)));
+}
+function lmsSpacePanel(cs){
+  document.querySelectorAll(".overlay.lms-ov").forEach(o=> o.remove());
+  const ov = document.createElement("div"); ov.className = "overlay show lms-ov";
+  const dg = document.createElement("div"); dg.className = "dialog"; dg.style.maxWidth = "820px";
+  const close = ()=> ov.remove();
+  const draw = ()=>{
+    dg.innerHTML = "";
+    const h = document.createElement("h3"); h.textContent = "🎓 LMS — " + cs.name; dg.appendChild(h);
+    const T = lmsTarget(), from = lmsPeriodStart(T.per), subs = cs.lmsSubs || [];
+    /* target */
+    const tr = document.createElement("div"); tr.className = "lms-tgt";
+    tr.append(document.createTextNode("Target: each person makes "));
+    if(iAmTeamAdmin()){
+      const n = document.createElement("input"); n.type = "number"; n.min = "0"; n.value = T.n; n.className = "lms-tn";
+      const per = document.createElement("select"); [["week","a week"],["month","a month"]].forEach(([k,t])=>{ const o = document.createElement("option"); o.value = k; o.textContent = t; per.appendChild(o); }); per.value = T.per;
+      const save = ()=>{ RMAPS.lmsTarget = { n: Math.max(0, parseInt(n.value,10)||0), per: per.value }; saveRmaps(); draw(); };
+      n.onchange = save; per.onchange = save;
+      tr.append(n, document.createTextNode(" approved drops "), per);
+    } else tr.append(document.createTextNode(T.n + " approved drop" + (T.n===1?"":"s") + " " + (T.per==="month" ? "a month" : "a week")));
+    const hint = document.createElement("span"); hint.className = "hint"; hint.textContent = " · set by team Owners/Admins for every space"; tr.appendChild(hint);
+    dg.appendChild(tr);
+    /* who has made how many */
+    const tb = document.createElement("div"); tb.className = "lms-ppl";
+    lmsPeopleOf(cs).forEach(u=>{
+      const mine = subs.filter(x=> x.by && x.by.email===u.email), got = mine.filter(x=> x.status==="approved" && dNum(x.finalAt||x.at) >= from).length;
+      const wait = mine.filter(x=> x.status==="space" || x.status==="final").length;
+      const r = document.createElement("div"); r.className = "lms-pr" + (got < T.n ? " short" : " ok");
+      const nm = document.createElement("span"); nm.textContent = userDisplayName(u);
+      const ct = document.createElement("b"); ct.textContent = got + " / " + T.n + (got >= T.n ? " ✅" : " ⚠");
+      ct.title = got >= T.n ? "Target met this " + T.per : "Short by " + (T.n - got) + " this " + T.per;
+      const wt = document.createElement("small"); wt.textContent = wait ? wait + " waiting for approval" : "";
+      r.append(nm, wt, ct); tb.appendChild(r);
+    });
+    const ph = document.createElement("div"); ph.className = "ta-h"; ph.style.marginTop = "14px"; ph.textContent = "This " + T.per + " (approved ones count)";
+    dg.append(ph, tb);
+    /* the submissions */
+    const sh = document.createElement("div"); sh.className = "ta-h"; sh.style.marginTop = "16px"; sh.textContent = "Submitted here"; dg.appendChild(sh);
+    const order = { space:0, final:1, approved:2, declined:3 };
+    const L = subs.slice().sort((a,b)=> (order[a.status]-order[b.status]) || String(b.at).localeCompare(String(a.at)));
+    if(!L.length){ const e = document.createElement("div"); e.className = "hint"; e.textContent = "Nothing yet — anyone can send one from ⋯ → 🎓 Submit to LMS."; dg.appendChild(e); }
+    L.forEach(sub=>{
+      const r = document.createElement("div"); r.className = "lms-sub";
+      const top = document.createElement("div"); top.className = "lms-sub-top";
+      const k = document.createElement("span"); k.className = "lms-sub-k"; k.textContent = lmsSubKind(sub.kind);
+      const t = document.createElement(sub.url ? "a" : "b"); t.textContent = sub.title; if(sub.url){ t.href = sub.url; t.target = "_blank"; t.rel = "noopener"; }
+      const st = document.createElement("span"); st.className = "lms-st " + sub.status;
+      st.textContent = { space:"Waiting for " + cs.name + "’s admins", final:"Waiting for a team Admin", approved:"✅ Approved", declined:"Declined" }[sub.status];
+      top.append(k, t, st); r.appendChild(top);
+      const meta = document.createElement("div"); meta.className = "hint";
+      meta.textContent = (sub.by && sub.by.name || "") + " · " + rmlFmt(sub.at) + (sub.spaceBy ? " · space ✓ " + sub.spaceBy : "") + (sub.finalBy ? " · team ✓ " + sub.finalBy : "") + ((sub.qs||[]).length ? " · " + sub.qs.length + " question" + (sub.qs.length===1?"":"s") : "");
+      r.appendChild(meta);
+      if(sub.note){ const n = document.createElement("div"); n.className = "lms-sub-note"; n.textContent = sub.note; r.appendChild(n); }
+      const can = (sub.status==="space" && lmsCanSpace(cs)) || (sub.status==="final" && iAmTeamAdmin());
+      if(can){
+        const bt = document.createElement("div"); bt.className = "lms-sub-btns";
+        const ok = document.createElement("button"); ok.className = "btn save"; ok.textContent = sub.status==="space" ? "✓ Approve for " + cs.name : "✓ Approve and send out";
+        ok.onclick = ()=>{ lmsDecide(cs, sub, true); if(document.body.contains(ov)) draw(); };
+        const no = document.createElement("button"); no.className = "btn"; no.textContent = "Decline";
+        no.onclick = ()=>{ lmsDecide(cs, sub, false); draw(); };
+        bt.append(ok, no); r.appendChild(bt);
+      }
+      dg.appendChild(r);
+    });
+    const btns = document.createElement("div"); btns.className = "btns";
+    const add = document.createElement("button"); add.className = "btn"; add.textContent = "＋ Submit to LMS"; add.onclick = ()=>{ close(); lmsSubmit(cs); };
+    const sp = document.createElement("span"); sp.style.flex = "1";
+    const cl = document.createElement("button"); cl.className = "btn save"; cl.textContent = "Close"; cl.onclick = close;
+    btns.append(add, sp, cl); dg.appendChild(btns);
+  };
+  draw();
+  ov.appendChild(dg); ov.addEventListener("mousedown", e=>{ if(e.target===ov) close(); });
+  document.body.appendChild(ov);
+}
+/* Administration → LMS: what the spaces sent that waits on a team Admin */
+function lmsSubsAdminCard(wrap){
+  if(!iAmTeamAdmin()) return;
+  const all = []; (CSPACES.list||[]).forEach(cs=> (cs.lmsSubs||[]).forEach(sub=>{ if(sub.status==="final" || sub.status==="space") all.push([cs, sub]); }));
+  const card = document.createElement("div"); card.className = "ntf-card";
+  const h = document.createElement("h3"); h.textContent = "📥 From the spaces" + (all.length ? " (" + all.length + ")" : ""); card.appendChild(h);
+  if(!all.length){ const e = document.createElement("div"); e.className = "hint"; e.textContent = "Nothing waiting. Anyone can send a drop from a space’s ⋯ → 🎓 Submit to LMS; its admins approve it first, then it lands here."; card.appendChild(e); }
+  all.sort((a,b)=> (a[1].status==="final" ? 0 : 1) - (b[1].status==="final" ? 0 : 1)).forEach(([cs, sub])=>{
+    const r = document.createElement("div"); r.className = "lms-sub";
+    const top = document.createElement("div"); top.className = "lms-sub-top";
+    const k = document.createElement("span"); k.className = "lms-sub-k"; k.textContent = lmsSubKind(sub.kind);
+    const t = document.createElement("b"); t.textContent = sub.title;
+    const st = document.createElement("span"); st.className = "lms-st " + sub.status; st.textContent = sub.status==="final" ? "Approved by " + (sub.spaceBy || "the space") : "Waiting for " + cs.name + "’s admins";
+    top.append(k, t, st); r.appendChild(top);
+    const meta = document.createElement("div"); meta.className = "hint"; meta.textContent = cs.name + " · " + (sub.by && sub.by.name || "") + " · " + rmlFmt(sub.at); r.appendChild(meta);
+    const bt = document.createElement("div"); bt.className = "lms-sub-btns";
+    if(sub.status==="final"){
+      const ok = document.createElement("button"); ok.className = "btn save"; ok.textContent = "✓ Approve and fill in the drop";
+      ok.onclick = ()=>{ lmsDecide(cs, sub, true); renderAdminPage(); window.scrollTo(0,0); };
+      bt.appendChild(ok);
+    }
+    const no = document.createElement("button"); no.className = "btn"; no.textContent = "Decline"; no.onclick = ()=>{ lmsDecide(cs, sub, false); renderAdminPage(); };
+    const op = document.createElement("button"); op.className = "btn"; op.textContent = "Open in " + cs.name; op.onclick = ()=> lmsSpacePanel(cs);
+    bt.append(no, op); r.appendChild(bt);
+    card.appendChild(r);
+  });
+  wrap.appendChild(card);
 }
 // Administration → Templates: documents (e.g. a PRD) a Gantt phase can start from. Picking one when
 // making a phase gives that phase its own copy to fill in; changing a template later doesn't touch copies.
