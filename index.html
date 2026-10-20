@@ -2773,6 +2773,7 @@ body.rm-chart #pane-work > .controls{display:none}
 .proc-dept:hover{border-color:var(--indigo)}
 .rmg-wk.warn{background:color-mix(in srgb,#C8473B 9%,var(--paper))}
 .rmg-wk.warn{position:relative;z-index:4}
+.rmg-wk.warn.past .rmg-wkwarn{background:#7A2A22}
 .rmg-wkwarn{display:inline-block;margin-right:5px;padding:0 6px;border-radius:99px;background:#C8473B;color:#fff;font-family:var(--mono);font-size:10px;font-weight:700;cursor:help}
 .mkt-tltop{display:flex;align-items:center;gap:12px;margin:0 0 8px}
 .mkt-tltop .hint{flex:1}
@@ -12653,12 +12654,14 @@ function mktScheduleMap(mk){
   });
   m.lanes = lanes; m.items = items;
   const socs = mktMergeable(mk).filter(x=> x.type==="social" && mktMerged(mk, x) && canViewSpace(csRef(x)));
+  if(socs.length) mktLoadSnaps();
   m.weekWarn = socs.length ? (mon=> socs.flatMap(x=> mktSlaGaps(x, mon).map(g=> (socs.length > 1 ? x.name + ": " : "") + g))) : null;
   return { m, byTid };
 }
 /* Social Media → Our agreement, week by week: the content goals ("per week", or "per day" × 7) against the posts
-   scheduled that week (Mon–Sun), by platform and type. Posting time and audience numbers (views, likes…) aren't
-   checked. Weeks more than 4 weeks ahead aren't flagged yet. Returns e.g. ["YouTube: 1 of 2 long videos", …]. */
+   scheduled that week (Mon–Sun), by platform and type — or, once the week is over, against what was actually
+   posted, plus subscriber / follower growth against the pace the Summary asks for. Posting time, views, likes
+   etc. aren't checked. Weeks more than 4 weeks ahead aren't flagged yet. Returns e.g. ["YouTube: 1 of 2 long videos …", …]. */
 const MKT_SLA_MATCH = {
   longs:{ pl:"yt", label:"long videos", keys:["long"], words:["long"] },
   shorts:{ pl:"yt", label:"shorts", keys:["short"], words:["short"] },
@@ -12672,18 +12675,47 @@ const MKT_SLA_MATCH = {
   iglives:{ pl:"ig", label:"live sessions", keys:["live"], words:["live"] },
   posts:{ pl:null, label:"posts", keys:null, words:null },
 };
+/* the daily follower counts the Social Media Summary uses (social_snapshots, filled by the sync), loaded once */
+const MKT_SNAPS = { status:"", rows:[] };
+function mktLoadSnaps(){
+  if(MKT_SNAPS.status || !SUPA || window.LOCAL_MODE || !TEAM) return;
+  MKT_SNAPS.status = "loading";
+  SUPA.from("social_snapshots").select("platform,day,followers").eq("team_slug", TEAM).gte("day", dISO(dNum(todayISO()) - 130)).order("day", {ascending:true}).limit(2000)
+    .then(r=>{ MKT_SNAPS.rows = (r && r.data) || []; MKT_SNAPS.status = "ok"; if(view==="disc" && (currentDisc()||{}).type==="marketing") renderAll(); })
+    .catch(()=>{ MKT_SNAPS.status = "error"; });
+}
+/* followers on (or just before) a day: synced counts, or for Instagram before it's synced, the counts typed in by hand */
+function mktFollowersAt(S, pl, day){
+  const name = pl==="yt" ? "youtube" : "instagram";
+  let ser = MKT_SNAPS.rows.filter(r=> r.platform===name && r.followers!=null).map(r=>({ d:r.day, v:Number(r.followers) }));
+  if(!ser.length && pl==="ig") ser = (S.igFollowers||[]).map(f=>({ d:f.d, v:Number(f.v) })).sort((a,b)=> a.d.localeCompare(b.d));
+  let v = null; ser.forEach(r=>{ if(r.d <= day) v = r.v; });
+  return v;
+}
 function mktSlaGaps(x, mon){
   const monN = dNum(mon), todayN = dNum(todayISO());
   if(monN > todayN + 28) return [];
   const S = (window.SX && SX.normalize) ? SX.normalize(x) : x.sx; if(!S) return [];
-  const T = (typeof SOCIAL_TARGETS!=="undefined" && SOCIAL_TARGETS[x.id]) || { goals: S.goals };
+  const T = (typeof SOCIAL_TARGETS!=="undefined" && SOCIAL_TARGETS[x.id]) || { goals: S.goals, targets: S.targets };
+  const ended = monN + 6 < todayN;   /* a week that's over is judged on what was posted, plus audience growth */
+  const out = [];
+  if(ended){
+    /* the same pace the Summary asks for: what's left to the total target, spread over 12 weeks */
+    const tg = Object.assign({ yt:80000, ig:20000 }, T.targets || S.targets || {});
+    [["yt","YouTube","subscribers"],["ig","Instagram","followers"]].forEach(([pl, nm, word])=>{
+      const a = mktFollowersAt(S, pl, dISO(monN - 1)), b = mktFollowersAt(S, pl, dISO(monN + 6)), tgt = Number(tg[pl]) || 0;
+      if(a==null || b==null || !tgt || a >= tgt) return;
+      const need = Math.ceil((tgt - a) / 12), got = b - a;
+      if(got < need) out.push(nm + ": " + (got >= 0 ? "+" : "−") + Math.abs(got).toLocaleString() + " " + word + " of +" + need.toLocaleString() + " needed (target " + tgt.toLocaleString() + ")");
+    });
+  }
   const goals = (T.goals||[]).filter(g=> MKT_SLA_MATCH[g.metric] && (g.period==="week" || g.period==="day") && Number(g.target) > 0);
-  if(!goals.length) return [];
+  if(!goals.length) return out;
   const vt = (S.reg && S.reg.vtype) || {}, ideas = S.ideas || [];
-  const week = (S.cards||[]).filter(c=> c.scheduled && dNum(c.scheduled) >= monN && dNum(c.scheduled) <= monN + 6
+  const inWeek = d=> d && dNum(d) >= monN && dNum(d) <= monN + 6;
+  const week = (S.cards||[]).filter(c=> (ended ? inWeek(c.published) : inWeek(c.scheduled))
     && (!c.ideaId || !ideas.some(i=> i.id===c.ideaId && i.status!=="accepted")));
   const platsOf = c=> Array.isArray(c.platforms) && c.platforms.length ? c.platforms : [c.platform || "ig"];
-  const out = [];
   goals.forEach(g=>{
     const mm = MKT_SLA_MATCH[g.metric], pl = g.platform;
     const need = Number(g.target) * (g.period==="day" ? 7 : 1);
@@ -12693,7 +12725,7 @@ function mktSlaGaps(x, mon){
       const lab = String(vt[c.vtype] || c.vtype || "").toLowerCase();
       return mm.keys.includes(c.vtype) || mm.words.some(w=> lab.includes(w));
     }).length;
-    if(have < need) out.push((pl==="yt" ? "YouTube" : "Instagram") + ": " + have + " of " + need + " " + mm.label + " scheduled");
+    if(have < need) out.push((pl==="yt" ? "YouTube" : "Instagram") + ": " + have + " of " + need + " " + mm.label + (ended ? " posted" : " scheduled"));
   });
   return out;
 }
@@ -13741,8 +13773,9 @@ function renderRmapGantt(m, wrap, byTid){
     const _ww = m.weekWarn ? m.weekWarn(dISO(w0 + w*7)) : null;
     if(_ww && _ww.length){
       const wb = document.createElement("span"); wb.className = "rmg-wkwarn"; wb.textContent = "⚠ " + _ww.length;
-      wb.title = "Short of what was agreed this week:\n• " + _ww.join("\n• ");
-      c.insertBefore(wb, c.firstChild); c.classList.add("warn");   /* on the "Week n" line, so it stays inside the header */
+      wb.title = (dNum(dISO(w0 + w*7)) + 6 < dNum(todayISO()) ? "This week ended short of what was agreed:" : "Short of what was agreed this week:") + "\n• " + _ww.join("\n• ");
+      c.insertBefore(wb, c.firstChild); c.classList.add("warn");
+      if(dNum(dISO(w0 + w*7)) + 6 < dNum(todayISO())) c.classList.add("past");   /* on the "Week n" line, so it stays inside the header */
     }
     grid.appendChild(c);
   }
