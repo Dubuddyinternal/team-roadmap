@@ -3280,6 +3280,9 @@ body.rm-chart #pane-work > .controls{display:none}
 .soc-ev[draggable="true"]{cursor:grab}
 .soc-ev.soc-ev-dragging{opacity:.45}
 .dt-row.dt-nostate{grid-template-columns:minmax(220px,2.4fr) 62px minmax(150px,1.4fr) minmax(100px,1fr) minmax(70px,auto)}
+.dt-row.dt-wphase{grid-template-columns:minmax(220px,2.4fr) 62px minmax(130px,1.2fr) minmax(100px,1fr) minmax(110px,1fr) minmax(100px,1fr) minmax(70px,auto)}
+.disc-chip.phase{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.disc-chip.phase.none{color:var(--muted);border-style:dashed}
 .soc-card-n{margin-top:5px;font-size:11.5px;line-height:1.5;color:var(--muted);white-space:pre-wrap}
 /* ===== space -> OKR link ===== */
 .ws-okr{display:flex;align-items:center;gap:9px;width:100%;text-align:left;border:1px solid var(--line);background:linear-gradient(180deg,#F7F8FF,#EEF1FF);border-radius:10px;padding:9px 11px;margin:2px 0 6px;cursor:pointer;font-family:var(--sans)}
@@ -16498,7 +16501,9 @@ function discIdeasPane(cs){
   const _noState = (cs && cs.type==="social");
   if(_noState) hr.classList.add("dt-nostate");
   const _stgH = cs && cs.type==="process" ? "Stage" : "Roadmap";
-  (_noState ? ["Summary","\uD83D\uDCAC",discThemeLabel(cs),_stgH,""] : ["Summary","\uD83D\uDCAC",discThemeLabel(cs),_stgH,"State",""]).forEach(t=>{
+  const _wph = discHasGantt(cs);   /* Product / Process: each idea sits under a phase of the Timeline */
+  if(_wph){ hr.classList.add("dt-wphase"); if(ideaGanttSync(cs) && editMode) pushLater(); }
+  (_noState ? ["Summary","\uD83D\uDCAC",discThemeLabel(cs),_stgH,""] : ["Summary","\uD83D\uDCAC",discThemeLabel(cs),_stgH].concat(_wph ? ["Timeline phase"] : []).concat(["State",""])).forEach(t=>{
     const c = document.createElement("div");
     c.className = "dt-cell";
     c.textContent = t;
@@ -16541,7 +16546,12 @@ function discIdeasPane(cs){
       const cState = document.createElement("div");
       cState.className = "dt-cell";
       cState.appendChild(discStateChip(idea));
-      r.append(cSum, cCmt, cTheme, cStage, cState, cActs);
+      if(_wph){
+        const cPh = document.createElement("div"); cPh.className = "dt-cell";
+        cPh.appendChild(ideaPhaseChip(cs, idea));
+        r.classList.add("dt-wphase");
+        r.append(cSum, cCmt, cTheme, cStage, cPh, cState, cActs);
+      } else r.append(cSum, cCmt, cTheme, cStage, cState, cActs);
     }
     table.appendChild(r);
   });
@@ -16911,7 +16921,7 @@ function procSync(t){
 }
 function procByTid(){ const byTid = {}; allTasks().forEach(x=> byTid[x.tid] = x); return byTid; }
 function procDeptTimeline(d){
-  const t = procTarget(d); if(t && procSync(t) && editMode) pushAll();   /* rows are rebuilt on every draw; saved by whoever can edit */
+  const t = procTarget(d); if(t && procSync(t) && editMode) pushLater();   /* rows are rebuilt on every draw; saved by whoever can edit */
   const wrap = $("content"), m = procDeptGantt(d), byTid = procByTid();
   m.items = m.items.filter(it=> byTid[it.tid]);
   const hint = document.createElement("div"); hint.className = "hint"; hint.style.margin = "0 0 10px";
@@ -16921,7 +16931,7 @@ function procDeptTimeline(d){
 }
 /* the top board's Timeline: each department's plan (same data — edit it here too), then your own */
 function procTopTimeline(cs){
-  if(procSync(cs) && editMode) pushAll();
+  if(procSync(cs) && editMode) pushLater();
   const wrap = $("content"), byTid = procByTid();
   const depts = (CSPACES.list||[]).filter(x=> x.type==="procdept" && procTarget(x)===cs);
   depts.forEach(d=>{
@@ -16929,6 +16939,7 @@ function procTopTimeline(cs){
     m.items = m.items.filter(it=> byTid[it.tid]);
     renderRmapGantt(m, wrap, byTid);
   });
+  if(ideaGanttSync(cs) && editMode) pushLater();
   const own = discGantt(cs);
   own.name = depts.length ? "Your own plan" : "Timeline";
   own.items = own.items.filter(it=> byTid[it.tid]);
@@ -17021,7 +17032,49 @@ function discGantt(cs){
   rmlEnsureLanes(g);
   return g;
 }
+/* save after the page has finished drawing: saving can redraw, and a redraw in the middle of one draws twice */
+let _pushLaterT = null;
+function pushLater(){ clearTimeout(_pushLaterT); _pushLaterT = setTimeout(()=> pushAll(), 0); }
+/* every idea has a row on its space's Timeline (Product: all ideas; Process: the ones not sent by a department,
+   which live on that department's Timeline). New ones start in an "Unplanned" phase with no dates. */
+function discHasGantt(cs){ return !!cs && (cs.type==="discovery" || cs.type==="process"); }
+function ideaGanttIdeas(cs){ return (cs.ideas||[]).filter(i=> cs.type!=="process" || !i.dept); }
+function ideaGanttSync(cs){
+  if(!discHasGantt(cs)) return false;
+  const m = discGantt(cs);
+  let changed = false;
+  const ids = new Set(ideaGanttIdeas(cs).map(i=> i.id));
+  ideaGanttIdeas(cs).forEach(i=>{
+    if(m.items.some(it=> it.tid===i.id)) return;
+    let un = m.lanes.find(l=> l.id==="ln-unplanned");
+    if(!un){ un = { id:"ln-unplanned", name:"Unplanned", kind:"project" }; m.lanes.push(un); }
+    m.items.push({ rid:"ri-"+Math.random().toString(36).slice(2,7), tid:i.id, lane:un.id });
+    changed = true;
+  });
+  /* rows whose idea / card is gone, or that moved off this Timeline (a Process idea from a department), go */
+  const mine = new Set((cs.ideas||[]).map(i=> i.id)), reg = new Set(allTasks().map(x=> x.tid));
+  m.items.slice().forEach(it=>{ if(!reg.has(it.tid) || (mine.has(it.tid) && !ids.has(it.tid))){ rmgDropItem(m, it); changed = true; } });
+  return changed;
+}
+function ideaPhaseChip(cs, idea){
+  const m = discGantt(cs), it = m.items.find(x=> x.tid===idea.id);
+  const ln = it ? rmlLaneOf(m, rmgParentOf(m, it) || it) : null;
+  const c = document.createElement("button");
+  const unpl = !ln || ln.id==="ln-unplanned";
+  c.className = "disc-chip phase" + (unpl ? " none" : "");
+  c.textContent = ln ? rmwLanePath(m, ln) + (it && it.start ? " · " + rmlFmt(it.start) : "") : "—";
+  c.title = editMode ? "Pick the Timeline phase it sits under" : (ln ? rmwLanePath(m, ln) : "");
+  c.onclick = e=>{
+    e.stopPropagation();
+    if(!editMode || !it) return;
+    openDiscPick(c, { search: m.lanes.length > 6, current: ln && ln.id,
+      options: m.lanes.map(l=>({ key:l.id, label: rmwLanePath(m, l) })),
+      onPick: k=>{ if(!k) return; it.lane = k; delete it.parent; m.items.forEach(x=>{ if(x.parent===it.rid) x.lane = k; }); saveRmaps(); toast("Moved to “" + ((m.lanes.find(l=> l.id===k)||{}).name||"") + "” on the Timeline"); } });
+  };
+  return c;
+}
 function discGanttPane(cs){
+  if(ideaGanttSync(cs) && editMode) pushLater();
   const m = discGantt(cs), byTid = {};
   allTasks().forEach(x=> byTid[x.tid] = x);
   m.items = m.items.filter(it=> byTid[it.tid]);
