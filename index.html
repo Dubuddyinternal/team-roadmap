@@ -12824,13 +12824,15 @@ function mktSlaGaps(x, mon){
   const ended = monN + 6 < todayN;   /* a week that's over is judged on what was posted, plus audience growth */
   const out = [];
   if(ended){
-    /* the same pace the Summary asks for: what's left to the total target, spread over 12 weeks */
-    const tg = Object.assign({ yt:80000, ig:20000 }, T.targets || S.targets || {});
+    /* the same pace the Summary asks for: what's left to the total target, spread over the weeks to its deadline
+       (Our agreement → "By end of this quarter" / "In N months"), or over 12 weeks when there's none */
+    const tg = Object.assign({ yt:80000, ig:20000 }, T.targets || S.targets || {}), by = T.by || {};
     [["yt","YouTube","subscribers"],["ig","Instagram","followers"]].forEach(([pl, nm, word])=>{
       const a = mktFollowersAt(S, pl, dISO(monN - 1)), b = mktFollowersAt(S, pl, dISO(monN + 6)), tgt = Number(tg[pl]) || 0;
       if(a==null || b==null || !tgt || a >= tgt) return;
-      const need = Math.ceil((tgt - a) / 12), got = b - a;
-      if(got < need) out.push(nm + ": " + (got >= 0 ? "+" : "−") + Math.abs(got).toLocaleString() + " " + word + " of +" + need.toLocaleString() + " needed (target " + tgt.toLocaleString() + ")");
+      const wks = by[pl] ? Math.max(1, Math.ceil((dNum(by[pl]) - monN) / 7)) : 12;
+      const need = Math.ceil((tgt - a) / wks), got = b - a;
+      if(got < need) out.push(nm + ": " + (got >= 0 ? "+" : "−") + Math.abs(got).toLocaleString() + " " + word + " of +" + need.toLocaleString() + " needed (target " + tgt.toLocaleString() + (by[pl] ? " by " + rmlFmt(by[pl]) : "") + ")");
     });
   }
   const goals = (T.goals||[]).filter(g=> MKT_SLA_MATCH[g.metric] && (g.period==="week" || g.period==="day") && Number(g.target) > 0);
