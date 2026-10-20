@@ -8091,7 +8091,10 @@ let _lastNavSig = "";
 // the work-area tabs for the current view (Summary is prepended separately)
 function workTabs(){
   if(view==="disc"){
-    const _t = [{key:"ideas",label:"All ideas"},{key:"roadmap",label:"Roadmap"},{key:"timeline",label:"Timeline"}];
+    // Product Roadmap spaces: no stage board (an idea's stage is set from All ideas); Timeline is a Gantt
+    const _t = (currentDisc() || {}).type==="discovery"
+      ? [{key:"ideas",label:"All ideas"},{key:"timeline",label:"Timeline"}]
+      : [{key:"ideas",label:"All ideas"},{key:"roadmap",label:"Roadmap"},{key:"timeline",label:"Timeline"}];
     // the product space also gets the students' inbox (student-ideas.js)
     if(typeof sidIsTarget === "function" && sidIsTarget(currentDisc()) && sidCanSee()) _t.push({key:"students",label:sidTabLabel()});
     return _t;
@@ -8521,6 +8524,7 @@ function allTasks(){
   });
   (CSPACES.list||[]).filter(x=>x.type==="discovery").forEach(cs=>{
     (cs.ideas||[]).forEach(i=> out.push({tid:i.id, task:i, path:cs.name+" · Ideas", kind:"idea"}));
+    if(cs.gantt) (cs.gantt.own||[]).forEach(t=> out.push({tid:t.tid, task:t, path:cs.name+" \u00B7 written on the Timeline", kind:"own", map:cs.gantt}));
   });
   // items written straight onto a roadmap (not from any space): map.own = [{tid, title, note, status}]
   ((typeof RMAPS!=="undefined" && RMAPS.maps) || []).forEach(m=>{
@@ -12881,7 +12885,7 @@ function rmlBarButtons(row, m, rowWord){
 /* roadmap name in the header of Lanes / Gantt views: click it (edit mode) to rename or change type */
 function rmapTitleEl(m){
   const h2 = document.createElement("h2"); h2.textContent = m.name;
-  if(editMode){
+  if(editMode && !m.spaceOf){
     h2.className = "rm-rename"; h2.title = "Click to rename, or change the roadmap type";
     h2.onclick = ()=> openRmapSettings(m);
     const pen = document.createElement("span"); pen.className = "rm-rename-pen"; pen.textContent = "\u270E"; h2.appendChild(pen);
@@ -16217,6 +16221,7 @@ function renderContentDisc(){
   const cs = currentDisc();
   if(!cs){ view = "roadmap"; renderAll(); return; }
 
+  if(discView === "roadmap" && cs.type==="discovery") discView = "ideas";
   if(discView === "roadmap") return discRoadmapPane(cs);
   if(discView === "timeline") return discTimelinePane(cs);
   if(discView === "students" && typeof sidIsTarget === "function" && sidIsTarget(cs) && sidCanSee()) return sidPane(cs);
@@ -16395,6 +16400,7 @@ function discRoadmapPane(cs){
 
 /* ---- Timeline: the full roadmap engine (drag, zoom, stretch, markers, range) on this space's ideas ---- */
 function discTimelinePane(cs){
+  if(cs.type==="discovery") return discGanttPane(cs);
   cs.tl = cs.tl || { id:"rmtl-"+cs.id, items:[], markers:[] };
   cs.tl.items = cs.tl.items || [];
   cs.tl.markers = cs.tl.markers || [];
@@ -16410,6 +16416,22 @@ function discTimelinePane(cs){
   const ideaIds = new Set(cs.ideas.map(i=>i.id));
   cs.tl.items = cs.tl.items.filter(it=> ideaIds.has(it.tid));
   renderContentRmap(cs.tl, {disc:true});
+}
+
+/* ---- Product Roadmap Timeline: the same Simple Gantt as a roadmap (phases, tasks written straight in,
+   sub-tasks, dependencies), kept on the space as cs.gantt. Its own tasks are registered by allTasks. ---- */
+function discGantt(cs){
+  if(!cs.gantt) cs.gantt = { id:"rmsp-"+cs.id, name:"Timeline", view:"gantt", lanes:[], items:[], own:[], markers:[] };
+  const g = cs.gantt;
+  g.spaceOf = cs.id; g.view = "gantt"; g.items = g.items || []; g.own = g.own || [];
+  rmlEnsureLanes(g);
+  return g;
+}
+function discGanttPane(cs){
+  const m = discGantt(cs), byTid = {};
+  allTasks().forEach(x=> byTid[x.tid] = x);
+  m.items = m.items.filter(it=> byTid[it.tid]);
+  renderRmapGantt(m, $("content"), byTid);
 }
 
 function bugSrcChip(t){
