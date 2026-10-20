@@ -2904,7 +2904,8 @@ body.rm-chart #pane-work > .controls{display:none}
 .rm-rename:hover{background:var(--indigo-soft)}
 .rm-rename-pen{font-size:14px;color:var(--muted);opacity:0;transition:opacity .12s}
 .rm-rename:hover .rm-rename-pen{opacity:1;color:var(--indigo)}
-.ia-board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start}
+.ia-board{display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:12px;align-items:start;overflow-x:auto;padding-bottom:6px}
+.ia-tl .ia-h b{color:#2F55B5}.ia-done .ia-h b{color:#6B6058}
 .ia-col{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;min-height:200px;transition:background .12s}
 .ia-col.over{background:var(--indigo-soft);border-color:var(--indigo)}
 .ia-h{display:flex;justify-content:space-between;align-items:center;padding:4px 6px 10px;font-size:14px}
@@ -2918,7 +2919,7 @@ body.rm-chart #pane-work > .controls{display:none}
 .ia-btn{border:1px solid var(--line-strong);background:var(--card);border-radius:7px;font-size:11.5px;padding:3px 8px;cursor:pointer}
 .ia-btn:hover{border-color:var(--indigo)}
 .ia-empty{font-size:13px;color:var(--muted);padding:18px 6px;text-align:center;border:1px dashed var(--line-strong);border-radius:10px}
-@media(max-width:760px){.ia-board{grid-template-columns:1fr}}
+@media(max-width:760px){.ia-board{grid-template-columns:1fr;overflow:visible}}
 .rmg-linkbar{margin:0 0 8px;padding:8px 12px;border-radius:9px;background:#EAF0FB;color:#1F3F8A;font-size:13.5px;font-weight:600;border:1px solid #C9D6F2}
 .rmg-linking .rmg-task,.rmg-linking .rmg-blk{cursor:crosshair!important}
 .rmg-linking .rmg-task:hover{background:#EAF0FB}
@@ -18410,7 +18411,7 @@ function discGanttPane(cs){
   allTasks().forEach(x=> byTid[x.tid] = x);
   m.items = m.items.filter(it=> byTid[it.tid]);
   if(cs.type==="discovery"){
-    const n = (cs.ideas||[]).filter(i=> ideaApproval(i)!=="will").length;
+    const n = (cs.ideas||[]).filter(i=> !ideaOnTl(i)).length;
     if(n){ const h = document.createElement("div"); h.className = "hint"; h.style.margin = "0 0 8px";
       h.textContent = "Only ideas marked ✅ Will do show here — " + n + " more are waiting or marked Won’t do in ✅ Idea approval."; $("content").appendChild(h); }
   }
@@ -18418,34 +18419,69 @@ function discGanttPane(cs){
 }
 /* Product Roadmap: an idea's call — "will" (Will do and every stage after it), "wont", or "" (still to decide) */
 const IDEA_WILL = ["now","implres","ready","building","done"];
-function ideaApproval(i){ return i.stage==="wont" ? "wont" : IDEA_WILL.includes(i.stage) ? "will" : ""; }
+function ideaOnTl(i){ return IDEA_WILL.includes(i.stage); }   /* Will do, In timeline and Done ideas show on the Timeline */
+/* its Timeline row has dates and sits in a phase (not "Unplanned") */
+function ideaScheduled(cs, i){ const it = discGantt(cs).items.find(x=> x.tid===i.id); return !!(it && it.start && it.lane!=="ln-unplanned"); }
+/* the idea's column on ✅ Idea approval: "" to decide · will · tl (in the timeline) · done · wont */
+function ideaApproval(i, cs){
+  if(i.stage==="wont") return "wont";
+  if(i.stage==="done") return "done";
+  if(!IDEA_WILL.includes(i.stage)) return "";
+  return cs && ideaScheduled(cs, i) ? "tl" : "will";
+}
 /* the Timeline as shown: rows of ideas not (yet) a Will do are hidden — kept, so their dates come back with a yes */
 function ideaTlView(cs, m){
   if(cs.type!=="discovery") return m;
   const byId = {}; (cs.ideas||[]).forEach(i=> byId[i.id] = i);
-  const shown = m.items.filter(it=>{ const i = byId[it.tid]; if(!i) { const par = it.parent && m.items.find(x=> x.rid===it.parent); const pi = par && byId[par.tid]; return !pi || ideaApproval(pi)==="will"; } return ideaApproval(i)==="will"; });
+  const shown = m.items.filter(it=>{ const i = byId[it.tid]; if(!i) { const par = it.parent && m.items.find(x=> x.rid===it.parent); const pi = par && byId[par.tid]; return !pi || ideaOnTl(pi); } return ideaOnTl(i); });
   return new Proxy(m, { get:(t, k)=> k==="items" ? shown : k==="mapOf" ? (()=> m) : t[k], set:(t, k, v)=>{ if(k!=="items") t[k] = v; return true; } });
 }
 /* ✅ Idea approval: a simple board — To decide · Will do · Won't do. Will do ideas go on the Timeline. */
 function ideaApprovalPane(cs){
   const wrap = $("content");
   const hint = document.createElement("div"); hint.className = "hint"; hint.style.margin = "0 0 12px";
-  hint.textContent = "Drag an idea to ✅ Will do to put it on the Timeline, or to ❌ Won’t do to park it. Ideas further along (research, engineering, done) stay under Will do.";
+  hint.textContent = "Drag an idea across: ✅ Will do puts it on the Timeline (Unplanned), 🗓 In timeline gives it dates and a phase, 🏁 Done when it’s shipped, ❌ Won’t do parks it.";
   wrap.appendChild(hint);
   const board = document.createElement("div"); board.className = "ia-board";
-  const cols = [["","🤔 To decide","backlog"],["will","✅ Will do","now"],["wont","❌ Won’t do","wont"]];
+  const cols = [["","🤔 To decide","backlog"],["will","✅ Will do","now"],["tl","🗓 In timeline","now"],["done","🏁 Done","done"],["wont","❌ Won’t do","wont"]];
   const stLabel = k=> (PIPE_STAGES.find(x=> x.key===k) || {}).label || k;
+  const rowOf = idea=>{ ideaGanttSync(cs); return discGantt(cs).items.find(x=> x.tid===idea.id); };
   const move = (idea, to)=>{
     if(!editMode){ toast("You can view this space but not change it"); return; }
+    const from = ideaApproval(idea, cs);
+    if(from===to) return;
+    if(to==="tl"){   /* give it dates and a phase */
+      const g = discGantt(cs), phases = g.lanes.filter(l=> l.id!=="ln-unplanned");
+      if(!phases.length){ phases.push({ id:"ln-"+Date.now().toString(36)+Math.random().toString(36).slice(2,6), name:"Planning", kind:"project" }); }
+      const cur = rowOf(idea) || {}, st = cur.start || todayISO();
+      rmlModal("🗓 Put “" + (idea.title||"") + "” on the Timeline", [
+        { k:"start", label:"Start", type:"date", value: st, half:true },
+        { k:"end", label:"End", type:"date", value: cur.end && cur.start ? cur.end : dISO(dNum(st) + 13), half:true },
+        { k:"lane", label:"Phase", type:"select", value: cur.lane && cur.lane!=="ln-unplanned" ? cur.lane : phases[0].id, opts: phases.map(l=> [l.id, rmwLanePath(g, l)]) },
+      ], v=>{
+        if(!v.start || !v.end || v.end < v.start){ toast("Pick a start, and an end on or after it"); return false; }
+        if(!g.lanes.some(l=> l.id===phases[0].id)) g.lanes.push(phases[0]);
+        if(!IDEA_WILL.includes(idea.stage) || idea.stage==="done") discSetStage(cs, idea, "now");
+        const it = rowOf(idea); if(!it) return;
+        it.start = v.start; it.end = v.end; it.lane = v.lane; delete it.parent;
+        saveRmaps(); toast("🗓 On the Timeline, " + rmlFmt(v.start) + " → " + rmlFmt(v.end));
+      }, { width: 460 });
+      return;
+    }
     const want = cols.find(c=> c[0]===to);
-    if(ideaApproval(idea)===to) return;
-    discSetStage(cs, idea, want[2]);
-    if(to==="will" && ideaGanttSync(cs)) saveRmaps();
-    toast(to==="will" ? "✅ Will do — it’s on the Timeline now" : to==="wont" ? "❌ Won’t do" : "Back to To decide");
+    if(to==="will"){
+      if(!IDEA_WILL.includes(idea.stage) || idea.stage==="done") discSetStage(cs, idea, "now");
+      const it = rowOf(idea);
+      if(from==="tl" && it){ delete it.start; delete it.end; it.lane = "ln-unplanned";
+        const g = discGantt(cs); if(!g.lanes.some(l=> l.id==="ln-unplanned")) g.lanes.push({ id:"ln-unplanned", name:"Unplanned", kind:"project" }); }
+      saveRmaps();
+    } else discSetStage(cs, idea, want[2]);
+    if(to==="done" && ideaGanttSync(cs)) saveRmaps();
+    toast({ will:"✅ Will do — it’s on the Timeline (Unplanned)", done:"🏁 Done", wont:"❌ Won’t do", "":"Back to To decide" }[to]);
     renderAll();
   };
   cols.forEach(([key, label])=>{
-    const L = (cs.ideas||[]).filter(i=> ideaApproval(i)===key);
+    const L = (cs.ideas||[]).filter(i=> ideaApproval(i, cs)===key);
     const col = document.createElement("div"); col.className = "ia-col ia-" + (key || "todo");
     const h = document.createElement("div"); h.className = "ia-h"; h.innerHTML = "<b></b><span></span>";
     h.firstChild.textContent = label; h.lastChild.textContent = L.length; col.appendChild(h);
@@ -18460,11 +18496,12 @@ function ideaApprovalPane(cs){
       const t = document.createElement("div"); t.className = "ia-t"; t.textContent = idea.title || "(untitled)"; c.appendChild(t);
       const meta = document.createElement("div"); meta.className = "ia-m";
       const who = idea.assignee || idea.owner || "";
-      meta.textContent = [key==="will" && idea.stage!=="now" ? stLabel(idea.stage) : (key==="" ? stLabel(idea.stage) : ""), who ? "👤 " + who : ""].filter(Boolean).join(" · ");
+      const row = key==="tl" ? discGantt(cs).items.find(x=> x.tid===idea.id) : null;
+      meta.textContent = [row ? "🗓 " + rmlFmt(row.start) + " → " + rmlFmt(row.end) : "", (key==="will" || key==="tl") && idea.stage!=="now" ? stLabel(idea.stage) : (key==="" ? stLabel(idea.stage) : ""), who ? "👤 " + who : ""].filter(Boolean).join(" · ");
       if(meta.textContent) c.appendChild(meta);
       if(editMode){
         const acts = document.createElement("div"); acts.className = "ia-acts";
-        cols.filter(o=> o[0]!==key).forEach(([k2, l2])=>{ const b = document.createElement("button"); b.className = "ia-btn"; b.textContent = l2.split(" ")[0] + " " + (k2==="will" ? "Will do" : k2==="wont" ? "Won’t do" : "To decide"); b.onclick = ()=> move(idea, k2); acts.appendChild(b); });
+        cols.filter(o=> o[0]!==key).forEach(([k2, l2])=>{ const b = document.createElement("button"); b.className = "ia-btn"; b.textContent = l2; b.onclick = ()=> move(idea, k2); acts.appendChild(b); });
         c.appendChild(acts);
       }
       list.appendChild(c);
