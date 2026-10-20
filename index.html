@@ -2913,6 +2913,8 @@ body.rm-chart #pane-work > .controls{display:none}
 .ia-will .ia-h b{color:var(--done)}.ia-wont .ia-h b{color:var(--blocked)}
 .ia-list{display:flex;flex-direction:column;gap:8px}
 .ia-card{position:relative;border:1px solid var(--line-strong);border-radius:10px;padding:9px 30px 9px 11px;background:var(--paper);cursor:grab}
+.ia-ren{right:30px!important}
+.ia-card{padding-right:54px!important}
 .ia-del{position:absolute;top:6px;right:6px;border:0;background:transparent;cursor:pointer;font-size:13px;opacity:.35;padding:2px 4px;border-radius:6px}
 .ia-card:hover .ia-del{opacity:.8}.ia-del:hover{opacity:1;background:var(--blocked-bg)}
 .ia-card.drag{opacity:.45}.ia-card:active{cursor:grabbing}
@@ -18627,15 +18629,44 @@ function ideaApprovalPane(cs){
           toast("Idea deleted");
         };
         c.appendChild(del);
+        const ren = document.createElement("button"); ren.className = "ia-del ia-ren"; ren.textContent = "✏️"; ren.title = "Rename";
+        ren.onclick = e=>{ e.stopPropagation();
+          rmlModal("✏️ Rename idea", [{ k:"title", label:"Name", type:"text", value: idea.title || "" }], v=>{
+            const t = (v.title||"").trim(); if(!t){ toast("Give it a name"); return false; }
+            idea.title = t; saveDisc(); toast("Renamed");
+          }, { width: 460 });
+        };
+        c.appendChild(ren);
       }
       const meta = document.createElement("div"); meta.className = "ia-m";
       const who = idea.assignee || idea.owner || "";
       const row = key==="tl" ? discGantt(cs).items.find(x=> x.tid===idea.id) : null;
       meta.textContent = [row ? "🗓 " + rmlFmt(row.start) + " → " + rmlFmt(row.end) : "", (key==="will" || key==="tl") && idea.stage!=="now" ? stLabel(idea.stage) : (key==="" ? stLabel(idea.stage) : ""), who ? "👤 " + who : ""].filter(Boolean).join(" · ");
       if(meta.textContent) c.appendChild(meta);
+      const _g = discGantt(cs), _row = _g.items.find(x=> x.tid===idea.id), _par = _row && _row.parent ? _g.items.find(x=> x.rid===_row.parent) : null;
+      if(_par){ const pe = allTasks().find(x=> x.tid===_par.tid); const u = document.createElement("div"); u.className = "ia-m"; u.textContent = "↳ under “" + ((pe && pe.task.title) || "a task") + "”"; c.appendChild(u); }
       if(editMode){
         const acts = document.createElement("div"); acts.className = "ia-acts";
         cols.filter(o=> o[0]!==key).forEach(([k2, l2])=>{ const b = document.createElement("button"); b.className = "ia-btn"; b.textContent = l2; b.onclick = ()=> move(idea, k2); acts.appendChild(b); });
+        /* make it a sub-task of another idea (or a task written on the Timeline) */
+        const ub = document.createElement("button"); ub.className = "ia-btn"; ub.textContent = _par ? "↳ Move / take out" : "↳ Put under…";
+        ub.onclick = e=>{ e.stopPropagation();
+          ideaGanttSync(cs);
+          const g = discGantt(cs), reg = {}; allTasks().forEach(x=> reg[x.tid] = x);
+          const opts = g.items.filter(x=> !x.parent && x.tid!==idea.id && reg[x.tid] && (!(cs.ideas||[]).some(i=> i.id===x.tid) || ideaOnTl((cs.ideas||[]).find(i=> i.id===x.tid))))
+            .map(x=> ({ key: x.rid, label: (reg[x.tid].task.title || "(untitled)") }));
+          (cs.ideas||[]).filter(i=> i.id!==idea.id && !ideaOnTl(i)).forEach(i=> opts.push({ key: "idea:" + i.id, label: i.title + " (" + (i.stage==="wont" ? "Won’t do" : stLabel(i.stage)) + ")" }));
+          if(_par) opts.unshift({ key: "__out", label: "⤴ Take it out — its own row again" });
+          openDiscPick(ub, { search: opts.length > 6, options: opts, onPick: k=>{
+            if(!k) return;
+            if(k==="__out"){ const it = discGantt(cs).items.find(x=> x.tid===idea.id); if(it){ delete it.parent; saveRmaps(); toast("Taken out — its own row again"); } return; }
+            let target;
+            if(k.indexOf("idea:")===0){ const ti = (cs.ideas||[]).find(i=> i.id===k.slice(5)); if(!ti) return; discSetStage(cs, ti, "now"); ideaGanttSync(cs); target = discGantt(cs).items.find(x=> x.tid===ti.id); }
+            else target = discGantt(cs).items.find(x=> x.rid===k);
+            if(target) ideaPlace(discGantt(cs), idea, { parent: target });
+          } });
+        };
+        acts.appendChild(ub);
         c.appendChild(acts);
       }
       list.appendChild(c);
