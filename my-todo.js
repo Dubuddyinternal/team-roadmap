@@ -1309,6 +1309,12 @@ function renderContentTodo() {
   nb("Today", "Back to now", function () { delete todoAt[todoLevel]; renderAll(); });
   nb("›", "Next", function () { todoStep(1); });
   ctl.appendChild(todoEl("span", "rmg-wl", todoWindow().label));
+  // plan the next day the night before — jumps straight to tomorrow's day view
+  var tmr = todoAddDays(todoToday(), 1), onTmr = todoLevel === "day" && todoWindow().from === tmr;
+  var tb = todoEl("button", "rmg-nav rmg-tmr" + (onTmr ? " on" : ""), "🌙 Tomorrow");
+  tb.title = onTmr ? "You're planning tomorrow" : "Plan tomorrow";
+  tb.onclick = function () { if (onTmr) return; todoLevel = "day"; todoAt.day = tmr; renderAll(); };
+  ctl.appendChild(tb);
   row.appendChild(ctl);
   row.appendChild(todoEl("span", "spacer"));
   var nAsg = 0; try { var onP = {}; TODO.planner.tasks.forEach(function (t) { if (t.ref && t.ref.k === "asg") onP[t.ref.key] = 1; }); nAsg = Object.keys(S.asg).filter(function (k) { return S.asg[k].col !== "done" && !onP[k]; }).length; } catch (_) { }
