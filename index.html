@@ -2771,6 +2771,11 @@ body.rm-chart #pane-work > .controls{display:none}
 .proc-depts{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 18px}
 .proc-dept{border:1px solid var(--line-strong);background:var(--paper);border-radius:99px;padding:6px 12px;font-size:12.5px;cursor:pointer}
 .proc-dept:hover{border-color:var(--indigo)}
+.ss-heads{border:1px solid var(--line);border-radius:12px;background:var(--paper);padding:12px 14px;margin:0 0 14px}
+.ss-heads-t{font-weight:700;font-size:14px;margin-bottom:2px}
+.ss-heads-c{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px}
+.ss-head{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-strong);background:var(--card);border-radius:99px;padding:3px 10px;font-size:12.5px;font-weight:600}
+.ss-head button{border:0;background:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0}
 .proc-dgroup{display:inline-flex;gap:4px}
 .proc-req{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1.5px dashed var(--line-strong);background:var(--paper);border-radius:12px;padding:12px 14px;margin:0 0 14px;font-size:14px}
 .proc-sech{font-weight:700;font-size:13px;margin:14px 0 6px;color:var(--ink)}
@@ -5492,12 +5497,25 @@ function _bugsMainSpace(){ return { members: (BUILTIN_SPACE_MEMBERS.bugs = BUILT
 function _devSpaceObj(id){ return { members: (BUILTIN_SPACE_MEMBERS.dev = BUILTIN_SPACE_MEMBERS.dev || {}) }; }
 function spaceMembers(ref){ if(!ref||!ref.obj) return {}; ref.obj.members = ref.obj.members || {}; return ref.obj.members; }
 // effective role for a user in a given space ref
+/* 👑 heads of a space (obj.heads = [email]) — appointed by team Owners/Admins. A head is Admin of that
+   space and of every space inside it (cs.parent chain), unless an inner space has heads of its own. */
+function spaceHeadsOf(obj){
+  let cur = obj, g = 0;
+  while(cur && g++ < 8){
+    if(Array.isArray(cur.heads) && cur.heads.length) return cur.heads;
+    cur = cur.parent ? (CSPACES.list||[]).find(x=> x.id===cur.parent) : null;
+  }
+  return [];
+}
+function isSpaceHead(user, ref){ return !!(user && ref && ref.obj && spaceHeadsOf(ref.obj).includes(user.email)); }
+function iAmTeamAdmin(){ const me = currentUser(); return !!me && (me.super || roleRank(roleOf(me, TEAM)) <= roleRank("admin")); }
 function spaceRoleOf(user, ref){
   if(!user) return "";
   const teamRole = roleOf(user, TEAM);
   if(!teamRole) return "";                     // not on the team at all -> no access
   if(roleRank(teamRole) <= roleRank("admin")) return teamRole;   // team Owners/Admins ALWAYS keep full power
   if(!ref) return teamRole;                    // team-level view -> team role
+  if(isSpaceHead(user, ref)) return "admin";   // 👑 head of this space (or of the space it sits in)
   const m = spaceMembers(ref);
   const sr = m[user.email];
   // "none" is an explicit "no access to this space" for a team member
@@ -5523,6 +5541,7 @@ function canViewSpace(ref){
   const teamRole = roleOf(currentUser(), TEAM);
   if(!teamRole) return false;
   if(roleRank(teamRole) <= roleRank("admin")) return true;   // owners/admins see everything
+  if(isSpaceHead(currentUser(), ref)) return true;
   const m = spaceMembers(ref);
   const sr = m[currentUser().email];
   if(sr === "none") return false;               // explicitly shut out of this space
@@ -17307,7 +17326,7 @@ function renderAll(){
           const rq = procCanManage(k) ? (k.requests||[]).length : 0;
           return { label: "⚙️ Process improvements" + (procHasAccess(k) ? "" : " 🔒") + (rq ? " · 🙋 " + rq : ""), onClick:()=> navToSpace(k) };
         });
-        if(editMode){
+        if(editMode || canInSpace("admin", csRef(cs))){
           const doDelete = ()=>{
             const msg = cs.type==="bugs"
               ? "Remove \u201C"+cs.name+"\u201D? Its tickets are NOT deleted \u2014 they move to the main Bugs space."
@@ -24249,7 +24268,7 @@ let ssRef = null, ssTab = "people";
 function openSpaceSettings(ref){
   if(!ref){ return; }
   ssRef = ref; ssTab = "people";
-  if(!canManageSpacePeople()){ toast("You need Admin access in this space to manage it"); return; }
+  if(!canInSpace("admin", ref)){ toast("Only this space's 👑 heads and team Admins can manage it"); return; }
   $("ssettings-crumb").textContent = "\u2699\uFE0F " + ((ref.kind==="roadmap")?"ROADMAP SETTINGS":"SPACE SETTINGS") + " \u203A " + ref.name.toUpperCase();
   $("ssettings-title").textContent = ref.name;
   document.querySelectorAll("#spacesettings-overlay .ss-tab").forEach(t=>{
@@ -24280,6 +24299,7 @@ function drawSpaceSettings(){
 }
 function drawSpacePeople(body){
   const ref = ssRef;
+  drawSpaceHeads(ref, body);
   // access-level control
   const arow = document.createElement("div"); arow.className = "ss-access-row";
   const alab = document.createElement("div"); alab.style.cssText = "font-weight:600;color:var(--ink);font-size:13px"; alab.textContent = "Access:";
@@ -24322,6 +24342,12 @@ function drawSpacePeople(body){
       const tag = document.createElement("span"); tag.className = "ss-mrole";
       tag.textContent = (u.super ? "Owner" : roleLabel(teamRole)) + " (team)";
       row.appendChild(tag);
+    } else if(isSpaceHead(u, ref)){
+      const tag = document.createElement("span"); tag.className = "ss-mrole"; tag.textContent = "👑 Head";
+      row.appendChild(tag);
+    } else if(!iAmTeamAdmin() && members[u.email]==="admin"){   /* only team Owners/Admins change a space Admin */
+      const tag = document.createElement("span"); tag.className = "ss-mrole"; tag.textContent = "Admin (this space)";
+      row.appendChild(tag);
     } else {
       const sel = document.createElement("select"); sel.className = "person-role";
       // options: "team default" + each role
@@ -24330,7 +24356,7 @@ function drawSpacePeople(body){
       // in a private space, "not added" means no access; elsewhere it means team default
       def.textContent = isPrivate ? "\u2014 Not added (no access)" : "Team default (" + roleLabel(teamRole) + ")";
       sel.appendChild(def);
-      ROLES.forEach(r=>{ if(r==="owner") return; const o=document.createElement("option"); o.value=r; o.textContent="This space: "+ROLE_LABEL[r]; sel.appendChild(o); });
+      ROLES.forEach(r=>{ if(r==="owner" || (r==="admin" && !iAmTeamAdmin())) return; const o=document.createElement("option"); o.value=r; o.textContent="This space: "+ROLE_LABEL[r]; sel.appendChild(o); });   /* heads give up to Editor */
       // explicit "No access" for OPEN/LIMITED spaces (private already excludes via "not added")
       if(!isPrivate){
         const no = document.createElement("option"); no.value = "none"; no.textContent = "\uD83D\uDEAB No access to this space";
@@ -24346,11 +24372,53 @@ function drawSpacePeople(body){
     body.appendChild(row);
   });
 }
+/* 👑 heads row at the top of People: team Owners/Admins appoint and remove; everyone else sees who they are */
+function drawSpaceHeads(ref, body){
+  if(!ref || !ref.obj) return;
+  const box = document.createElement("div"); box.className = "ss-heads";
+  const own = Array.isArray(ref.obj.heads) ? ref.obj.heads : [];
+  const inherited = !own.length ? spaceHeadsOf(ref.obj) : [];
+  const t = document.createElement("div"); t.className = "ss-heads-t";
+  t.textContent = "👑 Heads of this " + (ref.kind==="roadmap" ? "roadmap" : "space");
+  box.appendChild(t);
+  const sub = document.createElement("div"); sub.className = "hint";
+  sub.textContent = "Heads manage this space and every space inside it: people and their roles (up to Editor), who can see it, and Process improvements access. They can’t delete it." + (inherited.length ? " Right now its heads come from the space it sits in." : "");
+  box.appendChild(sub);
+  const chips = document.createElement("div"); chips.className = "ss-heads-c";
+  const name = em=>{ const u = USERS.find(x=> x.email===em); return u ? userDisplayName(u) : em; };
+  (own.length ? own : inherited).forEach(em=>{
+    const c = document.createElement("span"); c.className = "ss-head"; c.textContent = "👑 " + name(em) + (own.length ? "" : " (from parent)");
+    if(own.length && iAmTeamAdmin()){
+      const x = document.createElement("button"); x.textContent = "×"; x.title = "Remove as head";
+      x.onclick = ()=>{ ref.obj.heads = own.filter(e=> e!==em); if(!ref.obj.heads.length) delete ref.obj.heads; persistSpace(ref); drawSpaceSettings(); renderAll(); };
+      c.appendChild(x);
+    }
+    chips.appendChild(c);
+  });
+  if(!own.length && !inherited.length){ const e = document.createElement("span"); e.className = "hint"; e.textContent = "No head yet."; chips.appendChild(e); }
+  box.appendChild(chips);
+  if(iAmTeamAdmin()){
+    const cand = USERS.filter(u=> (u.super || (u.teams && u.teams[TEAM])) && !own.includes(u.email) && !u.super && roleRank(roleOf(u, TEAM)) > roleRank("admin"));
+    if(cand.length){
+      const r = document.createElement("div"); r.className = "ss-access-row";
+      const sel = document.createElement("select"); sel.className = "person-role"; sel.style.flex = "1";
+      const o0 = document.createElement("option"); o0.value = ""; o0.textContent = "＋ Appoint a head…"; sel.appendChild(o0);
+      cand.forEach(u=>{ const o = document.createElement("option"); o.value = u.email; o.textContent = userDisplayName(u) + " · " + u.email; sel.appendChild(o); });
+      sel.onchange = ()=>{ if(!sel.value) return; ref.obj.heads = own.concat(sel.value); persistSpace(ref); drawSpaceSettings(); renderAll(); toast(name(sel.value) + " is now a head of " + ref.name); };
+      r.appendChild(sel); box.appendChild(r);
+    }
+  }
+  body.appendChild(box);
+}
 function drawSpacePerms(body){
   const note = document.createElement("div");
   note.className = "ss-note";
   note.textContent = "What each role can do inside this space. Space roles are set on the People tab; a person's effective role here is their space role, or their team role if none is set.";
   body.appendChild(note);
+  const _hd = ssRef && ssRef.obj ? spaceHeadsOf(ssRef.obj) : [];
+  const hn = document.createElement("div"); hn.className = "ss-note";
+  hn.textContent = "👑 Heads (" + (_hd.length ? _hd.map(em=>{ const u = USERS.find(x=> x.email===em); return u ? userDisplayName(u) : em; }).join(", ") : "none yet") + ") act as Admin here and in every space inside it, but can only give roles up to Editor and can’t delete the space. Team Owners and Admins appoint heads on the People tab.";
+  body.appendChild(hn);
   const _pn = (ssRef && ssRef.kind==="roadmap") ? "roadmap" : "space";
   const caps = [
     {label:"View this "+_pn,        roles:["owner","admin","editor","commenter","viewer"]},
