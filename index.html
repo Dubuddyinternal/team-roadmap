@@ -12620,8 +12620,11 @@ function mktScheduleMap(mk){
   (CSPACES.list||[]).filter(x=> x.parent===mk.id && canViewSpace(csRef(x))).forEach(x=>{
     if(x.type==="social"){
       const ln = { id:"mv-"+x.id, name:"🎯 " + x.name + " · Schedule", kind:"project" }; lanes.push(ln);
-      (x.events||[]).filter(e=> e.date).forEach(e=> add(ln.id, x.id+":"+e.id, (e.title || "Post") + (e.time ? " · " + e.time : ""), e.date, e.date, x.name + " → Schedule", { owner: e.owner || undefined, color:"#8A55C2" }));
-      (x.cards||[]).filter(c=> c.scheduled && !c.eventId).forEach(c=> add(ln.id, x.id+":c:"+c.id, (c.pre && c.pre.title) || c.idea || "Post", c.scheduled, c.scheduled, x.name + " → Content Process", { color:"#8A55C2" }));
+      mktSocialPosts(x).forEach(c=>{
+        const key = x.id+":"+c.id;
+        add(ln.id, key, c.title, c.date, c.date, x.name + " → Schedule", { color:"#8A55C2" });
+        if(c.published) byTid["mktv:"+key].task.status = "done";   /* ✓ once it's out, not just because the day passed */
+      });
     } else if(x.type==="campaign"){
       const ln = { id:"mv-"+x.id, name:"📣 " + x.name, kind:"project" }; lanes.push(ln);
       const d = x.details || {};
@@ -12634,6 +12637,24 @@ function mktScheduleMap(mk){
   });
   m.lanes = lanes; m.items = items;
   return { m, byTid };
+}
+/* a Social Media space's scheduled posts, as its Schedule tab shows them. The space (social-space.js) keeps its
+   cards in space.sx; only cards on the board count (an idea's card shows once the idea is accepted). A space
+   still on the older board kept dated posts in space.events; those count only when there are no sx cards. */
+function mktSocialPosts(x){
+  const out = [];
+  const S = (window.SX && SX.normalize) ? SX.normalize(x) : (x.sx || null);
+  if(S && Array.isArray(S.cards)){
+    const reg = S.reg || {}, vt = (reg.vtype || {}), ideas = S.ideas || [];
+    S.cards.filter(c=> c.scheduled && (!c.ideaId || !ideas.some(i=> i.id===c.ideaId && i.status!=="accepted"))).forEach(c=>{
+      const pl = (Array.isArray(c.platforms) && c.platforms.length ? c.platforms : [c.platform || "ig"]).map(k=> k==="yt" ? "YT" : k==="ig" ? "INSTA" : String(k).toUpperCase()).join("+");
+      const title = ((c.pre && c.pre.title) || c.idea || "Untitled") + " · " + pl + (c.vtype && vt[c.vtype] ? " " + vt[c.vtype] : "") + (c.time ? " · " + c.time : "");
+      out.push({ id: c.id, title, date: c.scheduled, published: c.stage==="published" || !!c.published });
+    });
+  }
+  if(!(S && Array.isArray(S.cards) && S.cards.length))   /* only for a space still on the older board, so nothing shows twice */
+    (x.events||[]).filter(e=> e.date).forEach(e=> out.push({ id:"ev-"+e.id, title:(e.title || "Post") + (e.time ? " · " + e.time : ""), date:e.date, published:false }));
+  return out;
 }
 function mktTimelinePane(mk){
   const wrap = $("content");
@@ -12669,7 +12690,7 @@ function mktRenderSummary(pane, show){
   const inside = (CSPACES.list||[]).filter(x=> x.parent===mk.id && x.type!=="procdept" && canViewSpace(csRef(x)));
   const c1 = card("📂 Spaces inside");
   inside.forEach(x=>{
-    const n = x.type==="campaign" ? (x.items||[]).length + " item(s)" : x.type==="social" ? (x.cards||[]).length + " in Content Process" : csTypeLabel(x.type);
+    const n = x.type==="campaign" ? (x.items||[]).length + " item(s)" : x.type==="social" ? mktSocialPosts(x).filter(c=> !c.published && c.date >= todayISO()).length + " post(s) coming up" : csTypeLabel(x.type);
     line(c1, x.name + " ↗", n, ()=> navToSpace(x));
   });
   if(!inside.length) line(c1, "Nothing inside yet", "Add spaces from ⋯ → Settings → Spaces inside");
