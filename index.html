@@ -2771,6 +2771,9 @@ body.rm-chart #pane-work > .controls{display:none}
 .proc-depts{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 18px}
 .proc-dept{border:1px solid var(--line-strong);background:var(--paper);border-radius:99px;padding:6px 12px;font-size:12.5px;cursor:pointer}
 .proc-dept:hover{border-color:var(--indigo)}
+.rmg-wk.warn{background:color-mix(in srgb,#C8473B 9%,var(--paper))}
+.rmg-wk.warn{position:relative;z-index:4}
+.rmg-wkwarn{display:inline-block;margin-right:5px;padding:0 6px;border-radius:99px;background:#C8473B;color:#fff;font-family:var(--mono);font-size:10px;font-weight:700;cursor:help}
 .mkt-tltop{display:flex;align-items:center;gap:12px;margin:0 0 8px}
 .mkt-tltop .hint{flex:1}
 .mkt-line{display:flex;align-items:baseline;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
@@ -12636,7 +12639,7 @@ function mktScheduleMap(mk){
       mktSocialPosts(x).forEach(c=>{
         const key = x.id+":"+c.id;
         add(ln.id, key, c.title, c.date, c.date, x.name + " → Schedule", { color:"#8A55C2" });
-        if(c.published) byTid["mktv:"+key].task.status = "done";   /* ✓ once it's out, not just because the day passed */
+        byTid["mktv:"+key].task.status = c.published ? "done" : "planned";   /* ✓ once it's out, not just because the day passed */
       });
     } else if(x.type==="campaign"){
       const ln = { id:"mv-"+x.id, name:"📣 " + x.name, kind:"project" }; lanes.push(ln);
@@ -12649,7 +12652,50 @@ function mktScheduleMap(mk){
     }
   });
   m.lanes = lanes; m.items = items;
+  const socs = mktMergeable(mk).filter(x=> x.type==="social" && mktMerged(mk, x) && canViewSpace(csRef(x)));
+  m.weekWarn = socs.length ? (mon=> socs.flatMap(x=> mktSlaGaps(x, mon).map(g=> (socs.length > 1 ? x.name + ": " : "") + g))) : null;
   return { m, byTid };
+}
+/* Social Media → Our agreement, week by week: the content goals ("per week", or "per day" × 7) against the posts
+   scheduled that week (Mon–Sun), by platform and type. Posting time and audience numbers (views, likes…) aren't
+   checked. Weeks more than 4 weeks ahead aren't flagged yet. Returns e.g. ["YouTube: 1 of 2 long videos", …]. */
+const MKT_SLA_MATCH = {
+  longs:{ pl:"yt", label:"long videos", keys:["long"], words:["long"] },
+  shorts:{ pl:"yt", label:"shorts", keys:["short"], words:["short"] },
+  lives:{ pl:"yt", label:"live sessions", keys:["live"], words:["live"] },
+  webinars:{ pl:"yt", label:"webinars", keys:[], words:["webinar"] },
+  community:{ pl:"yt", label:"community posts", keys:[], words:["community"] },
+  reels:{ pl:"ig", label:"reels", keys:["reel"], words:["reel"] },
+  carousels:{ pl:"ig", label:"carousels", keys:["carousel"], words:["carousel"] },
+  images:{ pl:"ig", label:"single-image posts", keys:["image"], words:["image","poster"] },
+  stories:{ pl:"ig", label:"stories", keys:[], words:["story"] },
+  iglives:{ pl:"ig", label:"live sessions", keys:["live"], words:["live"] },
+  posts:{ pl:null, label:"posts", keys:null, words:null },
+};
+function mktSlaGaps(x, mon){
+  const monN = dNum(mon), todayN = dNum(todayISO());
+  if(monN > todayN + 28) return [];
+  const S = (window.SX && SX.normalize) ? SX.normalize(x) : x.sx; if(!S) return [];
+  const T = (typeof SOCIAL_TARGETS!=="undefined" && SOCIAL_TARGETS[x.id]) || { goals: S.goals };
+  const goals = (T.goals||[]).filter(g=> MKT_SLA_MATCH[g.metric] && (g.period==="week" || g.period==="day") && Number(g.target) > 0);
+  if(!goals.length) return [];
+  const vt = (S.reg && S.reg.vtype) || {}, ideas = S.ideas || [];
+  const week = (S.cards||[]).filter(c=> c.scheduled && dNum(c.scheduled) >= monN && dNum(c.scheduled) <= monN + 6
+    && (!c.ideaId || !ideas.some(i=> i.id===c.ideaId && i.status!=="accepted")));
+  const platsOf = c=> Array.isArray(c.platforms) && c.platforms.length ? c.platforms : [c.platform || "ig"];
+  const out = [];
+  goals.forEach(g=>{
+    const mm = MKT_SLA_MATCH[g.metric], pl = g.platform;
+    const need = Number(g.target) * (g.period==="day" ? 7 : 1);
+    const have = week.filter(c=>{
+      if(!platsOf(c).includes(pl)) return false;
+      if(!mm.keys) return true;
+      const lab = String(vt[c.vtype] || c.vtype || "").toLowerCase();
+      return mm.keys.includes(c.vtype) || mm.words.some(w=> lab.includes(w));
+    }).length;
+    if(have < need) out.push((pl==="yt" ? "YouTube" : "Instagram") + ": " + have + " of " + need + " " + mm.label + " scheduled");
+  });
+  return out;
 }
 /* a Social Media space's scheduled posts, as its Schedule tab shows them. The space (social-space.js) keeps its
    cards in space.sx; only cards on the board count (an idea's card shows once the idea is accepted). A space
@@ -13691,6 +13737,13 @@ function renderRmapGantt(m, wrap, byTid){
     const c = document.createElement("div"); c.className = "rmg-wk" + (inRange && w===tw ? " now" : "");
     c.style.gridColumn = (2 + w*7) + " / span 7";
     c.innerHTML = "Week " + (w+1) + "<small>" + rmlFmt(dISO(w0 + w*7)) + (nW<=9 ? " – " + rmlFmt(dISO(w0 + w*7 + 6)) : "") + "</small>";
+    /* a chart can flag a week (m.weekWarn(monday) → list of problems): ⚠ on its header, the list on hover */
+    const _ww = m.weekWarn ? m.weekWarn(dISO(w0 + w*7)) : null;
+    if(_ww && _ww.length){
+      const wb = document.createElement("span"); wb.className = "rmg-wkwarn"; wb.textContent = "⚠ " + _ww.length;
+      wb.title = "Short of what was agreed this week:\n• " + _ww.join("\n• ");
+      c.insertBefore(wb, c.firstChild); c.classList.add("warn");   /* on the "Week n" line, so it stays inside the header */
+    }
     grid.appendChild(c);
   }
   const weekPx = ()=> (grid.querySelector(".rmg-wk")||{}).offsetWidth || 0;
