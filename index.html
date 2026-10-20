@@ -2799,7 +2799,11 @@ body.rm-chart #pane-work > .controls{display:none}
 .mag-in{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:12.5px;color:var(--muted)}
 .mag-in input{width:110px;padding:4px 8px;border:1px solid var(--line-strong);border-radius:6px;font:inherit}
 .mag-edit{border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.mag-er{display:grid;grid-template-columns:minmax(160px,2fr) 110px 80px 120px minmax(170px,1.6fr) 34px;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line)}
+.mag-ach{display:flex;flex-direction:column;line-height:1.2}
+.mag-ach b{font-family:var(--mono);font-size:13px}
+.mag-ach small{font-size:11px;color:var(--muted)}
+.mag-ach.ok b{color:var(--done)}
+.mag-er{display:grid;grid-template-columns:minmax(150px,2fr) 110px 130px 80px 120px minmax(170px,1.6fr) 34px;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line)}
 .mag-er:last-child{border-bottom:0}
 .mag-eh{background:var(--paper);font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .mag-er input,.mag-er select{width:100%;padding:6px 8px;border:1px solid var(--line-strong);border-radius:7px;font:inherit;font-size:13px;background:var(--card);min-width:0}
@@ -12984,17 +12988,23 @@ function mktTimelinePane(mk){
      posts      — posts published in the period, across Marketing's Social Media spaces
      campaigns  — campaigns inside Marketing that start in the period
    ================================================================ */
-const MKT_AG_SOURCES = [["hand","Typed in by hand"],["proc_out","Process improvements rolled out"],["proc_sent","Process improvements sent"],["posts","Posts published (Social Media)"],["campaigns","Campaigns started"]];
+const MKT_AG_SOURCES = [["hand","Typed in by hand"],["cashfree","Revenue from Cashfree (sales − refunds)"],["proc_out","Process improvements rolled out"],["proc_sent","Process improvements sent"],["posts","Posts published (Social Media)"],["campaigns","Campaigns started"]];
 const MKT_AG_PERIODS = [["week","per week"],["month","per month"],["quarter","per quarter"]];
 const MKT_AG_UNITS = [["count","count"],["inr","₹"],["pct","%"]];
 function mktAgreement(mk){
   if(!mk.agreement) mk.agreement = { goals:[
-    { id:"ag-rev",   name:"Overall revenue",      target:null, unit:"inr",   period:"month",   source:"hand" },
+    { id:"ag-rev",   name:"Overall revenue",      target:null, unit:"inr",   period:"month",   source:"cashfree" },
     { id:"ag-games", name:"Games",                 target:null, unit:"count", period:"month",   source:"hand" },
     { id:"ag-proc",  name:"Processes improved",    target:null, unit:"count", period:"quarter", source:"proc_out" },
     { id:"ag-posts", name:"Posts published",       target:null, unit:"count", period:"week",    source:"posts" },
   ], manual:{} };
-  mk.agreement.goals = mk.agreement.goals || []; mk.agreement.manual = mk.agreement.manual || {};
+  mk.agreement.goals = mk.agreement.goals || []; mk.agreement.manual = mk.agreement.manual || {}; mk.agreement.cache = mk.agreement.cache || {};
+  /* Overall revenue now comes from Cashfree — unless someone already typed figures in by hand */
+  if(!mk.agreement.revCf){
+    const rv = mk.agreement.goals.find(g=> g.id==="ag-rev" && g.source==="hand");
+    if(rv && !Object.keys(mk.agreement.manual).some(k=> k.indexOf("ag-rev:")===0)) rv.source = "cashfree";
+    mk.agreement.revCf = true;
+  }
   return mk.agreement;
 }
 function mktPeriodStart(period){
@@ -13016,6 +13026,7 @@ function mktGoalValue(mk, g){
   const from = mktPeriodStart(g.period), to = mktPeriodEnd(g.period), inP = d=> !!d && d >= from && d <= to;
   const kids = (CSPACES.list||[]).filter(x=> x.parent===mk.id);
   if(g.source==="hand"){ const v = mktAgreement(mk).manual[g.id + ":" + from]; return v==null ? 0 : Number(v); }
+  if(g.source==="cashfree"){ mktCashfreeFetch(mk, from, to); const c = mktAgreement(mk).cache["cf:" + from + ":" + to]; return c ? Number(c.v) : 0; }
   if(g.source==="proc_out" || g.source==="proc_sent"){
     return kids.filter(x=> x.type==="procdept").flatMap(procEntries).filter(i=> g.source==="proc_sent" ? inP(i.created) : inP(i.stageAt && i.stageAt.rolledout)).length;
   }
@@ -13025,6 +13036,34 @@ function mktGoalValue(mk, g){
   }
   if(g.source==="campaigns") return kids.filter(x=> x.type==="campaign" && x.details && inP(x.details.start)).length;
   return 0;
+}
+/* Cashfree sales (Accounts → Sales) can only be read with the Accounts permission: whoever has it works the
+   period's total out (successful payments, refunds taken off) and it's kept on the agreement, so everyone in
+   Marketing sees the number — with when it was last worked out — but not the sales themselves. */
+const MKT_CF = {};   /* per period this session: "loading" | "done" */
+function mktCashfreeFetch(mk, from, to){
+  const key = "cf:" + from + ":" + to;
+  if(MKT_CF[key] || !SUPA || window.LOCAL_MODE || !hasPerm("accounts")) return;
+  MKT_CF[key] = "loading";
+  const next = dISO(dNum(to) + 1);
+  SUPA.from("acc_sales").select("txn_amount,refund_amount,refunded,status").eq("status","SUCCESS")
+    .gte("txn_time", from + "T00:00:00+05:30").lt("txn_time", next + "T00:00:00+05:30").limit(20000)
+    .then(r=>{
+      MKT_CF[key] = "done";
+      if(!r || r.error) return;
+      const rows = r.data || [];
+      const v = Math.round(rows.reduce((a, x)=> a + Number(x.txn_amount||0) - (x.refunded ? Number(x.refund_amount||0) : 0), 0));
+      const A = mktAgreement(mk), old = A.cache[key];
+      A.cache[key] = { v, at: new Date().toISOString(), n: rows.length };
+      if(!old || old.v !== v) pushLater();
+      if(view==="disc" && (currentDisc()||{}).id===mk.id) renderAll();
+    }).catch(()=>{ MKT_CF[key] = "done"; });
+}
+function mktCfNote(mk, g){
+  if(g.source!=="cashfree") return "";
+  const c = mktAgreement(mk).cache["cf:" + mktPeriodStart(g.period) + ":" + mktPeriodEnd(g.period)];
+  if(c) return " · from Cashfree, " + c.n + " sale" + (c.n===1 ? "" : "s") + ", updated " + new Date(c.at).toLocaleString("en-IN", { day:"numeric", month:"short", hour:"numeric", minute:"2-digit" });
+  return hasPerm("accounts") ? " · loading from Cashfree…" : " · waits for someone with Accounts access to open this page";
 }
 function mktFmtVal(g, v){ return g.unit==="inr" ? "₹" + Number(v||0).toLocaleString("en-IN") : g.unit==="pct" ? (v||0) + "%" : Number(v||0).toLocaleString(); }
 const MKT_PERIOD_NOW = { week:"this week", month:"this month", quarter:"this quarter" };
@@ -13045,7 +13084,7 @@ function mktAgreementSummary(mk, card){
     row.querySelector(".mag-top b").textContent = g.name + " · " + mktFmtVal(g, t) + " " + (MKT_AG_PERIODS.find(x=> x[0]===g.period)||["","per month"])[1];
     row.querySelector(".mag-top span").textContent = mktFmtVal(g, v) + " / " + mktFmtVal(g, t) + " " + MKT_PERIOD_NOW[g.period];
     const bar = row.querySelector(".mag-bar i"); bar.style.width = pc + "%"; if(v >= t) bar.classList.add("ok");
-    row.querySelector(".mag-foot span:first-child").textContent = Math.round(pc) + "%" + (g.source==="hand" ? " · typed in by hand" : " · " + (MKT_AG_SOURCES.find(x=> x[0]===g.source)||["",""])[1].toLowerCase());
+    row.querySelector(".mag-foot span:first-child").textContent = Math.round(pc) + "%" + (g.source==="hand" ? " · typed in by hand" : g.source==="cashfree" ? mktCfNote(mk, g) : " · " + (MKT_AG_SOURCES.find(x=> x[0]===g.source)||["",""])[1].toLowerCase());
     row.querySelector(".mag-foot span:last-child").textContent = v >= t ? "reached 🎉" : mktFmtVal(g, t - v) + " to go · " + left + " day" + (left===1 ? "" : "s") + " left";
     if(g.source==="hand" && editMode){
       const f = document.createElement("div"); f.className = "mag-in";
@@ -13074,19 +13113,30 @@ function mktAgreementPane(mk){
   const draw = ()=>{
     list.innerHTML = "";
     const hr = document.createElement("div"); hr.className = "mag-er mag-eh";
-    ["Target","Number","Unit","Period","How it's counted",""].forEach(t=>{ const c = document.createElement("span"); c.textContent = t; hr.appendChild(c); });
+    ["Target","Number","Achieved","Unit","Period","How it's counted",""].forEach(t=>{ const c = document.createElement("span"); c.textContent = t; hr.appendChild(c); });
     list.appendChild(hr);
     D.forEach((g, i)=>{
       const r = document.createElement("div"); r.className = "mag-er";
       const nm = document.createElement("input"); nm.type = "text"; nm.value = g.name; nm.disabled = !editMode; nm.oninput = ()=> g.name = nm.value;
       const tg = document.createElement("input"); tg.type = "number"; tg.min = "0"; tg.step = "any"; tg.placeholder = "—"; tg.value = g.target==null ? "" : g.target; tg.disabled = !editMode;
       tg.oninput = ()=> g.target = tg.value==="" ? null : Number(tg.value);
+      /* what's been done so far this period (as saved — change the target and save to see it against the new one) */
+      const ac = document.createElement("div"); ac.className = "mag-ach";
+      const saved = A.goals.find(x=> x.id===g.id);
+      if(saved){
+        const v = mktGoalValue(mk, saved), t = Number(saved.target)||0;
+        ac.innerHTML = "<b></b><small></small>";
+        ac.firstChild.textContent = mktFmtVal(saved, v);
+        ac.lastChild.textContent = MKT_PERIOD_NOW[saved.period] + (t ? " · " + Math.round(Math.min(100, v / t * 100)) + "%" : "");
+        if(t && v >= t) ac.classList.add("ok");
+        ac.title = (saved.source==="hand" ? "Typed in on the Summary" : (MKT_AG_SOURCES.find(x=> x[0]===saved.source)||["",""])[1]) + mktCfNote(mk, saved);
+      } else ac.textContent = "—";
       const un = sel(MKT_AG_UNITS, g.unit, !editMode); un.onchange = ()=> g.unit = un.value;
       const pe = sel(MKT_AG_PERIODS, g.period, !editMode); pe.onchange = ()=> g.period = pe.value;
       const so = sel(MKT_AG_SOURCES, g.source, !editMode); so.onchange = ()=> g.source = so.value;
       const x = document.createElement("button"); x.className = "rml-mini"; x.textContent = "×"; x.title = "Remove"; x.style.opacity = "1";
       x.onclick = ()=>{ D.splice(i, 1); draw(); }; x.disabled = !editMode;
-      r.append(nm, tg, un, pe, so, x); list.appendChild(r);
+      r.append(nm, tg, ac, un, pe, so, x); list.appendChild(r);
     });
   };
   draw();
