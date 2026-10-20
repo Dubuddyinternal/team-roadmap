@@ -2803,6 +2803,12 @@ body.rm-chart #pane-work > .controls{display:none}
 .rmg-lfold{border:0;background:transparent;cursor:pointer;font-size:12px;color:var(--muted);padding:0 4px 0 0;margin-left:-4px;line-height:1}
 .rmg-lfold:hover{color:var(--ink)}
 .rmg-lfold{flex:none}.rmg-lfold + .rmg-pname{margin-right:auto}
+.rmm-who{border:1px solid var(--line-strong);background:var(--card);border-radius:9px;padding:7px 12px;font-size:14px;cursor:pointer;max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rmm-pop{position:fixed;z-index:500;background:var(--card);border:1px solid var(--line-strong);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.16);padding:6px;min-width:240px;max-height:380px;overflow:auto;font-weight:400}
+.rmm-pop-top{display:flex;gap:6px;padding:4px 4px 8px;border-bottom:1px solid var(--line);margin-bottom:4px}
+.rmm-pop-top button{border:1px solid var(--line-strong);background:var(--paper);border-radius:7px;padding:4px 10px;font-size:12.5px;cursor:pointer}
+.rmm-pop-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;cursor:pointer;font-size:14px}
+.rmm-pop-row:hover{background:var(--indigo-soft)}
 .rmm-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px;font-size:14px;font-weight:600}
 .rmm-bar select{max-width:240px}.rmm-bar .hint{font-weight:400}
 .lms-tgt{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:14px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper)}
@@ -15831,7 +15837,8 @@ function personMatches(text, u){
   const nm = userDisplayName(u).toLowerCase().trim(), first = nm.split(/\s+/)[0], mail = (u.email||"").toLowerCase().split("@")[0];
   return (nm && T.includes(nm)) || (first.length >= 3 && T.includes(first)) || (mail.length >= 3 && T.includes(mail));
 }
-const RMAP_MERGED = {}, RMAP_PERSON = {};
+const RMAP_MERGED = {}, RMAP_PERSON = {};   /* RMAP_PERSON[roadmap id] = [emails] for 👤 Show */
+let RMM_REOPEN = null;   /* keep the 👤 list open while ticking people */
 function rmapMergedPane(own, wrap, reg){
   const C = RMAP_MERGED[own.id] || (RMAP_MERGED[own.id] = { id:"rmm-"+own.id, view:"gantt", gWin: own.gWin || 0, spaceOf:"merge" });
   C.name = own.name;
@@ -15863,14 +15870,16 @@ function rmapMergedPane(own, wrap, reg){
   const ownIds = new Set(own.lanes.map(l=> l.id));
   own.lanes.forEach(ln=>{ lanes.push(ln); if(!ln.parent) label[ln.id] = ln.name==="Planning" ? "🙋 Own plan" : "🙋 " + ln.name; });
   own.items.forEach(it=> items.push(it));
-  /* 👤 only one person's rows (and the sections they're in) */
-  const who = RMAP_PERSON[own.id] ? USERS.find(u=> u.email===RMAP_PERSON[own.id]) : null;
-  const I = who ? items.filter(it=> personMatches(rowPeople(it, byTid[it.tid]), who)) : items;
+  /* 👤 only the chosen people's rows (any of them), and the sections they're in */
+  const picked = (Array.isArray(RMAP_PERSON[own.id]) ? RMAP_PERSON[own.id] : []).map(e=> USERS.find(u=> u.email===e)).filter(Boolean);
+  const who = picked.length ? picked : null;
+  const I = who ? items.filter(it=>{ const txt = rowPeople(it, byTid[it.tid]); return picked.some(u=> personMatches(txt, u)); }) : items;
   /* sections with rows in them (and the sections above those); the spaces' empty sections are left out */
   const keep = new Set();
   I.forEach(it=>{ let id = it.lane, g = 0; while(id && g++ < 12){ keep.add(id); const l = lanes.find(x=> x.id===id); id = l && l.parent; } });
   const L = lanes.filter(l=> keep.has(l.id) || (!who && (ownIds.has(l.id) || /^mg:[^:]+$/.test(l.id))));
-  C.lanes = L.length ? L : [{ id:"mg-none", name: who ? "Nothing with " + userDisplayName(who) + "’s name" : "Nothing yet", kind:"project" }];
+  const names = picked.map(u=> userDisplayName(u));
+  C.lanes = L.length ? L : [{ id:"mg-none", name: who ? "Nothing with " + names.join(" or ") + "’s name" : "Nothing yet", kind:"project" }];
   C.items = I;
   C.mapOf = ln=> ownIds.has(ln.id) ? own : null;
   C.linkStore = own;
@@ -15883,16 +15892,37 @@ function rmapMergedPane(own, wrap, reg){
   /* the filter bar */
   const bar = document.createElement("div"); bar.className = "rmm-bar";
   const lab = document.createElement("span"); lab.textContent = "👤 Show";
-  const sel = document.createElement("select"); sel.className = "person-role";
-  const o0 = document.createElement("option"); o0.value = ""; o0.textContent = "Everyone"; sel.appendChild(o0);
   const me = currentUser();
   const team = USERS.filter(u=> !u.super && u.teams && u.teams[TEAM]).sort((a,b)=> userDisplayName(a).localeCompare(userDisplayName(b)));
   if(me && !team.some(u=> u.email===me.email)) team.unshift(me);
-  team.forEach(u=>{ const o = document.createElement("option"); o.value = u.email; o.textContent = (me && u.email===me.email ? "Only me — " : "") + userDisplayName(u); sel.appendChild(o); });
-  sel.value = who ? who.email : "";
-  sel.onchange = ()=>{ if(sel.value) RMAP_PERSON[own.id] = sel.value; else delete RMAP_PERSON[own.id]; renderAll(); };
+  if(me){ const i = team.findIndex(u=> u.email===me.email); if(i > 0) team.unshift(team.splice(i, 1)[0]); }   /* me first */
+  const set = (list, keepOpen)=>{ if(list.length) RMAP_PERSON[own.id] = list; else delete RMAP_PERSON[own.id]; if(keepOpen) RMM_REOPEN = own.id; document.querySelectorAll(".rmm-pop").forEach(x=> x.remove()); renderAll(); };
+  const sel = document.createElement("button"); sel.className = "rmm-who";
+  sel.textContent = !who ? "Everyone ▾" : (names.length <= 2 ? names.join(", ") : names.slice(0, 2).join(", ") + " +" + (names.length - 2)) + " ▾";
+  sel.onclick = e=>{
+    e.stopPropagation();
+    document.querySelectorAll(".rmm-pop").forEach(x=> x.remove());
+    const pop = document.createElement("div"); pop.className = "rmm-pop";
+    const cur = new Set(picked.map(u=> u.email));
+    const top = document.createElement("div"); top.className = "rmm-pop-top";
+    const all = document.createElement("button"); all.textContent = "Everyone"; all.onclick = ()=>{ pop.remove(); set([]); };
+    const mine = document.createElement("button"); mine.textContent = "Only me"; mine.onclick = ()=>{ pop.remove(); if(me) set([me.email]); };
+    top.append(all, mine); pop.appendChild(top);
+    team.forEach(u=>{
+      const r = document.createElement("label"); r.className = "rmm-pop-row";
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = cur.has(u.email);
+      cb.onchange = ()=>{ if(cb.checked) cur.add(u.email); else cur.delete(u.email); set(team.filter(x=> cur.has(x.email)).map(x=> x.email), true); };
+      const nm = document.createElement("span"); nm.textContent = userDisplayName(u) + (me && u.email===me.email ? " (me)" : "");
+      r.append(cb, nm); pop.appendChild(r);
+    });
+    const rr = sel.getBoundingClientRect();
+    Object.assign(pop.style, { left: rr.left + "px", top: (rr.bottom + 4) + "px" });
+    document.body.appendChild(pop);
+    setTimeout(()=> document.addEventListener("mousedown", function off(ev){ if(!pop.contains(ev.target)){ pop.remove(); document.removeEventListener("mousedown", off); } }), 0);
+  };
+  if(RMM_REOPEN===own.id){ RMM_REOPEN = null; setTimeout(()=> sel.click(), 0); }
   const hint = document.createElement("span"); hint.className = "hint";
-  hint.textContent = who ? I.length + " row" + (I.length===1 ? "" : "s") + " with " + userDisplayName(who) + "’s name" : "Each space’s Timeline, merged — change things where they live. ▾ minimizes a section.";
+  hint.textContent = who ? I.length + " row" + (I.length===1 ? "" : "s") + " with " + names.join(" or ") + "’s name" : "Each space’s Timeline, merged — change things where they live. ▾ minimizes a section.";
   bar.append(lab, sel, hint);
   wrap.appendChild(bar);
   renderRmapGantt(C, wrap, byTid);
