@@ -2802,9 +2802,6 @@ body.rm-chart #pane-work > .controls{display:none}
 .rmg-lfold{border:0;background:transparent;cursor:pointer;font-size:12px;color:var(--muted);padding:0 4px 0 0;margin-left:-4px;line-height:1}
 .rmg-lfold:hover{color:var(--ink)}
 .rmg-lfold{flex:none}.rmg-lfold + .rmg-pname{margin-right:auto}
-.proc-tl-tabs{display:inline-flex;gap:4px;padding:4px;border:1px solid var(--line);border-radius:12px;background:var(--card);margin:0 0 14px}
-.proc-tl-tab{border:0;background:transparent;padding:7px 16px;border-radius:9px;font-size:14px;font-weight:600;color:var(--muted);cursor:pointer}
-.proc-tl-tab.on{background:var(--indigo);color:#fff}
 .lms-tgt{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:14px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper)}
 .lms-tgt .lms-tn{width:64px;padding:4px 6px}.lms-tgt select{padding:4px 6px}
 .lms-ppl{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px;margin-top:6px}
@@ -13805,7 +13802,7 @@ function rmapViewOf(m){ return m && (m.view==="lanes" || m.view==="gantt" || m.v
 /* "gantt" and "swimlane" share the week grid, window controls and rows = m.lanes */
 function rmgIsGrid(m){ return !!m && (m.view==="gantt" || m.view==="swimlane"); }
 function rmlEnsureLanes(m, vw){
-  if(!Array.isArray(m.lanes) || !m.lanes.length) m.lanes = [{ id:"ln-"+Date.now().toString(36), name: {gantt:"Planning", swimlane:"Product", wbs:"Project"}[vw||m.view] || "Projects", kind:"project" }];
+  if(!Array.isArray(m.lanes) || !m.lanes.length) m.lanes = [{ id:"ln-"+Date.now().toString(36)+Math.random().toString(36).slice(2,6), name: {gantt:"Planning", swimlane:"Product", wbs:"Project"}[vw||m.view] || "Projects", kind:"project" }];
   return m.lanes;
 }
 function rmlLaneOf(m, it){ return m.lanes.find(l=>l.id===it.lane) || m.lanes[0]; }
@@ -14334,7 +14331,7 @@ function renderRmapGantt(m, wrap, byTid){
     fb.title = _fd ? "Show “" + ln.name + "”" : "Minimize “" + ln.name + "”";
     fb.onclick = e=>{ e.stopPropagation(); rmgSetFold(m, ln, !_fd); renderAll(); };
     lab.appendChild(fb);
-    const lt = document.createElement("span"); lt.className = "rmg-pname"; lt.textContent = ln.name; lab.appendChild(lt);
+    const lt = document.createElement("span"); lt.className = "rmg-pname"; lt.textContent = m.laneLabel ? m.laneLabel(ln) : ln.name; lab.appendChild(lt);
     const ct = document.createElement("span"); ct.className = "rmg-pct"; ct.textContent = all.length || ""; lab.appendChild(ct);
     if(ln.doc){
       const db = document.createElement("button"); db.className = "rmg-doc"; db.textContent = "📄 " + (ln.doc.name || "Document");
@@ -17821,31 +17818,39 @@ function procTopTimeline(cs){
   const wrap = $("content"), byTid = procByTid();
   const depts = (CSPACES.list||[]).filter(x=> x.type==="procdept" && procTarget(x)===cs);
   if(ideaGanttSync(cs) && editMode) pushLater();
-  /* two tabs: 👥 Team (each department's plan) and 🙋 Your own plan */
-  const sub = depts.length ? (PROC_TL[cs.id] || "team") : "own";
-  if(depts.length){
-    const bar = document.createElement("div"); bar.className = "proc-tl-tabs";
-    [["team","👥 Team"],["own","🙋 Your own plan"]].forEach(([k, l])=>{
-      const b = document.createElement("button"); b.className = "proc-tl-tab" + (sub===k ? " on" : ""); b.textContent = l;
-      b.onclick = ()=>{ if(sub===k) return; PROC_TL[cs.id] = k; renderAll(); };
-      bar.appendChild(b);
-    });
-    wrap.appendChild(bar);
-  }
-  if(sub==="team"){
-    depts.forEach(d=>{
-      const m = procDeptGantt(d);
-      m.items = m.items.filter(it=> byTid[it.tid]);
-      renderRmapGantt(m, wrap, byTid);
-    });
-    return;
-  }
+  /* one chart: each department's plan (its rows labelled with the department, edited right here), then this space's own */
   const own = discGantt(cs);
-  own.name = depts.length ? "Your own plan" : "Timeline";
   own.items = own.items.filter(it=> byTid[it.tid]);
-  renderRmapGantt(own, wrap, byTid);
+  const m = PROC_ALL[cs.id] || (PROC_ALL[cs.id] = { id:"procv-"+cs.id, view:"gantt", gWin:0, spaceOf: cs.id });
+  m.name = "⚙️ " + cs.name + " — Timeline";
+  const lanes = [], items = [], home = {}, label = {};
+  /* charts made in the same instant could share a row id: give a clashing row a new one (and move its tasks) */
+  const seen = new Set(own.lanes.map(l=> l.id)); let fixed = false;
+  depts.forEach(d=>{ const g = procDeptGantt(d); g.lanes.forEach(ln=>{
+    if(seen.has(ln.id)){ const nid = "ln-"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+      g.items.forEach(it=>{ if(it.lane===ln.id) it.lane = nid; }); g.lanes.forEach(l=>{ if(l.parent===ln.id) l.parent = nid; }); ln.id = nid; fixed = true; }
+    seen.add(ln.id); }); });
+  if(fixed) pushLater();
+  depts.forEach(d=>{
+    const g = procDeptGantt(d), nm = procDeptName(d.id);
+    g.items = g.items.filter(it=> byTid[it.tid]);
+    g.lanes.forEach(ln=>{ lanes.push(ln); home[ln.id] = g; if(!ln.parent) label[ln.id] = ln.name==="Planning" ? "⚙️ " + nm : nm + " · " + ln.name; });
+    g.items.forEach(it=> items.push(it));
+  });
+  own.lanes.forEach(ln=>{ lanes.push(ln); home[ln.id] = own; if(depts.length && !ln.parent) label[ln.id] = ln.name==="Planning" ? "🙋 Own plan" : "🙋 " + ln.name; });
+  own.items.forEach(it=> items.push(it));
+  m.lanes = lanes; m.items = items;
+  m.mapOf = ln=> home[ln.id] || null;
+  m.laneLabel = ln=> label[ln.id] || ln.name;
+  m.barButtons = row=> rmlBarButtons(row, own, "Phase");
+  if(depts.length){
+    const hint = document.createElement("div"); hint.className = "hint"; hint.style.margin = "0 0 8px";
+    hint.textContent = "One Timeline: each department’s plan (its rows start with the department’s name) and " + cs.name + "’s own. ▾ on a section minimizes it.";
+    wrap.appendChild(hint);
+  }
+  renderRmapGantt(m, wrap, byTid);
 }
-const PROC_TL = {};   /* per process space (session): which Timeline tab is open */
+const PROC_ALL = {};   /* per process space (session): the merged chart, so its 1/2/3-month choice sticks */
 /* 👥 From team (in the process space): everything the departments sent, and the department spaces */
 function procTeamPane(cs){
   const wrap = $("content");
