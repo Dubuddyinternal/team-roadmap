@@ -2904,6 +2904,13 @@ body.rm-chart #pane-work > .controls{display:none}
 .rm-rename:hover{background:var(--indigo-soft)}
 .rm-rename-pen{font-size:14px;color:var(--muted);opacity:0;transition:opacity .12s}
 .rm-rename:hover .rm-rename-pen{opacity:1;color:var(--indigo)}
+.rmg-blk.rmg-dragable{cursor:grab}.rmg-blk.rmg-dragable:active{cursor:grabbing}
+.rmg-blk.rmg-line.rmg-dragable::before{content:"";position:absolute;left:-4px;right:-4px;top:-9px;bottom:-9px}
+.rmg-hl,.rmg-hr{position:absolute;top:50%;width:12px;height:12px;margin-top:-6px;border-radius:50%;background:#fff;border:2px solid rgba(0,0,0,.35);cursor:ew-resize;opacity:0;transition:opacity .12s;z-index:2}
+.rmg-hl{left:-6px}.rmg-hr{right:-6px}
+.rmg-blk:hover .rmg-hl,.rmg-blk:hover .rmg-hr{opacity:1}
+.rmg-chip{position:fixed;z-index:9999;pointer-events:none;background:#1A1614;color:#fff;font:600 12px/1 var(--sans);padding:6px 9px;border-radius:7px;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,.25)}
+body.rmg-busy,body.rmg-busy *{user-select:none!important;cursor:grabbing!important}
 .rmg-blk:hover{filter:brightness(1.08);box-shadow:0 3px 10px rgba(0,0,0,.18)}
 .rmg-blk.done{opacity:.55}
 .rmg-blk.locked{outline:2px dashed var(--blocked);outline-offset:1px}
@@ -12835,7 +12842,7 @@ function devTimelineMap(cs){
   if(cs) procKidsOf(cs).filter(d=> canViewSpace(csRef(d))).forEach(d=>{
     const t = procTarget(d); if(t) procSync(t);
     const g = procDeptGantt(d), ln = { id:"dv-"+d.id, name:"⚙️ Process improvements", kind:"project" }; lanes.push(ln);
-    (g.items||[]).filter(it=> reg[it.tid]).forEach(it=>{ byTid[it.tid] = reg[it.tid]; items.push(Object.assign({}, it, { lane: ln.id, color: it.color || "#3A9CA8" })); });
+    (g.items||[]).filter(it=> reg[it.tid]).forEach(it=>{ byTid[it.tid] = reg[it.tid]; items.push(rmgWriteBack(Object.assign({}, it, { lane: ln.id, color: it.color || "#3A9CA8" }), it, d)); });
   });
   /* the team's own written tasks share this one chart, in their own rows below (stored on the space's own Timeline) */
   const own = discGantt(host);
@@ -12907,7 +12914,7 @@ function mktScheduleMap(mk){
       const ln = { id:"mv-"+x.id, name: (x.type==="procdept" ? "⚙️ Process improvements" : "🗓 " + x.name), kind:"project" }; lanes.push(ln);
       (x.gantt.items||[]).filter(it=> reg[it.tid]).forEach(it=>{
         byTid[it.tid] = reg[it.tid];
-        items.push(Object.assign({}, it, { lane: ln.id, color: it.color || "#3A9CA8" }));
+        items.push(rmgWriteBack(Object.assign({}, it, { lane: ln.id, color: it.color || "#3A9CA8" }), it, x));
       });
       return;
     }
@@ -12915,16 +12922,24 @@ function mktScheduleMap(mk){
       const ln = { id:"mv-"+x.id, name:"🎯 " + x.name + " · Schedule", kind:"project" }; lanes.push(ln);
       mktSocialPosts(x).forEach(c=>{
         const key = x.id+":"+c.id;
-        add(ln.id, key, c.title, c.date, c.date, x.name + " → Schedule", { color:"#8A55C2" });
+        const canE = canInSpace("editor", csRef(x));
+        add(ln.id, key, c.title, c.date, c.date, x.name + " → Schedule", { color:"#8A55C2", move: canE ? (d=>{
+          const S = x.sx || {}, card = (S.cards||[]).find(k=> k.id===c.id), ev = String(c.id).indexOf("ev-")===0 ? (x.events||[]).find(e=> "ev-"+e.id===c.id) : null;
+          if(card && card.scheduled) card.scheduled = dISO(dNum(card.scheduled) + d); else if(ev) ev.date = dISO(dNum(ev.date) + d);
+          pushAll(); }) : undefined });
         byTid["mktv:"+key].task.status = c.published ? "done" : "planned";   /* ✓ once it's out, not just because the day passed */
       });
     } else if(x.type==="campaign"){
       const ln = { id:"mv-"+x.id, name:"📣 " + x.name, kind:"project" }; lanes.push(ln);
       const d = x.details || {};
-      if(d.start) add(ln.id, x.id+":period", "Campaign period", d.start, d.end || d.start, x.name, { color:"#D9682B" });
+      const canC = canInSpace("editor", csRef(x));
+      if(d.start) add(ln.id, x.id+":period", "Campaign period", d.start, d.end || d.start, x.name, { color:"#D9682B",
+        move: canC ? (n=>{ d.start = dISO(dNum(d.start) + n); if(d.end) d.end = dISO(dNum(d.end) + n); pushAll(); }) : undefined,
+        resize: canC ? ((a, b)=>{ d.start = a; d.end = b; pushAll(); }) : undefined });
       (x.items||[]).filter(it=> it.date).forEach(it=>{
         const ow = it.ownerId ? (USERS.find(u=> u.id===it.ownerId) || null) : null;
-        add(ln.id, x.id+":"+it.id, (it.name || "Piece") + (it.platform ? " · " + it.platform : ""), it.date, it.date, x.name + " → Contents", { owner: ow ? userDisplayName(ow) : undefined, color:"#C8473B" });
+        add(ln.id, x.id+":"+it.id, (it.name || "Piece") + (it.platform ? " · " + it.platform : ""), it.date, it.date, x.name + " → Contents", { owner: ow ? userDisplayName(ow) : undefined, color:"#C8473B",
+          move: canC ? (n=>{ it.date = dISO(dNum(it.date) + n); pushAll(); }) : undefined });
       });
     }
   });
@@ -14503,7 +14518,9 @@ function renderRmapGantt(m, wrap, byTid){
       blk.style.background = it.color || colorOf(it.team);
       blk.title = nm.title + "\n" + rmlFmt(it.start) + " → " + rmlFmt(it.end);
       barEls[it.tid] = blk;
-      if(ed) rmgItemDrag(blk, M, it, ()=> weekPx()/7, 1, ()=> rmlEditItem(M, it, en)); else blk.style.cursor = "default";
+      if(ed) rmgItemDrag(blk, M, it, ()=> weekPx()/7, 1, ()=> rmlEditItem(M, it, en));
+      else if(editMode && it.move) rmgItemDrag(blk, M, it, ()=> weekPx()/7, 1, ()=>{}, { virtual:true });   /* lives in another space: moved there */
+      else blk.style.cursor = "default";
       grid.appendChild(blk);
       rIdx++;
     });
@@ -14595,53 +14612,101 @@ function rmlDepOverlay(grid, bars, byTid){
 }
 /* drag a task block / bar to another phase or swimlane (the row under the pointer, via data-lane)
    and sideways by whole units (a week in Simple Gantt, a day in Swimlane Gantt). A click still edits. */
-function rmgItemDrag(el, m, it, unitPx, unitDays, onClick){
+/* drag a bar: sideways moves its dates (snapped to days, the new dates shown as you go), up/down onto another
+   section moves it there; the round handles at its ends change the start or the end. Esc cancels.
+   opt.virtual: a row that lives in another space — it.move(days) / it.resize(start, end) write it back there. */
+function rmgItemDrag(el, m, it, unitPx, unitDays, onClick, opt){
+  opt = opt || {};
+  el.classList.add("rmg-dragable");
+  if(el.classList.contains("rmg-line") && unitDays && (!opt.virtual || it.resize)){
+    const hl = document.createElement("i"); hl.className = "rmg-hl"; hl.title = "Drag to change the start";
+    const hr = document.createElement("i"); hr.className = "rmg-hr"; hr.title = "Drag to change the end";
+    el.append(hl, hr);
+  }
   el.addEventListener("pointerdown", e=>{
     if(e.button!==0) return;
     if(e.target.closest && e.target.closest("button,input,a")) return;
+    e.preventDefault();
+    const mode = e.target.classList.contains("rmg-hl") ? "start" : e.target.classList.contains("rmg-hr") ? "end" : "move";
     const sx = e.clientX, sy = e.clientY, host = el.closest(".rmg-grid") || document;
-    let moved = false, target = null, ghost = null;
+    const s0 = dNum(it.start||it.end||todayISO()), e0 = dNum(it.end||it.start||todayISO());
+    let moved = false, target = null, ghost = null, chip = null, shift = 0, laneMode = false, ns = s0, ne = e0, cancelled = false;
     const mark = id=>{ host.querySelectorAll(".rmg-drop").forEach(x=> x.classList.remove("rmg-drop")); if(id) host.querySelectorAll('[data-lane="'+id+'"]').forEach(x=> x.classList.add("rmg-drop")); };
+    const r = el.getBoundingClientRect();
     const mv = ev=>{
       const dx = ev.clientX - sx, dy = ev.clientY - sy;
-      if(!moved && Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
+      if(!moved && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
       if(!moved){
         moved = true;
         /* a floating copy follows the pointer, so scroll boxes can't clip it */
-        const r = el.getBoundingClientRect();
         ghost = el.cloneNode(true); ghost.classList.add("rmg-ghost");
         Object.assign(ghost.style, { position:"fixed", left:r.left+"px", top:r.top+"px", width:r.width+"px", height:r.height+"px", margin:"0", background: getComputedStyle(el).background });
-        document.body.appendChild(ghost);
-        el.classList.add("rmg-dragging");
+        chip = document.createElement("div"); chip.className = "rmg-chip";
+        document.body.append(ghost, chip);
+        el.classList.add("rmg-dragging"); document.body.classList.add("rmg-busy");
       }
-      ghost.style.transform = "translate("+dx+"px,"+dy+"px)";
-      const under = document.elementFromPoint(ev.clientX, ev.clientY);
-      target = under && under.closest ? under.closest("[data-lane]") : null;
-      mark(target && target.dataset.lane);
+      const u = unitPx() || 1;
+      shift = unitDays ? Math.round(dx / u) * unitDays : 0;
+      if(mode==="move"){
+        ns = s0 + shift; ne = e0 + shift;
+        laneMode = !opt.virtual && (!unitDays || Math.abs(dy) > 16);   /* on a dated chart a small wobble up or down doesn't move it to another section */
+        ghost.style.transform = "translate(" + (unitDays ? shift * u / unitDays : dx) + "px," + (laneMode ? dy : 0) + "px)";
+        const under = laneMode ? document.elementFromPoint(ev.clientX, ev.clientY) : null;
+        target = under && under.closest ? under.closest("[data-lane]") : null;
+        mark(target && target.dataset.lane);
+      } else {
+        if(mode==="start") ns = Math.min(e0, s0 + shift); else ne = Math.max(s0, e0 + shift);
+        const px = d=> d * u / (unitDays||1);
+        ghost.style.left = (r.left + px(ns - s0)) + "px";
+        ghost.style.width = Math.max(10, r.width + px((ne - e0) - (ns - s0))) + "px";
+      }
+      if(!unitDays){ chip.textContent = target ? "Move here" : "Drop on a section"; chip.style.left = (ev.clientX + 14) + "px"; chip.style.top = (ev.clientY - 34) + "px"; return; }
+      chip.textContent = (mode==="move" && laneMode && target ? "Move to this section · " : "") + rmlFmt(dISO(ns)) + (ne !== ns ? " → " + rmlFmt(dISO(ne)) : "") + (ne - ns ? " · " + (ne - ns + 1) + " days" : "");
+      chip.style.left = (ev.clientX + 14) + "px"; chip.style.top = (ev.clientY - 34) + "px";
     };
+    const done = ()=>{
+      window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("keydown", esc);
+      mark(null); el.classList.remove("rmg-dragging"); document.body.classList.remove("rmg-busy");
+      if(ghost) ghost.remove(); if(chip) chip.remove();
+    };
+    const esc = ev=>{ if(ev.key==="Escape"){ cancelled = true; done(); } };
     const up = ev=>{
-      window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up);
-      mark(null); el.classList.remove("rmg-dragging"); if(ghost) ghost.remove();
+      done();
+      if(cancelled) return;
       if(!moved){ onClick(); return; }
-      const dx = ev.clientX - sx, u = unitPx() || 1;
-      const shift = unitDays ? Math.round(dx / u) * unitDays : 0;
-      const lane = target && target.dataset.lane;
+      if(opt.virtual){
+        if(mode==="move" && shift && it.move){ it.move(shift); toast("Moved to " + rmlFmt(dISO(ns))); }
+        else if(mode!=="move" && it.resize && (ns!==s0 || ne!==e0)){ it.resize(dISO(ns), dISO(ne)); toast(rmlFmt(dISO(ns)) + " → " + rmlFmt(dISO(ne))); }
+        return;
+      }
       let changed = false;
-      const par = rmgParentOf(m, it), kids = par ? [] : m.items.filter(k=> rmgParentOf(m, k)===it);
-      if(lane && lane !== rmlLaneOf(m, par || it).id){
-        it.lane = lane; delete it.parent; kids.forEach(k=> k.lane = lane); changed = true;
+      if(mode!=="move"){
+        if(ns!==s0 || ne!==e0){ it.start = dISO(ns); it.end = dISO(ne); changed = true; }
+      } else {
+        const lane = laneMode && target && target.dataset.lane;
+        const par = rmgParentOf(m, it), kids = par ? [] : m.items.filter(k=> rmgParentOf(m, k)===it);
+        if(lane && lane !== rmlLaneOf(m, par || it).id && m.lanes.some(l=> l.id===lane)){
+          it.lane = lane; delete it.parent; kids.forEach(k=> k.lane = lane); changed = true;
+        }
+        if(shift){
+          [it].concat(kids).forEach(x=>{
+            const s1 = dNum(x.start||x.end||todayISO()), e1 = dNum(x.end||x.start||todayISO());
+            x.start = dISO(s1 + shift); x.end = dISO(e1 + shift);
+          });
+          changed = true;
+        }
       }
-      if(shift){
-        [it].concat(kids).forEach(x=>{
-          const s = dNum(x.start||x.end||todayISO()), en = dNum(x.end||x.start||todayISO());
-          x.start = dISO(s + shift); x.end = dISO(en + shift);
-        });
-        changed = true;
-      }
-      if(changed){ saveRmaps(); toast("Moved"); }
+      if(changed){ saveRmaps(); toast(rmlFmt(it.start) + (it.end && it.end!==it.start ? " → " + rmlFmt(it.end) : "")); }
     };
-    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+    window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("keydown", esc);
   });
+}
+/* rows shown from another space: dragging them changes them there (if you may edit that space) */
+function rmgWriteBack(copy, orig, cs){
+  if(!orig || !cs || !canInSpace("editor", csRef(cs))) return copy;
+  copy.move = d=>{ orig.start = dISO(dNum(orig.start||orig.end||todayISO()) + d); orig.end = dISO(dNum(orig.end||orig.start||todayISO()) + d); pushAll(); };
+  copy.resize = (a, b)=>{ orig.start = a; orig.end = b; pushAll(); };
+  return copy;
 }
 /* Swimlane Gantt: one band per swimlane (team / workstream), one row per task,
    bars placed on exact days; colour = the swimlane. */
@@ -15497,7 +15562,9 @@ function rmapMergedPane(own, wrap, reg){
     });
     (sm.items||[]).forEach(it=>{
       if(!byTid[it.tid]) return;
-      items.push(Object.assign({}, it, { rid: P + it.rid, lane: P + it.lane, parent: it.parent ? P + it.parent : undefined, _from: cs.name }));
+      const cp = Object.assign({}, it, { rid: P + it.rid, lane: P + it.lane, parent: it.parent ? P + it.parent : undefined, _from: cs.name });
+      if(!cp.move && byTid[it.tid].kind!=="virtual") rmgWriteBack(cp, it, cs);   /* the space's own row: dragging it here changes it there */
+      items.push(cp);
     });
   });
   own.lanes = own.lanes || []; rmlEnsureLanes(own);
