@@ -12851,13 +12851,14 @@ function devTimelineMap(cs){
       const cards = DEV.cards.filter(c=> c.sprint===sp.id && devWork(c)), done = cards.filter(c=> c.col==="done").length;
       const tid = "devv:" + sp.id;
       byTid[tid] = { tid, task:{ title: sp.name + " · " + done + "/" + cards.length + " done", status: sp.completed ? "done" : "planned" }, path: team.name + " → sprints", kind:"virtual" };
-      items.push({ rid:"rv-"+sp.id, tid, start:r.start, end:r.end, lane:ln.id, color: sp.completed ? "#2E9466" : "#2F6DB5" });
+      items.push({ rid:"rv-"+sp.id, tid, start:r.start, end:r.end, lane:ln.id, color: sp.completed ? "#2E9466" : "#2F6DB5",
+        open: ()=>{ document.querySelectorAll(".overlay.show").forEach(o=> o.classList.remove("show")); view = "dev"; devSpace = team.id; devSprint = sp.id; devView = "board"; paneTab = "work"; renderAll(); window.scrollTo(0, 0); } });
     });
   });
   if(cs) procKidsOf(cs).filter(d=> canViewSpace(csRef(d))).forEach(d=>{
     const t = procTarget(d); if(t) procSync(t);
     const g = procDeptGantt(d), ln = { id:"dv-"+d.id, name:"⚙️ Process improvements", kind:"project" }; lanes.push(ln);
-    (g.items||[]).filter(it=> reg[it.tid]).forEach(it=>{ byTid[it.tid] = reg[it.tid]; items.push(rmgWriteBack(Object.assign({}, it, { lane: ln.id, color: it.color || "#3A9CA8" }), it, d)); });
+    (g.items||[]).filter(it=> reg[it.tid]).forEach(it=>{ byTid[it.tid] = reg[it.tid]; items.push(rmgWriteBack(Object.assign({}, it, { lane: ln.id, color: it.color || "#3A9CA8", open: ()=> goSpace(d, "timeline") }), it, d)); });
   });
   /* the team's own written tasks share this one chart, in their own rows below (stored on the space's own Timeline) */
   const own = discGantt(host);
@@ -12930,7 +12931,7 @@ function mktScheduleMap(mk){
       const ln = { id:"mv-"+x.id, name: (x.type==="procdept" ? "⚙️ Process improvements" : "🗓 " + x.name), kind:"project" }; lanes.push(ln);
       (x.gantt.items||[]).filter(it=> reg[it.tid]).forEach(it=>{
         byTid[it.tid] = reg[it.tid];
-        items.push(rmgWriteBack(Object.assign({}, it, { lane: ln.id, color: it.color || "#3A9CA8" }), it, x));
+        items.push(rmgWriteBack(Object.assign({}, it, { lane: ln.id, color: it.color || "#3A9CA8", open: ()=> goSpace(x, "timeline") }), it, x));
       });
       return;
     }
@@ -12939,7 +12940,8 @@ function mktScheduleMap(mk){
       mktSocialPosts(x).forEach(c=>{
         const key = x.id+":"+c.id;
         const canE = canInSpace("editor", csRef(x));
-        add(ln.id, key, c.title, c.date, c.date, x.name + " → Schedule", { color:"#8A55C2", move: canE ? (d=>{
+        add(ln.id, key, c.title, c.date, c.date, x.name + " → Schedule", { color:"#8A55C2",
+          open: ()=> goSpace(x, "schedule", ()=>{ if(window.SX && SX.reopen && String(c.id).indexOf("ev-")!==0) SX.reopen({ kind:"card", id:c.id }); }), move: canE ? (d=>{
           const S = x.sx || {}, card = (S.cards||[]).find(k=> k.id===c.id), ev = String(c.id).indexOf("ev-")===0 ? (x.events||[]).find(e=> "ev-"+e.id===c.id) : null;
           if(card && card.scheduled) card.scheduled = dISO(dNum(card.scheduled) + d); else if(ev) ev.date = dISO(dNum(ev.date) + d);
           pushAll(); }) : undefined });
@@ -12949,12 +12951,12 @@ function mktScheduleMap(mk){
       const ln = { id:"mv-"+x.id, name:"📣 " + x.name, kind:"project" }; lanes.push(ln);
       const d = x.details || {};
       const canC = canInSpace("editor", csRef(x));
-      if(d.start) add(ln.id, x.id+":period", "Campaign period", d.start, d.end || d.start, x.name, { color:"#D9682B",
+      if(d.start) add(ln.id, x.id+":period", "Campaign period", d.start, d.end || d.start, x.name, { color:"#D9682B", open: ()=> goSpace(x, "details"),
         move: canC ? (n=>{ d.start = dISO(dNum(d.start) + n); if(d.end) d.end = dISO(dNum(d.end) + n); pushAll(); }) : undefined,
         resize: canC ? ((a, b)=>{ d.start = a; d.end = b; pushAll(); }) : undefined });
       (x.items||[]).filter(it=> it.date).forEach(it=>{
         const ow = it.ownerId ? (USERS.find(u=> u.id===it.ownerId) || null) : null;
-        add(ln.id, x.id+":"+it.id, (it.name || "Piece") + (it.platform ? " · " + it.platform : ""), it.date, it.date, x.name + " → Contents", { owner: ow ? userDisplayName(ow) : undefined, color:"#C8473B",
+        add(ln.id, x.id+":"+it.id, (it.name || "Piece") + (it.platform ? " · " + it.platform : ""), it.date, it.date, x.name + " → Contents", { owner: ow ? userDisplayName(ow) : undefined, color:"#C8473B", open: ()=> goSpace(x, "calendar"),
           move: canC ? (n=>{ it.date = dISO(dNum(it.date) + n); pushAll(); }) : undefined });
       });
     }
@@ -14508,6 +14510,7 @@ function renderRmapGantt(m, wrap, byTid){
       nm.lastChild.textContent = rmlFmt(it.start) + (it.end && it.end!==it.start ? " → " + rmlFmt(it.end) : "") + (it.owner ? " · 👤 " + it.owner : "") + (kd ? " · ☑ " + kd : "");
       nm.title = (en.task.title||"") + (it.owner ? "\nOwner: " + it.owner : "") + (it.team ? "\nTeam: " + it.team : "") + "\n" + en.path;
       if(ed){ nm.onclick = ()=> rmlEditItem(M, it, en); nm.style.cursor = "pointer"; }
+      else if(it.open){ nm.onclick = it.open; nm.style.cursor = "pointer"; nm.title += "\n↗ Click to open it in its space"; }
       const tacts = document.createElement("span"); tacts.className = "rmg-tacts";
       if(it.doc){
         const db = document.createElement("button"); db.className = "rmg-doc"; db.textContent = "📄";
@@ -14536,7 +14539,8 @@ function renderRmapGantt(m, wrap, byTid){
       blk.title = nm.title + "\n" + rmlFmt(it.start) + " → " + rmlFmt(it.end);
       barEls[it.tid] = blk;
       if(ed) rmgItemDrag(blk, M, it, ()=> weekPx()/7, 1, ()=> rmlEditItem(M, it, en));
-      else if(editMode && it.move) rmgItemDrag(blk, M, it, ()=> weekPx()/7, 1, ()=>{}, { virtual:true });   /* lives in another space: moved there */
+      else if(editMode && it.move) rmgItemDrag(blk, M, it, ()=> weekPx()/7, 1, ()=>{ if(it.open) it.open(); }, { virtual:true });   /* lives in another space: moved there */
+      else if(it.open){ blk.onclick = it.open; blk.style.cursor = "pointer"; }
       else blk.style.cursor = "default";
       grid.appendChild(blk);
       rIdx++;
@@ -14726,6 +14730,15 @@ function ownLanesFix(own){
   if(!ids.size) return;
   (own.items||[]).forEach(it=>{ if(!it.parent && !ids.has(it.lane)){ it.lane = own.lanes[0].id; n++; } });
   if(n && editMode) pushLater();
+}
+/* open a space on one of its tabs (then e.g. open the item there) — used by rows shown from that space */
+function goSpace(cs, tab, after){
+  if(!cs) return;
+  document.querySelectorAll(".overlay.show").forEach(o=> o.classList.remove("show"));
+  navToSpace(cs);
+  if(tab){ paneTab = "work"; tabSetWork(tab); renderAll(); }
+  window.scrollTo(0, 0);
+  if(after) setTimeout(after, 60);
 }
 function rmgWriteBack(copy, orig, cs){
   if(!orig || !cs || !canInSpace("editor", csRef(cs))) return copy;
@@ -15589,6 +15602,10 @@ function rmapMergedPane(own, wrap, reg){
       if(!byTid[it.tid]) return;
       const cp = Object.assign({}, it, { rid: P + it.rid, lane: P + it.lane, parent: it.parent ? P + it.parent : undefined, _from: cs.name });
       if(!cp.move && byTid[it.tid].kind!=="virtual") rmgWriteBack(cp, it, cs);   /* the space's own row: dragging it here changes it there */
+      if(!cp.open){
+        const idea = (cs.ideas||[]).find(i=> i.id===it.tid);
+        cp.open = idea && cs.type==="discovery" ? (()=> goSpace(cs, "ideas", ()=> openIdeaDialog(cs, idea))) : (()=> goSpace(cs, "timeline"));
+      }
       items.push(cp);
     });
   });
