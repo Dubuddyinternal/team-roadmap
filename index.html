@@ -2825,6 +2825,23 @@ body.rm-chart #pane-work > .controls{display:none}
 .proc-sech{font-weight:700;font-size:13px;margin:14px 0 6px;color:var(--ink)}
 .proc-fh{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:6px 0 10px}
 .rml-docview{max-height:65vh;overflow:auto;font-size:14px;line-height:1.55;padding:4px 2px}
+.rich-wrap{border:1px solid var(--line-strong);border-radius:10px;background:var(--card);overflow:hidden}
+.rich-wrap:focus-within{border-color:var(--indigo);box-shadow:0 0 0 1px var(--indigo)}
+.rich-bar{display:flex;flex-wrap:wrap;gap:2px;padding:6px;border-bottom:1px solid var(--line);background:var(--paper);position:sticky;top:0}
+.rich-bar button{border:0;background:none;border-radius:6px;padding:4px 8px;font:inherit;font-size:12.5px;color:var(--ink);cursor:pointer}
+.rich-bar button:hover{background:var(--indigo-soft)}
+.rich-ed{min-height:260px;max-height:58vh;overflow:auto;padding:14px 16px;font-size:14px;line-height:1.55;outline:none}
+.rich-ed h1,.rml-docview h1{font-size:22px;margin:14px 0 6px}
+.rich-ed h2,.rml-docview h2{font-size:19px;margin:16px 0 6px}
+.rich-ed h3,.rml-docview h3{font-size:15.5px;margin:12px 0 4px}
+.rich-ed h4,.rml-docview h4{font-size:14px;margin:10px 0 4px}
+.rich-ed p,.rml-docview p{margin:4px 0}
+.rich-ed ul,.rich-ed ol,.rml-docview ul,.rml-docview ol{margin:4px 0 4px 22px;padding:0}
+.rich-ed table,.rml-docview table{border-collapse:collapse;margin:8px 0;width:100%;max-width:100%}
+.rich-ed th,.rich-ed td,.rml-docview th,.rml-docview td{border:1px solid var(--line-strong);padding:6px 9px;vertical-align:top;text-align:left}
+.rich-ed th,.rml-docview th{background:var(--paper);font-weight:600}
+.rich-ed blockquote,.rml-docview blockquote{border-left:3px solid var(--line-strong);margin:6px 0;padding:2px 12px;color:var(--muted)}
+.rich-ed a,.rml-docview a{color:var(--indigo)}
 .rml-docview ul,.rml-docview ol{margin:2px 0 2px 20px;padding:0}
 .rmg-cell.phase{background:var(--paper)}
 .rmg-cell.phase.now,.rmg-cell.addrow.now{background:color-mix(in srgb,var(--indigo-soft) 70%,var(--paper))}
@@ -13903,16 +13920,16 @@ function rmgTplField(holder){
 }
 function rmgTplApply(holder, id){
   const tp = id && (RMAPS.templates || []).find(t=> t.id===id);
-  if(tp && !holder.doc) holder.doc = { tpl: tp.id, name: tp.name, text: tp.body || "" };   /* its own copy to fill in */
+  if(tp && !holder.doc) holder.doc = { tpl: tp.id, name: tp.name, text: tp.body || "", html: !!tp.html };   /* its own copy to fill in */
 }
 function rmgOpenDoc(holder, name){
   const d = holder.doc, ttl = "📄 " + (d.name || "Document") + " — " + name;
   /* view mode: the formatted document; Edit mode: the rich-text box to fill in */
-  if(!editMode){ rmlModal(ttl, [], ()=>{}, { width: 760, noSave: true, sub: "View only — you don’t have edit access here", html: window.RT ? RT.html(d.text || "") : mtEsc(d.text || "").replace(/\n/g, "<br>") }); return; }
+  if(!editMode){ rmlModal(ttl, [], ()=>{}, { width: 860, noSave: true, sub: "View only — you don’t have edit access here", html: docHtml(d.text, d.html) }); return; }
   rmlModal(ttl, [
-    { k:"text", label:"Fill it in — the prompts are from the template", type:"area", rows:24, value: d.text || "" },
-  ], v=>{ d.text = v.text; saveRmaps(); toast("Saved"); }, {
-    width: 760,
+    { k:"text", label:"Fill it in — the prompts are from the template", type:"rich", value: docHtml(d.text, d.html) },
+  ], v=>{ d.text = v.text; d.html = true; saveRmaps(); toast("Saved"); }, {
+    width: 860,
     extra: editMode ? [["Remove document", "Take the document off this phase", ()=>{
       if(!confirm("Remove the “" + (d.name||"document") + "” from “" + name + "”? What’s written in it is lost.")) return false;
       delete holder.doc; saveRmaps();
@@ -14862,6 +14879,81 @@ function rmlChartBlockers(en, m){
 }
 
 /* small form modal built on the app's .overlay/.dialog look */
+/* ================================================================
+   RICH DOCUMENTS (templates and the documents on phases / tasks): headings, tables, bold, italic,
+   lists, links — kept when pasted from Claude Docs, Google Docs, Word or a web page. Stored as cleaned
+   HTML with .html = true; older ones were light markdown and are converted the first time they open.
+   ================================================================ */
+const RICH_KEEP = { H1:1,H2:1,H3:1,H4:1,P:1,DIV:1,BR:1,B:1,I:1,U:1,S:1,UL:1,OL:1,LI:1,TABLE:1,THEAD:1,TBODY:1,TR:1,TH:1,TD:1,A:1,BLOCKQUOTE:1,PRE:1,CODE:1,HR:1 };
+const RICH_SAME = { STRONG:"B", EM:"I", STRIKE:"S", DEL:"S", INS:"U", H5:"H4", H6:"H4" };
+const RICH_DROP = { SCRIPT:1, STYLE:1, META:1, LINK:1, HEAD:1, TITLE:1, IFRAME:1, OBJECT:1, EMBED:1, SVG:1, NOSCRIPT:1, TEMPLATE:1 };
+function richClean(html){
+  const src = new DOMParser().parseFromString(String(html||""), "text/html").body;
+  const out = document.createElement("div");
+  const walk = (node, host)=>{
+    node.childNodes.forEach(n=>{
+      if(n.nodeType===3){ host.appendChild(document.createTextNode(n.nodeValue)); return; }
+      if(n.nodeType!==1 || RICH_DROP[n.tagName]) return;
+      let tag = RICH_SAME[n.tagName] || n.tagName;
+      const st = (n.getAttribute("style")||"").toLowerCase();
+      /* Google Docs marks bold / italic with styles on spans, and wraps everything in a "normal weight" <b> */
+      if(tag==="B" && /font-weight:\s*(normal|400)/.test(st)) tag = "SPAN";
+      if(!RICH_KEEP[tag]){
+        let h = host;
+        if(/font-weight:\s*(bold|[6-9]00)/.test(st)){ const b = document.createElement("b"); host.appendChild(b); h = b; }
+        if(/font-style:\s*italic/.test(st)){ const i = document.createElement("i"); h.appendChild(i); h = i; }
+        walk(n, h); return;
+      }
+      const el = document.createElement(tag);
+      if(tag==="A"){ const href = n.getAttribute("href")||""; if(/^(https?:|mailto:)/i.test(href)){ el.setAttribute("href", href); el.setAttribute("target","_blank"); el.setAttribute("rel","noopener"); } }
+      if(tag==="TD" || tag==="TH"){ ["colspan","rowspan"].forEach(a=>{ const v = n.getAttribute(a); if(v && /^\d+$/.test(v)) el.setAttribute(a, v); }); }
+      host.appendChild(el);
+      walk(n, el);
+    });
+  };
+  walk(src, out);
+  return out.innerHTML.replace(/<p><\/p>/g, "").trim();
+}
+/* a stored template / document → HTML for the editor or for reading */
+function docHtml(text, isHtml){
+  if(isHtml) return richClean(text||"");
+  if(!text) return "";
+  return window.RT ? richClean(RT.mdToHtml(text)) : mtEsc(text).replace(/\n/g, "<br>");
+}
+function docFirstLine(text, isHtml){
+  const d = document.createElement("div");
+  d.innerHTML = docHtml(text, isHtml).replace(/<\/(h\d|p|div|li|tr|td|th|blockquote|pre)>|<br\s*\/?>/gi, "$&\n");   /* blocks end a line */
+  return ((d.textContent || "").split("\n").find(x=> x.trim()) || "").trim();
+}
+/* the editor: a toolbar and an editable page; .value gives cleaned HTML */
+function richEditor(html){
+  const wrap = document.createElement("div"); wrap.className = "rich-wrap";
+  const bar = document.createElement("div"); bar.className = "rich-bar";
+  const ed = document.createElement("div"); ed.className = "rich-ed"; ed.contentEditable = "true"; ed.innerHTML = html || "";
+  const cmd = (c, v)=>{ ed.focus(); document.execCommand(c, false, v); };
+  [["H1","Heading", ()=> cmd("formatBlock","<h2>")],["H2","Subheading", ()=> cmd("formatBlock","<h3>")],["¶","Normal text", ()=> cmd("formatBlock","<p>")],
+   ["B","Bold", ()=> cmd("bold")],["I","Italic", ()=> cmd("italic")],["U","Underline", ()=> cmd("underline")],
+   ["• List","Bulleted list", ()=> cmd("insertUnorderedList")],["1. List","Numbered list", ()=> cmd("insertOrderedList")],
+   ["⊞ Table","Insert a table", ()=> cmd("insertHTML", '<table><tbody><tr><th>Field</th><th>Details</th></tr><tr><td><br></td><td><br></td></tr><tr><td><br></td><td><br></td></tr></tbody></table><p><br></p>')],
+   ["🔗 Link","Link the selected text", ()=>{ const u = prompt("Link (https://…)"); if(u && /^(https?:|mailto:)/i.test(u.trim())) cmd("createLink", u.trim()); }],
+   ["Clear","Clear formatting", ()=>{ cmd("removeFormat"); cmd("formatBlock","<p>"); }]].forEach(([t, title, fn])=>{
+    const b = document.createElement("button"); b.type = "button"; b.textContent = t; b.title = title;
+    if(t==="B") b.style.fontWeight = "800"; if(t==="I") b.style.fontStyle = "italic"; if(t==="U") b.style.textDecoration = "underline";
+    b.onmousedown = e=> e.preventDefault(); b.onclick = fn; bar.appendChild(b);
+  });
+  /* pasting keeps headings, tables, bold, italic, lists and links — and nothing else */
+  ed.addEventListener("paste", e=>{
+    const cd = e.clipboardData; if(!cd) return;
+    const h = cd.getData("text/html"), t = cd.getData("text/plain");
+    e.preventDefault();
+    if(h) document.execCommand("insertHTML", false, richClean(h));
+    else if(t) document.execCommand("insertHTML", false, t.split(/\n{2,}/).map(par=> "<p>" + mtEsc(par).replace(/\n/g, "<br>") + "</p>").join(""));
+  });
+  wrap.append(bar, ed);
+  Object.defineProperty(wrap, "value", { get: ()=> richClean(ed.innerHTML), set: v=>{ ed.innerHTML = v || ""; } });
+  wrap.focusEd = ()=> ed.focus();
+  return wrap;
+}
 function rmlModal(title, fields, onSave, o){
   o = o || {};
   const ov = document.createElement("div"); ov.className = "overlay show";
@@ -14881,6 +14973,7 @@ function rmlModal(title, fields, onSave, o){
     let el;
     if(f.type==="select"){ el = document.createElement("select"); f.opts.forEach(([val,txt])=>{ const op=document.createElement("option"); op.value=val; op.textContent=txt; el.appendChild(op); }); el.value = f.value; }
     else if(f.type==="area"){ el = document.createElement("textarea"); el.rows = f.rows || 2; el.value = f.value; if(f.ph) el.placeholder = f.ph; if(f.readOnly) el.readOnly = true; }
+    else if(f.type==="rich"){ el = richEditor(f.value); }
     else if(f.type==="color"){
       /* swatches + "Auto"; the value lives on a hidden input so read() stays the same */
       el = document.createElement("input"); el.type = "hidden"; el.value = f.value || "";
@@ -14936,7 +15029,7 @@ function rmlModal(title, fields, onSave, o){
   ov.appendChild(dg);
   ov.addEventListener("mousedown", e=>{ if(e.target===ov) close(); });
   document.body.appendChild(ov);
-  const first = body.querySelector("input,select,textarea"); if(first) setTimeout(()=> first.focus(), 30);
+  const first = body.querySelector("input,select,textarea,.rich-ed"); if(first) setTimeout(()=> first.focus(), 30);
 }
 
 /* rules that read live data from other spaces */
@@ -23641,17 +23734,17 @@ function tplSubmit(cs){
   const me = currentUser();
   rmlModal("📄 Submit a template — " + cs.name, [
     { k:"name", label:"Name", type:"text", value:"", ph:"e.g. Campaign brief, Sprint retro, Bug report" },
-    { k:"body", label:"What it says — headings, prompts and examples to fill in", type:"area", rows:16, value:"" },
+    { k:"body", label:"What it says — headings, tables, prompts and examples (paste from a doc keeps the formatting)", type:"rich", value:"" },
   ], v=>{
     const nm = (v.name||"").trim(); if(!nm){ toast("Give the template a name"); return false; }
-    if(!(v.body||"").trim()){ toast("Write what the template says"); return false; }
+    if(!docFirstLine(v.body, true)){ toast("Write what the template says"); return false; }
     RMAPS.templateSubs = RMAPS.templateSubs || [];
-    RMAPS.templateSubs.push({ id:"ts-"+Date.now().toString(36), name:nm, body:v.body, from:cs.id, fromName:cs.name, by: me ? { id:me.id, name:userDisplayName(me) } : null, at: todayISO() });
+    RMAPS.templateSubs.push({ id:"ts-"+Date.now().toString(36), name:nm, body:v.body, html:true, from:cs.id, fromName:cs.name, by: me ? { id:me.id, name:userDisplayName(me) } : null, at: todayISO() });
     saveRmaps(); toast("Sent for approval — it becomes a template once approved");
-  }, { width: 720, sub: "Once a team Owner or Admin approves it in Administration → Templates, anyone can pick it for a phase or task." });
+  }, { width: 860, sub: "Once a team Owner or Admin approves it in Administration → Templates, anyone can pick it for a phase or task." });
 }
 function tplPreview(t, title){
-  rmlModal(title || ("📄 " + t.name), [], ()=>{}, { width: 760, noSave: true, z: 420, sub: t.fromName ? "From " + t.fromName + (t.by && t.by.name ? " · " + t.by.name : "") : "", html: window.RT ? RT.html(t.body || "") : mtEsc(t.body || "").replace(/\n/g, "<br>") });
+  rmlModal(title || ("📄 " + t.name), [], ()=>{}, { width: 860, noSave: true, z: 420, sub: t.fromName ? "From " + t.fromName + (t.by && t.by.name ? " · " + t.by.name : "") : "", html: docHtml(t.body, t.html) });
 }
 // Administration → Templates: documents (e.g. a PRD) a Gantt phase can start from. Picking one when
 // making a phase gives that phase its own copy to fill in; changing a template later doesn't touch copies.
@@ -23666,12 +23759,12 @@ function renderAdminTemplates(wrap){
   left.append(h2, sub);
   const edit = tp=> rmlModal(tp ? "Edit template" : "New template", [
     { k:"name", label:"Name", type:"text", value: tp ? tp.name : "", ph:"e.g. PRD, Design brief, Launch checklist" },
-    { k:"body", label:"What it says — headings, prompts and examples to fill in", type:"area", rows:20, value: tp ? tp.body : "" },
+    { k:"body", label:"What it says — headings, tables, prompts and examples (paste from a doc keeps the formatting)", type:"rich", value: tp ? docHtml(tp.body, tp.html) : "" },
   ], v=>{
     const nm = (v.name||"").trim(); if(!nm){ toast("Give the template a name"); return false; }
-    if(tp){ tp.name = nm; tp.body = v.body; } else T.push({ id:"tpl-"+Date.now().toString(36), name:nm, body:v.body });
+    if(tp){ tp.name = nm; tp.body = v.body; tp.html = true; } else T.push({ id:"tpl-"+Date.now().toString(36), name:nm, body:v.body, html:true });
     saveRmaps(); renderAdminPage(); toast("Template saved");
-  }, { width: 760, z: 420 });
+  }, { width: 860, z: 420 });
   const add = document.createElement("button"); add.className = "btn save admin-invite-btn"; add.textContent = "\uFF0B New template";
   add.onclick = ()=> edit(null);
   head.append(left, add);
@@ -23693,7 +23786,7 @@ function renderAdminTemplates(wrap){
       a.appendChild(pv);
       if(iAmTeamAdmin()){
         const ok = document.createElement("button"); ok.className = "person-del"; ok.textContent = "✓ Approve"; ok.style.color = "var(--done)";
-        ok.onclick = ()=>{ T.push({ id:"tpl-"+Date.now().toString(36), name:ts.name, body:ts.body, from:ts.fromName || "" }); RMAPS.templateSubs = subs.filter(x=> x!==ts); saveRmaps(); renderAdminPage(); toast("“"+ts.name+"” is now a template"); };
+        ok.onclick = ()=>{ T.push({ id:"tpl-"+Date.now().toString(36), name:ts.name, body:ts.body, html:!!ts.html, from:ts.fromName || "" }); RMAPS.templateSubs = subs.filter(x=> x!==ts); saveRmaps(); renderAdminPage(); toast("“"+ts.name+"” is now a template"); };
         const no = document.createElement("button"); no.className = "person-del"; no.textContent = "Decline";
         no.onclick = ()=>{ if(!confirm("Decline “"+ts.name+"”?")) return; RMAPS.templateSubs = subs.filter(x=> x!==ts); saveRmaps(); renderAdminPage(); };
         a.append(ok, no);
@@ -23711,7 +23804,7 @@ function renderAdminTemplates(wrap){
     const r = document.createElement("div"); r.className = "au-row";
     const n = document.createElement("div"); n.className = "au-cell au-name"; n.textContent = tp.name;
     if(tp.from){ const fr = document.createElement("div"); fr.className = "hint"; fr.textContent = "from " + tp.from; n.appendChild(fr); }
-    const t = document.createElement("div"); t.className = "au-cell hint"; const _first = (tp.body||"").split("\n").find(x=> x.trim()) || ""; t.textContent = (window.RT ? RT.plain(_first) : _first) || "(empty)";
+    const t = document.createElement("div"); t.className = "au-cell hint"; t.textContent = docFirstLine(tp.body, tp.html) || "(empty)";
     const a = document.createElement("div"); a.className = "au-cell au-acts";
     const e = document.createElement("button"); e.className = "person-del"; e.textContent = "Edit"; e.onclick = ()=> edit(tp);
     const del = document.createElement("button"); del.className = "person-del"; del.textContent = "Delete";
