@@ -13126,7 +13126,7 @@ function drawTabAccess(cs, body){
     body.appendChild(box);
   });
 }
-const MKT_AG_SOURCES = [["hand","Typed in by hand"],["cashfree","Revenue from Cashfree (sales − refunds)"],["proc_out","Process improvements rolled out"],["proc_sent","Process improvements sent"],["posts","Posts published (Social Media)"],["campaigns","Campaigns started"]];
+const MKT_AG_SOURCES = [["hand","Typed in by hand"],["cashfree","Revenue from Cashfree (sales − refunds)"],["proc_out","Process improvements rolled out"],["proc_sent","Process improvements sent"],["posts","Posts published (Social Media)"],["campaigns","Campaigns started"],["lms","LMS drops approved — each person (🎓 in every space)"],["games","Games approved (🎮 Submit to games)"]];
 const MKT_AG_PERIODS = [["week","per week"],["month","per month"],["quarter","per quarter"]];
 const MKT_AG_UNITS = [["count","count"],["inr","₹"],["pct","%"]];
 function mktAgreement(mk){
@@ -13142,6 +13142,20 @@ function mktAgreement(mk){
     const rv = mk.agreement.goals.find(g=> g.id==="ag-rev" && g.source==="hand");
     if(rv && !Object.keys(mk.agreement.manual).some(k=> k.indexOf("ag-rev:")===0)) rv.source = "cashfree";
     mk.agreement.revCf = true;
+  }
+  /* the LMS target lives here (each person, approved drops from 🎓 Submit to LMS in any space) */
+  if(!mk.agreement.lmsSeed){
+    if(!mk.agreement.goals.some(g=> g.source==="lms")){
+      const old = RMAPS.lmsTarget || {};
+      mk.agreement.goals.push({ id:"ag-lms", name:"LMS drops — each person", target: old.n != null ? Number(old.n) : 2, unit:"count", period: old.per==="month" ? "month" : "week", source:"lms" });
+    }
+    mk.agreement.lmsSeed = true;
+  }
+  /* Games are counted from 🎮 Submit to games — unless someone already typed figures in by hand */
+  if(!mk.agreement.gamesSrc){
+    const gm = mk.agreement.goals.find(g=> g.id==="ag-games" && g.source==="hand");
+    if(gm && !Object.keys(mk.agreement.manual).some(k=> k.indexOf("ag-games:")===0)) gm.source = "games";
+    mk.agreement.gamesSrc = true;
   }
   return mk.agreement;
 }
@@ -13173,6 +13187,8 @@ function mktGoalValue(mk, g){
       return n + ((S && S.cards) || []).filter(c=> inP(c.published) || (c.stage==="published" && !c.published && inP(c.scheduled))).length; }, 0);
   }
   if(g.source==="campaigns") return kids.filter(x=> x.type==="campaign" && x.details && inP(x.details.start)).length;
+  if(g.source==="lms") return lmsTeamStats(g).met;
+  if(g.source==="games") return gameSubsApproved(from, to);
   return 0;
 }
 /* Cashfree sales (Accounts → Sales) can only be read with the Accounts permission: whoever has it works the
@@ -13215,15 +13231,17 @@ function mktAgreementSummary(mk, card){
     c.appendChild(e); return;
   }
   goals.forEach(g=>{
-    const v = mktGoalValue(mk, g), t = Number(g.target), pc = Math.min(100, t ? v / t * 100 : 0);
+    /* LMS: the target is per person, so progress is how many people have made theirs */
+    const _ls = g.source==="lms" ? lmsTeamStats(g) : null;
+    const v = _ls ? _ls.met : mktGoalValue(mk, g), t = _ls ? _ls.people : Number(g.target), pc = Math.min(100, t ? v / t * 100 : 0);
     const left = Math.max(0, Math.round((dNum(mktPeriodEnd(g.period)) - dNum(todayISO())))) + 1;
     const row = document.createElement("div"); row.className = "mag-row";
     row.innerHTML = '<div class="mag-top"><b></b><span></span></div><div class="mag-bar"><i></i></div><div class="mag-foot"><span></span><span></span></div>';
     row.querySelector(".mag-top b").textContent = g.name + " · " + mktFmtVal(g, t) + " " + (MKT_AG_PERIODS.find(x=> x[0]===g.period)||["","per month"])[1];
-    row.querySelector(".mag-top span").textContent = mktFmtVal(g, v) + " / " + mktFmtVal(g, t) + " " + MKT_PERIOD_NOW[g.period];
+    row.querySelector(".mag-top span").textContent = _ls ? v + " / " + t + " people on target " + MKT_PERIOD_NOW[g.period] : mktFmtVal(g, v) + " / " + mktFmtVal(g, t) + " " + MKT_PERIOD_NOW[g.period];
     const bar = row.querySelector(".mag-bar i"); bar.style.width = pc + "%"; if(v >= t) bar.classList.add("ok");
     row.querySelector(".mag-foot span:first-child").textContent = Math.round(pc) + "%" + (g.source==="hand" ? " · typed in by hand" : g.source==="cashfree" ? mktCfNote(mk, g) : " · " + (MKT_AG_SOURCES.find(x=> x[0]===g.source)||["",""])[1].toLowerCase());
-    row.querySelector(".mag-foot span:last-child").textContent = v >= t ? "reached 🎉" : mktFmtVal(g, t - v) + " to go · " + left + " day" + (left===1 ? "" : "s") + " left";
+    row.querySelector(".mag-foot span:last-child").textContent = v >= t ? "reached 🎉" : _ls ? (t - v) + " " + (t - v===1 ? "person" : "people") + " short · " + _ls.total + " approved so far · " + left + " day" + (left===1 ? "" : "s") + " left" : mktFmtVal(g, t - v) + " to go · " + left + " day" + (left===1 ? "" : "s") + " left";
     if(g.source==="hand" && editMode){
       const f = document.createElement("div"); f.className = "mag-in";
       const lab = document.createElement("span"); lab.textContent = "Done " + MKT_PERIOD_NOW[g.period] + ":";
@@ -13262,9 +13280,10 @@ function mktAgreementPane(mk){
       const ac = document.createElement("div"); ac.className = "mag-ach";
       const saved = A.goals.find(x=> x.id===g.id);
       if(saved){
-        const v = mktGoalValue(mk, saved), t = Number(saved.target)||0;
+        const _ls = saved.source==="lms" ? lmsTeamStats(saved) : null;
+        const v = _ls ? _ls.met : mktGoalValue(mk, saved), t = _ls ? _ls.people : Number(saved.target)||0;
         ac.innerHTML = "<b></b><small></small>";
-        ac.firstChild.textContent = mktFmtVal(saved, v);
+        ac.firstChild.textContent = _ls ? v + " / " + t + " people" : mktFmtVal(saved, v);
         ac.lastChild.textContent = MKT_PERIOD_NOW[saved.period] + (t ? " · " + Math.round(Math.min(100, v / t * 100)) + "%" : "");
         if(t && v >= t) ac.classList.add("ok");
         ac.title = (saved.source==="hand" ? "Typed in on the Summary" : (MKT_AG_SOURCES.find(x=> x[0]===saved.source)||["",""])[1]) + mktCfNote(mk, saved);
@@ -15164,6 +15183,15 @@ function rmlModal(title, fields, onSave, o){
     if(f.type==="select"){ el = document.createElement("select"); f.opts.forEach(([val,txt])=>{ const op=document.createElement("option"); op.value=val; op.textContent=txt; el.appendChild(op); }); el.value = f.value; }
     else if(f.type==="area"){ el = document.createElement("textarea"); el.rows = f.rows || 2; el.value = f.value; if(f.ph) el.placeholder = f.ph; if(f.readOnly) el.readOnly = true; if(f.plain) el.setAttribute("data-plain",""); }
     else if(f.type==="rich"){ el = richEditor(f.value); }
+    else if(f.type==="file"){
+      el = document.createElement("input"); el.type = "hidden"; el.value = "";
+      const fi = document.createElement("input"); fi.type = "file"; if(f.accept) fi.accept = f.accept;
+      fi.onchange = ()=>{ const file = fi.files[0]; el.value = ""; if(!file) return;
+        if(f.max && file.size > f.max){ toast("That file is too big"); fi.value = ""; return; }
+        const rd = new FileReader(); rd.onload = ()=>{ el.value = String(rd.result || ""); }; rd.readAsText(file); };
+      w.append(lb, fi, el); inputs[f.k] = el; wraps[f.k] = w; body.appendChild(w);
+      return;
+    }
     else if(f.type==="color"){
       /* swatches + "Auto"; the value lives on a hidden input so read() stays the same */
       el = document.createElement("input"); el.type = "hidden"; el.value = f.value || "";
@@ -18228,6 +18256,8 @@ function renderAll(){
         const _lmsItems = cs.type==="procdept" ? [] : [
           {label:"🎓 Submit to LMS", onClick:()=> lmsSubmit(cs)},
           {label:"🎓 LMS in this space" + (_lw ? " · " + _lw + " to approve" : ""), onClick:()=> lmsSpacePanel(cs)},
+          {label:"🎮 Submit to games", onClick:()=> gameSubmit(cs)},
+          {label:"🎮 Games in this space" + (gameWaiting(cs) ? " · " + gameWaiting(cs) + " to approve" : ""), onClick:()=> gameSpacePanel(cs)},
         ];
         if(editMode || canInSpace("admin", csRef(cs))){
           const doDelete = ()=>{
@@ -23953,12 +23983,27 @@ function tplPreview(t, title){
    Anyone in a space sends a learning drop from its ⋯ → 🎓 Submit to LMS. It stays in that space (cs.lmsSubs) and goes
    through two approvals: the space's admins/👑 heads first, then a team Owner/Admin, whose approval opens it in
    Administration → LMS ready to send out. ⋯ → 🎓 LMS in this space shows who has made how many against the team's
-   target (RMAPS.lmsTarget = { n, per: "week"|"month" }), so space admins can make sure everyone makes theirs.
+   target (a row in Marketing → 🤝 Our agreement), so space admins can make sure everyone makes theirs.
    sub.status: "space" (waiting on the space) → "final" (waiting on a team Admin) → "approved" | "declined"          */
-const LMS_SUB_KINDS = [["video","🎬 Video"],["article","📰 Article"],["poll","🗳 Quick poll"],["quiz","🧠 Mini quiz"],["game","🎮 Game"]];
+const LMS_SUB_KINDS = [["video","🎬 Video"],["article","📰 Article"],["poll","🗳 Quick poll"],["quiz","🧠 Mini quiz"]];
 const lmsSubKind = k=> (LMS_SUB_KINDS.find(x=> x[0]===k) || LMS_SUB_KINDS[0])[1];
-function lmsTarget(){ const t = RMAPS.lmsTarget || {}; return { n: Number(t.n) >= 0 && t.n !== undefined && t.n !== "" ? Number(t.n) : 2, per: t.per==="month" ? "month" : "week" }; }
-function lmsPeriodStart(per){ const t = dNum(todayISO()); if(per==="month") return dNum(todayISO().slice(0,8) + "01"); const d = new Date(todayISO()+"T00:00:00"); return t - ((d.getDay()+6)%7); }
+/* the target is set in Marketing → 🤝 Our agreement (a row counted from "LMS drops approved — each person") */
+function lmsGoal(){
+  for(const mk of (CSPACES.list||[]).filter(x=> x.type==="marketing")){ const g = mktAgreement(mk).goals.find(x=> x.source==="lms" && Number(x.target) > 0); if(g) return { g, mk }; }
+  return null;
+}
+function lmsTarget(){ const G = lmsGoal(); return G ? { n: Number(G.g.target), per: G.g.period, mk: G.mk } : { n: 0, per: "week", mk: (CSPACES.list||[]).find(x=> x.type==="marketing") || null }; }
+function lmsPeriodStart(per){ return dNum(mktPeriodStart(per)); }
+/* approved drops per person this period, from every space */
+function lmsCountOf(email, per){
+  const from = lmsPeriodStart(per);
+  return (CSPACES.list||[]).reduce((n, cs)=> n + (cs.lmsSubs||[]).filter(x=> x.status==="approved" && x.by && x.by.email===email && dNum(x.finalAt||x.at) >= from).length, 0);
+}
+function lmsTeamStats(g){
+  const n = Number(g.target)||0, team = USERS.filter(u=> !u.super && u.teams && u.teams[TEAM]);
+  const counts = team.map(u=> lmsCountOf(u.email, g.period));
+  return { people: team.length, met: n ? counts.filter(c=> c >= n).length : 0, total: counts.reduce((a,b)=> a+b, 0) };
+}
 function lmsCanSpace(cs){ return iAmTeamAdmin() || canInSpace("admin", csRef(cs)); }
 function lmsAdminWaiting(){ return (CSPACES.list||[]).reduce((n, cs)=> n + (cs.lmsSubs||[]).filter(x=> x.status==="final").length, 0); }
 function lmsWaiting(cs){ return (cs.lmsSubs||[]).filter(x=> (x.status==="space" && lmsCanSpace(cs)) || (x.status==="final" && iAmTeamAdmin())).length; }
@@ -23976,13 +24021,13 @@ function lmsSubmit(cs){
   rmlModal("🎓 Submit to LMS — " + cs.name, [
     { k:"kind", label:"What is it?", type:"select", value:"video", opts: LMS_SUB_KINDS },
     { k:"title", label:"Headline", type:"text", value:"", ph:"e.g. The hook trick that doubled their views" },
-    { k:"url", label:"Link (YouTube video, article or game)", type:"text", value:"", ph:"https://…", show: v=> v.kind!=="poll" && v.kind!=="quiz" },
+    { k:"url", label:"Link (YouTube video or article)", type:"text", value:"", ph:"https://…", show: v=> v.kind!=="poll" && v.kind!=="quiz" },
     { k:"note", label:"Why the team should see it (optional)", type:"area", rows:2, value:"" },
     { k:"qs", label:"Questions — one per line, choices after |, mark the right one with *", type:"area", rows:4, plain:true, value:"", ph:"Best hook length? | 3 seconds* | 10 seconds | 30 seconds" },
   ], v=>{
     const title = (v.title||"").trim(); if(!title){ toast("Give it a headline"); return false; }
     const url = (v.url||"").trim();
-    if((v.kind==="video" || v.kind==="article" || v.kind==="game") && !/^https?:\/\//i.test(url)){ toast("Paste the link (starting with https://)"); return false; }
+    if((v.kind==="video" || v.kind==="article") && !/^https?:\/\//i.test(url)){ toast("Paste the link (starting with https://)"); return false; }
     const qs = lmsParseQs(v.qs);
     if((v.kind==="poll" || v.kind==="quiz") && !qs.some(q=> q.options.length >= 2)){ toast("Write at least one question with two choices"); return false; }
     if(v.kind==="quiz" && qs.some(q=> q.options.length && q.correct===null)){ toast("Mark the right answer of each quiz question with *"); return false; }
@@ -23994,9 +24039,8 @@ function lmsSubmit(cs){
 /* a team Admin's approval: the drop opens in Administration → LMS, filled in, to choose who gets it and send */
 function lmsSubToDraft(sub){
   if(typeof lmsBlankDraft!=="function") return null;
-  const kind = sub.kind==="game" ? "article" : sub.kind, d = lmsBlankDraft(kind);
-  d.title = (sub.kind==="game" ? "🎮 " : "") + sub.title;
-  if(sub.kind==="game") d.intro = "New game to play 🎮 — beat the team’s score?";
+  const kind = sub.kind, d = lmsBlankDraft(kind);
+  d.title = sub.title;
   if(kind==="video") d.video = sub.url; else if(sub.url) d.url = sub.url;
   d.note = (sub.note ? sub.note + "\n\n" : "") + "— from " + (sub.by && sub.by.name || "the team");
   const qs = (sub.qs||[]).map(q=> ({ id: lmsQid(), type: q.type, q: q.q, options: q.options.slice(), correct: kind==="quiz" ? q.correct : null }));
@@ -24030,26 +24074,25 @@ function lmsSpacePanel(cs){
     dg.innerHTML = "";
     const h = document.createElement("h3"); h.textContent = "🎓 LMS — " + cs.name; dg.appendChild(h);
     const T = lmsTarget(), from = lmsPeriodStart(T.per), subs = cs.lmsSubs || [];
-    /* target */
+    /* target: set in Marketing → 🤝 Our agreement */
     const tr = document.createElement("div"); tr.className = "lms-tgt";
-    tr.append(document.createTextNode("Target: each person makes "));
-    if(iAmTeamAdmin()){
-      const n = document.createElement("input"); n.type = "number"; n.min = "0"; n.value = T.n; n.className = "lms-tn";
-      const per = document.createElement("select"); [["week","a week"],["month","a month"]].forEach(([k,t])=>{ const o = document.createElement("option"); o.value = k; o.textContent = t; per.appendChild(o); }); per.value = T.per;
-      const save = ()=>{ RMAPS.lmsTarget = { n: Math.max(0, parseInt(n.value,10)||0), per: per.value }; saveRmaps(); draw(); };
-      n.onchange = save; per.onchange = save;
-      tr.append(n, document.createTextNode(" approved drops "), per);
-    } else tr.append(document.createTextNode(T.n + " approved drop" + (T.n===1?"":"s") + " " + (T.per==="month" ? "a month" : "a week")));
-    const hint = document.createElement("span"); hint.className = "hint"; hint.textContent = " · set by team Owners/Admins for every space"; tr.appendChild(hint);
-    dg.appendChild(tr);
+    const perTxt = { week:"a week", month:"a month", quarter:"a quarter" }[T.per] || "a week";
+    tr.append(document.createTextNode(T.n ? "🎯 Target: each person makes " + T.n + " approved drop" + (T.n===1?"":"s") + " " + perTxt + " (counted across every space)" : "🎯 No LMS target set yet"));
+    if(T.mk){
+      const go = document.createElement("button"); go.className = "tool sm"; go.style.marginLeft = "auto";
+      go.textContent = (T.n ? "Change it" : "Set it") + " in " + T.mk.name + " → 🤝 Our agreement";
+      go.onclick = ()=>{ close(); navToSpace(T.mk); paneTab = "work"; discView = "agreement"; renderAll(); };
+      tr.appendChild(go);
+    }    dg.appendChild(tr);
     /* who has made how many */
     const tb = document.createElement("div"); tb.className = "lms-ppl";
     lmsPeopleOf(cs).forEach(u=>{
-      const mine = subs.filter(x=> x.by && x.by.email===u.email), got = mine.filter(x=> x.status==="approved" && dNum(x.finalAt||x.at) >= from).length;
+      const mine = subs.filter(x=> x.by && x.by.email===u.email), got = lmsCountOf(u.email, T.per);
       const wait = mine.filter(x=> x.status==="space" || x.status==="final").length;
       const r = document.createElement("div"); r.className = "lms-pr" + (got < T.n ? " short" : " ok");
       const nm = document.createElement("span"); nm.textContent = userDisplayName(u);
       const ct = document.createElement("b"); ct.textContent = got + " / " + T.n + (got >= T.n ? " ✅" : " ⚠");
+      if(!T.n) ct.textContent = String(got);
       ct.title = got >= T.n ? "Target met this " + T.per : "Short by " + (T.n - got) + " this " + T.per;
       const wt = document.createElement("small"); wt.textContent = wait ? wait + " waiting for approval" : "";
       r.append(nm, wt, ct); tb.appendChild(r);
@@ -24091,6 +24134,102 @@ function lmsSpacePanel(cs){
     btns.append(add, sp, cl); dg.appendChild(btns);
   };
   draw();
+  ov.appendChild(dg); ov.addEventListener("mousedown", e=>{ if(e.target===ov) close(); });
+  document.body.appendChild(ov);
+}
+/* ================= Games from the spaces =================
+   ⋯ → 🎮 Submit to games: the game (Let's Play's HTML file) is saved and submitted through the games library as
+   usual, and cs.gameSubs remembers it came from this space. Its admins/👑 heads approve it first; until then
+   Administration → Review games holds its Approve button. sub.status: "space" → "review" | "declined";
+   the library's own status (approved / sent back) is read from GAMES.                                         */
+function gameSubOf(id){ for(const cs of (CSPACES.list||[])){ const sub = (cs.gameSubs||[]).find(x=> x.gameId===id); if(sub) return { cs, sub }; } return null; }
+let _gamesAsked = false;
+function gamesEnsure(){ if(!GAMES_READY && !_gamesAsked && SUPA && !window.LOCAL_MODE){ _gamesAsked = true; loadGames().then(()=> renderAll()).catch(()=>{}); } }
+function gameSubsApproved(from, to){
+  gamesEnsure();
+  let n = 0;
+  (CSPACES.list||[]).forEach(cs=> (cs.gameSubs||[]).forEach(sub=>{
+    const g = GAMES[sub.gameId], d = g && g.reviewed_at ? String(g.reviewed_at).slice(0,10) : "";
+    if(g && g.status==="approved" && d >= from && d <= to) n++;
+  }));
+  return n;
+}
+function gameWaiting(cs){ return lmsCanSpace(cs) ? (cs.gameSubs||[]).filter(x=> x.status==="space").length : 0; }
+function gameSubmit(cs){
+  const me = currentUser(); if(!me){ toast("Sign in first"); return; }
+  if(!SUPA || window.LOCAL_MODE){ toast("Games need the live app"); return; }
+  if(!hasPerm("create_games")){ toast("Your role can’t make games yet — ask a team Owner to tick “Create games” for it in Administration → Roles"); return; }
+  rmlModal("🎮 Submit to games — " + cs.name, [
+    { k:"emoji", label:"Emoji", type:"text", value:"🎮", half:true },
+    { k:"title", label:"Game name", type:"text", value:"", ph:"e.g. Customer Detective", half:true },
+    { k:"tagline", label:"One-line tagline", type:"text", value:"", ph:"e.g. Every customer has a story." },
+    { k:"takeaway", label:"Takeaway (the lesson, shown with the badge)", type:"area", rows:2, value:"" },
+    { k:"level", label:"Who can play it", type:"select", value:"company", opts:[["company","Company — everyone"],["team","Team — only " + ((TEAMS[TEAM] && TEAMS[TEAM].name) || TEAM)]] },
+    { k:"file", label:"Game file (.html, max 3 MB) — the rules and an AI prompt are in Administration → My games", type:"file", accept:".html,.htm,text/html", max:3145728 },
+    { k:"html", label:"…or paste the HTML code", type:"area", rows:4, plain:true, value:"", ph:"<!DOCTYPE html> ..." },
+  ], v=>{
+    const title = (v.title||"").trim(), html = v.file || (v.html||"").trim();
+    if(!title){ toast("Give the game a name"); return false; }
+    if(!html){ toast("Add the game’s HTML file"); return false; }
+    if(new Blob([html]).size > 3145728){ toast("The game file is over 3 MB"); return false; }
+    if(!/dubuddy:game-complete/.test(html) && !confirm("This file never sends the finished signal (dubuddy:game-complete), so players won't get a badge.\n\nSend it anyway?")) return false;
+    toast("Sending…");
+    (async ()=>{
+      try{
+        const r = await gamesCall({ action:"save_game", team:TEAM, title, emoji:(v.emoji||"").trim(), tagline:(v.tagline||"").trim(), takeaway:(v.takeaway||"").trim(), level:v.level, department_id:null, html });
+        await gamesCall({ action:"submit_game", id:r.game.id });
+        cs.gameSubs = cs.gameSubs || [];
+        cs.gameSubs.push({ id:"gs-"+Date.now().toString(36), gameId:r.game.id, title, emoji:(v.emoji||"").trim(), tagline:(v.tagline||"").trim(), takeaway:(v.takeaway||"").trim(),
+          by:{ id:me.id, email:me.email, name:userDisplayName(me) }, at: todayISO(), status:"space" });
+        pushAll(); loadGames().catch(()=>{});
+        toast("✅ Sent — " + cs.name + "’s admins approve it first, then it’s reviewed and played");
+      }catch(e){ alert("Couldn't send the game: " + e.message); }
+    })();
+  }, { width: 640, sub: "It’s kept with " + cs.name + ". Its admins approve it, then it’s played and reviewed in Administration → Review games before it goes live in Let’s Play." });
+}
+function gameSpacePanel(cs){
+  gamesEnsure();
+  document.querySelectorAll(".overlay.lms-ov").forEach(o=> o.remove());
+  const ov = document.createElement("div"); ov.className = "overlay show lms-ov";
+  const dg = document.createElement("div"); dg.className = "dialog"; dg.style.maxWidth = "760px";
+  const close = ()=> ov.remove();
+  const draw = ()=>{
+    dg.innerHTML = "";
+    const h = document.createElement("h3"); h.textContent = "🎮 Games — " + cs.name; dg.appendChild(h);
+    const hint = document.createElement("div"); hint.className = "hint"; hint.textContent = "Games sent from " + cs.name + ". Its admins approve first; then they’re played and reviewed in Administration → Review games. How many count is set in Marketing → 🤝 Our agreement (Games)."; dg.appendChild(hint);
+    const L = (cs.gameSubs||[]).slice().sort((a,b)=> (a.status==="space" ? 0 : 1) - (b.status==="space" ? 0 : 1) || String(b.at).localeCompare(String(a.at)));
+    if(!L.length){ const e = document.createElement("div"); e.className = "hint"; e.style.marginTop = "10px"; e.textContent = "Nothing yet — send one from ⋯ → 🎮 Submit to games."; dg.appendChild(e); }
+    L.forEach(sub=>{
+      const g = GAMES[sub.gameId];
+      const r = document.createElement("div"); r.className = "lms-sub";
+      const top = document.createElement("div"); top.className = "lms-sub-top";
+      const t = document.createElement("b"); t.textContent = (sub.emoji || "🎮") + " " + sub.title;
+      const lib = g ? (g.status==="approved" ? (gamePlayable(g) ? "✅ Live in Let’s Play" : "✅ Approved") : g.status==="sent_back" ? "↩ Sent back" : g.status==="submitted" ? "Waiting for review" : g.status) : "";
+      const st = document.createElement("span"); st.className = "lms-st " + (sub.status==="declined" ? "declined" : g && g.status==="approved" ? "approved" : "");
+      st.textContent = sub.status==="space" ? "Waiting for " + cs.name + "’s admins" : sub.status==="declined" ? "Declined here" : (lib || "With the reviewer");
+      top.append(t, st); r.appendChild(top);
+      const meta = document.createElement("div"); meta.className = "hint";
+      meta.textContent = (sub.by && sub.by.name || "") + " · " + rmlFmt(sub.at) + (sub.spaceBy ? " · space ✓ " + sub.spaceBy : "") + (sub.tagline ? " · " + sub.tagline : "");
+      r.appendChild(meta);
+      if(g && g.status==="sent_back" && g.review_note){ const n = document.createElement("div"); n.className = "lms-sub-note"; n.textContent = "Reviewer: " + g.review_note; r.appendChild(n); }
+      if(sub.status==="space" && lmsCanSpace(cs)){
+        const bt = document.createElement("div"); bt.className = "lms-sub-btns";
+        const ok = document.createElement("button"); ok.className = "btn save"; ok.textContent = "✓ Approve for " + cs.name;
+        ok.onclick = ()=>{ sub.status = "review"; sub.spaceBy = userDisplayName(currentUser()); sub.spaceAt = todayISO(); pushAll(); toast("Approved — it goes on to Review games"); draw(); };
+        const no = document.createElement("button"); no.className = "btn"; no.textContent = "Decline";
+        no.onclick = ()=>{ if(!confirm("Decline “" + sub.title + "”?")) return; sub.status = "declined"; sub.decidedBy = userDisplayName(currentUser()); pushAll(); draw(); };
+        bt.append(ok, no); r.appendChild(bt);
+      }
+      dg.appendChild(r);
+    });
+    const btns = document.createElement("div"); btns.className = "btns";
+    const add = document.createElement("button"); add.className = "btn"; add.textContent = "＋ Submit to games"; add.onclick = ()=>{ close(); gameSubmit(cs); };
+    const sp = document.createElement("span"); sp.style.flex = "1";
+    const cl = document.createElement("button"); cl.className = "btn save"; cl.textContent = "Close"; cl.onclick = close;
+    btns.append(add, sp, cl); dg.appendChild(btns);
+  };
+  draw();
+  if(!GAMES_READY && SUPA && !window.LOCAL_MODE) loadGames().then(()=>{ if(document.body.contains(ov)) draw(); }).catch(()=>{});
   ov.appendChild(dg); ov.addEventListener("mousedown", e=>{ if(e.target===ov) close(); });
   document.body.appendChild(ov);
 }
@@ -24598,6 +24737,8 @@ function renderReviewGames(wrap){
       const play = document.createElement("button"); play.className = "btn"; play.textContent = "▶ Play"; play.onclick = ()=> previewGameFile(g, g.version);
       const ok = document.createElement("button"); ok.className = "btn save"; ok.textContent = "Approve";
       const no = document.createElement("button"); no.className = "btn"; no.textContent = "Send back";
+      const _gs = gameSubOf(g.id);   /* sent from a space: its admins approve first */
+      if(_gs && _gs.sub.status==="space"){ ok.disabled = true; ok.title = "Waiting for " + _gs.cs.name + "’s admins to approve it first"; }
       ok.onclick = async ()=>{
         const note = prompt("Approve “" + g.title + "” (version " + g.version + ")? Optional note for the creator:", "");
         if(note === null) return;
@@ -24616,7 +24757,8 @@ function renderReviewGames(wrap){
         await loadGames().catch(()=>{}); renderAdminPage();
       };
       acts.append(play, ok, no);
-      card.append(gameCardInfo(g, "by " + (cr ? userDisplayName(cr) : "someone") + " · submitted " + fmtWhen(g.updated_at)), acts);
+      card.append(gameCardInfo(g, "by " + (cr ? userDisplayName(cr) : "someone") + " · submitted " + fmtWhen(g.updated_at)
+        + (_gs ? " · from " + _gs.cs.name + (_gs.sub.status==="space" ? " — ⏳ waiting for its admins" : _gs.sub.status==="declined" ? " — ✗ its admins declined it" : " — ✓ approved by " + (_gs.sub.spaceBy || "its admins")) : "")), acts);
       if(g.takeaway){ const tk = document.createElement("div"); tk.style.cssText = "flex-basis:100%;font-size:13px"; tk.textContent = "Takeaway: " + g.takeaway; card.appendChild(tk); }
       body.appendChild(card);
     });
