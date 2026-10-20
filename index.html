@@ -13914,9 +13914,12 @@ function rmlOwnerSuggestions(m){
 }
 function rmlEditItem(m, it, en){
   const own = en.kind==="own";
+  /* the title can be edited here for anything saved with the team (a linked card's own title changes
+     on its board too); bug tickets live in their own table, so they're renamed on the bug board */
+  const named = en.kind!=="bug";
   const r = it.rule || {};
   const fields = [];
-  if(own) fields.push({ k:"title", label:"Title", type:"text", value: en.task.title||"" });
+  if(named) fields.push({ k:"title", label: own ? "Title" : "Title (renames the card on its board too)", type:"text", value: en.task.title||"" });
   fields.push(
     { k:"lane", label: {gantt:"Phase", swimlane:"Swimlane", wbs:"Group"}[m.view] || "Lane", type:"select", value: rmlLaneOf(m, it).id, opts: m.lanes.map(l=>[l.id, (m.view==="wbs" || m.view==="gantt" ? rmwLanePath(m, l) : l.name) + (l.kind==="ongoing" ? " (ongoing)" : "")]) },
     { k:"start", label:"Starts", type:"date", value: it.start || todayISO(), half:true },
@@ -13940,9 +13943,10 @@ function rmlEditItem(m, it, en){
     const opts = m.items.filter(x=> x!==it && !x.parent && reg[x.tid]).map(x=> [x.rid, reg[x.tid].task.title || "(untitled)"]);
     if(opts.length) fields.splice(fields.findIndex(f=> f.k==="lane")+1, 0, { k:"parent", label:"Sub-task of", type:"select", value: (rmgParentOf(m, it) || {}).rid || "", opts: [["","— none (a main task) —"]].concat(opts) });
   }
-  rmlModal(own ? "Edit item" : (en.task.title||"Item"), fields, v=>{
+  rmlModal(named ? "Edit item" : (en.task.title||"Item"), fields, v=>{
     if(v.start && v.end && dNum(v.end) < dNum(v.start)){ toast("“Done by” is before the start date"); return false; }
-    if(own){ const nm=(v.title||"").trim(); if(!nm){ toast("Give it a title"); return false; } en.task.title = nm; en.task.status = v.status || "planned"; }
+    if(named){ const nm=(v.title||"").trim(); if(!nm){ toast("Give it a title"); return false; } en.task.title = nm; }
+    if(own) en.task.status = v.status || "planned";
     const oldLane = rmlLaneOf(m, rmgParentOf(m, it) || it).id;
     it.lane = v.lane; if(v.start) it.start = v.start; if(v.end) it.end = v.end;
     if(subOf && "parent" in v){
