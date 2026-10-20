@@ -2771,6 +2771,9 @@ body.rm-chart #pane-work > .controls{display:none}
 .proc-depts{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 18px}
 .proc-dept{border:1px solid var(--line-strong);background:var(--paper);border-radius:99px;padding:6px 12px;font-size:12.5px;cursor:pointer}
 .proc-dept:hover{border-color:var(--indigo)}
+.proc-dgroup{display:inline-flex;gap:4px}
+.proc-req{display:flex;align-items:center;gap:12px;flex-wrap:wrap;border:1.5px dashed var(--line-strong);background:var(--paper);border-radius:12px;padding:12px 14px;margin:0 0 14px;font-size:14px}
+.proc-sech{font-weight:700;font-size:13px;margin:14px 0 6px;color:var(--ink)}
 .proc-fh{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:6px 0 10px}
 .rml-docview{max-height:65vh;overflow:auto;font-size:14px;line-height:1.55;padding:4px 2px}
 .rml-docview ul,.rml-docview ol{margin:2px 0 2px 20px;padding:0}
@@ -3566,6 +3569,7 @@ body.rm-chart #pane-work > .controls{display:none}
     <div class="ss-tabs">
       <button class="ss-tab" data-sstab="people">👥 People</button>
       <button class="ss-tab" data-sstab="perms">🔐 Permissions</button>
+      <button class="ss-tab" data-sstab="proc" style="display:none">⚙️ Process improvements</button>
     </div>
     <div class="dlg-body" id="ssettings-body"></div>
     <div class="btns">
@@ -5530,6 +5534,7 @@ function canViewSpace(ref){
 function spaceViewAllowed(){
   const cs = (CSPACES.list||[]).find(x=>x.id===activeCspace);
   if(!cs) return true;
+  if(cs.type==="procdept") return true;   /* shows "Request access" to people without it */
   return canViewSpace(csRef(cs));
 }
 /* ---------- link a space to an OKR ---------- */
@@ -6146,7 +6151,7 @@ function discSetStage(cs, idea, stage){
   idea.stage = stage;
   saveDisc();
   discOnEnter(cs, idea, was);
-  if(cs.type==="process" && was!==stage) procPing(cs, idea);
+  if(cs.type==="process" && was!==stage){ procPing(cs, idea); if(procSync(cs)) saveRmaps(); }
 }
 function openIdeaDates(cs, idea, phase){
   const ph = discPhase(phase) || PIPE_PHASES[1];
@@ -8194,7 +8199,8 @@ function workTabs(){
   if(view==="disc"){
     // Product Roadmap spaces: no stage board (an idea's stage is set from All ideas); Timeline is a Gantt
     const _ct = (currentDisc() || {}).type;
-    if(_ct==="procdept") return [{key:"ideas",label:"⚙️ Process improvements"}];
+    if(_ct==="procdept") return procHasAccess(currentDisc()) || canViewSpace(csRef(currentDisc()))
+      ? [{key:"ideas",label:"⚙️ Process improvements"},{key:"timeline",label:"Timeline"}] : [{key:"ideas",label:"🔒 Request access"}];
     if(_ct==="process") return [{key:"ideas",label:"All ideas"},{key:"timeline",label:"Timeline"},{key:"team",label:"👥 From team"}];
     const _t = _ct==="discovery"
       ? [{key:"ideas",label:"All ideas"},{key:"timeline",label:"Timeline"}]
@@ -8633,6 +8639,9 @@ function allTasks(){
   (CSPACES.list||[]).filter(x=>x.type==="discovery" || x.type==="process").forEach(cs=>{
     (cs.ideas||[]).forEach(i=> out.push({tid:i.id, task:i, path:cs.name+" · Ideas", kind:"idea"}));
     if(cs.gantt) (cs.gantt.own||[]).forEach(t=> out.push({tid:t.tid, task:t, path:cs.name+" \u00B7 written on the Timeline", kind:"own", map:cs.gantt}));
+  });
+  (CSPACES.list||[]).filter(x=>x.type==="procdept" && x.gantt).forEach(cs=>{
+    (cs.gantt.own||[]).forEach(t=> out.push({tid:t.tid, task:t, path:procDeptName(cs.id)+" \u00B7 process Timeline", kind:"own", map:cs.gantt}));
   });
   // items written straight onto a roadmap (not from any space): map.own = [{tid, title, note, status}]
   ((typeof RMAPS!=="undefined" && RMAPS.maps) || []).forEach(m=>{
@@ -16433,7 +16442,11 @@ function renderContentDisc(){
   const cs = currentDisc();
   if(!cs){ view = "roadmap"; renderAll(); return; }
 
-  if(cs.type==="procdept") return procDeptPane(cs);
+  if(cs.type==="procdept"){
+    if(!canViewSpace(csRef(cs))) return procRequestPane(cs);
+    if(discView==="timeline") return procDeptTimeline(cs);
+    return procDeptPane(cs);
+  }
   if(cs.type==="process" && discView==="team") return procTeamPane(cs);
   if(discView === "roadmap" && (cs.type==="discovery" || cs.type==="process")) discView = "ideas";
   if(discView === "roadmap") return discRoadmapPane(cs);
@@ -16616,7 +16629,8 @@ function discRoadmapPane(cs){
 
 /* ---- Timeline: the full roadmap engine (drag, zoom, stretch, markers, range) on this space's ideas ---- */
 function discTimelinePane(cs){
-  if(cs.type==="discovery" || cs.type==="process") return discGanttPane(cs);
+  if(cs.type==="process") return procTopTimeline(cs);
+  if(cs.type==="discovery") return discGanttPane(cs);
   cs.tl = cs.tl || { id:"rmtl-"+cs.id, items:[], markers:[] };
   cs.tl.items = cs.tl.items || [];
   cs.tl.markers = cs.tl.markers || [];
@@ -16673,7 +16687,7 @@ function procPing(cs, idea){
   }).then(r=>{ if(r && r.error) console.warn("process ping:", r.error.message); });
 }
 /* write / edit one improvement (the department space, or the process space for its own feed) */
-function procWrite(dept, idea){
+function procWrite(dept, idea, forDept){
   const t = procTarget(dept);
   if(!t){ toast("There's no Process Optimization space to send to yet"); return; }
   const P = (idea && idea.proc) || {}, me = currentUser();
@@ -16690,11 +16704,12 @@ function procWrite(dept, idea){
     if(idea){ idea.title = title; idea.proc = proc; idea.note = note; }
     else {
       t.ideas = t.ideas || [];
-      t.ideas.push({ id:"idea-"+Math.random().toString(36).slice(2,8), title, note, proc, stage:"proposed", state:"Pending", status:"planned",
+      t.ideas.push({ id:"idea-"+Math.random().toString(36).slice(2,8), title, note, proc, stage: forDept ? "approved" : "proposed", state:"Pending", status:"planned",
                      dept: dept.id, by: me ? { id: me.id, name: userDisplayName(me) } : null, created: todayISO() });
     }
-    saveDisc(); toast(idea ? "Saved" : "Sent to “" + t.name + "”");
-  }, { width: 560, sub: idea ? "" : "It goes straight into “" + t.name + "” → All ideas." });
+    procSync(t);
+    saveDisc(); toast(idea ? "Saved" : forDept ? "Added for " + procDeptName(dept.id) + " — on their Timeline" : "Sent to “" + t.name + "”");
+  }, { width: 560, sub: idea ? "" : forDept ? "For " + procDeptName(dept.id) + ": it goes in already Approved, onto their Timeline." : "It goes straight into “" + t.name + "” → All ideas." });
 }
 /* the department space: write improvements, see where each one stands */
 function procDeptPane(cs){
@@ -16713,6 +16728,7 @@ function procDeptPane(cs){
   }
   block.appendChild(head);
   if(!t){ const e = document.createElement("div"); e.className = "empty"; e.textContent = "There's no Process Optimization space yet. Make one from ＋ Add space, then entries here go to it."; block.appendChild(e); wrap.appendChild(block); return; }
+  if(!procHasAccess(cs)) block.appendChild(procRequestBox(cs));
   const hint = document.createElement("div"); hint.className = "hint"; hint.style.margin = "0 0 12px";
   hint.textContent = "Each one goes to “" + t.name + "”. Its stage below updates as it’s reviewed, piloted, rolled out and measured.";
   block.appendChild(hint);
@@ -16735,6 +16751,170 @@ function procDeptPane(cs){
   if(!list.length){ const e = document.createElement("div"); e.className = "empty"; e.style.padding = "24px"; e.textContent = editMode ? "Nothing yet. Press ＋ Write an improvement for a process you’re making better." : "Nothing sent yet."; block.appendChild(e); }
   wrap.appendChild(block);
 }
+/* ---- access: an Editor role in the department space = may write improvements and plan its Timeline ---- */
+const PROC_LIVE = ["approved","piloting","rolledout","measured"];   /* on the Timelines */
+function procHasAccess(d){ return !!d && canInSpace("editor", csRef(d)); }
+function procCanManage(d){ if(!d) return false; const par = (CSPACES.list||[]).find(x=> x.id===d.parent); return canInSpace("admin", csRef(d)) || (!!par && canInSpace("admin", csRef(par))); }
+function procUserHas(u, d){ const r = spaceRoleOf(u, csRef(d)); return !!r && roleRank(r) <= roleRank("editor"); }
+function procGrant(d, email){
+  d.members = d.members || {};
+  d.members[email] = "editor";
+  d.requests = (d.requests||[]).filter(r=> r.email!==email);
+}
+function procRevoke(d, email){
+  d.members = d.members || {};
+  if((d.access||"open")==="open") d.members[email] = "viewer"; else delete d.members[email];   /* open spaces: back to view-only */
+}
+/* who can use it, requests waiting, ＋ add people — Space settings tab and the 👥 People dialog */
+function procAccessPanel(d, body, redraw){
+  body.innerHTML = "";
+  const manage = procCanManage(d);
+  const note = document.createElement("div"); note.className = "ss-note";
+  note.textContent = "People here can write process improvements for " + procDeptName(d.id) + " and plan them on its Timeline. Others see the space with 🔒 and can ask for access. Team Owners and Admins always can.";
+  body.appendChild(note);
+  if((d.access||"open")==="open"){
+    const w = document.createElement("div"); w.className = "ss-note"; w.style.borderColor = "var(--amber,#D9A030)";
+    w.textContent = "This space is Open: everyone whose team role can edit already has access. ";
+    if(manage){ const mk = document.createElement("button"); mk.className = "person-del"; mk.textContent = "Make it invite-only"; mk.onclick = ()=>{ d.access = "limited"; pushAll(); redraw(); toast("Now only people you add can write here"); }; w.appendChild(mk); }
+    body.appendChild(w);
+  }
+  const reqs = d.requests || [];
+  const sec = t=>{ const h = document.createElement("div"); h.className = "proc-sech"; h.textContent = t; body.appendChild(h); };
+  sec("🙋 Asking for access (" + reqs.length + ")");
+  reqs.forEach(r=>{
+    const row = document.createElement("div"); row.className = "ss-member";
+    const main = document.createElement("div"); main.className = "person-main";
+    const nm = document.createElement("div"); nm.className = "person-name"; nm.textContent = r.name || r.email;
+    const em = document.createElement("div"); em.className = "person-email"; em.textContent = r.email + (r.at ? " · asked " + fmtD(r.at) : "") + (r.why ? " · “" + r.why + "”" : "");
+    main.append(nm, em); row.appendChild(main);
+    if(manage){
+      const ok = document.createElement("button"); ok.className = "btn save"; ok.textContent = "Approve";
+      ok.onclick = ()=>{ procGrant(d, r.email); pushAll(); redraw(); toast((r.name||r.email) + " can now use it"); };
+      const no = document.createElement("button"); no.className = "btn"; no.textContent = "Decline";
+      no.onclick = ()=>{ d.requests = reqs.filter(x=> x!==r); pushAll(); redraw(); };
+      row.append(ok, no);
+    }
+    body.appendChild(row);
+  });
+  if(!reqs.length){ const e = document.createElement("div"); e.className = "hint"; e.style.margin = "0 0 8px"; e.textContent = "Nobody is waiting."; body.appendChild(e); }
+  const team = USERS.filter(u=> u.super || (u.teams && u.teams[TEAM]));
+  const have = team.filter(u=> procUserHas(u, d)), rest = team.filter(u=> !procUserHas(u, d));
+  sec("✅ Can use it (" + have.length + ")");
+  have.forEach(u=>{
+    const row = document.createElement("div"); row.className = "ss-member";
+    const main = document.createElement("div"); main.className = "person-main";
+    const nm = document.createElement("div"); nm.className = "person-name"; nm.textContent = userDisplayName(u);
+    const em = document.createElement("div"); em.className = "person-email"; em.textContent = u.email; main.append(nm, em); row.appendChild(main);
+    const tr = roleOf(u, TEAM);
+    if(u.super || roleRank(tr) <= roleRank("admin")){ const tag = document.createElement("span"); tag.className = "ss-mrole"; tag.textContent = (u.super ? "Owner" : roleLabel(tr)) + " (team)"; row.appendChild(tag); }
+    else if(manage){ const rm = document.createElement("button"); rm.className = "person-del"; rm.textContent = "Remove"; rm.onclick = ()=>{ procRevoke(d, u.email); pushAll(); redraw(); }; row.appendChild(rm); }
+    body.appendChild(row);
+  });
+  if(manage && rest.length){
+    sec("＋ Add people");
+    const row = document.createElement("div"); row.className = "ss-access-row";
+    const sel = document.createElement("select"); sel.className = "person-role"; sel.style.flex = "1";
+    const o0 = document.createElement("option"); o0.value = ""; o0.textContent = "Pick someone…"; sel.appendChild(o0);
+    rest.forEach(u=>{ const o = document.createElement("option"); o.value = u.email; o.textContent = userDisplayName(u) + " · " + u.email; sel.appendChild(o); });
+    const go = document.createElement("button"); go.className = "btn save"; go.textContent = "Add";
+    go.onclick = ()=>{ if(!sel.value) return; procGrant(d, sel.value); pushAll(); redraw(); toast("Added"); };
+    row.append(sel, go); body.appendChild(row);
+  }
+}
+function procPeopleDialog(d){
+  const ov = document.createElement("div"); ov.className = "overlay show";
+  const dg = document.createElement("div"); dg.className = "dialog"; dg.setAttribute("role","dialog"); dg.style.maxWidth = "620px";
+  const h = document.createElement("h3"); h.textContent = "👥 " + procDeptName(d.id) + " · Process improvements"; dg.appendChild(h);
+  const body = document.createElement("div"); body.className = "dlg-body"; dg.appendChild(body);
+  const btns = document.createElement("div"); btns.className = "btns";
+  const cl = document.createElement("button"); cl.className = "btn"; cl.textContent = "Close"; cl.onclick = ()=>{ ov.remove(); renderAll(); };
+  btns.appendChild(cl); dg.appendChild(btns);
+  ov.appendChild(dg); ov.addEventListener("mousedown", e=>{ if(e.target===ov){ ov.remove(); renderAll(); } });
+  document.body.appendChild(ov);
+  const redraw = ()=> procAccessPanel(d, body, redraw);
+  redraw();
+}
+/* 🙋 asking for access (saved on the department space; whoever manages it approves) */
+function procRequestBox(d){
+  const box = document.createElement("div"); box.className = "proc-req";
+  const me = currentUser();
+  const mine = me && (d.requests||[]).find(r=> r.email===me.email);
+  const t = document.createElement("div");
+  t.textContent = mine ? "🙋 You asked for access on " + fmtD(mine.at) + ". You’ll be able to write here once it’s approved."
+                       : "🔒 You can’t write process improvements for " + procDeptName(d.id) + " yet.";
+  box.appendChild(t);
+  if(me && !mine){
+    const b = document.createElement("button"); b.className = "tool sm primary"; b.textContent = "🙋 Request access";
+    b.onclick = ()=>{
+      const why = prompt("Anything to add? (optional — e.g. which process you want to improve)") ;
+      if(why === null) return;
+      d.requests = d.requests || [];
+      d.requests.push({ email: me.email, uid: me.id, name: userDisplayName(me), at: todayISO(), why: (why||"").trim().slice(0, 200) });
+      pushAll(); renderAll(); toast("Asked — the space’s owner will see it");
+    };
+    box.appendChild(b);
+  }
+  return box;
+}
+function procRequestPane(d){
+  const wrap = $("content");
+  const block = document.createElement("section"); block.className = "module-block";
+  const head = document.createElement("div"); head.className = "module-head";
+  const h2 = document.createElement("h2"); h2.textContent = "⚙️ Process improvements · " + procDeptName(d.id); head.appendChild(h2);
+  block.append(head, procRequestBox(d));
+  wrap.appendChild(block);
+}
+/* ---- department Timeline: every Approved-onwards improvement is a row, planned by the department ---- */
+function procDeptGantt(d){
+  const g = discGantt(d);
+  g.name = "⚙️ " + procDeptName(d.id) + " — Timeline";
+  return g;
+}
+/* add rows for improvements that reached Approved, drop rows for ones moved back; true if anything changed */
+function procSync(t){
+  let changed = false;
+  (CSPACES.list||[]).filter(x=> x.type==="procdept" && procTarget(x)===t).forEach(d=>{
+    const g = procDeptGantt(d);
+    const live = (t.ideas||[]).filter(i=> i.dept===d.id && PROC_LIVE.includes(i.stage));
+    const ids = new Set(live.map(i=> i.id));
+    live.forEach(i=>{
+      if(g.items.some(it=> it.tid===i.id)) return;
+      const st = todayISO();
+      g.items.push({ rid:"ri-"+Math.random().toString(36).slice(2,7), tid:i.id, start:st, end:dISO(dNum(st)+13), lane:g.lanes[0].id, owner:(i.proc && i.proc.owner) || undefined });
+      changed = true;
+    });
+    g.items.slice().forEach(it=>{
+      const idea = (t.ideas||[]).find(i=> i.id===it.tid);
+      if(idea && idea.dept===d.id && !ids.has(it.tid)){ rmgDropItem(g, it); changed = true; }
+    });
+  });
+  return changed;
+}
+function procByTid(){ const byTid = {}; allTasks().forEach(x=> byTid[x.tid] = x); return byTid; }
+function procDeptTimeline(d){
+  const t = procTarget(d); if(t && procSync(t) && editMode) pushAll();   /* rows are rebuilt on every draw; saved by whoever can edit */
+  const wrap = $("content"), m = procDeptGantt(d), byTid = procByTid();
+  m.items = m.items.filter(it=> byTid[it.tid]);
+  const hint = document.createElement("div"); hint.className = "hint"; hint.style.margin = "0 0 10px";
+  hint.textContent = "Each approved improvement is a row here. Set when you’re doing it (drag the bar or click it), add sub-tasks with ＋, and add phases if you like. " + ((t||{}).name || "Process Optimization") + " sees this plan.";
+  wrap.appendChild(hint);
+  renderRmapGantt(m, wrap, byTid);
+}
+/* the top board's Timeline: each department's plan (same data — edit it here too), then your own */
+function procTopTimeline(cs){
+  if(procSync(cs) && editMode) pushAll();
+  const wrap = $("content"), byTid = procByTid();
+  const depts = (CSPACES.list||[]).filter(x=> x.type==="procdept" && procTarget(x)===cs);
+  depts.forEach(d=>{
+    const m = procDeptGantt(d);
+    m.items = m.items.filter(it=> byTid[it.tid]);
+    renderRmapGantt(m, wrap, byTid);
+  });
+  const own = discGantt(cs);
+  own.name = depts.length ? "Your own plan" : "Timeline";
+  own.items = own.items.filter(it=> byTid[it.tid]);
+  renderRmapGantt(own, wrap, byTid);
+}
 /* 👥 From team (in the process space): everything the departments sent, and the department spaces */
 function procTeamPane(cs){
   const wrap = $("content");
@@ -16748,16 +16928,36 @@ function procTeamPane(cs){
     add.title = "Add a “Process improvements” space inside a department’s space";
     add.onclick = ()=> procConnect(cs); head.appendChild(add);
   }
+  if(editMode){
+    const ad = document.createElement("button"); ad.className = "tool sm"; ad.textContent = "＋ Add improvement for a department";
+    ad.title = "Write one yourself for a department — it lands there already Approved, on their Timeline";
+    ad.onclick = ()=>{
+      const ds = (CSPACES.list||[]).filter(x=> x.type==="procdept" && procTarget(x)===cs);
+      if(!ds.length){ toast("Connect a department first"); return; }
+      if(ds.length===1) return procWrite(ds[0], null, true);
+      openChoice("Add an improvement for which department?", ds.map(d=>({ label: procDeptName(d.id), value: d.id })), id=>{ const d = ds.find(x=> x.id===id); if(d) procWrite(d, null, true); });
+    };
+    head.appendChild(ad);
+  }
   block.appendChild(head);
   const depts = (CSPACES.list||[]).filter(x=> x.type==="procdept" && procTarget(x)===cs);
   const dl = document.createElement("div"); dl.className = "proc-depts";
   depts.forEach(d=>{
+    const g = document.createElement("span"); g.className = "proc-dgroup";
     const b = document.createElement("button"); b.className = "proc-dept";
     const vis = d.access==="private" ? "🔒 chosen people" : d.access==="limited" ? "👁 team views · chosen edit" : "everyone";
-    b.textContent = "⚙️ " + procDeptName(d.id) + " · " + procEntries(d).length + " sent · " + vis;
-    b.title = "Open it. Change who can see it from ⋯ → Settings next to it in the sidebar.";
+    const rq = (d.requests||[]).length;
+    b.textContent = "⚙️ " + procDeptName(d.id) + " · " + procEntries(d).length + " sent · " + vis + (rq ? " · 🙋 " + rq + " waiting" : "");
+    b.title = "Open it";
     b.onclick = ()=> navToSpace(d);
-    dl.appendChild(b);
+    g.appendChild(b);
+    if(procCanManage(d)){
+      const pp = document.createElement("button"); pp.className = "proc-dept"; pp.textContent = "👥 People" + (rq ? " (" + rq + ")" : "");
+      pp.title = "Who can use it, access requests, add people";
+      pp.onclick = ()=> procPeopleDialog(d);
+      g.appendChild(pp);
+    }
+    dl.appendChild(g);
   });
   if(!depts.length){ const e = document.createElement("div"); e.className = "hint"; e.textContent = "No departments connected yet. Press ＋ Connect a department to add a “Process improvements” space inside, say, Engineering or Marketing."; dl.appendChild(e); }
   block.appendChild(dl);
@@ -16934,7 +17134,7 @@ function renderAll(){
   // visibility protection: if you're viewing a space you can no longer see, bounce to a safe view
   (function(){
     const ref = currentSpaceRef();
-    if(ref && ref.key.indexOf("cs:")===0 && !canViewSpace(ref)){
+    if(ref && ref.key.indexOf("cs:")===0 && !canViewSpace(ref) && !(ref.obj && ref.obj.type==="procdept")){   /* department process spaces show "Request access" instead */
       view = "roadmap"; activeCspace = null; editMode = false; defaultView();
     }
     // bounce off a roadmap you can no longer see -> first viewable, else leave rmap view
@@ -17087,13 +17287,13 @@ function renderAll(){
       const _allCs = CSPACES.list.filter(cs=>canViewSpace(csRef(cs)) && !mktParentOf(cs) && !procParentOf(cs) && !hiddenForMe("cs:"+cs.id));
       const _shownCs = stableSidebar(_allCs, cs=>csIsActive(cs), SIDEBAR_CAP);
       const _drawCs = (cs, _host, _nested)=>{
-        if(!canViewSpace(csRef(cs))) return;   // private spaces hidden from non-members
+        if(!canViewSpace(csRef(cs)) && cs.type!=="procdept") return;   // private spaces hidden from non-members (department process spaces show 🔒, to ask for access)
         if(hiddenForMe("cs:"+cs.id)) return;    // I hid it from my sidebar (Administration → My hidden boards)
         const active = csIsActive(cs);
         const b = document.createElement("button");
         b.className = "ws-item"+(active && cs.type!=="marketing"?" active":"")+(_nested?" ws-nested":"")+(cs.type==="marketing"?" ws-parent":"");
         b.innerHTML = '<span class="dot cs"></span><span></span>';
-        b.querySelector("span:nth-child(2)").textContent = cs.name;
+        b.querySelector("span:nth-child(2)").textContent = cs.name + (cs.type==="procdept" && !procHasAccess(cs) ? " 🔒" : "");
         b.onclick = ()=> navToSpace(cs);
         if(cs.type==="marketing"){
           const chev = document.createElement("span"); chev.className = "ws-chev"+(mktOpen(cs)?" open":""); chev.textContent = "\u25BE";
@@ -24067,11 +24267,17 @@ function openSpaceSettings(ref){
   $("spacesettings-overlay").classList.add("show");
 }
 function drawSpaceSettings(){
+  /* ⚙️ Process improvements: on a department's settings (or the department space's own), who may use it */
+  const _pd = ssRef && ssRef.obj ? (ssRef.obj.type==="procdept" ? ssRef.obj : procKidsOf(ssRef.obj)[0]) : null;
+  const _pt = document.querySelector('#spacesettings-overlay .ss-tab[data-sstab="proc"]');
+  if(_pt){ _pt.style.display = _pd ? "" : "none"; const n = _pd ? (_pd.requests||[]).length : 0; _pt.textContent = "⚙️ Process improvements" + (n ? " (" + n + ")" : ""); }
+  if(ssTab === "proc" && !_pd) ssTab = "people";
   document.querySelectorAll("#spacesettings-overlay .ss-tab").forEach(t=>{
     t.classList.toggle("active", t.getAttribute("data-sstab")===ssTab);
   });
   const body = $("ssettings-body");
   body.innerHTML = "";
+  if(ssTab === "proc") return procAccessPanel(_pd, body, drawSpaceSettings);
   if(ssTab === "perms") return drawSpacePerms(body);
   return drawSpacePeople(body);
 }
