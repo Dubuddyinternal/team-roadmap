@@ -70,7 +70,7 @@
    renderAll, rmlModal, rmlTreeLines, rmgColResizer, allTasks, effStatus,
    dNum, dISO, fmtD, toast …).
    ===================================================================== */
-var TODO = { team: null, loaded: false, loading: false, local: false, why: null, whyMin: false, over: {}, planner: { groups: [], tasks: [] }, ideas: [], clock: { wake: "06:00", sleep: "22:00" }, sleepLog: {}, rest: {} };
+var TODO = { team: null, loaded: false, loading: false, local: false, why: null, whyMin: false, over: {}, planner: { groups: [], tasks: [] }, ideas: [], clock: { wake: "06:00", sleep: "22:00" }, sleepLog: {}, phase: null, rest: {} };
 var TODO_IDEA_KINDS = [["idea", "💡", "Idea"], ["imagine", "🌌", "Imagination"], ["question", "❓", "Question"], ["note", "📝", "Note"]];
 var todoIdeaKind = "idea";     // the kind picked for the next one I write
 var todoIdeaFilter = "";       // "" = all, else a kind
@@ -109,7 +109,7 @@ function todoPlannerNorm(p) {
 function todoApply(d) {
   d = d && typeof d === "object" ? d : {};
   TODO.rest = {};
-  Object.keys(d).forEach(function (k) { if (["why", "whyMin", "planner", "over", "ideas", "clock", "sleepLog"].indexOf(k) < 0) TODO.rest[k] = d[k]; });   // older My To-do data: kept untouched
+  Object.keys(d).forEach(function (k) { if (["why", "whyMin", "planner", "over", "ideas", "clock", "sleepLog", "phase"].indexOf(k) < 0) TODO.rest[k] = d[k]; });   // older My To-do data: kept untouched
   TODO.why = todoWhyNorm(d.why);
   TODO.whyMin = !!d.whyMin;
   TODO.over = d.over && typeof d.over === "object" ? d.over : {};
@@ -118,6 +118,8 @@ function todoApply(d) {
   var hm = function (v) { return /^\d{2}:\d{2}$/.test(v || "") ? v : ""; }, os = d.settings || {}, ck = d.clock || {};
   TODO.clock = { wake: hm(ck.wake) || hm(os.wakeAt) || "06:00", sleep: hm(ck.sleep) || hm(os.sleepAt) || "22:00" };
   TODO.sleepLog = d.sleepLog && typeof d.sleepLog === "object" ? d.sleepLog : {};
+  var ph = d.phase && typeof d.phase === "object" ? d.phase : null;
+  TODO.phase = ph && ph.text ? { text: String(ph.text), note: String(ph.note || ""), until: todoISO(ph.until) } : null;
   TODO.ideas = Array.isArray(d.ideas) ? d.ideas.filter(function (x) { return x && x.id && x.text; }) : [];
 }
 async function todoLoad() {
@@ -139,7 +141,7 @@ async function todoLoad() {
 }
 var _todoSaveT = null;
 function todoSave() {
-  var data = Object.assign({}, TODO.rest, { why: TODO.why, whyMin: TODO.whyMin, over: TODO.over, planner: TODO.planner, ideas: TODO.ideas, clock: TODO.clock, sleepLog: TODO.sleepLog });
+  var data = Object.assign({}, TODO.rest, { why: TODO.why, whyMin: TODO.whyMin, over: TODO.over, planner: TODO.planner, ideas: TODO.ideas, clock: TODO.clock, sleepLog: TODO.sleepLog, phase: TODO.phase });
   clearTimeout(_todoSaveT);
   _todoSaveT = setTimeout(async function () {
     if (!TODO.local && SUPA) {
@@ -160,6 +162,10 @@ function todoMe() {
   return { email: (u.email || "").toLowerCase(), id: u.id || "", names: names };
 }
 function todoNameIsMe(me, s) { return !!s && me.names.indexOf(String(s).trim().toLowerCase()) >= 0; }
+// an owner field can name a few people ("Sumit, Shivam" / "Sumit & Shivam")
+function todoOwners(s) { return String(s || "").split(/\s*(?:,|&|\/|\+|\band\b)\s*/i).map(function (x) { return x.trim(); }).filter(Boolean); }
+function todoOwnerIsMe(me, s) { return todoOwners(s).some(function (n) { return todoNameIsMe(me, n); }); }
+function todoOwnedByOther(me, s) { return todoOwners(s).length > 0 && !todoOwnerIsMe(me, s); }
 function todoColFromKcol(c) { return c === "done" ? "done" : (c === "progress" || c === "review") ? "progress" : "todo"; }
 function todoColFromStatus(s) { return s === "done" ? "done" : (s === "progress" || s === "blocked") ? "progress" : "todo"; }
 function todoCanSee(cs) { try { return typeof canViewSpace !== "function" || canViewSpace(csRef(cs)); } catch (_) { return true; } }
@@ -227,7 +233,7 @@ function todoAssigned() {
     });
     // Product All in One items (owner typed as a name)
     if (cs.type === "pdt") (cs.items || []).forEach(function (it) {
-      if (!todoNameIsMe(me, it.owner)) return;
+      if (!todoOwnerIsMe(me, it.owner)) return;
       var done = (it.lane === "bugs" && it.col === "done") || (it.lane === "qa" && it.col === "passed") || (it.lane === "dev" && it.col === "qa");
       out.push({ key: "pdt:" + it.id, hat: "product", icon: "🧩", src: "Product", title: it.title, where: cs.name,
         board: cs.name + (it.lane ? " · " + todoCap(it.lane) : ""), status: todoCap(it.col),
@@ -265,7 +271,7 @@ function todoAssigned() {
   var walkMod = function (m, path, label) {
     var leaf = function (t, trail) {
       if (t.items && t.items.length) { t.items.forEach(function (s, j) { leaf(s, trail + "." + j); }); return; }
-      if (!todoNameIsMe(me, t.owner)) return;
+      if (!todoOwnerIsMe(me, t.owner)) return;
       out.push({ key: "mod:" + path + ":" + (t.tid || trail), hat: "product", icon: "🗺️", src: "Roadmap", title: t.title, where: label,
         board: "Roadmap · " + label, status: todoCap(t.status || "planned"),
         col: todoColFromStatus(t.status), due: todoISO(t.deadline),
@@ -276,11 +282,23 @@ function todoAssigned() {
     (m.subs || []).forEach(function (s) { walkMod(s, path + "::" + s.key, label + " › " + s.name); });
   };
   ((DATA && DATA.modules) || []).forEach(function (m) { walkMod(m, m.key, m.name); });
+  // roadmap charts (Gantt) — the task's Owner is picked from the team's members
+  var reg = {}; try { allTasks().forEach(function (x) { if (x.tid) reg[x.tid] = x; }); } catch (_) { }
+  ((typeof RMAPS !== "undefined" && RMAPS.maps) || []).forEach(function (m) {
+    (m.items || []).forEach(function (it) {
+      if (!todoOwnerIsMe(me, it.owner)) return;
+      var x = reg[it.tid], rm = todoRoadmapItem(m.id, it.tid); if (!x || !rm) return;
+      var st = ""; try { st = effStatus(x.task); } catch (_) { }
+      out.push({ key: "rmap:" + m.id + ":" + it.tid, hat: "product", icon: "🗺", src: "Roadmap", title: x.task.title || x.task.name || "(untitled)", where: rm.where,
+        board: rm.where, status: todoCap(st || "planned"),
+        col: todoColFromStatus(st), due: todoISO(it.end), write: null, open: rm.open });
+    });
+  });
   // Educational Content tasks (owner typed as a name)
   ((CONTENT && CONTENT.sections) || []).forEach(function (s) {
     var walk = function (t) {
       if (t.items && t.items.length) { t.items.forEach(walk); return; }
-      if (!todoNameIsMe(me, t.owner)) return;
+      if (!todoOwnerIsMe(me, t.owner)) return;
       out.push({ key: "edu:" + (t.tid || t.title), hat: "ceo", icon: "📚", src: "Content", title: t.title, where: s.name || "Educational Content",
         board: "Content · " + (s.name || "Educational Content"), status: todoCap(t.status || "planned"),
         col: todoColFromStatus(t.status), due: todoISO(t.deadline),
@@ -372,7 +390,29 @@ function todoSources() {
   var S = { asg: {}, reg: {} };
   try { todoAssigned().forEach(function (e) { S.asg[e.key] = e; }); } catch (_) { }
   try { allTasks().forEach(function (x) { if (x.tid) S.reg[x.tid] = x; }); } catch (_) { }
+  S.me = todoMe();
   return S;
+}
+// a task linked from a board or roadmap that's now someone else's (or no longer assigned to me) stays off My plan —
+// kept in the data, so it comes back if it's handed back
+function todoGone(t, S) {
+  var r = t.ref;
+  if (t.parent) { var p = todoGroupTask(t.parent); if (p && p !== t && todoGone(p, S)) return true; }
+  if (!r) return false;
+  if (r.k === "asg") return !S.asg[r.key];
+  if (r.k === "tid") {
+    var rm = r.map && todoRoadmapItem(r.map, r.tid);
+    if (rm) return todoOwnedByOther(S.me, rm.it.owner);
+    var x = S.reg[r.tid];
+    return !!(x && x.task) && todoOwnedByOther(S.me, x.task.owner);
+  }
+  return false;
+}
+// already on My plan, whichever way it was added
+function todoOnPlan() {
+  var on = {};
+  TODO.planner.tasks.forEach(function (t) { var r = t.ref; if (!r) return; if (r.k === "asg") on[r.key] = 1; else if (r.k === "tid") { on["tid:" + r.tid] = 1; if (r.map) on["rmap:" + r.map + ":" + r.tid] = 1; } });
+  return on;
 }
 function todoInfo(t, S) {
   var r = t.ref, i = { title: t.title || "(untitled)", done: !!t.done, src: "", open: null };
@@ -389,8 +429,8 @@ function todoInfo(t, S) {
   }
   return i;
 }
-function todoTasksIn(gid) {
-  return TODO.planner.tasks.filter(function (t) { return t.group === gid; })
+function todoTasksIn(gid, S) {
+  return TODO.planner.tasks.filter(function (t) { return t.group === gid && !(S && todoGone(t, S)); })
     .sort(function (a, b) { return a.start < b.start ? -1 : a.start > b.start ? 1 : a.end < b.end ? -1 : 1; });
 }
 // a group's tasks in order, each followed by its subtasks: [{ t, depth, kids }]
@@ -565,7 +605,7 @@ function todoPickDialog(title, sub, rows, onAdd, searchable) {
 // new linked tasks start on the first day in view that isn't before today, and run to their due date (or a week)
 function todoPlaceStart() { var t = todoToday(), w = todoWindow(); return w.from > t ? w.from : t; }
 function todoPickAssigned() {
-  var on = {}; TODO.planner.tasks.forEach(function (t) { if (t.ref && t.ref.k === "asg") on[t.ref.key] = 1; });
+  var on = todoOnPlan();
   var rows = todoAssigned().filter(function (e) { return e.col !== "done"; }).map(function (e) {
     return { id: e.key, title: e.title || "(untitled)", sub: e.icon + " " + (e.board || e.where) + (e.status ? " · " + e.status : "") + (e.due ? " · due " + fmtD(e.due) : ""), on: !!on[e.key], e: e };
   });
@@ -585,23 +625,21 @@ function todoRoadmapItem(mapId, tid) {
   return { m: m, it: it, where: m.name + (ph ? " › " + ph : ""), open: function () { view = "rmap"; activeRmap = m.id; renderAll(); } };
 }
 function todoPickRoadmaps() {
-  var on = {}; TODO.planner.tasks.forEach(function (t) { if (t.ref && t.ref.k === "tid") on[t.ref.tid] = 1; });
+  var on = todoOnPlan();
   var reg = {}; try { allTasks().forEach(function (x) { if (x.tid) reg[x.tid] = x; }); } catch (_) { }
   var me = todoMe(), rows = [];
   ((typeof RMAPS !== "undefined" && RMAPS.maps) || []).forEach(function (m) {
     (m.items || []).forEach(function (it) {
       var x = reg[it.tid]; if (!x) return;
       try { if (effStatus(x.task) === "done") return; } catch (_) { }
+      if (!todoOwnerIsMe(me, it.owner)) return;   // only the tasks you're the Owner of
       var rm = todoRoadmapItem(m.id, it.tid);
-      var owner = it.owner || it.team || "";
-      var mine = !!owner && me.names.some(function (n) { return owner.toLowerCase().indexOf(n.split(" ")[0]) >= 0; });
-      rows.push({ id: it.tid, title: x.task.title || x.task.name || "(untitled)", mine: mine,
-        sub: (mine ? "⭐ yours · " : "") + rm.where + (it.start ? " · " + fmtD(it.start) + (it.end && it.end !== it.start ? " → " + fmtD(it.end) : "") : "") + (owner ? " · 👤 " + owner : ""),
-        on: !!on[it.tid], m: m, it: it });
+      rows.push({ id: it.tid, title: x.task.title || x.task.name || "(untitled)",
+        sub: rm.where + (it.start ? " · " + fmtD(it.start) + (it.end && it.end !== it.start ? " → " + fmtD(it.end) : "") : "") + " · 👤 " + it.owner,
+        on: !!(on["tid:" + it.tid] || on["rmap:" + m.id + ":" + it.tid]), m: m, it: it });
     });
   });
-  rows.sort(function (a, b) { return (b.mine ? 1 : 0) - (a.mine ? 1 : 0); });
-  todoPickDialog("🗺 From roadmaps", "Tasks on the team's roadmap charts — yours (⭐) first. They keep the chart's dates; search by name, phase or owner.", rows, function (ps) {
+  todoPickDialog("🗺 From roadmaps", "Tasks on the team's roadmap charts where you're the Owner. They keep the chart's dates; search by name or phase.", rows, function (ps) {
     var st = todoPlaceStart();
     ps.forEach(function (p) {
       var gid = todoGroupFor(p.m.name), a = p.it.start || st, b = p.it.end && p.it.end >= a ? p.it.end : a;
@@ -613,9 +651,10 @@ function todoPickRoadmaps() {
 function todoPickBoards() {
   var on = {}; TODO.planner.tasks.forEach(function (t) { if (t.ref && t.ref.k === "tid") on[t.ref.tid] = 1; });
   var reg = []; try { reg = allTasks(); } catch (_) { }
-  var rows = reg.filter(function (x) { if (!x.tid || !(x.task.title || x.task.name)) return false; try { return effStatus(x.task) !== "done"; } catch (_) { return true; } })
+  var me = todoMe();
+  var rows = reg.filter(function (x) { if (!x.tid || !(x.task.title || x.task.name)) return false; if (todoOwnedByOther(me, x.task.owner)) return false; try { return effStatus(x.task) !== "done"; } catch (_) { return true; } })
     .map(function (x) { return { id: x.tid, title: x.task.title || x.task.name, sub: x.path, on: !!on[x.tid] }; });
-  todoPickDialog("＋ From boards", "Pick anything from any board, roadmap or space to plan it here. The card itself doesn't change.", rows, function (ps) {
+  todoPickDialog("＋ From boards", "Pick from any board, roadmap or space — yours or nobody's yet (tasks with someone else as Owner aren't listed). The card itself doesn't change.", rows, function (ps) {
     var gid = todoGroupFor("From boards"), st = todoPlaceStart();
     ps.forEach(function (p) { todoNewTask(p.title, gid, st, todoAddDays(st, 6), { k: "tid", tid: p.id }); });
     todoSave(); toast(ps.length + " placed on your plan — drag them to the right days");
@@ -685,7 +724,7 @@ function todoGantt(S) {
   TODO.planner.groups.forEach(function (g) {
     var log = g.kind === "log";
     var inView = function (t, end) { return !(dayOf(end) < 0 || dayOf(t.start) > nD - 1); };
-    var rows = todoTree(todoTasksIn(g.id)).map(function (n) { var I = todoInfo(n.t, S), end = todoEnd(n.t, I.done); return { t: n.t, I: I, end: end, depth: n.depth, kids: n.kids, show: inView(n.t, end) }; });
+    var rows = todoTree(todoTasksIn(g.id, S)).map(function (n) { var I = todoInfo(n.t, S), end = todoEnd(n.t, I.done); return { t: n.t, I: I, end: end, depth: n.depth, kids: n.kids, show: inView(n.t, end) }; });
     // a task stays when any of its subtasks is in view
     rows.forEach(function (r) { if (!r.show && !r.depth) r.show = r.kids.some(function (k) { return inView(k, todoEnd(k, todoInfo(k, S).done)); }); });
     rows = rows.filter(function (r) { return r.show; });
@@ -827,8 +866,10 @@ function todoQuickInput(gid, add, ph) {
 function todoDayTasks(S, day) {
   var today = todoToday();
   return TODO.planner.tasks.filter(function (t) {
+    if (todoGone(t, S)) return false;
     var dn = todoInfo(t, S).done;
     if (t.start <= day && todoEnd(t, dn) >= day) return true;
+    if (todoIsLog(t.group) && !dn && t.start <= day) return true;
     if (todoSlot(t, day)) return true;
     return !todoIsLog(t.group) && day === today && t.end < today && !dn;
   });
@@ -843,9 +884,10 @@ function todoDayList(S) {
     var onDay = function (t) {
       var dn = todoInfo(t, S).done;
       if (t.start <= day && todoEnd(t, dn) >= day) return true;
+      if (log && !dn && t.start <= day) return true;   // an ongoing log carries on into the coming days
       return !log && day === today && t.end < today && !dn;   // past its end and not done: still on today
     };
-    var tree = todoTree(todoTasksIn(g.id));
+    var tree = todoTree(todoTasksIn(g.id, S));
     var keep = {}; tree.forEach(function (n) { if (onDay(n.t)) { keep[n.t.id] = 1; if (n.t.parent) keep[n.t.parent] = 1; } });
     if (todoSubAdd) keep[todoSubAdd] = keep[todoSubAdd] || tree.some(function (n) { return n.t.id === todoSubAdd; }) ? 1 : 0;
     var nodes = tree.filter(function (n) { return keep[n.t.id]; });
@@ -892,6 +934,11 @@ function todoDayList(S) {
         sec.appendChild(sr);
       }
     });
+    if (!nodes.length && todoAddIn !== g.id) {
+      var em = todoEl("div", "td-day-row td-day-none", "Nothing here on this day — ＋ to add");
+      em.onclick = function () { todoAddIn = g.id; todoQuickFocus = { key: todoLevel + ":" + g.id, until: Date.now() + 2000 }; renderAll(); };
+      sec.appendChild(em);
+    }
     if (todoAddIn === g.id) {
       var add = todoEl("div", "td-day-row td-day-addrow");
       add.appendChild(todoClosable(todoQuickInput(g.id, function (v) { todoNewTask(v, g.id, day, day); }, log ? "＋ Jot something — an article, a question, where you're stuck…" : "＋ Add task for this day…"), function () { todoAddIn = null; }));
@@ -1259,10 +1306,52 @@ function todoIdeas() {
   return box;
 }
 
+/* ---------- the phase banner: what this stretch of days is about ("Next 21 days — slow, focused work") ---------- */
+function todoPhaseEdit() {
+  var P = TODO.phase || {}, txt, note, until;
+  todoDialog("🏷 Phase banner", function (body) {
+    body.appendChild(todoEl("p", "hint", "A line that sits on top of My plan — the phase you're in and till when."));
+    txt = todoEl("input"); txt.value = P.text || ""; txt.placeholder = "e.g. Slow and focused work — Go Slow phase";
+    note = todoEl("textarea"); note.rows = 2; note.value = P.note || ""; note.dataset.plain = "1"; note.placeholder = "Anything else to remind yourself (optional)";
+    until = todoEl("input"); until.type = "date"; until.value = P.until || todoAddDays(todoToday(), 21);
+    body.appendChild(todoField("Banner", txt));
+    body.appendChild(todoField("Note", note));
+    body.appendChild(todoField("Till", until));
+    setTimeout(function () { txt.focus(); }, 30);
+  }, function () {
+    var t = txt.value.trim();
+    if (!t) { TODO.phase = null; renderAll(); return; }   // empty = no banner
+    TODO.phase = { text: t, note: note.value.trim(), until: todoISO(until.value) };
+    renderAll();
+  });
+}
+function todoPhaseBanner() {
+  var P = TODO.phase;
+  if (!P) {
+    var a = todoEl("button", "td-phase-add", "🏷 ＋ Add a phase banner — e.g. “Next 21 days: slow, focused work”");
+    a.onclick = todoPhaseEdit;
+    return a;
+  }
+  var b = todoEl("section", "td-phase"), tx = todoEl("div", "td-phase-tx");
+  tx.appendChild(todoEl("div", "td-phase-t", P.text));
+  if (P.note) tx.appendChild(todoEl("div", "td-phase-n", P.note));
+  b.appendChild(tx);
+  if (P.until) {
+    var left = dNum(P.until) - dNum(todoToday());
+    b.appendChild(todoEl("div", "td-phase-d" + (left < 0 ? " over" : ""),
+      left < 0 ? "ended " + fmtD(P.until) : left === 0 ? "last day · today" : left + (left === 1 ? " day" : " days") + " left · till " + fmtD(P.until)));
+  }
+  var e = todoEl("button", "td-phase-e", "✎"); e.title = "Edit the banner (empty it to remove)"; e.onclick = todoPhaseEdit;
+  b.appendChild(e);
+  b.ondblclick = todoPhaseEdit;
+  return b;
+}
+
 /* ---------- counts (sidebar and Summary) ---------- */
 function todoCounts() {
   var S = todoSources(), t = todoToday(), c = { todo: 0, progress: 0, done: 0 };
   TODO.planner.tasks.forEach(function (x) {
+    if (todoGone(x, S)) return;
     if (todoInfo(x, S).done) c.done++;
     else if (x.start <= t) c.progress++;   // running (or overdue)
     else c.todo++;
@@ -1317,7 +1406,7 @@ function renderContentTodo() {
   ctl.appendChild(tb);
   row.appendChild(ctl);
   row.appendChild(todoEl("span", "spacer"));
-  var nAsg = 0; try { var onP = {}; TODO.planner.tasks.forEach(function (t) { if (t.ref && t.ref.k === "asg") onP[t.ref.key] = 1; }); nAsg = Object.keys(S.asg).filter(function (k) { return S.asg[k].col !== "done" && !onP[k]; }).length; } catch (_) { }
+  var nAsg = 0; try { var onP = todoOnPlan(); nAsg = Object.keys(S.asg).filter(function (k) { return S.asg[k].col !== "done" && !onP[k]; }).length; } catch (_) { }
   var mk = function (txt, tip, fn, cls) { var b = todoEl("button", "tool sm" + (cls ? " " + cls : ""), txt); b.title = tip; b.onclick = fn; row.appendChild(b); };
   mk("📥 Assigned to me" + (nAsg ? " (" + nAsg + ")" : ""), "Cards on the team's boards that are yours — place them on your timeline", todoPickAssigned, "primary");
   mk("🗺 From roadmaps", "Pick tasks from the team's roadmap charts (Gantt etc.) — with their phase, owner and dates", todoPickRoadmaps);
@@ -1325,6 +1414,7 @@ function renderContentTodo() {
   mk("＋ Group", "Add a group (like a phase)", function () { todoEditGroup(null); });
   head.appendChild(row);
   wrap.appendChild(head);
+  wrap.appendChild(todoPhaseBanner());
   if (todoLevel === "day") {   // the day starts with waking up and ends with going to bed
     var dd = todoWindow().from;
     wrap.appendChild(todoClock("wake", dd));
