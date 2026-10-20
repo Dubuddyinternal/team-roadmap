@@ -8262,7 +8262,7 @@ function workTabs(){
   if(view==="dev"){   // the flow: ⚡ Epics → Backlog → Board (the sprint)
     const spc = currentSpace(), cards = DEV.cards||[];
     const ne = cards.filter(c=>devIsEpic(c) && c.space===spc).length, nb = cards.filter(c=>!c.sprint && c.space===spc && devWork(c)).length;
-    return [{key:"epics",label:"\u26A1 Epics"+(ne?" \u00B7 "+ne:""), flow:true},{key:"backlog",label:"Backlog"+(nb?" \u00B7 "+nb:""), flow:true},{key:"board",label:"Board", flow:true}];
+    return [{key:"epics",label:"\u26A1 Epics"+(ne?" \u00B7 "+ne:""), flow:true},{key:"backlog",label:"Backlog"+(nb?" \u00B7 "+nb:""), flow:true},{key:"board",label:"Board", flow:true},{key:"timeline",label:"Timeline"}];
   }
   if(view==="campaign" && window.CX) return campTabs(currentCampaign()).map(([key,label])=>({key, label}));
   if(view==="watch" && window.WX) return WX.tabs.map(([key,label])=>({key, label}));
@@ -8697,8 +8697,8 @@ function allTasks(){
     (cs.ideas||[]).forEach(i=> out.push({tid:i.id, task:i, path:cs.name+" · Ideas", kind:"idea"}));
     if(cs.gantt) (cs.gantt.own||[]).forEach(t=> out.push({tid:t.tid, task:t, path:cs.name+" \u00B7 written on the Timeline", kind:"own", map:cs.gantt}));
   });
-  (CSPACES.list||[]).filter(x=>x.type==="marketing" && x.gantt).forEach(cs=>{
-    (cs.gantt.own||[]).forEach(t=> out.push({tid:t.tid, task:t, path:cs.name+" \u00B7 Timeline", kind:"own", map:cs.gantt}));
+  ((typeof DEV!=="undefined" && DEV.tlHost && DEV.tlHost.gantt) ? [DEV.tlHost] : []).concat((CSPACES.list||[]).filter(x=>(x.type==="marketing" || x.type==="scrum") && x.gantt)).forEach(cs=>{
+    (cs.gantt.own||[]).forEach(t=> out.push({tid:t.tid, task:t, path:(cs.name||"Engineering")+" \u00B7 Timeline", kind:"own", map:cs.gantt}));
   });
   (CSPACES.list||[]).filter(x=>x.type==="procdept" && x.gantt).forEach(cs=>{
     (cs.gantt.own||[]).forEach(t=> out.push({tid:t.tid, task:t, path:procDeptName(cs.id)+" \u00B7 process Timeline", kind:"own", map:cs.gantt}));
@@ -12653,6 +12653,53 @@ function devParseDay(str, year){
   const d = new Date(withYear);
   return isNaN(d) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
+/* a sprint's days as ISO dates (sprint dates are typed by hand, read the same way as its deadline card) */
+function devSprintRange(sp){
+  let end = sp.end ? devParseDay(sp.end) : null, start = sp.start ? devParseDay(sp.start) : null;
+  if(!end && !start) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  if(start && end && end < start) end = new Date(end.getFullYear()+1, end.getMonth(), end.getDate());
+  if(start && start > today && (start - today) > 180*864e5) start = new Date(start.getFullYear()-1, start.getMonth(), start.getDate());
+  const iso = d=> d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+  return { start: iso(start || end), end: iso(end || start) };
+}
+/* Engineering → Timeline: each team's sprints (read-only bars, start → end, with cards done) and the engineering
+   space's Process improvements Timeline, then the Engineering plan (an editable Gantt kept on the space). */
+const DEV_SCHED = {};
+function devTimelinePane(){
+  const wrap = $("content");
+  const cs = devHostCs();
+  const host = cs || (DEV.tlHost = DEV.tlHost || { id:"dev-core", name:"Engineering" });
+  const m = DEV_SCHED[host.id] || (DEV_SCHED[host.id] = { id:"devv-"+host.id, name:"🏃 Sprints and process", view:"gantt", gWin:0, spaceOf: host.id });
+  const byTid = {}, lanes = [], items = [], reg = {}; allTasks().forEach(t=> reg[t.tid] = t);
+  (cs ? devTeamsOf(cs) : DEV.spaces).forEach(team=>{
+    const ln = { id:"dv-"+team.id, name:"🏃 " + team.name, kind:"project" }; lanes.push(ln);
+    DEV.sprints.filter(sp=> sp.space===team.id).forEach(sp=>{
+      const r = devSprintRange(sp); if(!r) return;
+      const cards = DEV.cards.filter(c=> c.sprint===sp.id && devWork(c)), done = cards.filter(c=> c.col==="done").length;
+      const tid = "devv:" + sp.id;
+      byTid[tid] = { tid, task:{ title: sp.name + " · " + done + "/" + cards.length + " done", status: sp.completed ? "done" : "planned" }, path: team.name + " → sprints", kind:"virtual" };
+      items.push({ rid:"rv-"+sp.id, tid, start:r.start, end:r.end, lane:ln.id, color: sp.completed ? "#2E9466" : "#2F6DB5" });
+    });
+  });
+  if(cs) procKidsOf(cs).filter(d=> canViewSpace(csRef(d))).forEach(d=>{
+    const t = procTarget(d); if(t) procSync(t);
+    const g = procDeptGantt(d), ln = { id:"dv-"+d.id, name:"⚙️ Process improvements", kind:"project" }; lanes.push(ln);
+    (g.items||[]).filter(it=> reg[it.tid]).forEach(it=>{ byTid[it.tid] = reg[it.tid]; items.push(Object.assign({}, it, { lane: ln.id, color: it.color || "#3A9CA8" })); });
+  });
+  m.lanes = lanes; m.items = items;
+  if(lanes.length){
+    const hint = document.createElement("div"); hint.className = "hint"; hint.style.margin = "0 0 8px";
+    hint.textContent = "Sprints by team (from their start and end dates) and the Process improvements Timeline. Change them where they live — a sprint from its ⋯ in the sidebar; it shows here by itself.";
+    wrap.appendChild(hint);
+    const em = editMode; editMode = false;
+    try{ renderRmapGantt(m, wrap, byTid); } finally { editMode = em; }
+  }
+  const own = discGantt(host);
+  own.name = lanes.length ? "Engineering plan" : "Timeline";
+  own.items = own.items.filter(it=> reg[it.tid]);
+  renderRmapGantt(own, wrap, reg);
+}
 function devSprintDeadline(sp, spCards){
   if(!sp.end) return null;
   const today = new Date(); today.setHours(0,0,0,0);
@@ -13006,6 +13053,7 @@ function renderContentDev(){
   wrap.innerHTML = "";
   const sp = currentSprint();
   if(devView==="epics"){ wrap.appendChild(devEpicsSection(currentSpace(), sp)); return; }   // ⚡ Epics tab
+  if(devView==="timeline") return devTimelinePane();
 
   if(devView!=="backlog"){   // Board tab: the sprint only
   if(sp){
