@@ -174,6 +174,8 @@ th.sortable:hover,th.sorted{color:var(--accent)}
 .tin input,.tin select{border:none;background:transparent;padding:9px 11px;font-size:13.5px;min-width:0;outline:none}
 .tin input{flex:1 1 50%;width:50%}
 .tin select{flex:1 1 50%;border-left:1px solid var(--line-2);cursor:pointer}
+.tin select[data-by]{flex:1 1 55%;border:0;border-left:1px solid var(--line-2);padding:9px 8px;font-size:12.5px;background:var(--surface-4);color:var(--ink-2);min-width:0}
+.tpace{margin-top:5px;font-size:12px}
 .tin .tunit{flex:1 1 50%;border-left:1px solid var(--line-2);padding:9px 11px;font-size:13px;color:var(--ink-3);background:var(--surface-4)}
 .tin input:disabled,.tin select:disabled{color:var(--ink-2);cursor:default}
 .tcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px}
@@ -1055,10 +1057,18 @@ function normTargets(o){
   o = o && typeof o==="object" ? JSON.parse(JSON.stringify(o)) : {};
   const t = { targets:Object.assign({yt:80000, ig:20000}, o.targets||{}),
     goals:(Array.isArray(o.goals)?o.goals:[]).filter(g=>g && GOAL_METRICS[g.metric] && GOAL_PERIODS[g.period] && (g.platform==="yt"||g.platform==="ig")),
-    plan:{ yt:Object.assign({time:"",days:"all"}, (o.plan||{}).yt||{}), ig:Object.assign({time:"",days:"all"}, (o.plan||{}).ig||{}) } };
+    plan:{ yt:Object.assign({time:"",days:"all"}, (o.plan||{}).yt||{}), ig:Object.assign({time:"",days:"all"}, (o.plan||{}).ig||{}) },
+    by:{ yt:((o.by||{}).yt)||"", ig:((o.by||{}).ig)||"" } };   // the date the total should be reached by ("" = the old 12-week pace)
   t.goals.forEach(g=>{ if(!g.id) g.id=uid("g"); });
   return t;
 }
+/* the subscriber / follower deadline: "End of this quarter" or N months from today, stored as a date */
+function quarterEnd(){ const d=new Date(); const m=Math.floor(d.getMonth()/3)*3+3; return iso(new Date(d.getFullYear(), m, 0)); }
+function monthsOn(n){ const d=new Date(); d.setMonth(d.getMonth()+n); return iso(d); }
+const BY_CHOICES = ()=>[["q","By end of this quarter ("+dmy(quarterEnd())+")",quarterEnd()],["1","In 1 month",monthsOn(1)],["2","In 2 months",monthsOn(2)],["3","In 3 months",monthsOn(3)],["6","In 6 months",monthsOn(6)],["12","In 12 months",monthsOn(12)]];
+function weeksTo(by, from){ return by ? Math.max(1, Math.ceil((new Date(by+"T00:00:00") - new Date((from||today())+"T00:00:00")) / (7*864e5))) : 12; }
+/* the pace the total needs from the latest count: +n a week until the deadline (or over 12 weeks without one) */
+function paceNeeded(pl, cur, tgt){ const w=weeksTo(TG.by && TG.by[pl]); return { w, need: Math.max(0, Math.ceil((tgt-cur)/w)) }; }
 function canDeleteCards(){ return canEdit() && !!(OPT.canDeleteCards && OPT.canDeleteCards()); }
 function canEditTargets(){ return !!(OPT.canEditTargets && OPT.canEditTargets()); }
 
@@ -1108,7 +1118,13 @@ function renderTargets(){
       <div class="slab">
         <div class="tgrid">
           <div class="tf"><label>${pl==="yt"?"Subscribers":"Followers"} (total)<span class="req">*</span></label>
-            <div class="tin"><input type="number" min="1" data-fol="${pl}" value="${D.targets[pl]}"><span class="tunit">in total</span></div></div>
+            <div class="tin"><input type="number" min="1" data-fol="${pl}" value="${D.targets[pl]}">
+            <select data-by="${pl}">${(()=>{ const cur=D.by[pl]||""; const ch=BY_CHOICES();
+              const known=ch.find(x=>x[2]===cur);
+              return (cur&&!known?`<option value="d:${cur}" selected>By ${dmy(cur)}</option>`:"")
+                + `<option value="" ${!cur?"selected":""}>In total (12-week pace)</option>`
+                + ch.map(([k,l,d])=>`<option value="d:${d}" ${cur===d?"selected":""}>${esc(l)}</option>`).join(""); })()}</select></div>
+            <div class="hint tpace" data-pace="${pl}">${paceText(pl, D)}</div></div>
           <div class="tf"><label>Posting time</label>
             <div class="tin"><input type="time" data-pt="${pl}" value="${esc(D.plan[pl].time)}">
             <select data-pd="${pl}">${Object.entries(POST_DAYS).map(([k,l])=>`<option value="${k}" ${D.plan[pl].days===k?"selected":""}>${l}</option>`).join("")}</select></div></div>
@@ -1137,6 +1153,7 @@ function renderTargets(){
     const free=Object.entries(GOAL_METRICS).find(([k,m])=>(!m.only||m.only===pl)&&!FIXED[pl].includes(k)&&!TDRAFT.goals.some(g=>g.platform===pl&&g.metric===k));
     TDRAFT.goals.push({id:uid("g"),platform:pl,metric:free?free[0]:"posts",period:"month",target:null}); renderTargets(); });
   P.querySelectorAll("[data-gdel]").forEach(b=>b.onclick=()=>{ readTargets(); TDRAFT.goals.splice(Number(b.dataset.gdel),1); renderTargets(); });
+  P.querySelectorAll("[data-fol],[data-by]").forEach(e=>{ const up=()=>{ readTargets(); const pl=e.dataset.fol||e.dataset.by; const h=P.querySelector(`[data-pace="${pl}"]`); if(h) h.innerHTML=paceText(pl, TDRAFT); }; e.oninput=up; e.onchange=up; });
   $("#tReset").onclick=()=>{ TDRAFT=null; renderTargets(); toast("Changes undone"); };
   $("#tSave").onclick=()=>{ readTargets();
     if(!(TDRAFT.targets.yt>0)||!(TDRAFT.targets.ig>0)){ toast("Subscriber and follower targets must be numbers above zero"); return; }
@@ -1144,8 +1161,17 @@ function renderTargets(){
     TG=normTargets(TDRAFT); TDRAFT=null;
     if(OPT.saveTargets){ OPT.saveTargets(SPACE, normTargets(TG)); toast("Targets saved"); } };
 }
+/* "Needs +284 a week — 76,600 now, 12 weeks to 31 Dec" under the total, worked out as you type */
+function paceText(pl, D){
+  const ser = pl==="yt" ? ytSeries() : igSeries(), last = ser.length ? ser[ser.length-1].v : null, tgt = Number(D.targets[pl])||0;
+  if(last==null || !tgt) return tgt ? "The pace shows once there's a first count." : "";
+  if(last>=tgt) return "Already reached 🎉";
+  const w = weeksTo(D.by[pl]), need = Math.ceil((tgt-last)/w);
+  return `Needs <b>+${fmt(need)} a week</b> — ${fmt(last)} now, ${w} week${w===1?"":"s"}${D.by[pl]?" to "+dmy(D.by[pl]):""}`;
+}
 function readTargets(){ const P=$("#pane-targets"); if(!TDRAFT||!P) return;
   P.querySelectorAll("[data-fol]").forEach(e=>TDRAFT.targets[e.dataset.fol]=Number(e.value));
+  P.querySelectorAll("[data-by]").forEach(e=>TDRAFT.by[e.dataset.by]=e.value.startsWith("d:") ? e.value.slice(2) : "");
   P.querySelectorAll("[data-pt]").forEach(e=>TDRAFT.plan[e.dataset.pt].time=e.value);
   P.querySelectorAll("[data-pd]").forEach(e=>TDRAFT.plan[e.dataset.pd].days=e.value);
   P.querySelectorAll("[data-fx]").forEach(e=>{ const [pl,metric]=e.dataset.fx.split(":"), per=P.querySelector(`[data-fxp="${pl}:${metric}"]`).value;
@@ -1684,7 +1710,7 @@ function renderSummary(){
         ${delta!=null?`<div class="okr-t" style="color:${delta>=0?"var(--good)":"var(--crit)"}">${delta>=0?"+":"−"}${fmt(Math.abs(delta))} this week</div>`:`<div class="okr-t">as of ${dmy(last.d)}</div>`}</div></div>
       <div class="meter"><i style="width:${pct}%;background:${col}"></i></div>
       <div class="okr-foot"><span>${pct.toFixed(1)}% of target</span>
-        <span class="num">${cur>=tgt?"target reached 🎉":`${fmt(tgt-cur)} to go · needs +${fmt(Math.ceil((tgt-cur)/12))}/wk for 12 weeks`}</span></div>${more(k,col)}</div>`; };
+        <span class="num">${cur>=tgt?"target reached 🎉":(()=>{ const p=paceNeeded(k, cur, tgt); return `${fmt(tgt-cur)} to go · needs +${fmt(p.need)}/wk for ${p.w} week${p.w===1?"":"s"}${TG.by&&TG.by[k]?" (by "+dmy(TG.by[k])+")":""}`; })()}</span></div>${more(k,col)}</div>`; };
 
   $("#pane-summary").innerHTML=`
    <div class="platsw">${[["all","Both platforms"],["yt","YouTube only"],["ig","Instagram only"]].map(([k,l])=>
