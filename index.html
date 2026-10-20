@@ -804,6 +804,7 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .sys-tab{width:100%;border-collapse:collapse;margin-top:8px;font-size:13px}.sys-tab td{padding:6px 4px;border-top:1px solid var(--line)}.sys-tab td:not(:first-child){text-align:right;white-space:nowrap}
 .admin-table{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--card)}
 .au-row{display:grid;grid-template-columns:1fr minmax(200px,auto) 150px;align-items:center;border-bottom:1px solid var(--line)}
+.tpl-list .au-row{grid-template-columns:minmax(220px,1fr) minmax(0,2fr) 150px}.tpl-list .au-cell.hint{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .admin-table .au-row:last-child{border-bottom:none}
 .au-head{background:var(--paper)}
 .au-head .au-cell{font-family:var(--mono);font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:10px 16px}
@@ -6582,11 +6583,74 @@ const TPL_PRD = [
   "List what’s still undecided, and name the person responsible for the doc. Add the date and who has signed off on it.",
   ""
 ].join("\n");
+/* the Product Process Templates (Steps 3–10 of the product process), added to the team's templates once */
+const TPL_STEPS = [
+{
+"id": "tpl-step3",
+"name": "Step 3: Prioritization and roadmap",
+"body": "<p><strong>Owner:<\/strong> PM · <strong>Input:<\/strong> approved PRD features · <strong>Output:<\/strong> ranked backlog and phased roadmap<\/p> <p><strong>A. Feature scoring (RICE)<\/strong><\/p> <p><em>Score = Reach × Impact × Confidence ÷ Effort. Highest score goes first.<\/em><\/p> <table> <thead> <tr> <th>Feature<\/th> <th>Reach (users/month)<\/th> <th>Impact (1–3)<\/th> <th>Confidence (%)<\/th> <th>Effort (person-weeks)<\/th> <th>RICE score<\/th> <th>MoSCoW<\/th> <\/tr> <\/thead> <tbody> <tr> <td><em>e.g. Follow-up reminders<\/em><\/td> <td><em>20<\/em><\/td> <td><em>3<\/em><\/td> <td><em>80%<\/em><\/td> <td><em>1<\/em><\/td> <td><em>48<\/em><\/td> <td><em>Must<\/em><\/td> <\/tr> <tr> <td><em>e.g. Source-wise report<\/em><\/td> <td><em>5<\/em><\/td> <td><em>2<\/em><\/td> <td><em>70%<\/em><\/td> <td><em>2<\/em><\/td> <td><em>3.5<\/em><\/td> <td><em>Should<\/em><\/td> <\/tr> <\/tbody> <\/table> <p><strong>B. Roadmap by phase<\/strong><\/p> <table> <thead> <tr> <th>Phase<\/th> <th>Goal<\/th> <th>Features included<\/th> <th>Start<\/th> <th>End<\/th> <th>Owner<\/th> <th>Gate to next phase<\/th> <\/tr> <\/thead> <tbody> <tr> <td><em>Phase 1<\/em><\/td> <td><em>CRM core usable by sales<\/em><\/td> <td><em>F1, F2, F3<\/em><\/td> <td><em>Date<\/em><\/td> <td><em>Date<\/em><\/td> <td><em>Tech lead<\/em><\/td> <td><em>UAT passed<\/em><\/td> <\/tr> <tr> <td><em>Phase 2<\/em><\/td> <td><em>Tracking live<\/em><\/td> <td><em>Events, integrations<\/em><\/td> <td><em>Date<\/em><\/td> <td><em>Date<\/em><\/td> <td><em>Tech lead<\/em><\/td> <td><em>Data verified<\/em><\/td> <\/tr> <tr> <td><em>Phase 3<\/em><\/td> <td><em>Dashboards<\/em><\/td> <td><em>Reports<\/em><\/td> <td><em>Date<\/em><\/td> <td><em>Date<\/em><\/td> <td><em>PM<\/em><\/td> <td><em>Managers using weekly<\/em><\/td> <\/tr> <\/tbody> <\/table> <p><strong>C. Portfolio view (all projects)<\/strong><\/p> <table> <thead> <tr> <th>Project<\/th> <th>Current stage<\/th> <th>Owner<\/th> <th>Next milestone<\/th> <th>Target date<\/th> <th>Risk<\/th> <\/tr> <\/thead> <tbody> <tr> <td><em>e.g. CRM &amp; Analytics<\/em><\/td> <td><em>Development<\/em><\/td> <td><em>Name<\/em><\/td> <td><em>CRM core in UAT<\/em><\/td> <td><em>Date<\/em><\/td> <td><em>Low / Med / High<\/em><\/td> <\/tr> <tr> <td><em>e.g. Maverick<\/em><\/td> <td><em>Discovery<\/em><\/td> <td><em>Name<\/em><\/td> <td><em>Brief signed off<\/em><\/td> <td><em>Date<\/em><\/td> <td><\/td> <\/tr> <\/tbody> <\/table>",
+"html": true,
+"from": "Product Process Templates"
+},
+{
+"id": "tpl-step4",
+"name": "Step 4: Design brief and design review",
+"body": "<p><strong>Owner:<\/strong> Designer · <strong>Input:<\/strong> PRD user stories and flows · <strong>Output:<\/strong> approved wireframes and final UI<\/p> <p><strong>A. Design brief<\/strong> <em>(PM fills, designer reads before starting)<\/em><\/p> <ul> <li><p><strong>Project and PRD link:<\/strong> <em>Name · link<\/em><\/p><\/li> <li><p><strong>Primary user:<\/strong> <em>Who we design for first<\/em><\/p><\/li> <li><p><strong>Key flows to design:<\/strong> <em>e.g. Add lead → assign → follow up → close<\/em><\/p><\/li> <li><p><strong>Screens needed:<\/strong> <em>e.g. Lead list, lead detail, pipeline board, dashboard<\/em><\/p><\/li> <li><p><strong>Must-follow rules:<\/strong> <em>Brand colours, existing components, desktop-first<\/em><\/p><\/li> <li><p><strong>References:<\/strong> <em>Apps or screens the team likes, and why<\/em><\/p><\/li> <li><p><strong>Deadline:<\/strong> <em>Wireframes by date · Final UI by date<\/em><\/p><\/li> <\/ul> <p><strong>B. Screen checklist<\/strong> <em>(designer fills for each screen)<\/em><\/p> <table> <thead> <tr> <th>Screen<\/th> <th>Wireframe<\/th> <th>Final UI<\/th> <th>Empty state<\/th> <th>Error state<\/th> <th>Mobile view<\/th> <th>Link<\/th> <\/tr> <\/thead> <tbody> <tr> <td><em>Lead list<\/em><\/td> <td>[ ]<\/td> <td>[ ]<\/td> <td>[ ]<\/td> <td>[ ]<\/td> <td>[ ]<\/td> <td><em>Figma link<\/em><\/td> <\/tr> <\/tbody> <\/table> <p><strong>C. Design review<\/strong><\/p> <table> <thead> <tr> <th>Reviewer<\/th> <th>Date<\/th> <th>Feedback<\/th> <th>Must fix before dev?<\/th> <th>Status<\/th> <\/tr> <\/thead> <tbody> <tr> <td><em>PM<\/em><\/td> <td><em>Date<\/em><\/td> <td><em>e.g. Add a \"next follow-up\" column<\/em><\/td> <td><em>Yes<\/em><\/td> <td><em>Open / Done<\/em><\/td> <\/tr> <tr> <td><em>User (sales rep)<\/em><\/td> <td><em>Date<\/em><\/td> <td><em>e.g. Couldn't find the call button<\/em><\/td> <td><em>Yes<\/em><\/td> <td><\/td> <\/tr> <tr> <td><em>Tech lead<\/em><\/td> <td><em>Date<\/em><\/td> <td><em>e.g. Live updates are costly; use refresh<\/em><\/td> <td><em>No<\/em><\/td> <td><\/td> <\/tr> <\/tbody> <\/table> <p><strong>Gate to development:<\/strong> all \"must fix\" items done; PM and tech lead approve the final UI.<\/p>",
+"html": true,
+"from": "Product Process Templates"
+},
+{
+"id": "tpl-step5",
+"name": "Step 5: Tech spec",
+"body": "<p><strong>Owner:<\/strong> Tech lead · <strong>Input:<\/strong> PRD and approved designs · <strong>Output:<\/strong> architecture, data model and estimated task backlog<\/p> <ol type=\"1\"> <li><p><strong>Overview:<\/strong> <em>What we are building in 3 lines, with PRD and Figma links.<\/em><\/p><\/li> <li><p><strong>Tech stack:<\/strong> <em>Frontend, backend, database, hosting, e.g. React · Node · Supabase (Postgres) · Vercel.<\/em><\/p><\/li> <li><p><strong>Architecture:<\/strong> <em>Main components and how they talk to each other. Add a simple diagram.<\/em><\/p><\/li> <li><p><strong>Data model<\/strong><\/p><\/li> <\/ol> <table> <thead> <tr> <th>Table<\/th> <th>Key fields<\/th> <th>Relations<\/th> <\/tr> <\/thead> <tbody> <tr> <td><em>leads<\/em><\/td> <td><em>id, name, phone, source, stage, owner_id, created_at<\/em><\/td> <td><em>owner_id → users<\/em><\/td> <\/tr> <tr> <td><em>activities<\/em><\/td> <td><em>id, lead_id, type, note, due_at<\/em><\/td> <td><em>lead_id → leads<\/em><\/td> <\/tr> <\/tbody> <\/table> <ol start=\"5\" type=\"1\"> <li><p><strong>APIs / endpoints:<\/strong> <em>e.g. POST /leads, PATCH /leads/:id/stage, GET /reports/funnel<\/em><\/p><\/li> <li><p><strong>Integrations:<\/strong> <em>WhatsApp API, forms, email: how each connects and what fails gracefully.<\/em><\/p><\/li> <li><p><strong>Tracking events:<\/strong> <em>Copy from the PRD's tracking table; where each fires in code.<\/em><\/p><\/li> <li><p><strong>Security and permissions:<\/strong> <em>Auth method, role rules, data visibility.<\/em><\/p><\/li> <li><p><strong>Data migration:<\/strong> <em>What moves from sheets, how, and who verifies it.<\/em><\/p><\/li> <li><p><strong>Risks and unknowns:<\/strong> <em>Technical risks and spikes needed.<\/em><\/p><\/li> <li><p><strong>Task breakdown<\/strong><\/p><\/li> <\/ol> <table> <thead> <tr> <th>Task<\/th> <th>Feature ID<\/th> <th>Owner<\/th> <th>Estimate (days)<\/th> <th>Depends on<\/th> <\/tr> <\/thead> <tbody> <tr> <td><em>Leads table + API<\/em><\/td> <td><em>F1<\/em><\/td> <td><em>Name<\/em><\/td> <td><em>2<\/em><\/td> <td><em>—<\/em><\/td> <\/tr> <tr> <td><em>Lead list screen<\/em><\/td> <td><em>F1<\/em><\/td> <td><em>Name<\/em><\/td> <td><em>3<\/em><\/td> <td><em>Leads API<\/em><\/td> <\/tr> <\/tbody> <\/table> <p><strong>Gate to development:<\/strong> spec reviewed by another developer; tasks estimated and on the board.<\/p>",
+"html": true,
+"from": "Product Process Templates"
+},
+{
+"id": "tpl-step6",
+"name": "Step 6: Sprint plan and demo",
+"body": "<p><strong>Owner:<\/strong> Tech lead · <strong>Input:<\/strong> estimated task backlog · <strong>Output:<\/strong> working features every 1–2 weeks<\/p> <p><strong>A. Sprint plan<\/strong> <em>(fill at the start of each sprint)<\/em><\/p> <ul> <li><p><strong>Sprint:<\/strong> <em>#3 · dates<\/em><\/p><\/li> <li><p><strong>Sprint goal (one line):<\/strong> <em>e.g. Sales reps can add leads and move them through the pipeline.<\/em><\/p><\/li> <li><p><strong>Team capacity:<\/strong> <em>e.g. 2 devs × 8 days = 16 dev-days (minus leave)<\/em><\/p><\/li> <\/ul> <table> <thead> <tr> <th>Task<\/th> <th>Feature ID<\/th> <th>Owner<\/th> <th>Estimate (days)<\/th> <th>Status<\/th> <\/tr> <\/thead> <tbody> <tr> <td><em>Pipeline board UI<\/em><\/td> <td><em>F3<\/em><\/td> <td><em>Name<\/em><\/td> <td><em>3<\/em><\/td> <td><em>To do / In progress / Review / Done<\/em><\/td> <\/tr> <\/tbody> <\/table> <p><strong>B. Daily standup<\/strong> <em>(10–15 min, each person)<\/em><\/p> <ul> <li><p>What I finished yesterday<\/p><\/li> <li><p>What I'm doing today<\/p><\/li> <li><p>What's blocking me<\/p><\/li> <\/ul> <p><strong>C. Sprint demo and review<\/strong> <em>(end of sprint)<\/em><\/p> <ul> <li><p><strong>Shown to:<\/strong> <em>PM, designer, 1 user<\/em><\/p><\/li> <li><p><strong>Done:<\/strong> <em>Features demoed and accepted<\/em><\/p><\/li> <li><p><strong>Not done and why:<\/strong> <em>Carried to next sprint<\/em><\/p><\/li> <li><p><strong>Feedback / changes requested:<\/strong> <em>Goes to backlog, not straight into code<\/em><\/p><\/li> <li><p><strong>Next sprint goal:<\/strong> <em>One line<\/em><\/p><\/li> <\/ul>",
+"html": true,
+"from": "Product Process Templates"
+},
+{
+"id": "tpl-step7",
+"name": "Step 7: Testing (QA and UAT)",
+"body": "<p><strong>Owner:<\/strong> QA / tester · <strong>Input:<\/strong> built features and PRD acceptance criteria · <strong>Output:<\/strong> passed tests and UAT sign-off<\/p> <p><strong>A. Test cases<\/strong> <em>(write from each feature's acceptance criteria)<\/em><\/p> <table> <thead> <tr> <th>ID<\/th> <th>Feature<\/th> <th>Steps<\/th> <th>Expected result<\/th> <th>Actual result<\/th> <th>Pass / Fail<\/th> <\/tr> <\/thead> <tbody> <tr> <td><em>TC-01<\/em><\/td> <td><em>F1 Add lead<\/em><\/td> <td><em>Open Leads → Add → fill fields → Save<\/em><\/td> <td><em>Lead appears in list; status \"New\"<\/em><\/td> <td><\/td> <td><\/td> <\/tr> <tr> <td><em>TC-02<\/em><\/td> <td><em>F1 Duplicate<\/em><\/td> <td><em>Add lead with an existing phone number<\/em><\/td> <td><em>Error: \"Lead already exists\"<\/em><\/td> <td><\/td> <td><\/td> <\/tr> <\/tbody> <\/table> <p><strong>B. Bug report<\/strong><\/p> <table> <thead> <tr> <th>ID<\/th> <th>Title<\/th> <th>Steps to reproduce<\/th> <th>Expected vs actual<\/th> <th>Severity<\/th> <th>Owner<\/th> <th>Status<\/th> <\/tr> <\/thead> <tbody> <tr> <td><em>BUG-01<\/em><\/td> <td><em>Pipeline count wrong<\/em><\/td> <td><em>Move lead to \"Won\", refresh<\/em><\/td> <td><em>Count +1 vs no change<\/em><\/td> <td><em>Critical / High / Medium / Low<\/em><\/td> <td><em>Dev name<\/em><\/td> <td><em>Open / Fixed / Verified<\/em><\/td> <\/tr> <\/tbody> <\/table> <p><strong>C. UAT (User Acceptance Testing)<\/strong><\/p> <ul> <li><p><strong>Testers:<\/strong> <em>2–3 real users, e.g. sales reps<\/em><\/p><\/li> <li><p><strong>Scenario:<\/strong> <em>A normal working day with realistic data<\/em><\/p><\/li> <li><p><strong>Tasks to try:<\/strong> <em>Add 5 leads, follow up, move to Won, check dashboard<\/em><\/p><\/li> <li><p><strong>Feedback:<\/strong> <em>What confused them, what's missing<\/em><\/p><\/li> <\/ul> <p><strong>Gate to launch:<\/strong> no open Critical or High bugs; all Must features pass; UAT testers sign off.<\/p>",
+"html": true,
+"from": "Product Process Templates"
+},
+{
+"id": "tpl-step8",
+"name": "Step 8: Launch plan",
+"body": "<p><strong>Owner:<\/strong> PM · <strong>Input:<\/strong> UAT sign-off · <strong>Output:<\/strong> product live and the team using it<\/p> <ul> <li><p><strong>Launch date:<\/strong> <em>Date<\/em><\/p><\/li> <li><p><strong>Rollout:<\/strong> <em>e.g. Pilot with 2 reps for 1 week → whole sales team → managers<\/em><\/p><\/li> <li><p><strong>Rollback plan:<\/strong> <em>If something breaks, what we switch back to and who decides<\/em><\/p><\/li> <\/ul> <p><strong>Pre-launch checklist<\/strong><\/p> <ul> <li><p>☐ All Must features pass UAT<\/p><\/li> <li><p>☐ Old data migrated and spot-checked (sheets → CRM)<\/p><\/li> <li><p>☐ Roles and permissions set for every user<\/p><\/li> <li><p>☐ Tracking events firing and verified<\/p><\/li> <li><p>☐ Short user guide or 2-minute video ready<\/p><\/li> <li><p>☐ Training session booked<\/p><\/li> <li><p>☐ Support channel set (e.g. a WhatsApp group or Slack channel for issues)<\/p><\/li> <\/ul> <p><strong>Launch day<\/strong><\/p> <ul> <li><p>☐ Deploy to production<\/p><\/li> <li><p>☐ Smoke test the key flows<\/p><\/li> <li><p>☐ Announce to the team, with the guide link<\/p><\/li> <li><p>☐ Old process switched off (e.g. sheet made read-only)<\/p><\/li> <\/ul> <p><strong>First week<\/strong><\/p> <table> <thead> <tr> <th>Day<\/th> <th>Check<\/th> <th>Owner<\/th> <th>Notes<\/th> <\/tr> <\/thead> <tbody> <tr> <td><em>Day 1<\/em><\/td> <td><em>Everyone logged in; no blockers<\/em><\/td> <td><em>PM<\/em><\/td> <td><\/td> <\/tr> <tr> <td><em>Day 3<\/em><\/td> <td><em>Bugs triaged; quick fixes shipped<\/em><\/td> <td><em>Tech lead<\/em><\/td> <td><\/td> <\/tr> <tr> <td><em>Day 7<\/em><\/td> <td><em>Usage check; feedback session<\/em><\/td> <td><em>PM<\/em><\/td> <td><\/td> <\/tr> <\/tbody> <\/table>",
+"html": true,
+"from": "Product Process Templates"
+},
+{
+"id": "tpl-step9",
+"name": "Step 9: Post-launch metrics review",
+"body": "<p><strong>Owner:<\/strong> PM / data analyst · <strong>Input:<\/strong> success metrics from the brief and PRD · <strong>Output:<\/strong> a verdict on whether it worked<\/p> <p><strong>When:<\/strong> <em>2 weeks, 1 month and 3 months after launch<\/em><\/p> <p><strong>A. Metrics vs targets<\/strong><\/p> <table> <thead> <tr> <th>Metric<\/th> <th>Before launch<\/th> <th>Target<\/th> <th>Actual now<\/th> <th>On track?<\/th> <\/tr> <\/thead> <tbody> <tr> <td><em>Leads logged in the system<\/em><\/td> <td><em>~0%<\/em><\/td> <td><em>100%<\/em><\/td> <td><\/td> <td><em>Yes / No<\/em><\/td> <\/tr> <tr> <td><em>Follow-up within 24 hours<\/em><\/td> <td><em>Unknown<\/em><\/td> <td><em>90%<\/em><\/td> <td><\/td> <td><\/td> <\/tr> <tr> <td><em>Weekly active users<\/em><\/td> <td><em>—<\/em><\/td> <td><em>All reps<\/em><\/td> <td><\/td> <td><\/td> <\/tr> <\/tbody> <\/table> <p><strong>B. Summary<\/strong><\/p> <ul> <li><p><strong>What worked:<\/strong> <em>e.g. Reps log every lead; duplicates gone.<\/em><\/p><\/li> <li><p><strong>What didn't:<\/strong> <em>e.g. Managers still ask for the old sheet.<\/em><\/p><\/li> <li><p><strong>Why:<\/strong> <em>Usage data, user quotes<\/em><\/p><\/li> <li><p><strong>Problems solved from the brief:<\/strong> <em>Tick off each pain point from the Product Brief<\/em><\/p><\/li> <li><p><strong>Decision:<\/strong> <em>Keep going as planned / fix adoption first / change direction<\/em><\/p><\/li> <\/ul>",
+"html": true,
+"from": "Product Process Templates"
+},
+{
+"id": "tpl-step10",
+"name": "Step 10: Feedback log and retrospective",
+"body": "<p><strong>Owner:<\/strong> PM · <strong>Input:<\/strong> user feedback, metrics review, team experience · <strong>Output:<\/strong> updated roadmap and next PRD<\/p> <p><strong>A. Feedback log<\/strong> <em>(collect continuously)<\/em><\/p> <table> <thead> <tr> <th>Date<\/th> <th>From<\/th> <th>Feedback<\/th> <th>Type<\/th> <th>How many asked<\/th> <th>Action<\/th> <th>Status<\/th> <\/tr> <\/thead> <tbody> <tr> <td><em>Date<\/em><\/td> <td><em>Sales rep<\/em><\/td> <td><em>e.g. Want a call button on lead card<\/em><\/td> <td><em>Feature / Bug / UX<\/em><\/td> <td><em>4<\/em><\/td> <td><em>Add to v2 backlog<\/em><\/td> <td><em>New / Planned / Done / Won't do<\/em><\/td> <\/tr> <\/tbody> <\/table> <p><strong>B. Team retrospective<\/strong> <em>(30 min after each launch or phase)<\/em><\/p> <ul> <li><p><strong>What went well:<\/strong> <em>Keep doing<\/em><\/p><\/li> <li><p><strong>What didn't go well:<\/strong> <em>Stop or change<\/em><\/p><\/li> <li><p><strong>What we'll try next time:<\/strong> <em>One or two concrete changes<\/em><\/p><\/li> <\/ul> <table> <thead> <tr> <th>Action<\/th> <th>Owner<\/th> <th>By when<\/th> <\/tr> <\/thead> <tbody> <tr> <td><em>e.g. Test designs with a user before dev<\/em><\/td> <td><em>Designer<\/em><\/td> <td><em>Next project<\/em><\/td> <\/tr> <\/tbody> <\/table> <p><strong>C. Next iteration:<\/strong> <em>Top 3 items going into the next PRD, then back to Step 2.<\/em><\/p>",
+"html": true,
+"from": "Product Process Templates"
+}
+];
 function normalizeRmaps(r){
   r = r || {};
   r.maps = r.maps || [];
   /* Administration → Templates: documents a phase can start from (r.templates = [{id, name, body}]) */
   if(!Array.isArray(r.templates)) r.templates = [{ id:"tpl-prd", name:"PRD — Problem briefing", body: TPL_PRD }];
+  if(!r.stepTplSeed){   /* added once — deleting one later keeps it deleted */
+    TPL_STEPS.forEach(t=>{ if(!r.templates.some(x=> x.id===t.id)) r.templates.push(JSON.parse(JSON.stringify(t))); });
+    r.stepTplSeed = true;
+  }
   if(!Array.isArray(r.templateSubs)) r.templateSubs = [];   /* sent from a space's ⋯ → Submit a template, waiting for approval */
   r.maps.forEach(m=>{
     if(!m.id) m.id = "rm-" + Math.random().toString(36).slice(2,9);
@@ -24347,14 +24411,15 @@ function renderAdminTemplates(wrap){
     wrap.appendChild(sl);
     if(!iAmTeamAdmin()){ const h = document.createElement("div"); h.className = "hint"; h.style.margin = "-10px 0 16px"; h.textContent = "A team Owner or Admin approves these."; wrap.appendChild(h); }
   }
-  const list = document.createElement("div"); list.className = "admin-table";
+  const list = document.createElement("div"); list.className = "admin-table tpl-list";
   const hr = document.createElement("div"); hr.className = "au-row au-head";
   ["Template","Starts with",""].forEach(t=>{ const c = document.createElement("div"); c.className = "au-cell"; c.textContent = t; hr.appendChild(c); });
   list.appendChild(hr);
   T.forEach(tp=>{
     const r = document.createElement("div"); r.className = "au-row";
-    const n = document.createElement("div"); n.className = "au-cell au-name"; n.textContent = tp.name;
-    if(tp.from){ const fr = document.createElement("div"); fr.className = "hint"; fr.textContent = "from " + tp.from; n.appendChild(fr); }
+    const n = document.createElement("div"); n.className = "au-cell au-name"; n.style.display = "block";   /* name, and where it came from under it */
+    const nt = document.createElement("div"); nt.textContent = tp.name; n.appendChild(nt);
+    if(tp.from){ const fr = document.createElement("div"); fr.className = "hint"; fr.style.fontWeight = "400"; fr.style.fontSize = "12px"; fr.textContent = "from " + tp.from; n.appendChild(fr); }
     const t = document.createElement("div"); t.className = "au-cell hint"; t.textContent = docFirstLine(tp.body, tp.html) || "(empty)";
     const a = document.createElement("div"); a.className = "au-cell au-acts";
     const e = document.createElement("button"); e.className = "person-del"; e.textContent = "Edit"; e.onclick = ()=> edit(tp);
