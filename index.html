@@ -14278,6 +14278,7 @@ function rmlChartBlockers(en, m){
 function rmlModal(title, fields, onSave, o){
   o = o || {};
   const ov = document.createElement("div"); ov.className = "overlay show";
+  if(o.z) ov.style.zIndex = String(o.z);   /* e.g. above the Administration page (z 390) */
   const dg = document.createElement("div"); dg.className = "dialog"; dg.setAttribute("role","dialog"); dg.style.maxWidth = (o.width || 480) + "px";
   const h = document.createElement("h3"); h.textContent = title; dg.appendChild(h);
   if(o.sub){ const s = document.createElement("div"); s.className = "hint"; s.style.margin = "-6px 0 8px"; s.textContent = o.sub; dg.appendChild(s); }
@@ -22828,7 +22829,7 @@ function renderAdminTemplates(wrap){
     const nm = (v.name||"").trim(); if(!nm){ toast("Give the template a name"); return false; }
     if(tp){ tp.name = nm; tp.body = v.body; } else T.push({ id:"tpl-"+Date.now().toString(36), name:nm, body:v.body });
     saveRmaps(); renderAdminPage(); toast("Template saved");
-  }, { width: 760 });
+  }, { width: 760, z: 420 });
   const add = document.createElement("button"); add.className = "btn save admin-invite-btn"; add.textContent = "\uFF0B New template";
   add.onclick = ()=> edit(null);
   head.append(left, add);
@@ -22840,7 +22841,7 @@ function renderAdminTemplates(wrap){
   T.forEach(tp=>{
     const r = document.createElement("div"); r.className = "au-row";
     const n = document.createElement("div"); n.className = "au-cell au-name"; n.textContent = tp.name;
-    const t = document.createElement("div"); t.className = "au-cell hint"; t.textContent = (tp.body||"").split("\n").find(x=> x.trim()) || "(empty)";
+    const t = document.createElement("div"); t.className = "au-cell hint"; const _first = (tp.body||"").split("\n").find(x=> x.trim()) || ""; t.textContent = (window.RT ? RT.plain(_first) : _first) || "(empty)";
     const a = document.createElement("div"); a.className = "au-cell au-acts";
     const e = document.createElement("button"); e.className = "person-del"; e.textContent = "Edit"; e.onclick = ()=> edit(tp);
     const del = document.createElement("button"); del.className = "person-del"; del.textContent = "Delete";
