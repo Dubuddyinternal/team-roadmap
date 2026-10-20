@@ -2919,6 +2919,11 @@ body.rm-chart #pane-work > .controls{display:none}
 .ia-btn:hover{border-color:var(--indigo)}
 .ia-empty{font-size:13px;color:var(--muted);padding:18px 6px;text-align:center;border:1px dashed var(--line-strong);border-radius:10px}
 @media(max-width:760px){.ia-board{grid-template-columns:1fr}}
+.rmg-linkbar{margin:0 0 8px;padding:8px 12px;border-radius:9px;background:#EAF0FB;color:#1F3F8A;font-size:13.5px;font-weight:600;border:1px solid #C9D6F2}
+.rmg-linking .rmg-task,.rmg-linking .rmg-blk{cursor:crosshair!important}
+.rmg-linking .rmg-task:hover{background:#EAF0FB}
+.rmg-task.rmg-linkfrom{background:#DCE6FA!important;box-shadow:inset 3px 0 0 #2F55B5}
+.rmg-blk.rmg-linkfrom{outline:3px solid #2F55B5;outline-offset:2px}
 .rmg-blk.rmg-dragable{cursor:grab}.rmg-blk.rmg-dragable:active{cursor:grabbing}
 .rmg-blk.rmg-line.rmg-dragable::before{content:"";position:absolute;left:-4px;right:-4px;top:-9px;bottom:-9px}
 .rmg-hl,.rmg-hr{position:absolute;top:50%;width:12px;height:12px;margin-top:-6px;border-radius:50%;background:#fff;border:2px solid rgba(0,0,0,.35);cursor:ew-resize;opacity:0;transition:opacity .12s;z-index:2}
@@ -12869,6 +12874,7 @@ function devTimelineMap(cs){
   const ownIds = new Set(own.lanes.map(l=> l.id));
   m.lanes = lanes; m.items = items;
   m.mapOf = ln=> ownIds.has(ln.id) ? own : null;
+  m.linkStore = own;
   m.barButtons = row=>{
     const spx = document.createElement("span"); spx.className = "spacer"; row.appendChild(spx);
     const b = document.createElement("button"); b.className = "tool sm"; b.textContent = "✏️ Write task"; b.title = "Write a new task on this Timeline";
@@ -13114,6 +13120,7 @@ function mktTimelineMap(mk){
   const ownIds = new Set(own.lanes.map(l=> l.id));
   m.name = "🗓 " + mk.name + " — Timeline";
   m.mapOf = ln=> ownIds.has(ln.id) ? own : null;
+  m.linkStore = own;
   m.barButtons = row=>{
     rmlBarButtons(row, own, "Phase");
     const mb = document.createElement("button"); mb.className = "tool sm"; mb.textContent = "⚙ Merge"; mb.title = "Choose which spaces inside show here";
@@ -14319,6 +14326,26 @@ function rmgWeekStart(n){ const dow = (new Date(n*86400000).getUTCDay()+6)%7; re
 let RMG_FOLD = {}; try{ RMG_FOLD = JSON.parse(localStorage.getItem("rmgFold") || "{}") || {}; }catch(e){}
 function rmgFolded(m, ln){ return !!RMG_FOLD[m.id + ":" + ln.id]; }
 function rmgSetFold(m, ln, on){ const k = m.id + ":" + ln.id; if(on) RMG_FOLD[k] = 1; else delete RMG_FOLD[k]; try{ localStorage.setItem("rmgFold", JSON.stringify(RMG_FOLD)); }catch(e){} }
+/* 🔗 linking mode on a chart: { chart: chart id, store: where links between rows live, from: first task picked } */
+let RMG_LINK = null;
+document.addEventListener("keydown", e=>{ if(e.key==="Escape" && RMG_LINK){ RMG_LINK = null; renderAll(); } });
+function rmgLinkPick(tid, byTid){
+  const L = RMG_LINK; if(!L) return;
+  if(!L.from){ L.from = tid; renderAll(); return; }
+  if(L.from===tid){ L.from = null; renderAll(); return; }
+  const a = L.from, b = tid, ta = byTid[a], tb = byTid[b];
+  const real = x=> x && x.kind!=="virtual" && x.task;
+  const name = x=> "“" + ((x && x.task && x.task.title) || "task") + "”";
+  L.store.links = L.store.links || [];
+  const ix = L.store.links.findIndex(l=> l.from===a && l.to===b);
+  if(real(tb) && (tb.task.blockedBy||[]).includes(a)){
+    tb.task.blockedBy = tb.task.blockedBy.filter(x=> x!==a); if(!tb.task.blockedBy.length) delete tb.task.blockedBy; toast("Link removed");
+  } else if(ix >= 0){ L.store.links.splice(ix, 1); toast("Link removed"); }
+  else if(real(ta) && real(tb)){ (tb.task.blockedBy = tb.task.blockedBy || []).push(a); toast("🔗 " + name(ta) + " now blocks " + name(tb)); }   /* a real task: it shows everywhere */
+  else { L.store.links.push({ from:a, to:b }); toast("🔗 " + name(ta) + " now blocks " + name(tb)); }
+  L.from = null;
+  saveRmaps();
+}
 function renderRmapGantt(m, wrap, byTid){
   rmlEnsureLanes(m);
   const live = m.items.filter(it=> byTid[it.tid]);
@@ -14383,7 +14410,23 @@ function renderRmapGantt(m, wrap, byTid){
   }
   row.appendChild(ctl);
   if(editMode){ if(m.barButtons) m.barButtons(row); else rmlBarButtons(row, m, m.view==="swimlane" ? "Swimlane" : "Phase"); }
+  /* 🔗 Link: click the task that comes first, then the one it blocks (again = remove the link) */
+  const linkStore = m.linkStore || (m.mapOf ? m.mapOf({}) : m);
+  if(editMode && linkStore){
+    const on = RMG_LINK && RMG_LINK.chart===m.id;
+    const lb = document.createElement("button"); lb.className = "tool sm" + (on ? " primary" : ""); lb.textContent = on ? "✓ Done linking" : "🔗 Link";
+    lb.title = "Show which task blocks which: click the task that comes first, then the one waiting on it";
+    lb.onclick = ()=>{ RMG_LINK = on ? null : { chart: m.id, store: linkStore, from: null }; renderAll(); };
+    if(!row.querySelector(".spacer")){ const sp = document.createElement("span"); sp.className = "spacer"; row.appendChild(sp); }
+    row.appendChild(lb);
+  }
   head.appendChild(row); wrap.appendChild(head);
+  if(RMG_LINK && RMG_LINK.chart===m.id){
+    const nb = document.createElement("div"); nb.className = "rmg-linkbar";
+    const fromT = RMG_LINK.from && byTid[RMG_LINK.from] ? (byTid[RMG_LINK.from].task.title || "that task") : "";
+    nb.textContent = RMG_LINK.from ? "🔗 Now click the task that waits on “" + fromT + "” (click it again to cancel · Esc to stop)" : "🔗 Click the task that comes first — the one that blocks. Clicking a linked pair again removes the link.";
+    wrap.appendChild(nb);
+  }
   if(m.view==="swimlane"){ rmgSwimlanes(m, wrap, byTid, live, w0, nW, today); return; }
 
   /* day columns (7 per week) so a task covers exactly its own days; every task gets its own
@@ -14497,7 +14540,7 @@ function renderRmapGantt(m, wrap, byTid){
       const en = byTid[it.tid], st = effStatus(en.task), locked = isLocked(en.task);
       const s = Math.max(0, dayOf(dNum(it.start || it.end || todayISO())));
       const e = Math.min(nD-1, Math.max(s, dayOf(dNum(it.end || it.start || todayISO()))));
-      const nm = document.createElement("div"); nm.className = "rmg-task" + (st==="done" ? " done" : "") + (dep ? " rmg-sub" : ""); nm.style.gridRow = String(rIdx); nm.dataset.lane = ln.id;
+      const nm = document.createElement("div"); nm.className = "rmg-task" + (st==="done" ? " done" : "") + (dep ? " rmg-sub" : "") + (RMG_LINK && RMG_LINK.from===it.tid ? " rmg-linkfrom" : ""); nm.style.gridRow = String(rIdx); nm.dataset.lane = ln.id; nm.dataset.tid = it.tid;
       nm.innerHTML = '<span class="rmg-tt"></span><span class="rmg-td"></span>';
       if(R.kids.length){
         const fo = document.createElement("button"); fo.className = "td-fold"; fo.textContent = it.fold ? "▸" : "▾";
@@ -14537,7 +14580,7 @@ function renderRmapGantt(m, wrap, byTid){
       blk.style.gridRow = String(rIdx); blk.style.gridColumn = (s + 2) + " / " + (e + 3);
       blk.style.background = it.color || colorOf(it.team);
       blk.title = nm.title + "\n" + rmlFmt(it.start) + " → " + rmlFmt(it.end);
-      barEls[it.tid] = blk;
+      barEls[it.tid] = blk; blk.dataset.tid = it.tid; if(RMG_LINK && RMG_LINK.from===it.tid) blk.classList.add("rmg-linkfrom");
       if(ed) rmgItemDrag(blk, M, it, ()=> weekPx()/7, 1, ()=> rmlEditItem(M, it, en));
       else if(editMode && it.move) rmgItemDrag(blk, M, it, ()=> weekPx()/7, 1, ()=>{ if(it.open) it.open(); }, { virtual:true });   /* lives in another space: moved there */
       else if(it.open){ blk.onclick = it.open; blk.style.cursor = "pointer"; }
@@ -14565,12 +14608,17 @@ function renderRmapGantt(m, wrap, byTid){
   }
   rmgColResizer(grid, m, nameW, 250, rIdx, colsRest, minExtra);
   scroll.appendChild(grid); wrap.appendChild(scroll);
-  rmlDepOverlay(grid, barEls, byTid);
+  const extraLinks = (linkStore && linkStore.links) || [];
+  rmlDepOverlay(grid, barEls, byTid, extraLinks);
+  if(RMG_LINK && RMG_LINK.chart===m.id){
+    grid.classList.add("rmg-linking");
+    grid.addEventListener("click", e=>{ const el = e.target.closest("[data-tid]"); if(!el) return; e.stopPropagation(); e.preventDefault(); rmgLinkPick(el.dataset.tid, byTid); }, true);
+  }
 
   const lg = document.createElement("div"); lg.className = "rmg-legend";
   lg.innerHTML = '<b>Legend</b>' + (teams.length ? teams.map(t=> '<span><i style="background:'+colorOf(t)+'"></i>'+mtEsc(t)+'</span>').join("") : '<span class="muted">Give tasks a “Team involved” to colour them by team</span>')
     + (live.some(it=>!(it.team||"").trim()) && teams.length ? '<span><i style="background:#8C95A3"></i>No team</span>' : '');
-  if(live.some(it=> byTid[it.tid] && (byTid[it.tid].task.blockedBy||[]).length)) lg.insertAdjacentHTML("beforeend", rmlDepLegend());
+  if(extraLinks.length || live.some(it=> byTid[it.tid] && (byTid[it.tid].task.blockedBy||[]).length)) lg.insertAdjacentHTML("beforeend", rmlDepLegend());
   wrap.appendChild(lg);
 }
 
@@ -14612,7 +14660,7 @@ function rmlDepLegend(){
   return '<span>'+sw("")+' Finish → start</span><span>'+sw("5 3")+' Start → start</span><span>'+sw("2 3")+' Finish → finish</span><span>'+sw("8 3 2 3")+' Start → finish</span><span><svg width="26" height="8" style="vertical-align:middle"><line x1="0" y1="4" x2="26" y2="4" stroke="#C8473B" stroke-width="1.6"/></svg> Dates break the link</span>';
 }
 /* arrows over a CSS-grid chart (Simple / Swimlane Gantt): measured from the bars once laid out */
-function rmlDepOverlay(grid, bars, byTid){
+function rmlDepOverlay(grid, bars, byTid, extra){
   const draw = ()=>{
     const old = grid.querySelector(":scope > .rml-deps"); if(old) old.remove();
     const gr = grid.getBoundingClientRect(), geo = {};
@@ -14622,6 +14670,7 @@ function rmlDepOverlay(grid, bars, byTid){
       const t = byTid[tid] && byTid[tid].task;
       (t && t.blockedBy || []).forEach(bt=>{ if(geo[bt]) pairs.push({ type: depTypeOf(t, bt), fr: geo[bt], to: geo[tid] }); });
     });
+    (extra||[]).forEach(l=>{ if(geo[l.from] && geo[l.to]) pairs.push({ type: l.type || "FS", fr: geo[l.from], to: geo[l.to] }); });   /* links kept on the chart (rows from other spaces) */
     if(!pairs.length) return;
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("class", "rml-deps");
     svg.setAttribute("width", grid.scrollWidth); svg.setAttribute("height", grid.scrollHeight);
@@ -14645,7 +14694,7 @@ function rmgItemDrag(el, m, it, unitPx, unitDays, onClick, opt){
     el.append(hl, hr);
   }
   el.addEventListener("pointerdown", e=>{
-    if(e.button!==0) return;
+    if(e.button!==0 || RMG_LINK) return;
     if(e.target.closest && e.target.closest("button,input,a")) return;
     e.preventDefault();
     const mode = e.target.classList.contains("rmg-hl") ? "start" : e.target.classList.contains("rmg-hr") ? "end" : "move";
@@ -15624,6 +15673,7 @@ function rmapMergedPane(own, wrap, reg){
   C.lanes = L.length ? L : [{ id:"mg-none", name: who ? "Nothing with " + userDisplayName(who) + "’s name" : "Nothing yet", kind:"project" }];
   C.items = I;
   C.mapOf = ln=> ownIds.has(ln.id) ? own : null;
+  C.linkStore = own;
   C.laneLabel = ln=> label[ln.id] || ln.name;
   C.barButtons = row=>{
     rmlBarButtons(row, own, "Phase");
@@ -18147,6 +18197,7 @@ function procTopMap(cs){
   own.items.forEach(it=> items.push(it));
   m.lanes = lanes; m.items = items;
   m.mapOf = ln=> home[ln.id] || null;
+  m.linkStore = own;
   m.laneLabel = ln=> label[ln.id] || ln.name;
   m.barButtons = row=> rmlBarButtons(row, own, "Phase");
   return { m, byTid, depts };
