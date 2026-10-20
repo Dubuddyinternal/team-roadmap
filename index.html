@@ -2750,6 +2750,11 @@ body.rm-chart #pane-work > .controls{display:none}
 .rmg-phase.sub.d2 .rmg-pname{font-weight:500;font-style:italic}
 .rmg-pname{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rmg-pct{font-family:var(--mono);font-size:10.5px;color:var(--muted);font-weight:600}
+.rmg-doc{flex:0 3 auto;min-width:30px;border:1px solid var(--line-strong);background:var(--card);border-radius:99px;padding:2px 8px;font-size:11px;font-weight:600;color:var(--indigo);cursor:pointer;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis}
+.rmg-phase .rmg-pname{flex:0 1 auto;min-width:64px}
+.rmg-doc:hover{border-color:var(--indigo)}
+.rml-docview{max-height:65vh;overflow:auto;font-size:14px;line-height:1.55;padding:4px 2px}
+.rml-docview ul,.rml-docview ol{margin:2px 0 2px 20px;padding:0}
 .rmg-cell.phase{background:var(--paper)}
 .rmg-cell.phase.now,.rmg-cell.addrow.now{background:color-mix(in srgb,var(--indigo-soft) 70%,var(--paper))}
 .rmg-sum{align-self:center;height:5px;border-radius:99px;background:var(--line-strong);margin:0 1px;z-index:1;pointer-events:none}
@@ -6365,9 +6370,68 @@ const backlogSel = new Set();   // ids of backlog cards selected for bulk action
 /* ============ TOP-LEVEL ROADMAPS (Jira-style timelines) ============ */
 let RMAPS = { maps: [] };
 let activeRmap = null;          // id of the roadmap being viewed
+const TPL_PRD = [
+  "**1. Background (2–3 lines)**",
+  "Why are we doing this now? What triggered it?",
+  "Example: “We’re handling 300+ leads a month across Excel and WhatsApp. Follow-ups are being missed and nobody knows the real conversion rate.”",
+  "",
+  "",
+  "**2. Who will use it**",
+  "List each user type and what they do day to day.",
+  "• Sales reps: add leads, follow up, update status",
+  "• Team leads / managers: check pipeline, assign leads, review performance",
+  "• Founders / management: see revenue, conversion, trends",
+  "• Support / ops (if relevant): see customer history",
+  "Mark who the primary user is. The tool should be designed for them first.",
+  "",
+  "",
+  "**3. Current process and what’s breaking**",
+  "Describe how things work today, honestly, then list the specific pain points.",
+  "• Leads come from forms, calls, Instagram, and referrals, and get copied by hand into a sheet",
+  "• Two people sometimes call the same lead",
+  "• Follow-ups are forgotten because reminders live in people’s heads",
+  "• Monthly reports take a day to compile and are still unreliable",
+  "• When someone leaves, their lead history leaves with them",
+  "This section matters most. Each pain point here should later map to a feature.",
+  "",
+  "",
+  "**4. Decisions it must help people make**",
+  "This is what turns a “CRM” into something useful.",
+  "• Which leads should I call today?",
+  "• Which source brings the best leads?",
+  "• Where in the pipeline are we losing people?",
+  "• Who on the team is performing, and who needs help?",
+  "• How much revenue is likely this month?",
+  "",
+  "",
+  "**5. Success metrics**",
+  "How will you know in 3 months that it worked?",
+  "• 100% of leads logged in the system (zero in sheets or WhatsApp)",
+  "• Follow-up within 24 hours for 90% of leads",
+  "• Monthly report generated in minutes, not a day",
+  "• Conversion rate visible by source and by rep",
+  "",
+  "",
+  "**6. Scope: in and out**",
+  "Write down what’s explicitly in and out of v1.",
+  "• In: lead capture, pipeline, activities, follow-up reminders, one dashboard",
+  "• Out (for now): invoicing, email marketing, mobile app, AI scoring",
+  "The “out” list prevents most arguments later.",
+  "",
+  "",
+  "**7. Constraints**",
+  "Note the limits you’re working within: budget, timeline, team size, must-use tools (e.g. WhatsApp, Google Sheets, an existing website), and data privacy needs.",
+  "",
+  "",
+  "**8. Open questions and owner**",
+  "List what’s still undecided, and name the person responsible for the doc. Add the date and who has signed off on it.",
+  ""
+].join("\n");
 function normalizeRmaps(r){
   r = r || {};
   r.maps = r.maps || [];
+  /* Administration → Templates: documents a phase can start from (r.templates = [{id, name, body}]) */
+  if(!Array.isArray(r.templates)) r.templates = [{ id:"tpl-prd", name:"PRD — Problem briefing", body: TPL_PRD }];
   r.maps.forEach(m=>{
     if(!m.id) m.id = "rm-" + Math.random().toString(36).slice(2,9);
     if(!m.access) m.access = "open";      // access model: open | limited | private (mirrors spaces)
@@ -13161,6 +13225,21 @@ function rmlTreeLines(cell, lvl, guides, last, pad, step){
   (guides||[]).forEach((on, j)=>{ if(on){ const v = document.createElement("i"); v.className = "rml-tv"; v.style.left = x(j); cell.appendChild(v); } });
   const e = document.createElement("i"); e.className = "rml-te" + (last ? "" : " more"); e.style.left = x(lvl-1); cell.appendChild(e);
 }
+/* a phase made from a template carries its own copy of the document (ln.doc = {tpl, name, text}) */
+function rmgOpenDoc(m, ln){
+  const d = ln.doc, ttl = "📄 " + (d.name || "Document") + " — " + ln.name;
+  /* view mode: the formatted document; Edit mode: the rich-text box to fill in */
+  if(!editMode){ rmlModal(ttl, [], ()=>{}, { width: 760, noSave: true, sub: "View only — you don’t have edit access here", html: window.RT ? RT.html(d.text || "") : mtEsc(d.text || "").replace(/\n/g, "<br>") }); return; }
+  rmlModal(ttl, [
+    { k:"text", label:"Fill it in — the prompts are from the template", type:"area", rows:24, value: d.text || "" },
+  ], v=>{ d.text = v.text; saveRmaps(); toast("Saved"); }, {
+    width: 760,
+    extra: editMode ? [["Remove document", "Take the document off this phase", ()=>{
+      if(!confirm("Remove the “" + (d.name||"document") + "” from “" + ln.name + "”? What’s written in it is lost.")) return false;
+      delete ln.doc; saveRmaps();
+    }, true]] : [],
+  });
+}
 /* Simple Gantt phases nest: phase › sub-phase › sub-sub-phase */
 const RMG_MAX_DEPTH = 2;
 function rmlLaneDepth(m, ln){ let d = 0, cur = ln; while(cur && cur.parent && d < 12){ cur = m.lanes.find(x=>x.id===cur.parent); if(cur) d++; } return d; }
@@ -13179,6 +13258,8 @@ function rmlEditLane(m, ln, preset){
     const below = ln ? Math.max(...rmwDescLanes(m, ln).map(l=> rmlLaneDepth(m, l))) - rmlLaneDepth(m, ln) : 0;
     const ok = m.lanes.filter(l=> !banned.has(l.id) && rmlLaneDepth(m, l) + 1 + below <= RMG_MAX_DEPTH);
     fields.push({ k:"parent", label:"Inside phase", type:"select", value: ln ? (ln.parent || "") : ((preset && preset.parent) || ""), opts: [["","— top level —"]].concat(ok.map(l=>[l.id, rmwLanePath(m, l)])) });
+    const tpls = RMAPS.templates || [];
+    if(tpls.length && !(ln && ln.doc)) fields.push({ k:"tpl", label:"Template (a document to fill for this phase)", type:"select", value:"", opts: [["","— none —"]].concat(tpls.map(t=>[t.id, t.name])) });
   }
   if(m.view==="swimlane") fields.push({ k:"color", label:"Swimlane colour", type:"color", value: ln && ln.color || "", autoTip:"Next colour in the palette" });
   if(!g) fields.push({ k:"kind", label:"Type", type:"select", value: ln ? ln.kind : "project", opts:[["project","Project — things with a due date"],["ongoing","Ongoing — running work with health rules"]] });
@@ -13201,6 +13282,8 @@ function rmlEditLane(m, ln, preset){
     target.name = name; target.kind = kind;
     if(m.view==="swimlane" || wbs){ if(v.color) target.color = v.color; else delete target.color; }
     if(wbs || nest){ if(v.parent) target.parent = v.parent; else delete target.parent; }
+    const tp = v.tpl && (RMAPS.templates || []).find(t=> t.id===v.tpl);
+    if(tp && !target.doc) target.doc = { tpl: tp.id, name: tp.name, text: tp.body || "" };   /* its own copy to fill in */
     if(!ln) m.lanes.push(target);
     saveRmaps();
   }, { extra });
@@ -13326,6 +13409,12 @@ function renderRmapGantt(m, wrap, byTid){
     if(depth){ lab.style.paddingLeft = (12 + depth*18) + "px"; rmlTreeLines(lab, depth, [], false, 6, 18); }
     const lt = document.createElement("span"); lt.className = "rmg-pname"; lt.textContent = ln.name; lab.appendChild(lt);
     const ct = document.createElement("span"); ct.className = "rmg-pct"; ct.textContent = all.length || ""; lab.appendChild(ct);
+    if(ln.doc){
+      const db = document.createElement("button"); db.className = "rmg-doc"; db.textContent = "📄 " + (ln.doc.name || "Document");
+      db.title = "Open this phase’s " + (ln.doc.name || "document") + (editMode ? " to fill it in" : "");
+      db.onclick = e=>{ e.stopPropagation(); rmgOpenDoc(m, ln); };
+      lab.appendChild(db);
+    }
     if(editMode){
       if(depth < RMG_MAX_DEPTH){
         const sb = document.createElement("button"); sb.className = "rml-mini"; sb.textContent = "＋ Sub"; sb.title = "Add a sub-phase inside “"+ln.name+"”";
@@ -14069,10 +14158,11 @@ function rmlChartBlockers(en, m){
 function rmlModal(title, fields, onSave, o){
   o = o || {};
   const ov = document.createElement("div"); ov.className = "overlay show";
-  const dg = document.createElement("div"); dg.className = "dialog"; dg.setAttribute("role","dialog"); dg.style.maxWidth = "480px";
+  const dg = document.createElement("div"); dg.className = "dialog"; dg.setAttribute("role","dialog"); dg.style.maxWidth = (o.width || 480) + "px";
   const h = document.createElement("h3"); h.textContent = title; dg.appendChild(h);
   if(o.sub){ const s = document.createElement("div"); s.className = "hint"; s.style.margin = "-6px 0 8px"; s.textContent = o.sub; dg.appendChild(s); }
   const body = document.createElement("div"); body.className = "dlg-body"; dg.appendChild(body);
+  if(o.html){ const hv = document.createElement("div"); hv.className = "rml-docview"; hv.innerHTML = o.html; body.appendChild(hv); }
   const inputs = {};
   const read = ()=>{ const v={}; fields.forEach(f=>{ v[f.k] = inputs[f.k].value; }); return v; };
   const wraps = {};
@@ -14082,7 +14172,7 @@ function rmlModal(title, fields, onSave, o){
     const lb = document.createElement("label"); lb.textContent = f.label;
     let el;
     if(f.type==="select"){ el = document.createElement("select"); f.opts.forEach(([val,txt])=>{ const op=document.createElement("option"); op.value=val; op.textContent=txt; el.appendChild(op); }); el.value = f.value; }
-    else if(f.type==="area"){ el = document.createElement("textarea"); el.rows = 2; el.value = f.value; }
+    else if(f.type==="area"){ el = document.createElement("textarea"); el.rows = f.rows || 2; el.value = f.value; if(f.ph) el.placeholder = f.ph; if(f.readOnly) el.readOnly = true; }
     else if(f.type==="color"){
       /* swatches + "Auto"; the value lives on a hidden input so read() stays the same */
       el = document.createElement("input"); el.type = "hidden"; el.value = f.value || "";
@@ -14129,10 +14219,11 @@ function rmlModal(title, fields, onSave, o){
     btns.appendChild(b);
   });
   const sp = document.createElement("span"); sp.style.flex = "1"; btns.appendChild(sp);
-  const cancel = document.createElement("button"); cancel.className = "btn"; cancel.textContent = "Cancel"; cancel.onclick = close;
+  const cancel = document.createElement("button"); cancel.className = "btn"; cancel.textContent = o.noSave ? "Close" : "Cancel"; cancel.onclick = close;
   const save = document.createElement("button"); save.className = "btn save"; save.textContent = "Save";
   save.onclick = ()=>{ if(onSave(read())===false) return; close(); };
-  btns.append(cancel, save);
+  btns.append(cancel);
+  if(!o.noSave) btns.append(save);
   dg.appendChild(btns);
   ov.appendChild(dg);
   ov.addEventListener("mousedown", e=>{ if(e.target===ov) close(); });
@@ -22347,6 +22438,7 @@ function adminSections(){
     { k:"request",     ico:"➕",       lbl:"Request a teammate",   show: hasPerm("request_members"),     group:"it", render: renderRequestTeammate },
     { k:"roadmaps",    ico:"🗺️", lbl:"Roadmaps",             show: hasPerm("add_roadmaps"),        group:"it", render: renderAdminRoadmaps },
     { k:"spaces",      ico:"🗂️", lbl:"Spaces",               show: hasPerm("add_spaces"),          group:"it", render: renderAdminSpaces },
+    { k:"templates",   ico:"📄", lbl:"Templates",            show: !!me && (sup || canEdit()),                  render: renderAdminTemplates },
     { k:"systemstats", ico:"📊", lbl:"System stats",         show: sup || ["owner","admin"].includes(roleOf(me, TEAM)), group:"it", render: renderAdminSystemStats },
     { k:"reviewgames", ico:"\uD83D\uDD79\uFE0F", lbl:"Review games" + (gamesWaiting() ? " (" + gamesWaiting() + ")" : ""), crumb:"Review games",
                                                                         show: sup,                            group:"it", render: renderReviewGames },
@@ -22416,6 +22508,47 @@ function renderAdminRoadmaps(wrap){
   const tip = document.createElement("div"); tip.className = "hint"; tip.style.marginTop = "12px";
   tip.textContent = "To change who can see a roadmap: turn on Edit, then ⋯ → Settings next to it in the sidebar." + (hasPerm("delete_roadmaps") ? " Deleting is in the same ⋯ menu." : "");
   wrap.appendChild(tip);
+}
+// Administration → Templates: documents (e.g. a PRD) a Gantt phase can start from. Picking one when
+// making a phase gives that phase its own copy to fill in; changing a template later doesn't touch copies.
+function renderAdminTemplates(wrap){
+  RMAPS.templates = RMAPS.templates || [];
+  const T = RMAPS.templates;
+  const head = document.createElement("div"); head.className = "admin-userhead";
+  const left = document.createElement("div");
+  const h2 = document.createElement("h2"); h2.textContent = "Templates"; h2.style.margin = "0";
+  const sub = document.createElement("div"); sub.className = "hint"; sub.style.marginTop = "4px";
+  sub.textContent = "Pick one when you add a phase on a Gantt (e.g. Dubuddy Product Roadmap → Timeline → ＋ Phase). The phase gets its own copy to fill in, opened from 📄 on the phase row.";
+  left.append(h2, sub);
+  const edit = tp=> rmlModal(tp ? "Edit template" : "New template", [
+    { k:"name", label:"Name", type:"text", value: tp ? tp.name : "", ph:"e.g. PRD, Design brief, Launch checklist" },
+    { k:"body", label:"What it says — headings, prompts and examples to fill in", type:"area", rows:20, value: tp ? tp.body : "" },
+  ], v=>{
+    const nm = (v.name||"").trim(); if(!nm){ toast("Give the template a name"); return false; }
+    if(tp){ tp.name = nm; tp.body = v.body; } else T.push({ id:"tpl-"+Date.now().toString(36), name:nm, body:v.body });
+    saveRmaps(); renderAdminPage(); toast("Template saved");
+  }, { width: 760 });
+  const add = document.createElement("button"); add.className = "btn save admin-invite-btn"; add.textContent = "\uFF0B New template";
+  add.onclick = ()=> edit(null);
+  head.append(left, add);
+  wrap.appendChild(head);
+  const list = document.createElement("div"); list.className = "admin-table";
+  const hr = document.createElement("div"); hr.className = "au-row au-head";
+  ["Template","Starts with",""].forEach(t=>{ const c = document.createElement("div"); c.className = "au-cell"; c.textContent = t; hr.appendChild(c); });
+  list.appendChild(hr);
+  T.forEach(tp=>{
+    const r = document.createElement("div"); r.className = "au-row";
+    const n = document.createElement("div"); n.className = "au-cell au-name"; n.textContent = tp.name;
+    const t = document.createElement("div"); t.className = "au-cell hint"; t.textContent = (tp.body||"").split("\n").find(x=> x.trim()) || "(empty)";
+    const a = document.createElement("div"); a.className = "au-cell au-acts";
+    const e = document.createElement("button"); e.className = "person-del"; e.textContent = "Edit"; e.onclick = ()=> edit(tp);
+    const del = document.createElement("button"); del.className = "person-del"; del.textContent = "Delete";
+    del.onclick = ()=>{ if(!confirm("Delete the template “"+tp.name+"”? Phases already made from it keep their copy.")) return; T.splice(T.indexOf(tp),1); saveRmaps(); renderAdminPage(); };
+    a.append(e, del);
+    r.append(n, t, a); list.appendChild(r);
+  });
+  if(!T.length){ const e = document.createElement("div"); e.className = "empty"; e.style.padding = "24px"; e.textContent = "No templates yet. Press ＋ New template to make one."; list.appendChild(e); }
+  wrap.appendChild(list);
 }
 // Administration → Spaces: the only place to add a space (roles with "Add spaces")
 function renderAdminSpaces(wrap){
