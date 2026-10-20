@@ -2752,6 +2752,10 @@ body.rm-chart #pane-work > .controls{display:none}
 .rmg-pct{font-family:var(--mono);font-size:10.5px;color:var(--muted);font-weight:600}
 .rmg-doc{flex:0 3 auto;min-width:30px;border:1px solid var(--line-strong);background:var(--card);border-radius:99px;padding:2px 8px;font-size:11px;font-weight:600;color:var(--indigo);cursor:pointer;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis}
 .rmg-phase .rmg-pname{flex:0 1 auto;min-width:64px}
+.rmg-task .rmg-tdoc{position:absolute;right:34px;top:50%;transform:translateY(-50%);padding:1px 6px}
+.rmg-task .rmg-tdoc.solo{right:8px}
+.rmg-days .rmg-task.rmg-task:has(.rmg-tdoc){padding-right:64px}
+.rmg-days .rmg-task.rmg-task:has(.rmg-tdoc.solo){padding-right:40px}
 .rmg-doc:hover{border-color:var(--indigo)}
 .rml-docview{max-height:65vh;overflow:auto;font-size:14px;line-height:1.55;padding:4px 2px}
 .rml-docview ul,.rml-docview ol{margin:2px 0 2px 20px;padding:0}
@@ -13225,9 +13229,17 @@ function rmlTreeLines(cell, lvl, guides, last, pad, step){
   (guides||[]).forEach((on, j)=>{ if(on){ const v = document.createElement("i"); v.className = "rml-tv"; v.style.left = x(j); cell.appendChild(v); } });
   const e = document.createElement("i"); e.className = "rml-te" + (last ? "" : " more"); e.style.left = x(lvl-1); cell.appendChild(e);
 }
-/* a phase made from a template carries its own copy of the document (ln.doc = {tpl, name, text}) */
-function rmgOpenDoc(m, ln){
-  const d = ln.doc, ttl = "📄 " + (d.name || "Document") + " — " + ln.name;
+/* a phase or task made from a template carries its own copy of the document (.doc = {tpl, name, text}) */
+function rmgTplField(holder){
+  const tpls = RMAPS.templates || [];
+  return tpls.length && !(holder && holder.doc) ? { k:"tpl", label:"Template (a document to fill for this)", type:"select", value:"", opts: [["","— none —"]].concat(tpls.map(t=>[t.id, t.name])) } : null;
+}
+function rmgTplApply(holder, id){
+  const tp = id && (RMAPS.templates || []).find(t=> t.id===id);
+  if(tp && !holder.doc) holder.doc = { tpl: tp.id, name: tp.name, text: tp.body || "" };   /* its own copy to fill in */
+}
+function rmgOpenDoc(holder, name){
+  const d = holder.doc, ttl = "📄 " + (d.name || "Document") + " — " + name;
   /* view mode: the formatted document; Edit mode: the rich-text box to fill in */
   if(!editMode){ rmlModal(ttl, [], ()=>{}, { width: 760, noSave: true, sub: "View only — you don’t have edit access here", html: window.RT ? RT.html(d.text || "") : mtEsc(d.text || "").replace(/\n/g, "<br>") }); return; }
   rmlModal(ttl, [
@@ -13235,8 +13247,8 @@ function rmgOpenDoc(m, ln){
   ], v=>{ d.text = v.text; saveRmaps(); toast("Saved"); }, {
     width: 760,
     extra: editMode ? [["Remove document", "Take the document off this phase", ()=>{
-      if(!confirm("Remove the “" + (d.name||"document") + "” from “" + ln.name + "”? What’s written in it is lost.")) return false;
-      delete ln.doc; saveRmaps();
+      if(!confirm("Remove the “" + (d.name||"document") + "” from “" + name + "”? What’s written in it is lost.")) return false;
+      delete holder.doc; saveRmaps();
     }, true]] : [],
   });
 }
@@ -13258,8 +13270,7 @@ function rmlEditLane(m, ln, preset){
     const below = ln ? Math.max(...rmwDescLanes(m, ln).map(l=> rmlLaneDepth(m, l))) - rmlLaneDepth(m, ln) : 0;
     const ok = m.lanes.filter(l=> !banned.has(l.id) && rmlLaneDepth(m, l) + 1 + below <= RMG_MAX_DEPTH);
     fields.push({ k:"parent", label:"Inside phase", type:"select", value: ln ? (ln.parent || "") : ((preset && preset.parent) || ""), opts: [["","— top level —"]].concat(ok.map(l=>[l.id, rmwLanePath(m, l)])) });
-    const tpls = RMAPS.templates || [];
-    if(tpls.length && !(ln && ln.doc)) fields.push({ k:"tpl", label:"Template (a document to fill for this phase)", type:"select", value:"", opts: [["","— none —"]].concat(tpls.map(t=>[t.id, t.name])) });
+    const tf = rmgTplField(ln); if(tf) fields.push(tf);
   }
   if(m.view==="swimlane") fields.push({ k:"color", label:"Swimlane colour", type:"color", value: ln && ln.color || "", autoTip:"Next colour in the palette" });
   if(!g) fields.push({ k:"kind", label:"Type", type:"select", value: ln ? ln.kind : "project", opts:[["project","Project — things with a due date"],["ongoing","Ongoing — running work with health rules"]] });
@@ -13282,8 +13293,7 @@ function rmlEditLane(m, ln, preset){
     target.name = name; target.kind = kind;
     if(m.view==="swimlane" || wbs){ if(v.color) target.color = v.color; else delete target.color; }
     if(wbs || nest){ if(v.parent) target.parent = v.parent; else delete target.parent; }
-    const tp = v.tpl && (RMAPS.templates || []).find(t=> t.id===v.tpl);
-    if(tp && !target.doc) target.doc = { tpl: tp.id, name: tp.name, text: tp.body || "" };   /* its own copy to fill in */
+    rmgTplApply(target, v.tpl);
     if(!ln) m.lanes.push(target);
     saveRmaps();
   }, { extra });
@@ -13412,7 +13422,7 @@ function renderRmapGantt(m, wrap, byTid){
     if(ln.doc){
       const db = document.createElement("button"); db.className = "rmg-doc"; db.textContent = "📄 " + (ln.doc.name || "Document");
       db.title = "Open this phase’s " + (ln.doc.name || "document") + (editMode ? " to fill it in" : "");
-      db.onclick = e=>{ e.stopPropagation(); rmgOpenDoc(m, ln); };
+      db.onclick = e=>{ e.stopPropagation(); rmgOpenDoc(ln, ln.name); };
       lab.appendChild(db);
     }
     if(editMode){
@@ -13472,6 +13482,12 @@ function renderRmapGantt(m, wrap, byTid){
       nm.lastChild.textContent = rmlFmt(it.start) + (it.end && it.end!==it.start ? " → " + rmlFmt(it.end) : "") + (it.owner ? " · 👤 " + it.owner : "") + (kd ? " · ☑ " + kd : "");
       nm.title = (en.task.title||"") + (it.owner ? "\nOwner: " + it.owner : "") + (it.team ? "\nTeam: " + it.team : "") + "\n" + en.path;
       if(editMode){ nm.onclick = ()=> rmlEditItem(m, it, en); nm.style.cursor = "pointer"; }
+      if(it.doc){
+        const db = document.createElement("button"); db.className = "rmg-doc rmg-tdoc" + (editMode && !dep ? "" : " solo"); db.textContent = "📄";
+        db.title = "Open its " + (it.doc.name || "document");
+        db.onclick = e=>{ e.stopPropagation(); rmgOpenDoc(it, en.task.title || "(untitled)"); };
+        nm.appendChild(db);
+      }
       if(editMode && !dep){
         const sb = document.createElement("button"); sb.className = "td-gadd rmg-subbtn"; sb.textContent = "＋"; sb.title = "Add a sub-task under this";
         sb.onclick = e=>{ e.stopPropagation(); rmgOpenSub(m, it); };
@@ -14036,6 +14052,7 @@ function rmlEditItem(m, it, en){
     const opts = m.items.filter(x=> x!==it && !x.parent && reg[x.tid]).map(x=> [x.rid, reg[x.tid].task.title || "(untitled)"]);
     if(opts.length) fields.splice(fields.findIndex(f=> f.k==="lane")+1, 0, { k:"parent", label:"Sub-task of", type:"select", value: (rmgParentOf(m, it) || {}).rid || "", opts: [["","— none (a main task) —"]].concat(opts) });
   }
+  if(m.view==="gantt"){ const tf = rmgTplField(it); if(tf) fields.push(tf); }
   rmlModal(named ? "Edit item" : (en.task.title||"Item"), fields, v=>{
     if(v.start && v.end && dNum(v.end) < dNum(v.start)){ toast("“Done by” is before the start date"); return false; }
     if(named){ const nm=(v.title||"").trim(); if(!nm){ toast("Give it a title"); return false; } en.task.title = nm; }
@@ -14050,6 +14067,7 @@ function rmlEditItem(m, it, en){
     m.items.forEach(k=>{ if(k!==it && rmgParentOf(m, k)===it) k.lane = it.lane; });
     ["owner","team","progress","next"].forEach(k=>{ const s=(v[k]||"").trim(); if(s) it[k]=s; else delete it[k]; });
     if(rmgIsGrid(m) || m.view==="wbs"){ if(v.color) it.color = v.color; else delete it.color; }
+    if(m.view==="gantt") rmgTplApply(it, v.tpl);
     if(m.view==="wbs"){ const pc = Math.max(0, Math.min(100, Math.round(Number(v.pct)||0))); if(pc) it.pct = pc; else delete it.pct; }
     if(v.rule){
       it.rule = { type:v.rule };
