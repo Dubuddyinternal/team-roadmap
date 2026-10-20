@@ -2788,6 +2788,22 @@ body.rm-chart #pane-work > .controls{display:none}
 .dv-sidetree .ws-sub:hover .ws-menu-btn,.dv-sidetree .ws-sub2:hover .ws-menu-btn{opacity:1}
 .mkt-tltop{display:flex;align-items:center;gap:12px;margin:0 0 8px}
 .mkt-tltop .hint{flex:1}
+.mag-row{padding:10px 0;border-bottom:1px solid var(--line)}
+.mag-row:last-child{border-bottom:0}
+.mag-top{display:flex;justify-content:space-between;gap:10px;font-size:14px}
+.mag-top span{font-family:var(--mono);font-size:12.5px;font-weight:600}
+.mag-bar{height:7px;border-radius:99px;background:var(--line);margin:7px 0 5px;overflow:hidden}
+.mag-bar i{display:block;height:100%;background:var(--indigo);border-radius:99px}
+.mag-bar i.ok{background:var(--done)}
+.mag-foot{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+.mag-in{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:12.5px;color:var(--muted)}
+.mag-in input{width:110px;padding:4px 8px;border:1px solid var(--line-strong);border-radius:6px;font:inherit}
+.mag-edit{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.mag-er{display:grid;grid-template-columns:minmax(160px,2fr) 110px 80px 120px minmax(170px,1.6fr) 34px;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line)}
+.mag-er:last-child{border-bottom:0}
+.mag-eh{background:var(--paper);font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.mag-er input,.mag-er select{width:100%;padding:6px 8px;border:1px solid var(--line-strong);border-radius:7px;font:inherit;font-size:13px;background:var(--card);min-width:0}
+.mag-btns{display:flex;gap:8px;align-items:center;margin-top:12px}
 .mkt-line{display:flex;align-items:baseline;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
 .mkt-line:last-child{border-bottom:0}
 .mkt-line span{color:var(--muted);font-size:12.5px;margin-left:auto;text-align:right}
@@ -6200,6 +6216,7 @@ function discPhaseStrip(cs, idea){
 function discSetStage(cs, idea, stage){
   const was = idea.stage;
   idea.stage = stage;
+  if(was!==stage){ idea.stageAt = idea.stageAt || {}; idea.stageAt[stage] = todayISO(); }   /* when it got here (Marketing → Our agreement counts on it) */
   saveDisc();
   discOnEnter(cs, idea, was);
   if(cs.type==="process" && was!==stage){ procPing(cs, idea); if(procSync(cs)) saveRmaps(); }
@@ -8253,7 +8270,7 @@ function workTabs(){
   if(view==="disc"){
     // Product Roadmap spaces: no stage board (an idea's stage is set from All ideas); Timeline is a Gantt
     const _ct = (currentDisc() || {}).type;
-    if(_ct==="marketing") return [{key:"timeline",label:"Timeline"}];
+    if(_ct==="marketing") return [{key:"agreement",label:"🤝 Our agreement"},{key:"timeline",label:"Timeline"}];
     if(_ct==="procdept") return procHasAccess(currentDisc()) || canViewSpace(csRef(currentDisc()))
       ? [{key:"ideas",label:"⚙️ Process improvements"},{key:"timeline",label:"Timeline"}] : [{key:"ideas",label:"🔒 Request access"}];
     if(_ct==="process") return [{key:"ideas",label:"All ideas"},{key:"timeline",label:"Timeline"},{key:"team",label:"👥 From team"}];
@@ -12940,6 +12957,140 @@ function mktTimelinePane(mk){
   own.items = own.items.filter(it=> reg[it.tid]);
   renderRmapGantt(own, wrap, reg);
 }
+/* ================================================================
+   MARKETING → 🤝 OUR AGREEMENT: Marketing-wide targets (revenue, games, processes improved, posts…)
+   mk.agreement = { goals:[{id, name, target, unit:"count"|"inr"|"pct", period:"week"|"month"|"quarter", source}],
+                    manual:{ "<goal id>:<period start>": number } }
+   source = "hand" (typed in on the Summary each period) or counted from the app:
+     proc_out   — Marketing's process improvements that reached Rolled out in the period
+     proc_sent  — Marketing's process improvements sent in the period
+     posts      — posts published in the period, across Marketing's Social Media spaces
+     campaigns  — campaigns inside Marketing that start in the period
+   ================================================================ */
+const MKT_AG_SOURCES = [["hand","Typed in by hand"],["proc_out","Process improvements rolled out"],["proc_sent","Process improvements sent"],["posts","Posts published (Social Media)"],["campaigns","Campaigns started"]];
+const MKT_AG_PERIODS = [["week","per week"],["month","per month"],["quarter","per quarter"]];
+const MKT_AG_UNITS = [["count","count"],["inr","₹"],["pct","%"]];
+function mktAgreement(mk){
+  if(!mk.agreement) mk.agreement = { goals:[
+    { id:"ag-rev",   name:"Overall revenue",      target:null, unit:"inr",   period:"month",   source:"hand" },
+    { id:"ag-games", name:"Games",                 target:null, unit:"count", period:"month",   source:"hand" },
+    { id:"ag-proc",  name:"Processes improved",    target:null, unit:"count", period:"quarter", source:"proc_out" },
+    { id:"ag-posts", name:"Posts published",       target:null, unit:"count", period:"week",    source:"posts" },
+  ], manual:{} };
+  mk.agreement.goals = mk.agreement.goals || []; mk.agreement.manual = mk.agreement.manual || {};
+  return mk.agreement;
+}
+function mktPeriodStart(period){
+  const d = new Date(); d.setHours(0,0,0,0);
+  if(period==="week") d.setDate(d.getDate() - ((d.getDay()+6)%7));
+  else if(period==="month") d.setDate(1);
+  else { d.setDate(1); d.setMonth(Math.floor(d.getMonth()/3)*3); }
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function mktPeriodEnd(period){
+  const a = mktPeriodStart(period), d = new Date(a + "T00:00:00");
+  if(period==="week") d.setDate(d.getDate() + 6);
+  else if(period==="month"){ d.setMonth(d.getMonth() + 1); d.setDate(0); }
+  else { d.setMonth(d.getMonth() + 3); d.setDate(0); }
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+/* this period's value for one goal */
+function mktGoalValue(mk, g){
+  const from = mktPeriodStart(g.period), to = mktPeriodEnd(g.period), inP = d=> !!d && d >= from && d <= to;
+  const kids = (CSPACES.list||[]).filter(x=> x.parent===mk.id);
+  if(g.source==="hand"){ const v = mktAgreement(mk).manual[g.id + ":" + from]; return v==null ? 0 : Number(v); }
+  if(g.source==="proc_out" || g.source==="proc_sent"){
+    return kids.filter(x=> x.type==="procdept").flatMap(procEntries).filter(i=> g.source==="proc_sent" ? inP(i.created) : inP(i.stageAt && i.stageAt.rolledout)).length;
+  }
+  if(g.source==="posts"){
+    return kids.filter(x=> x.type==="social").reduce((n, x)=>{ const S = (window.SX && SX.normalize) ? SX.normalize(x) : x.sx;
+      return n + ((S && S.cards) || []).filter(c=> inP(c.published) || (c.stage==="published" && !c.published && inP(c.scheduled))).length; }, 0);
+  }
+  if(g.source==="campaigns") return kids.filter(x=> x.type==="campaign" && x.details && inP(x.details.start)).length;
+  return 0;
+}
+function mktFmtVal(g, v){ return g.unit==="inr" ? "₹" + Number(v||0).toLocaleString("en-IN") : g.unit==="pct" ? (v||0) + "%" : Number(v||0).toLocaleString(); }
+const MKT_PERIOD_NOW = { week:"this week", month:"this month", quarter:"this quarter" };
+/* Summary card: each goal with a target — this period's value, a bar, and (hand-counted) a box to update it */
+function mktAgreementSummary(mk, card){
+  const A = mktAgreement(mk), goals = A.goals.filter(g=> Number(g.target) > 0);
+  const c = card("🤝 Our agreement");
+  if(!goals.length){
+    const e = document.createElement("div"); e.className = "hint";
+    e.textContent = "No targets yet. Set them in the 🤝 Our agreement tab — revenue, games, processes improved, posts…";
+    c.appendChild(e); return;
+  }
+  goals.forEach(g=>{
+    const v = mktGoalValue(mk, g), t = Number(g.target), pc = Math.min(100, t ? v / t * 100 : 0);
+    const left = Math.max(0, Math.round((dNum(mktPeriodEnd(g.period)) - dNum(todayISO())))) + 1;
+    const row = document.createElement("div"); row.className = "mag-row";
+    row.innerHTML = '<div class="mag-top"><b></b><span></span></div><div class="mag-bar"><i></i></div><div class="mag-foot"><span></span><span></span></div>';
+    row.querySelector(".mag-top b").textContent = g.name + " · " + mktFmtVal(g, t) + " " + (MKT_AG_PERIODS.find(x=> x[0]===g.period)||["","per month"])[1];
+    row.querySelector(".mag-top span").textContent = mktFmtVal(g, v) + " / " + mktFmtVal(g, t) + " " + MKT_PERIOD_NOW[g.period];
+    const bar = row.querySelector(".mag-bar i"); bar.style.width = pc + "%"; if(v >= t) bar.classList.add("ok");
+    row.querySelector(".mag-foot span:first-child").textContent = Math.round(pc) + "%" + (g.source==="hand" ? " · typed in by hand" : " · " + (MKT_AG_SOURCES.find(x=> x[0]===g.source)||["",""])[1].toLowerCase());
+    row.querySelector(".mag-foot span:last-child").textContent = v >= t ? "reached 🎉" : mktFmtVal(g, t - v) + " to go · " + left + " day" + (left===1 ? "" : "s") + " left";
+    if(g.source==="hand" && editMode){
+      const f = document.createElement("div"); f.className = "mag-in";
+      const lab = document.createElement("span"); lab.textContent = "Done " + MKT_PERIOD_NOW[g.period] + ":";
+      const inp = document.createElement("input"); inp.type = "number"; inp.min = "0"; inp.step = "any"; inp.value = String(v);
+      const sv = document.createElement("button"); sv.className = "tool sm"; sv.textContent = "Save";
+      sv.onclick = ()=>{ A.manual[g.id + ":" + mktPeriodStart(g.period)] = Number(inp.value) || 0; pushAll(); renderAll(); toast("Saved"); };
+      f.append(lab, inp, sv); row.appendChild(f);
+    }
+    c.appendChild(row);
+  });
+}
+/* the 🤝 Our agreement tab: set the targets (editors), like Social Media's */
+function mktAgreementPane(mk){
+  const wrap = $("content"), A = mktAgreement(mk);
+  const D = JSON.parse(JSON.stringify(A.goals));
+  const block = document.createElement("section"); block.className = "module-block";
+  const head = document.createElement("div"); head.className = "module-head";
+  const h2 = document.createElement("h2"); h2.textContent = "🤝 Our agreement"; head.appendChild(h2);
+  block.appendChild(head);
+  const intro = document.createElement("div"); intro.className = "hint"; intro.style.margin = "0 0 12px";
+  intro.textContent = "What the whole of Marketing is aiming for. Progress shows on the Summary for the current week / month / quarter. Some numbers are counted from the app; the rest the team types in on the Summary. Leave a target empty to switch it off.";
+  block.appendChild(intro);
+  const list = document.createElement("div"); list.className = "mag-edit"; block.appendChild(list);
+  const sel = (opts, val, dis)=>{ const e = document.createElement("select"); opts.forEach(([k, l])=>{ const o = document.createElement("option"); o.value = k; o.textContent = l; e.appendChild(o); }); e.value = val; e.disabled = dis; return e; };
+  const draw = ()=>{
+    list.innerHTML = "";
+    const hr = document.createElement("div"); hr.className = "mag-er mag-eh";
+    ["Target","Number","Unit","Period","How it's counted",""].forEach(t=>{ const c = document.createElement("span"); c.textContent = t; hr.appendChild(c); });
+    list.appendChild(hr);
+    D.forEach((g, i)=>{
+      const r = document.createElement("div"); r.className = "mag-er";
+      const nm = document.createElement("input"); nm.type = "text"; nm.value = g.name; nm.disabled = !editMode; nm.oninput = ()=> g.name = nm.value;
+      const tg = document.createElement("input"); tg.type = "number"; tg.min = "0"; tg.step = "any"; tg.placeholder = "—"; tg.value = g.target==null ? "" : g.target; tg.disabled = !editMode;
+      tg.oninput = ()=> g.target = tg.value==="" ? null : Number(tg.value);
+      const un = sel(MKT_AG_UNITS, g.unit, !editMode); un.onchange = ()=> g.unit = un.value;
+      const pe = sel(MKT_AG_PERIODS, g.period, !editMode); pe.onchange = ()=> g.period = pe.value;
+      const so = sel(MKT_AG_SOURCES, g.source, !editMode); so.onchange = ()=> g.source = so.value;
+      const x = document.createElement("button"); x.className = "rml-mini"; x.textContent = "×"; x.title = "Remove"; x.style.opacity = "1";
+      x.onclick = ()=>{ D.splice(i, 1); draw(); }; x.disabled = !editMode;
+      r.append(nm, tg, un, pe, so, x); list.appendChild(r);
+    });
+  };
+  draw();
+  if(editMode){
+    const bar = document.createElement("div"); bar.className = "mag-btns";
+    const add = document.createElement("button"); add.className = "tool sm"; add.textContent = "＋ Add a target";
+    add.onclick = ()=>{ D.push({ id:"ag-"+Date.now().toString(36), name:"", target:null, unit:"count", period:"month", source:"hand" }); draw(); };
+    const sp = document.createElement("span"); sp.style.flex = "1";
+    const undo = document.createElement("button"); undo.className = "btn"; undo.textContent = "Undo changes"; undo.onclick = ()=> renderAll();
+    const save = document.createElement("button"); save.className = "btn save"; save.textContent = "Save targets";
+    save.onclick = ()=>{
+      if(D.some(g=> !String(g.name||"").trim())){ toast("Give every target a name"); return; }
+      A.goals = D.map(g=> Object.assign(g, { name:String(g.name).trim() })); pushAll(); renderAll(); toast("Targets saved");
+    };
+    bar.append(add, sp, undo, save); block.appendChild(bar);
+  } else {
+    const ro = document.createElement("div"); ro.className = "hint"; ro.style.marginTop = "10px"; ro.textContent = "View only — Marketing's heads and editors can change these.";
+    block.appendChild(ro);
+  }
+  wrap.appendChild(block);
+}
 /* Marketing → Summary: the spaces inside it, and what's late / coming up on its Timeline */
 function mktRenderSummary(pane, show){
   let box = document.getElementById("mkt-summary");
@@ -12955,6 +13106,7 @@ function mktRenderSummary(pane, show){
     if(sub){ const s = document.createElement("span"); s.textContent = sub; r.appendChild(s); }
     c.appendChild(r);
   };
+  mktAgreementSummary(mk, card);
   const inside = (CSPACES.list||[]).filter(x=> x.parent===mk.id && x.type!=="procdept" && canViewSpace(csRef(x)));
   const c1 = card("📂 Spaces inside");
   inside.forEach(x=>{
@@ -16868,7 +17020,7 @@ function renderContentDisc(){
   const cs = currentDisc();
   if(!cs){ view = "roadmap"; renderAll(); return; }
 
-  if(cs.type==="marketing") return mktTimelinePane(cs);
+  if(cs.type==="marketing") return discView==="agreement" ? mktAgreementPane(cs) : mktTimelinePane(cs);
   if(cs.type==="procdept"){
     if(!canViewSpace(csRef(cs))) return procRequestPane(cs);
     if(discView==="timeline") return procDeptTimeline(cs);
