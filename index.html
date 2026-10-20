@@ -2752,10 +2752,13 @@ body.rm-chart #pane-work > .controls{display:none}
 .rmg-pct{font-family:var(--mono);font-size:10.5px;color:var(--muted);font-weight:600}
 .rmg-doc{flex:0 3 auto;min-width:30px;border:1px solid var(--line-strong);background:var(--card);border-radius:99px;padding:2px 8px;font-size:11px;font-weight:600;color:var(--indigo);cursor:pointer;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis}
 .rmg-phase .rmg-pname{flex:0 1 auto;min-width:64px}
-.rmg-task .rmg-tdoc{position:absolute;right:34px;top:50%;transform:translateY(-50%);padding:1px 6px}
-.rmg-task .rmg-tdoc.solo{right:8px}
-.rmg-days .rmg-task.rmg-task:has(.rmg-tdoc){padding-right:64px}
-.rmg-days .rmg-task.rmg-task:has(.rmg-tdoc.solo){padding-right:40px}
+.rmg-tacts{position:absolute;right:8px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:4px}
+.rmg-tacts .rmg-doc{padding:1px 6px}
+.rmg-task .rmg-tacts .rmg-subbtn{position:static;transform:none}
+.rmg-linklist{max-height:55vh;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.rmg-linkrow{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);cursor:pointer;font-size:14px}
+.rmg-linkrow:last-child{border-bottom:0}
+.rmg-linkrow small{margin-left:auto;color:var(--muted);font-family:var(--mono);font-size:10.5px}
 .rmg-doc:hover{border-color:var(--indigo)}
 .rml-docview{max-height:65vh;overflow:auto;font-size:14px;line-height:1.55;padding:4px 2px}
 .rml-docview ul,.rml-docview ol{margin:2px 0 2px 20px;padding:0}
@@ -13229,6 +13232,62 @@ function rmlTreeLines(cell, lvl, guides, last, pad, step){
   (guides||[]).forEach((on, j)=>{ if(on){ const v = document.createElement("i"); v.className = "rml-tv"; v.style.left = x(j); cell.appendChild(v); } });
   const e = document.createElement("i"); e.className = "rml-te" + (last ? "" : " more"); e.style.left = x(lvl-1); cell.appendChild(e);
 }
+/* linked boards on a phase or task (.links = ["rm:<id>" | "cs:<id>" | "bi:dev" | "bi:bugs"]): a 🔗 button
+   jumps to them. Only the key is kept, so a renamed board shows its new name; a deleted one drops off. */
+function rmgBoards(){
+  const out = [];
+  RMAPS.maps.filter(m=> canViewSpace(rmapRef(m))).forEach(m=> out.push({ key:"rm:"+m.id, name:m.name, sub:"Roadmap", go:()=>{ view="rmap"; activeRmap=m.id; renderAll(); } }));
+  if(!BUILTIN_HIDDEN.dev) out.push({ key:"bi:dev", name:"Development", sub:"Scrum", go:()=>{ view="dev"; devSpace=null; devSprint=null; renderAll(); } });
+  if(!BUILTIN_HIDDEN.bugs) out.push({ key:"bi:bugs", name:"Bugs", sub:"Bugs", go:()=>{ view="bugs"; renderAll(); } });
+  (CSPACES.list||[]).filter(cs=> cs.type!=="marketing" && canViewSpace(csRef(cs))).forEach(cs=> out.push({ key:"cs:"+cs.id, name:cs.name, sub:csTypeLabel(cs.type), go:()=> navToSpace(cs) }));
+  return out;
+}
+function rmgLinksBtn(holder){
+  const all = rmgBoards(), ls = (holder.links||[]).map(k=> all.find(b=> b.key===k)).filter(Boolean);
+  if(!ls.length) return null;
+  const b = document.createElement("button"); b.className = "rmg-doc rmg-link";
+  b.textContent = "🔗" + (ls.length>1 ? ls.length : "");
+  b.title = "Open " + ls.map(x=> x.name).join(", ");
+  b.onclick = e=>{
+    e.stopPropagation();
+    if(ls.length===1) return ls[0].go();
+    openDiscPick(b, { options: ls.map(x=> ({ key:x.key, label:x.name + " ↗" })), onPick: k=>{ const x = ls.find(y=> y.key===k); if(x) x.go(); } });
+  };
+  return b;
+}
+function rmgLinkPicker(holder, name){
+  const all = rmgBoards(), on = new Set(holder.links || []);
+  const ov = document.createElement("div"); ov.className = "overlay show";
+  const dg = document.createElement("div"); dg.className = "dialog"; dg.setAttribute("role","dialog"); dg.style.maxWidth = "460px";
+  const h = document.createElement("h3"); h.textContent = "🔗 Link boards — " + name; dg.appendChild(h);
+  const hint = document.createElement("div"); hint.className = "hint"; hint.style.margin = "-6px 0 8px"; hint.textContent = "Tick the boards to open from here. A 🔗 button shows on the row."; dg.appendChild(hint);
+  const list = document.createElement("div"); list.className = "rmg-linklist";
+  all.forEach(bd=>{
+    const r = document.createElement("label"); r.className = "rmg-linkrow";
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = on.has(bd.key);
+    cb.onchange = ()=>{ if(cb.checked) on.add(bd.key); else on.delete(bd.key); };
+    const t = document.createElement("span"); t.textContent = bd.name;
+    const sb = document.createElement("small"); sb.textContent = bd.sub;
+    r.append(cb, t, sb); list.appendChild(r);
+  });
+  if(!all.length){ const e = document.createElement("div"); e.className = "empty"; e.textContent = "No boards to link yet."; list.appendChild(e); }
+  dg.appendChild(list);
+  const btns = document.createElement("div"); btns.className = "btns";
+  const sp = document.createElement("span"); sp.style.flex = "1"; btns.appendChild(sp);
+  const close = ()=> ov.remove();
+  const cancel = document.createElement("button"); cancel.className = "btn"; cancel.textContent = "Cancel"; cancel.onclick = close;
+  const save = document.createElement("button"); save.className = "btn save"; save.textContent = "Save";
+  save.onclick = ()=>{
+    /* keep links to boards this person can't see; replace the rest with what's ticked */
+    const seen = new Set(all.map(b=> b.key));
+    const keep = (holder.links||[]).filter(k=> !seen.has(k)).concat(all.filter(b=> on.has(b.key)).map(b=> b.key));
+    if(keep.length) holder.links = keep; else delete holder.links;
+    close(); saveRmaps(); toast("Links saved");
+  };
+  btns.append(cancel, save); dg.appendChild(btns);
+  ov.appendChild(dg); ov.addEventListener("mousedown", e=>{ if(e.target===ov) close(); });
+  document.body.appendChild(ov);
+}
 /* a phase or task made from a template carries its own copy of the document (.doc = {tpl, name, text}) */
 function rmgTplField(holder){
   const tpls = RMAPS.templates || [];
@@ -13286,6 +13345,7 @@ function rmlEditLane(m, ln, preset){
     m.items.forEach(it=>{ if(it.lane===ln.id) it.lane = to.id; });
     saveRmaps();
   }, true]);
+  if(nest && ln) extra.unshift(["🔗 Link boards…", "Boards this "+word+" opens with one click", ()=> rmgLinkPicker(ln, ln.name)]);
   rmlModal(ln ? "Edit "+word : (preset && preset.parent ? "New sub-"+word+" in “"+((m.lanes.find(l=>l.id===preset.parent)||{}).name||"")+"”" : "New "+word), fields, v=>{
     const name = (v.name||"").trim(); if(!name){ toast("Give the "+word+" a name"); return false; }
     const kind = g ? "project" : v.kind;
@@ -13425,6 +13485,7 @@ function renderRmapGantt(m, wrap, byTid){
       db.onclick = e=>{ e.stopPropagation(); rmgOpenDoc(ln, ln.name); };
       lab.appendChild(db);
     }
+    const plb = rmgLinksBtn(ln); if(plb) lab.appendChild(plb);
     if(editMode){
       if(depth < RMG_MAX_DEPTH){
         const sb = document.createElement("button"); sb.className = "rml-mini"; sb.textContent = "＋ Sub"; sb.title = "Add a sub-phase inside “"+ln.name+"”";
@@ -13482,17 +13543,20 @@ function renderRmapGantt(m, wrap, byTid){
       nm.lastChild.textContent = rmlFmt(it.start) + (it.end && it.end!==it.start ? " → " + rmlFmt(it.end) : "") + (it.owner ? " · 👤 " + it.owner : "") + (kd ? " · ☑ " + kd : "");
       nm.title = (en.task.title||"") + (it.owner ? "\nOwner: " + it.owner : "") + (it.team ? "\nTeam: " + it.team : "") + "\n" + en.path;
       if(editMode){ nm.onclick = ()=> rmlEditItem(m, it, en); nm.style.cursor = "pointer"; }
+      const tacts = document.createElement("span"); tacts.className = "rmg-tacts";
       if(it.doc){
-        const db = document.createElement("button"); db.className = "rmg-doc rmg-tdoc" + (editMode && !dep ? "" : " solo"); db.textContent = "📄";
+        const db = document.createElement("button"); db.className = "rmg-doc"; db.textContent = "📄";
         db.title = "Open its " + (it.doc.name || "document");
         db.onclick = e=>{ e.stopPropagation(); rmgOpenDoc(it, en.task.title || "(untitled)"); };
-        nm.appendChild(db);
+        tacts.appendChild(db);
       }
+      const lb = rmgLinksBtn(it); if(lb) tacts.appendChild(lb);
       if(editMode && !dep){
         const sb = document.createElement("button"); sb.className = "td-gadd rmg-subbtn"; sb.textContent = "＋"; sb.title = "Add a sub-task under this";
         sb.onclick = e=>{ e.stopPropagation(); rmgOpenSub(m, it); };
-        nm.appendChild(sb);
+        tacts.appendChild(sb);
       }
+      if(tacts.children.length){ nm.appendChild(tacts); nm.style.paddingRight = (12 + tacts.children.length*30) + "px"; }
       nm.style.paddingLeft = (26 + (depth+dep)*18) + "px";
       if(dep){
         const nx = rows[ri+1], gd = []; gd[depth] = moreTop;
@@ -14079,6 +14143,7 @@ function rmlEditItem(m, it, en){
     sub: en.path,
     extra: [
       ["🔒 Blocked by…", "Pick what this one is waiting on — tasks on this chart first, or cards on any board", ()=> rmlBlockers(en, m)],
+      ...(m.view==="gantt" ? [["🔗 Link boards…", "Boards this task opens with one click", ()=> rmgLinkPicker(it, en.task.title || "this task")]] : []),
       ["Remove", own ? "Delete this item" : "Remove from this roadmap (the card itself stays)", ()=>{
         if(!confirm(own ? "Delete “"+(en.task.title||"")+"”?" : "Remove “"+(en.task.title||"")+"” from this roadmap? The card itself is not deleted.")) return false;
         rmgDropItem(m, it);
