@@ -2775,6 +2775,17 @@ body.rm-chart #pane-work > .controls{display:none}
 .rmg-wk.warn{position:relative;z-index:4}
 .rmg-wk.warn.past .rmg-wkwarn{background:#7A2A22}
 .rmg-wkwarn{display:inline-block;margin-right:5px;padding:0 6px;border-radius:99px;background:#C8473B;color:#fff;font-family:var(--mono);font-size:10px;font-weight:700;cursor:help}
+.dv-sidetree{margin:2px 0 6px}
+.dv-sidetree .ws-sub,.dv-sidetree .ws-sub2{display:flex;align-items:center;gap:6px;position:relative}
+.dv-sidetree .ws-sub{padding:6px 8px 6px 26px;font-size:13px;font-weight:600}
+.dv-sidetree .ws-sub2{padding:5px 8px 5px 46px;font-size:12.5px}
+.dv-sidetree .ws-sub2::before{content:"";position:absolute;left:34px;top:0;bottom:0;border-left:1px solid var(--line-strong)}
+.dv-sidetree .ws-sub2.active{color:var(--indigo);font-weight:700;background:var(--indigo-soft,#EEF1FF)}
+.dv-sidetree .ws-sub.active{background:none;color:var(--indigo)}
+.dv-sidetree .ws-sub2.done{opacity:.6}
+.dv-sidetree .dv-sn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dv-sidetree .ws-menu-btn{opacity:0}
+.dv-sidetree .ws-sub:hover .ws-menu-btn,.dv-sidetree .ws-sub2:hover .ws-menu-btn{opacity:1}
 .mkt-tltop{display:flex;align-items:center;gap:12px;margin:0 0 8px}
 .mkt-tltop .hint{flex:1}
 .mkt-line{display:flex;align-items:baseline;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
@@ -12463,10 +12474,108 @@ function currentSprint(){
   return inSpace.find(x=>!x.completed) || inSpace[0] || null;
 }
 
+// a dev team's ⋯ menu: new sprint, rename, move, delete (sidebar, under the engineering space)
+function devTeamMenuItems(space){
+  const i = DEV.spaces.indexOf(space);
+  const doDelete = ()=>{
+      const n = DEV.cards.filter(c=>c.space===space.id).length;
+      const last = DEV.spaces.length<=1;
+      const msg = last
+        ? "Delete \u201C"+space.name+"\u201D and its "+n+" card(s) + sprints?\n\nThis is the last dev space, so the Development board will be removed from the sidebar. You can bring it back any time with \uFF0B Add space \u2192 Scrum."
+        : "Delete the dev space \u201C"+space.name+"\u201D and its "+n+" card(s) + sprints?";
+      if(confirm(msg)){
+        DEV.cards = DEV.cards.filter(c=>c.space!==space.id);
+        DEV.sprints = DEV.sprints.filter(x=>x.space!==space.id);
+        DEV.spaces.splice(DEV.spaces.indexOf(space),1);
+        devSpace = null; devSprint = null;
+        if(last){
+          BUILTIN_HIDDEN.dev = true;
+          view = "roadmap"; defaultView();
+          saveDev(); pushAll(); renderAll();
+          toast("Development board removed");
+          return;
+        }
+        saveDev(); toast("Dev space deleted");
+      }
+  };
+  return [
+    {label:"\uFF0B New sprint", onClick:()=> openDialog("New sprint in \u201C"+space.name+"\u201D", {title:"Sprint "+(DEV.sprints.filter(x=>x.space===space.id).length+1)}, v=>{
+      const sp = { id:"sp-"+Date.now().toString(36), name:v.title, space:space.id };
+      if(v.start) sp.start = v.start;
+      if(v.deadline) sp.end = v.deadline;
+      DEV.sprints.push(sp); devSpace = space.id; devSprint = sp.id; devView = "board";
+      saveDev(); toast("Sprint created \u2014 pull cards in from the Backlog tab");
+    }, {hideExtras:true, dates:true})},
+    {label:"\u270F\uFE0F Rename team", onClick:()=> openDialog("Rename dev team", {title:space.name}, v=>{ space.name = v.title; saveDev(); }, {hideExtras:true, titleLabel:"Team / space name"})},
+    i>0 && {label:"\u2191 Move up", onClick:()=>{ DEV.spaces.splice(i-1, 0, DEV.spaces.splice(i,1)[0]); saveDev(); }},
+    i<DEV.spaces.length-1 && {label:"\u2193 Move down", onClick:()=>{ DEV.spaces.splice(i+1, 0, DEV.spaces.splice(i,1)[0]); saveDev(); }},
+    {label:"Delete team\u2026", danger:true, onClick: doDelete},
+  ].filter(Boolean);
+}
+// a sprint's ⋯ menu: edit name / dates, delete
+function devSprintMenuItems(sp){
+  return [
+    {label:"\u270F\uFE0F Edit name / dates", onClick:()=> openDialog("Edit sprint", {title:sp.name, start:sp.start, deadline:sp.end}, v=>{
+      sp.name = v.title;
+      if(v.start) sp.start = v.start; else delete sp.start;
+      if(v.deadline) sp.end = v.deadline; else delete sp.end;
+      saveDev();
+    }, {hideExtras:true, dates:true})},
+    {label:"Delete sprint\u2026", danger:true, onClick:()=>{
+      const n2 = DEV.cards.filter(c=>c.sprint===sp.id).length;
+      if(confirm("Delete "+sp.name+"? Its "+n2+" card(s) move back to the backlog.")){
+        DEV.cards.forEach(c=>{ if(c.sprint===sp.id) c.sprint = null; });
+        DEV.sprints.splice(DEV.sprints.indexOf(sp),1);
+        if(devSprint===sp.id) devSprint = null;
+        saveDev(); toast("Sprint deleted");
+      }
+    }},
+  ];
+}
+/* the engineering space in the sidebar holds its dev teams, and the open team its sprints:
+     Dubuddy Engineering ▸ Pancham's Sprints ▸ Easy Small Changes sprint / Majedar Sprint
+   Its own team (devId, or the first one) comes first, then teams not tied to another engineering space. */
+function devHostCs(){
+  const L = (CSPACES.list||[]).filter(x=> x.type==="scrum" && canViewSpace(csRef(x)) && !hiddenForMe("cs:"+x.id));
+  const cur = currentSpace();
+  return L.find(x=> x.devId===cur) || L.find(x=> !x.devId) || null;
+}
+function devTeamsOf(cs){
+  const linked = new Set((CSPACES.list||[]).filter(x=> x.type==="scrum" && x.devId).map(x=> x.devId));
+  const own = cs.devId || (DEV.spaces[0] && DEV.spaces[0].id);
+  return DEV.spaces.filter(s=> s.id===own).concat(DEV.spaces.filter(s=> s.id!==own && !linked.has(s.id)));
+}
+function devSideTree(host, cs){
+  const spc = currentSpace(), cur = currentSprint();
+  const menuBtn = (row, items)=>{
+    const m = document.createElement("span"); m.className = "ws-menu-btn"; m.textContent = "\u22EF"; m.title = "More";
+    m.onclick = e=>{ e.stopPropagation(); openRowMenu(m, items()); };
+    row.appendChild(m);
+  };
+  devTeamsOf(cs).forEach(team=>{
+    const on = view==="dev" && spc===team.id;
+    const t = document.createElement("button"); t.className = "ws-sub dv-sideteam" + (on ? " active" : "");
+    const nm = document.createElement("span"); nm.className = "dv-sn"; nm.textContent = "🏃 " + team.name; t.appendChild(nm);
+    t.onclick = ()=>{ view = "dev"; devSpace = team.id; devSprint = null; renderAll(); };
+    if(editMode) menuBtn(t, ()=> devTeamMenuItems(team));
+    host.appendChild(t);
+    if(!on) return;
+    DEV.sprints.filter(sp=> sp.space===team.id).forEach(sp=>{
+      const r = document.createElement("button");
+      r.className = "ws-sub2 dv-sidesprint" + (cur && cur.id===sp.id ? " active" : "") + (sp.completed ? " done" : "");
+      const n = document.createElement("span"); n.className = "dv-sn"; n.textContent = (sp.completed ? "\u2713 " : "") + sp.name; r.appendChild(n);
+      r.title = sp.name + (sp.start || sp.end ? " · " + (sp.start || "?") + " → " + (sp.end || "?") : "");
+      r.onclick = ()=>{ view = "dev"; devSpace = team.id; devSprint = sp.id; renderAll(); };
+      if(editMode) menuBtn(r, ()=> devSprintMenuItems(sp));
+      host.appendChild(r);
+    });
+  });
+}
 function renderSidebarDev(){
   const wrap = $("mods");
   wrap.innerHTML = "";
   const spc = currentSpace();
+  if(devHostCs()){ $("side-title").style.display = "none"; return; }   /* drawn under the engineering space (devSideTree) */
 
   $("side-title").style.display = "none";   // no "Modules" / "Dev spaces (teams)" headings — the team cards speak for themselves
   // --- team / dev-space switcher ---
@@ -12481,41 +12590,7 @@ function renderSidebarDev(){
       b.style.position = "relative";
       const menu = document.createElement("span");
       menu.className = "ws-menu-btn dv-teammenu"; menu.textContent = "\u22EF"; menu.title = "Sprints and team settings";
-      const i = DEV.spaces.indexOf(space);
-      const doDelete = ()=>{
-          const n = DEV.cards.filter(c=>c.space===space.id).length;
-          const last = DEV.spaces.length<=1;
-          const msg = last
-            ? "Delete \u201C"+space.name+"\u201D and its "+n+" card(s) + sprints?\n\nThis is the last dev space, so the Development board will be removed from the sidebar. You can bring it back any time with \uFF0B Add space \u2192 Scrum."
-            : "Delete the dev space \u201C"+space.name+"\u201D and its "+n+" card(s) + sprints?";
-          if(confirm(msg)){
-            DEV.cards = DEV.cards.filter(c=>c.space!==space.id);
-            DEV.sprints = DEV.sprints.filter(x=>x.space!==space.id);
-            DEV.spaces.splice(DEV.spaces.indexOf(space),1);
-            devSpace = null; devSprint = null;
-            if(last){
-              BUILTIN_HIDDEN.dev = true;
-              view = "roadmap"; defaultView();
-              saveDev(); pushAll(); renderAll();
-              toast("Development board removed");
-              return;
-            }
-            saveDev(); toast("Dev space deleted");
-          }
-      };
-      menu.onclick = e=>{ e.stopPropagation(); openRowMenu(menu, [
-        {label:"\uFF0B New sprint", onClick:()=> openDialog("New sprint in \u201C"+space.name+"\u201D", {title:"Sprint "+(DEV.sprints.filter(x=>x.space===space.id).length+1)}, v=>{
-          const sp = { id:"sp-"+Date.now().toString(36), name:v.title, space:space.id };
-          if(v.start) sp.start = v.start;
-          if(v.deadline) sp.end = v.deadline;
-          DEV.sprints.push(sp); devSpace = space.id; devSprint = sp.id; devView = "board";
-          saveDev(); toast("Sprint created \u2014 pull cards in from the Backlog tab");
-        }, {hideExtras:true, dates:true})},
-        {label:"\u270F\uFE0F Rename team", onClick:()=> openDialog("Rename dev team", {title:space.name}, v=>{ space.name = v.title; saveDev(); }, {hideExtras:true, titleLabel:"Team / space name"})},
-        i>0 && {label:"\u2191 Move up", onClick:()=>{ DEV.spaces.splice(i-1, 0, DEV.spaces.splice(i,1)[0]); saveDev(); }},
-        i<DEV.spaces.length-1 && {label:"\u2193 Move down", onClick:()=>{ DEV.spaces.splice(i+1, 0, DEV.spaces.splice(i,1)[0]); saveDev(); }},
-        {label:"Delete team\u2026", danger:true, onClick: doDelete},
-      ].filter(Boolean)); };
+      menu.onclick = e=>{ e.stopPropagation(); openRowMenu(menu, devTeamMenuItems(space)); };
       b.appendChild(menu);
     }
     wrap.appendChild(b);
@@ -17822,6 +17897,10 @@ function renderAll(){
           _list.forEach(k=> _drawCs(k, _kids, true));
           if(!_list.length){ const e=document.createElement("div"); e.className="ws-empty"; e.textContent="Nothing inside yet."; _kids.appendChild(e); }
           /* "＋ Add space inside" is in Marketing's ⋯ menu */
+        }
+        if(cs.type==="scrum" && view==="dev" && devHostCs()===cs){
+          const _dk = document.createElement("div"); _dk.className = "ws-kids dv-sidetree";
+          _host.appendChild(_dk); devSideTree(_dk, cs);
         }
         if(cs.type==="social" && view==="social" && activeCspace===cs.id){
           [["targets","🤝 Our agreement"],["summary","📊 Summary"],["ideation","💡 Ideation"],["process","🎬 Content Process"],["schedule","🗓 Schedule"],["rivals","👀 Keep an Eye on 2nd Love"]].forEach(([k,lbl])=>{
