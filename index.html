@@ -1871,6 +1871,12 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .dv-sumtypes .dv-type{cursor:default;font-size:12.5px;padding:4px 10px}
 .dv-sumrev{display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--line)}
 .dv-sumrev:first-of-type{border-top:0}
+.dv-qa{display:inline-flex;align-items:center;border-radius:99px;padding:2px 8px;font-size:12px;font-weight:600;background:#ECFEFF;color:#0E7490;border:1px solid #A5F3FC}
+.dv-qatest{border:1px dashed var(--line-strong,#ccc);background:var(--card);border-radius:99px;padding:3px 10px;font-size:12.5px;color:var(--muted);cursor:pointer}
+.dv-qatest.on{border-style:solid;border-color:#A5F3FC;background:#ECFEFF;color:#0E7490;font-weight:600}
+.dv-qahead{margin:12px 0 0 28px;font-size:13px;font-weight:700;color:#0E7490}
+.dv-qaadd{border-color:#A5F3FC}
+.dv-qapick{display:flex;align-items:center;gap:10px}
 .dv-filter{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 12px}
 .dv-flab{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .dv-fsel{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:5px 10px;font:inherit;font-size:13px;color:inherit;max-width:240px;cursor:pointer}
@@ -7185,6 +7191,33 @@ function devSubtasksDialog(c){
   document.body.appendChild(ov);
 }
 const devEpicOpen = new Set();   // epics opened on the board (the rest show one line)
+/* 🧪 QA testing on an epic: admins pick who tests it (e.qaTesters: emails); only those people (and admins)
+   can add "improvement" cards under it (c.qa = true), even without Edit on. They land in the backlog, in the epic. */
+function devQaAdmin(){ const h = devHostCs(); return iAmTeamAdmin() || (!!h && canInSpace("admin", csRef(h))); }
+function devQaCanAdd(e){ const me = currentUser(); return !!me && (devQaAdmin() || (e.qaTesters||[]).includes(me.email)); }
+function devQaChip(c){
+  if(!c.qa) return null;
+  const b = document.createElement("span"); b.className = "dv-qa"; b.textContent = "\uD83E\uDDEA QA";
+  const u = c.qaBy && assigneeMembers().find(x=>x.email===c.qaBy);
+  b.title = "Improvement from QA testing" + (c.qaBy ? " \u2014 raised by "+(u ? userDisplayName(u) : c.qaBy) : "");
+  return b;
+}
+function devPickTesters(e){
+  const ov = $("choice-overlay"), list = $("choice-list"), pick = new Set(e.qaTesters||[]);
+  $("choice-title").textContent = "\uD83E\uDDEA Who can add QA improvements to \u201C"+e.title+"\u201D?";
+  list.innerHTML = "";
+  assigneeMembers().slice().sort((a,b)=> userDisplayName(a).localeCompare(userDisplayName(b))).forEach(u=>{
+    const l = document.createElement("label"); l.className = "choice-btn dv-qapick";
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = pick.has(u.email);
+    cb.onchange = ()=>{ if(cb.checked) pick.add(u.email); else pick.delete(u.email); };
+    const t = document.createElement("span"); t.textContent = userDisplayName(u)+(userDisplayName(u)!==u.email ? " \u00B7 "+u.email : "");
+    l.append(cb, t); list.appendChild(l);
+  });
+  const ok = document.createElement("button"); ok.className = "btn save"; ok.textContent = "Save testers";
+  ok.onclick = ()=>{ ov.classList.remove("show"); if(pick.size) e.qaTesters = [...pick]; else delete e.qaTesters; saveDev(); toast(pick.size ? pick.size+" QA tester(s) on "+e.title : "No QA testers on "+e.title); };
+  list.appendChild(ok);
+  ov.classList.add("show");
+}
 function devEpicsSection(spc, sp){
   const epics = devEpicsOf(spc);
   const block = document.createElement("section");
@@ -7215,6 +7248,15 @@ function devEpicsSection(spc, sp){
     }
     if(e.from){ const oc = originChip(e); if(oc) top.appendChild(oc); }
     if(e.assignee) top.appendChild(assigneeAvatar(e.assignee));
+    const nq = (e.qaTesters||[]).length;
+    if(nq || devQaAdmin()){
+      const qb = document.createElement("button"); qb.className = "dv-qatest"+(nq?" on":"");
+      qb.textContent = "\uD83E\uDDEA "+(nq ? nq+" QA tester"+(nq===1?"":"s") : "QA testers");
+      qb.title = (nq ? "QA testers: "+e.qaTesters.map(m=>{ const u = assigneeMembers().find(x=>x.email===m); return u ? userDisplayName(u) : m; }).join(", ") : "Nobody tests this epic yet")
+        + (devQaAdmin() ? " \u2014 click to choose who can add QA improvements" : "");
+      qb.onclick = ev=>{ ev.stopPropagation(); if(devQaAdmin()) devPickTesters(e); };
+      top.appendChild(qb);
+    }
     top.appendChild(commentChip(e, ()=>saveDev()));
     if(editMode){
       const acts = document.createElement("div"); acts.className = "acts";
@@ -7232,18 +7274,20 @@ function devEpicsSection(spc, sp){
     if(open){
       if(e.note){ const nt = document.createElement("div"); nt.className = "note"; nt.textContent = e.note; box.appendChild(nt); }
       const list = document.createElement("div"); list.className = "dv-epickids";
-      kids.forEach(k=>{
+      const kidRow = k=>{
         const r = document.createElement("div"); r.className = "dv-epickid"+(k.col==="done"?" done":"");
         const spr = k.sprint ? (DEV.sprints||[]).find(x=>x.id===k.sprint) : null;
         const where = document.createElement("span"); where.className = "dv-kidwhere"; where.textContent = (spr ? spr.name : "Backlog")+" \u00B7 "+todoKLabelSafe(k.col);
         const kt = document.createElement("span"); kt.className = "dv-kidt"; kt.textContent = k.title;
-        r.append(devTypeChip(k), kt, where);
+        r.append(devTypeChip(k)); const qc = devQaChip(k); if(qc) r.appendChild(qc); r.append(kt, where);
         const sc = devSubChip(k); if(sc) r.appendChild(sc);
         if(k.assignee) r.appendChild(assigneeAvatar(k.assignee));
         if(!k.sprint && sp && !sp.completed && editMode){ const mv = document.createElement("button"); mv.className = "upd"; mv.textContent = "\u2192 "+sp.name; mv.title = "Pull into the current sprint"; mv.onclick = ()=>{ k.sprint = sp.id; k.col = "todo"; saveDev(); toast("Pulled into "+sp.name); }; r.appendChild(mv); }
-        list.appendChild(r);
-      });
-      if(!kids.length){ const em = document.createElement("div"); em.className = "empty"; em.textContent = "No stories in this epic yet."; list.appendChild(em); }
+        return r;
+      };
+      const stories = kids.filter(k=>!k.qa), qas = kids.filter(k=>k.qa);
+      stories.forEach(k=> list.appendChild(kidRow(k)));
+      if(!stories.length){ const em = document.createElement("div"); em.className = "empty"; em.textContent = "No stories in this epic yet."; list.appendChild(em); }
       box.appendChild(list);
       if(editMode){
         const add = document.createElement("button"); add.className = "addline"; add.textContent = "\uFF0B Add a story to this epic";
@@ -7253,6 +7297,25 @@ function devEpicsSection(spc, sp){
           DEV.cards.push(c); saveDev(); toast("Story added to the backlog, in "+e.title);
         }, {photos:true, assignee:true, duedate:true, priority:true, labels:true});
         box.appendChild(add);
+      }
+      // 🧪 improvements raised while testing this epic
+      if(qas.length || (e.qaTesters||[]).length || devQaCanAdd(e)){
+        const qh = document.createElement("div"); qh.className = "dv-qahead";
+        qh.textContent = "\uD83E\uDDEA Improvements from QA testing \u00B7 "+qas.filter(k=>k.col==="done").length+" of "+qas.length+" done";
+        box.appendChild(qh);
+        const ql = document.createElement("div"); ql.className = "dv-epickids";
+        qas.forEach(k=> ql.appendChild(kidRow(k)));
+        if(!qas.length){ const em = document.createElement("div"); em.className = "hint"; em.textContent = (e.qaTesters||[]).length ? "Nothing raised from testing yet." : "Pick QA testers (\uD83E\uDDEA button above) \u2014 only they can add improvements here."; ql.appendChild(em); }
+        box.appendChild(ql);
+        if(devQaCanAdd(e)){
+          const qa = document.createElement("button"); qa.className = "addline dv-qaadd"; qa.textContent = "\uFF0B Add an improvement from QA testing";
+          qa.onclick = ()=> openDialog("\uD83E\uDDEA QA improvement in \u201C"+e.title+"\u201D", {}, v=>{
+            const c = { id:"dv-"+Date.now().toString(36), title:v.title, col:"todo", sprint:null, space:e.space, type:"task", epic:e.id, qa:true, qaBy:currentUser().email, qaOn:new Date().toISOString().slice(0,10) };
+            if(v.note) c.note = v.note; applyCardFields(c, v); if(v.photos && v.photos.length) c.photos = v.photos;
+            DEV.cards.push(c); saveDev(); toast("Improvement added to the backlog, in "+e.title);
+          }, {photos:true, priority:true});
+          box.appendChild(qa);
+        }
       }
     }
     block.appendChild(box);
@@ -13587,7 +13650,7 @@ function devCardOpts(sprintId){
   return {
     onMove: saveDev,
     colLabels: { review: "In review by "+DEV_REVIEWER_NAME.split(" ")[0] },   // everything in review waits on Sumit (devAutoReviewer)
-    cardExtras: c => [devTypeChip(c), devEpicChip(c), devSubChip(c), originChip(c), reviewerChip(c), commentChip(c, ()=>saveDev())],
+    cardExtras: c => [devTypeChip(c), devQaChip(c), devEpicChip(c), devSubChip(c), originChip(c), reviewerChip(c), commentChip(c, ()=>saveDev())],
     extraActs: c => [c.col!=="done" && actBtn("backlog","Send to backlog",false, ()=>{ c.sprint = null; c.col = "todo"; saveDev(); toast("\u201C"+c.title+"\u201D sent to the backlog"); })],
     onEdit: c => openDialog("Edit card", c, v=>{
       applyFields(c, v);
@@ -13633,7 +13696,7 @@ let devHistRange = "all";
 let devFilter = {epic:"", type:""};
 function devFilterPass(c){
   if(devFilter.epic && (devFilter.epic==="none" ? !!c.epic : c.epic!==devFilter.epic)) return false;
-  return !devFilter.type || devType(c).key===devFilter.type;
+  return !devFilter.type || (devFilter.type==="qa" ? !!c.qa : devType(c).key===devFilter.type);
 }
 function devFilterBar(spc, all, shown){
   const epics = devEpicsOf(spc);
@@ -13648,7 +13711,7 @@ function devFilterBar(spc, all, shown){
   };
   const lab = document.createElement("span"); lab.className = "dv-flab"; lab.textContent = "Filter"; bar.appendChild(lab);
   mk("epic", "\u26A1 All epics", epics.map(e=>[e.id, "\u26A1 "+e.title]).concat([["none","No epic"]]));
-  mk("type", "All kinds", DEV_TYPES.filter(t=>t.key!=="epic").map(t=>[t.key, t.icon+" "+(t.key==="story" ? "Stories" : t.label+"s")]));
+  mk("type", "All kinds", DEV_TYPES.filter(t=>t.key!=="epic").map(t=>[t.key, t.icon+" "+(t.key==="story" ? "Stories" : t.label+"s")]).concat([["qa","\uD83E\uDDEA From QA testing"]]));
   if(devFilter.epic || devFilter.type){
     const n = document.createElement("span"); n.className = "dv-fn"; n.textContent = "Showing "+shown+" of "+all; bar.appendChild(n);
     const x = document.createElement("button"); x.className = "dv-fclear"; x.textContent = "\u2715 Clear";
