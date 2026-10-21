@@ -2792,6 +2792,7 @@ body.rm-chart #pane-work > .controls{display:none}
 .rmg-doc{flex:0 3 auto;min-width:30px;border:1px solid var(--line-strong);background:var(--card);border-radius:99px;padding:2px 8px;font-size:11px;font-weight:600;color:var(--indigo);cursor:pointer;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis}
 .rmg-phase .rmg-pname{flex:0 1 auto;min-width:64px}
 .rmg-tacts{position:absolute;right:8px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:4px}
+.rmg-doc.rmg-qa{color:#0E7490;border-color:#A5F3FC;background:#ECFEFF}
 .rmg-tacts .rmg-doc{padding:1px 6px}
 .rmg-task .rmg-tacts .rmg-subbtn{position:static;transform:none}
 .rmg-linklist{max-height:55vh;overflow:auto;border:1px solid var(--line);border-radius:10px}
@@ -7231,7 +7232,7 @@ function devEpicsSection(spc, sp){
   bh.append(h2, pc); block.appendChild(bh);
   epics.forEach(e=>{
     const kids = devEpicKids(e), done = kids.filter(k=>k.col==="done").length, open = devEpicOpen.has(e.id);
-    const box = document.createElement("div"); box.className = "dv-epicbox"+(open?" open":"");
+    const box = document.createElement("div"); box.className = "dv-epicbox"+(open?" open":""); box.dataset.epic = e.id;
     const top = document.createElement("div"); top.className = "dv-epictop";
     const tg = document.createElement("button"); tg.className = "dv-epictg"; tg.textContent = open ? "\u25BE" : "\u25B8"; tg.title = open ? "Fold" : "Show its stories";
     tg.onclick = ()=>{ if(open) devEpicOpen.delete(e.id); else devEpicOpen.add(e.id); renderAll(); };
@@ -14524,6 +14525,63 @@ function rmgLinkPicker(holder, name){
   ov.appendChild(dg); ov.addEventListener("mousedown", e=>{ if(e.target===ov) close(); });
   document.body.appendChild(ov);
 }
+/* 🧪 QA testing board: a timeline task points at an Engineering epic (it.qaEpic = the epic's card id). The 🧪 button
+   on the row opens that epic on the Epics tab, where its QA testers add improvement cards. */
+function devGoEpic(id){
+  const e = (DEV.cards||[]).find(c=> c.id===id && devIsEpic(c)); if(!e){ toast("That epic no longer exists"); return; }
+  document.querySelectorAll(".overlay.show").forEach(o=> o.id ? o.classList.remove("show") : o.remove());
+  view = "dev"; devSpace = e.space; devSprint = null; devView = "epics"; paneTab = "work"; devEpicOpen.add(e.id); renderAll();
+  setTimeout(()=>{ const el = document.querySelector('[data-epic="'+e.id+'"]'); if(el && el.scrollIntoView) el.scrollIntoView({block:"start", behavior:"smooth"}); }, 60);
+}
+function rmgQaBtn(it){
+  const e = it.qaEpic && (DEV.cards||[]).find(c=> c.id===it.qaEpic && devIsEpic(c)); if(!e) return null;
+  const b = document.createElement("button"); b.className = "rmg-doc rmg-qa"; b.textContent = "🧪";
+  const k = devEpicKids(e).filter(c=> c.qa), open = k.filter(c=> c.col!=="done").length;
+  if(k.length) b.textContent += " " + open;
+  b.title = "QA testing board: ⚡ " + e.title + (k.length ? " — " + open + " of " + k.length + " improvements open" : "") + " — click to open";
+  b.onclick = ev=>{ ev.stopPropagation(); devGoEpic(e.id); };
+  return b;
+}
+function rmgQaPicker(it, name){
+  const teams = DEV.spaces || [];
+  if(!teams.length){ toast("Add an Engineering (scrum) team first"); return; }
+  let pick = it.qaEpic || "", newIn = "";
+  const ov = document.createElement("div"); ov.className = "overlay show";
+  const dg = document.createElement("div"); dg.className = "dialog"; dg.setAttribute("role","dialog"); dg.style.maxWidth = "480px";
+  const h = document.createElement("h3"); h.textContent = "🧪 QA testing board — " + name; dg.appendChild(h);
+  const hint = document.createElement("div"); hint.className = "hint"; hint.style.margin = "-6px 0 8px"; hint.textContent = "Pick the Engineering epic where this gets tested. A 🧪 button on the row opens it; its QA testers add improvement cards there."; dg.appendChild(hint);
+  const list = document.createElement("div"); list.className = "rmg-linklist";
+  const row = (label, sub, val, isNew)=>{
+    const r = document.createElement("label"); r.className = "rmg-linkrow";
+    const rb = document.createElement("input"); rb.type = "radio"; rb.name = "rmg-qa"; rb.checked = isNew ? false : pick===val;
+    rb.onchange = ()=>{ if(isNew){ newIn = val; pick = ""; } else { pick = val; newIn = ""; } };
+    const t = document.createElement("span"); t.textContent = label;
+    const sb = document.createElement("small"); sb.textContent = sub;
+    r.append(rb, t, sb); list.appendChild(r);
+  };
+  row("— No QA board", "", "", false);
+  teams.forEach(tm=>{
+    devEpicsOf(tm.id).forEach(e=> row("⚡ " + e.title, tm.name + ((e.qaTesters||[]).length ? " · 🧪 " + e.qaTesters.length : ""), e.id, false));
+    row("＋ New epic “" + name + "”", tm.name, tm.id, true);
+  });
+  dg.appendChild(list);
+  const btns = document.createElement("div"); btns.className = "btns";
+  const sp = document.createElement("span"); sp.style.flex = "1"; btns.appendChild(sp);
+  const close = ()=> ov.remove();
+  const cancel = document.createElement("button"); cancel.className = "btn"; cancel.textContent = "Cancel"; cancel.onclick = close;
+  const save = document.createElement("button"); save.className = "btn save"; save.textContent = "Save";
+  save.onclick = ()=>{
+    if(newIn){
+      const e = { id:"dv-"+Date.now().toString(36), title:name, col:"todo", sprint:null, space:newIn, type:"epic", from:"roadmap" };
+      DEV.cards.push(e); pick = e.id; DEV.updated = todayStr();
+    }
+    if(pick) it.qaEpic = pick; else delete it.qaEpic;
+    close(); saveRmaps(); toast(pick ? "QA testing board set \u2014 open it with 🧪 on the row" : "QA testing board removed");
+  };
+  btns.append(cancel, save); dg.appendChild(btns);
+  ov.appendChild(dg); ov.addEventListener("mousedown", e=>{ if(e.target===ov) close(); });
+  document.body.appendChild(ov);
+}
 /* a phase or task made from a template carries its own copy of the document (.doc = {tpl, name, text}) */
 function rmgTplField(holder){
   const tpls = RMAPS.templates || [];
@@ -14905,6 +14963,7 @@ function renderRmapGantt(m, wrap, byTid){
         tacts.appendChild(db);
       }
       const lb = rmgLinksBtn(it); if(lb) tacts.appendChild(lb);
+      const qb = rmgQaBtn(it); if(qb) tacts.appendChild(qb);
       if(ed && !dep){
         const sb = document.createElement("button"); sb.className = "td-gadd rmg-subbtn"; sb.textContent = "＋"; sb.title = "Add a sub-task under this";
         sb.onclick = e=>{ e.stopPropagation(); rmgOpenSub(M, it); };
@@ -15652,7 +15711,8 @@ function rmlEditItem(m, it, en){
     sub: en.path,
     extra: [
       ["🔒 Blocked by…", "Pick what this one is waiting on — tasks on this chart first, or cards on any board", ()=> rmlBlockers(en, m)],
-      ...(m.view==="gantt" ? [["🔗 Link boards…", "Boards this task opens with one click", ()=> rmgLinkPicker(it, en.task.title || "this task")]] : []),
+      ...(m.view==="gantt" ? [["🔗 Link boards…", "Boards this task opens with one click", ()=> rmgLinkPicker(it, en.task.title || "this task")],
+        ["🧪 QA testing…", "The Engineering epic where this gets tested — its QA testers add improvement cards there", ()=> rmgQaPicker(it, en.task.title || "this task")]] : []),
       ["Remove", own ? "Delete this item" : "Remove from this roadmap (the card itself stays)", ()=>{
         if(!confirm(own ? "Delete “"+(en.task.title||"")+"”?" : "Remove “"+(en.task.title||"")+"” from this roadmap? The card itself is not deleted.")) return false;
         rmgDropItem(m, it);
