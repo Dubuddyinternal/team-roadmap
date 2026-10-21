@@ -1876,7 +1876,9 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .dv-qatest.on{border-style:solid;border-color:#A5F3FC;background:#ECFEFF;color:#0E7490;font-weight:600}
 .dv-qahead{margin:12px 0 0 28px;font-size:13px;font-weight:700;color:#0E7490}
 .dv-qaadd{border-color:#A5F3FC}
-.dv-qapick{display:flex;align-items:center;gap:10px}
+.dv-qapick{display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:13.5px}
+.dv-qalist{max-height:min(60vh,520px);overflow-y:auto;padding-bottom:0}
+.dv-qasave{position:sticky;bottom:0;margin-top:4px;box-shadow:0 -8px 12px var(--card)}
 .dv-filter{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 12px}
 .dv-flab{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
 .dv-fsel{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:5px 10px;font:inherit;font-size:13px;color:inherit;max-width:240px;cursor:pointer}
@@ -7213,9 +7215,10 @@ function devPickTesters(e){
     const t = document.createElement("span"); t.textContent = userDisplayName(u)+(userDisplayName(u)!==u.email ? " \u00B7 "+u.email : "");
     l.append(cb, t); list.appendChild(l);
   });
-  const ok = document.createElement("button"); ok.className = "btn save"; ok.textContent = "Save testers";
+  const ok = document.createElement("button"); ok.className = "btn save dv-qasave"; ok.textContent = "Save testers";
   ok.onclick = ()=>{ ov.classList.remove("show"); if(pick.size) e.qaTesters = [...pick]; else delete e.qaTesters; saveDev(); toast(pick.size ? pick.size+" QA tester(s) on "+e.title : "No QA testers on "+e.title); };
   list.appendChild(ok);
+  list.classList.add("dv-qalist");   // scrolls, with Save stuck at the bottom; openChoice takes it off again
   ov.classList.add("show");
 }
 function devEpicsSection(spc, sp){
@@ -12712,7 +12715,7 @@ function openChoice(title, options, cb){
   const ov = $("choice-overlay");
   $("choice-title").textContent = title;
   const list = $("choice-list");
-  list.innerHTML = "";
+  list.innerHTML = ""; list.classList.remove("dv-qalist");
   options.forEach(o=>{
     const b = document.createElement("button");
     b.className = "choice-btn";
