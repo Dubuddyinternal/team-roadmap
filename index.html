@@ -1655,6 +1655,9 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);margin-bottom:12px}
 .check input{width:auto}
 .dialog .btns{display:flex;gap:8px;justify-content:flex-end;margin:0 -22px;padding:14px 22px 0;border-top:1px solid var(--line);flex:none}
+.dialog .btns.rml-btns{flex-wrap:wrap}
+.rml-extras{display:flex;flex-wrap:wrap;gap:6px;flex-basis:100%}
+.rml-extras .rml-xbtn{white-space:nowrap;padding:7px 12px;font-size:13px}
 .btn{padding:8px 16px;border-radius:8px;border:1px solid var(--line);font-size:14px}
 .btn.save{background:var(--indigo);border-color:var(--indigo);color:#fff;font-weight:600}
 
@@ -15948,14 +15951,17 @@ function rmlModal(title, fields, onSave, o){
   const refresh = ()=>{ const v = read(); fields.forEach(f=>{ if(f.show) wraps[f.k].style.display = f.show(v) ? "" : "none"; }); };
   Object.values(inputs).forEach(el=> el.addEventListener("change", refresh));
   refresh();
-  const btns = document.createElement("div"); btns.className = "btns";
+  const btns = document.createElement("div"); btns.className = "btns rml-btns";
   const close = ()=> ov.remove();
+  /* the extra actions (Blocked by, Link boards, QA testing, Remove) get their own wrapping row above Cancel / Save */
+  const xr = document.createElement("div"); xr.className = "rml-extras";
   (o.extra||[]).forEach(([txt, tip, fn, danger])=>{
-    const b = document.createElement("button"); b.className = "btn"; b.textContent = txt; b.title = tip;
+    const b = document.createElement("button"); b.className = "btn rml-xbtn"; b.textContent = txt; b.title = tip;
     if(danger){ b.style.color = "var(--blocked)"; }
     b.onclick = ()=>{ const keep = fn(); if(danger && keep!==false) close(); else if(!danger) close(); };
-    btns.appendChild(b);
+    xr.appendChild(b);
   });
+  if(xr.childNodes.length) btns.appendChild(xr);
   const sp = document.createElement("span"); sp.style.flex = "1"; btns.appendChild(sp);
   const cancel = document.createElement("button"); cancel.className = "btn"; cancel.textContent = o.noSave ? "Close" : "Cancel"; cancel.onclick = close;
   const save = document.createElement("button"); save.className = "btn save"; save.textContent = "Save";
