@@ -1871,6 +1871,15 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .dv-sumtypes .dv-type{cursor:default;font-size:12.5px;padding:4px 10px}
 .dv-sumrev{display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--line)}
 .dv-sumrev:first-of-type{border-top:0}
+.dv-histbar{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 14px}
+.dv-histr{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:5px 12px;font-size:12.5px;cursor:pointer;color:inherit}
+.dv-histr.on{background:var(--indigo);border-color:var(--indigo);color:#fff}
+.dv-histsp{margin-bottom:10px}
+.dv-histsp summary{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;cursor:pointer;margin-bottom:6px}
+.dv-histsp summary b{font-size:15px}
+.dv-histn{margin-left:auto;font-size:12.5px;color:#047857;font-weight:600}
+.dv-histep{font-size:12px;font-weight:700;color:var(--muted);margin:10px 0 2px}
+.dv-histsp .dv-type{cursor:default;font-size:12px;padding:3px 8px}
 .tab-flow{align-self:center;color:var(--muted);font-size:15px;padding:0 2px;user-select:none}
 .ws-item .ws-n + .ws-menu-btn{margin-left:6px}
 
@@ -8094,6 +8103,7 @@ const ICONS = {
   trash:'<svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>',
   up:'<svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
   down:'<svg viewBox="0 0 24 24"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>',
+  backlog:'<svg viewBox="0 0 24 24"><path d="M12 3v11M7 9l5 5 5-5M4 15v5h16v-5"/></svg>',
   comment:'<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
 };
 /* Move an item up/down within its own list. Returns the two buttons, each
@@ -8461,7 +8471,7 @@ function workTabs(){
   if(view==="dev"){   // the flow: ⚡ Epics → Backlog → Board (the sprint)
     const spc = currentSpace(), cards = DEV.cards||[];
     const ne = cards.filter(c=>devIsEpic(c) && c.space===spc).length, nb = cards.filter(c=>!c.sprint && c.space===spc && devWork(c)).length;
-    return [{key:"epics",label:"\u26A1 Epics"+(ne?" \u00B7 "+ne:""), flow:true},{key:"backlog",label:"Backlog"+(nb?" \u00B7 "+nb:""), flow:true},{key:"board",label:"Board", flow:true},{key:"timeline",label:"Timeline"}];
+    return [{key:"epics",label:"\u26A1 Epics"+(ne?" \u00B7 "+ne:""), flow:true},{key:"backlog",label:"Backlog"+(nb?" \u00B7 "+nb:""), flow:true},{key:"board",label:"Board", flow:true},{key:"timeline",label:"Timeline"},{key:"history",label:"\uD83D\uDCDC History"}];
   }
   if(view==="campaign" && window.CX) return campTabs(currentCampaign()).map(([key,label])=>({key, label}));
   if(view==="watch" && window.WX) return WX.tabs.map(([key,label])=>({key, label}));
@@ -13190,7 +13200,7 @@ function spaceTabsFor(cs){
       (typeof sidIsTarget==="function" && sidIsTarget(cs)) ? [["students", typeof sidTabLabel==="function" ? sidTabLabel() : "🎓 From students"]] : []);
     case "process":   return S.concat([["ideas","All ideas"],["timeline","Timeline"],["team","👥 From team"]]);
     case "procdept":  return S.concat([["ideas","⚙️ Process improvements"],["timeline","Timeline"]]);
-    case "scrum":     return S.concat([["epics","⚡ Epics"],["backlog","Backlog"],["board","Board"],["timeline","Timeline"]]);
+    case "scrum":     return S.concat([["epics","⚡ Epics"],["backlog","Backlog"],["board","Board"],["timeline","Timeline"],["history","📜 History"]]);
     case "bugs": case "content": case "module": return S.concat([["work","Board"]]);
   }
   return [];
@@ -13572,6 +13582,7 @@ function devCardOpts(sprintId){
     onMove: saveDev,
     colLabels: { review: "In review by "+DEV_REVIEWER_NAME.split(" ")[0] },   // everything in review waits on Sumit (devAutoReviewer)
     cardExtras: c => [devTypeChip(c), devEpicChip(c), devSubChip(c), originChip(c), reviewerChip(c), commentChip(c, ()=>saveDev())],
+    extraActs: c => [c.col!=="done" && actBtn("backlog","Send to backlog",false, ()=>{ c.sprint = null; c.col = "todo"; saveDev(); toast("\u201C"+c.title+"\u201D sent to the backlog"); })],
     onEdit: c => openDialog("Edit card", c, v=>{
       applyFields(c, v);
       applyCardFields(c, v);
@@ -13591,12 +13602,94 @@ function devCardOpts(sprintId){
   };
 }
 
+/* ✓ Complete sprint: say where the unfinished cards (To do / In progress / In review) go, then keep a record
+   of what shipped on the sprint itself (sp.shipped) so the 📜 History tab still shows it if cards move later */
+function devCompleteSprint(sp, spCards){
+  const left = spCards.filter(c=>c.col!=="done");
+  const finish = target=>{
+    left.forEach(c=>{ c.sprint = target || null; c.col = "todo"; });
+    const epicT = id=> ((DEV.cards||[]).find(x=>x.id===id)||{}).title;
+    sp.shipped = spCards.filter(c=>c.col==="done").map(c=>{ const r = {id:c.id, title:c.title, type:devType(c).key}; if(c.epic && epicT(c.epic)) r.epic = epicT(c.epic); if(c.assignee) r.assignee = c.assignee; return r; });
+    sp.unfinished = left.length;
+    sp.completed = true; sp.completedOn = new Date().toISOString().slice(0,10);
+    devSprint = target || null;
+    saveDev(); toast("Sprint completed \uD83C\uDF89" + (left.length ? " \u2014 "+left.length+" card(s) "+(target ? "moved to "+(DEV.sprints.find(x=>x.id===target)||{}).name : "sent to the backlog") : ""));
+  };
+  if(!left.length){ if(confirm("Complete "+sp.name+"? All "+spCards.length+" card(s) are done.")) finish(null); return; }
+  const n = k=> left.filter(c=>c.col===k).length;
+  const next = DEV.sprints.filter(x=>x.space===sp.space && !x.completed && x.id!==sp.id);
+  openChoice("Complete "+sp.name+"? "+left.length+" card(s) aren\u2019t done ("+n("todo")+" to do \u00B7 "+n("progress")+" in progress \u00B7 "+n("review")+" in review). Where should they go?",
+    [{label:"\uD83D\uDCE5 Send all "+left.length+" to the backlog", value:""}].concat(next.map(x=>({label:"\u2192 Move all "+left.length+" to "+x.name, value:x.id}))), finish);
+}
+/* 📜 History: every completed sprint of the team, newest first, with what shipped in it */
+let devHistRange = "all";
+function devHistDate(sp){ return sp.completedOn ? devParseDay(sp.completedOn) : sp.end ? devParseDay(sp.end) : null; }
+function devHistorySection(spc){
+  const box = document.createElement("section"); box.className = "module-block dv-hist";
+  const head = document.createElement("div"); head.className = "module-head";
+  const h2 = document.createElement("h2"); h2.textContent = "\uD83D\uDCDC Sprint history"; head.appendChild(h2);
+  const tot = document.createElement("span"); tot.className = "pct"; head.appendChild(tot);
+  box.appendChild(head);
+  const ranges = [["3m","Last 3 months",3],["6m","Last 6 months",6],["12m","Last year",12],["all","All time",0]];
+  const bar = document.createElement("div"); bar.className = "dv-histbar";
+  ranges.forEach(([k,l])=>{ const b = document.createElement("button"); b.className = "dv-histr"+(devHistRange===k?" on":""); b.textContent = l;
+    b.onclick = ()=>{ devHistRange = k; renderAll(); }; bar.appendChild(b); });
+  box.appendChild(bar);
+  const months = (ranges.find(r=>r[0]===devHistRange)||[])[2] || 0;
+  const since = months ? new Date(new Date().getFullYear(), new Date().getMonth()-months, new Date().getDate()) : null;
+  const sprints = DEV.sprints.filter(x=>x.space===spc && x.completed)
+    .filter(x=>{ if(!since) return true; const d = devHistDate(x); return !d || d >= since; })
+    .sort((a,b)=> ((devHistDate(b)||0) - (devHistDate(a)||0)) || (DEV.sprints.indexOf(b) - DEV.sprints.indexOf(a)));
+  const shippedOf = sp=>{
+    const live = DEV.cards.filter(c=>c.sprint===sp.id && c.col==="done" && devWork(c)).map(c=>{ const e = c.epic ? DEV.cards.find(x=>x.id===c.epic) : null; return {id:c.id, title:c.title, type:devType(c).key, epic:e ? e.title : "", assignee:c.assignee}; });
+    if(!sp.shipped) return live;
+    // the record from completion, plus anything marked done there since
+    return sp.shipped.map(r=> live.find(c=>c.id===r.id) || r).concat(live.filter(c=>!sp.shipped.some(r=>r.id===c.id)));
+  };
+  let all = 0;
+  if(!sprints.length){
+    const e = document.createElement("div"); e.className = "empty";
+    e.textContent = DEV.sprints.some(x=>x.space===spc && x.completed) ? "No sprints completed in this period." : "No completed sprints yet \u2014 finish one with \u2713 Complete sprint on the Board and it shows up here.";
+    box.appendChild(e);
+  }
+  sprints.forEach(sp=>{
+    const items = shippedOf(sp); all += items.length;
+    const c = document.createElement("details"); c.className = "dv-sumcard dv-histsp"; c.open = sprints.indexOf(sp) < 3;
+    const s = document.createElement("summary");
+    s.innerHTML = "<b></b><span class='dv-dl-date'></span><span class='dv-histn'></span>";
+    s.querySelector("b").textContent = "\u2713 "+sp.name;
+    const d = devHistDate(sp);
+    s.querySelector(".dv-dl-date").textContent = (sp.start || sp.end ? (sp.start||"\u2026")+" \u2192 "+(sp.end||"\u2026") : "")
+      + (sp.completedOn ? " \u00B7 closed "+d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}) : "");
+    s.querySelector(".dv-histn").textContent = items.length+" shipped"+(sp.unfinished ? " \u00B7 "+sp.unfinished+" carried over" : "");
+    c.appendChild(s);
+    if(!items.length){ const e = document.createElement("div"); e.className = "hint"; e.textContent = "Nothing was marked done in this sprint."; c.appendChild(e); }
+    const groups = {};
+    items.forEach(it=>{ (groups[it.epic||""] = groups[it.epic||""] || []).push(it); });
+    Object.keys(groups).sort((a,b)=> (a==="") - (b==="") || a.localeCompare(b)).forEach(g=>{
+      if(Object.keys(groups).length>1 || g){ const gh = document.createElement("div"); gh.className = "dv-histep"; gh.textContent = g ? "\u26A1 "+g : "Other work"; c.appendChild(gh); }
+      groups[g].forEach(it=>{
+        const r = document.createElement("div"); r.className = "dv-sumrev";
+        const T = DEV_TYPES.find(t=>t.key===it.type) || DEV_TYPES[1];
+        const ch = document.createElement("span"); ch.className = "dv-type t-"+T.key; ch.textContent = T.icon+" "+T.label; r.appendChild(ch);
+        const t = document.createElement("span"); t.textContent = it.title; t.style.flex = "1"; r.appendChild(t);
+        if(it.assignee) r.appendChild(assigneeAvatar(it.assignee));
+        c.appendChild(r);
+      });
+    });
+    box.appendChild(c);
+  });
+  tot.textContent = sprints.length+" sprint"+(sprints.length===1?"":"s")+" \u00B7 "+all+" card"+(all===1?"":"s")+" shipped";
+  return box;
+}
+
 function renderContentDev(){
   const wrap = $("content");
   wrap.innerHTML = "";
   const sp = currentSprint();
   if(devView==="epics"){ wrap.appendChild(devEpicsSection(currentSpace(), sp)); return; }   // ⚡ Epics tab
   if(devView==="timeline") return devTimelinePane();
+  if(devView==="history"){ wrap.appendChild(devHistorySection(currentSpace())); return; }   // 📜 completed sprints
 
   if(devView!=="backlog"){   // Board tab: the sprint only
   if(sp){
@@ -13617,15 +13710,7 @@ function renderContentDev(){
       const btn = document.createElement("button");
       btn.className = "tool";
       btn.textContent = "\u2713 Complete sprint";
-      btn.onclick = ()=>{
-        const unfinished = spCards.filter(c=>c.col!=="done").length;
-        if(confirm("Complete "+sp.name+"? "+unfinished+" unfinished card(s) will move back to the backlog.")){
-          DEV.cards.forEach(c=>{ if(c.sprint===sp.id && c.col!=="done") c.sprint = null; });
-          sp.completed = true;
-          devSprint = null;
-          saveDev(); toast("Sprint completed \uD83C\uDF89");
-        }
-      };
+      btn.onclick = ()=> devCompleteSprint(sp, spCards);
       row.appendChild(btn);
     }
     head.appendChild(row);
