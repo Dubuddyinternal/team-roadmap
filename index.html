@@ -14990,7 +14990,8 @@ function renderRmapGantt(m, wrap, byTid){
       else if(editMode && it.move) rmgItemDrag(blk, M, it, ()=> weekPx()/7, 1, ()=> rmgRowDialog(m, it, byTid), { virtual:true });   /* lives in another space: moved there */
       else { blk.onclick = ()=> rmgRowDialog(m, it, byTid); blk.style.cursor = "pointer"; }
       blk.oncontextmenu = e=> rmgRowMenu(e, m, M, it, en, byTid, ed);
-      grid.appendChild(blk);
+      if(it.noBar) delete barEls[it.tid];   /* a heading task: just its row, no bar */
+      else grid.appendChild(blk);
       rIdx++;
     });
     if(ed){
@@ -15195,6 +15196,7 @@ function rmgRowMenu(e, m, M, it, en, byTid, ed){
   if(ed) items.push({ label:"✏️ Edit", onClick: ()=> rmlEditItem(M, it, en) });
   else items.push({ label:"ℹ️ Details", onClick: ()=> rmgRowDialog(m, it, byTid) });
   if(editMode) items.push({ label:"🔒 Blocked by…", onClick: ()=> ed ? rmlBlockers(en, M) : rmgRowDialog(m, it, byTid) });
+  if(ed && M.view==="gantt") items.push({ label: it.noBar ? "▬ Show its bar" : "🚫 Hide its bar (a heading task)", onClick: ()=>{ if(it.noBar) delete it.noBar; else it.noBar = true; saveRmaps(); } });
   const x = e.clientX, y = e.clientY;
   openRowMenu({ getBoundingClientRect: ()=> ({ top:y, bottom:y, left:x, right:x + 200 }) }, items);
 }
@@ -15672,6 +15674,7 @@ function rmlEditItem(m, it, en){
     { k:"pct", label:"% complete", type:"number", value: it.pct ?? 0, show: ()=> m.view==="wbs" },
     { k:"progress", label:"What’s done so far", type:"area", value: it.progress || "" },
     { k:"next", label:"Next steps", type:"area", value: it.next || "" },
+    { k:"nobar", label:"Bar on the chart", type:"select", value: it.noBar ? "hide" : "show", opts:[["show","Show a bar"],["hide","No bar \u2014 a heading task; its sub-tasks carry the bars"]], show: ()=> m.view==="gantt" },
     { k:"color", label:"Bar colour", type:"color", value: it.color || "", autoTip: m.view==="swimlane" ? "Use the swimlane colour" : m.view==="wbs" ? "Blue" : "Use the team colour", show: ()=> rmgIsGrid(m) || m.view==="wbs" },
     { k:"rule", label:"Health rule (turns the card red)", type:"select", value: r.type || "", opts: RML_RULES.map(x=>[x.key, x.label]), show: ()=> !rmgIsGrid(m) && m.view!=="wbs" },
     { k:"days", label:"N days", type:"number", value: r.days || (r.type==="blogs" ? 5 : r.type==="notif" ? 2 : 7), show: v=> RML_RULES.some(x=>x.key===v.rule && x.days) },
@@ -15702,7 +15705,7 @@ function rmlEditItem(m, it, en){
     const _ow = rmlOwnerValue(v, "owner"); if(_ow) it.owner = _ow; else delete it.owner;
     ["team","progress","next"].forEach(k=>{ const s=(v[k]||"").trim(); if(s) it[k]=s; else delete it[k]; });
     if(rmgIsGrid(m) || m.view==="wbs"){ if(v.color) it.color = v.color; else delete it.color; }
-    if(m.view==="gantt") rmgTplApply(it, v.tpl);
+    if(m.view==="gantt"){ rmgTplApply(it, v.tpl); if(v.nobar==="hide") it.noBar = true; else delete it.noBar; }
     if(m.view==="wbs"){ const pc = Math.max(0, Math.min(100, Math.round(Number(v.pct)||0))); if(pc) it.pct = pc; else delete it.pct; }
     if(v.rule){
       it.rule = { type:v.rule };
