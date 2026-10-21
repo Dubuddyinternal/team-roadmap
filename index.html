@@ -1871,6 +1871,12 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .dv-sumtypes .dv-type{cursor:default;font-size:12.5px;padding:4px 10px}
 .dv-sumrev{display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--line)}
 .dv-sumrev:first-of-type{border-top:0}
+.dv-filter{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+.dv-flab{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.dv-fsel{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:5px 10px;font:inherit;font-size:13px;color:inherit;max-width:240px;cursor:pointer}
+.dv-fsel.on{border-color:var(--indigo);background:var(--indigo-soft);color:var(--indigo);font-weight:600}
+.dv-fn{font-size:12.5px;color:var(--muted)}
+.dv-fclear{border:0;background:none;color:var(--indigo);font-size:12.5px;cursor:pointer;padding:4px 6px}
 .dv-histbar{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 14px}
 .dv-histr{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:5px 12px;font-size:12.5px;cursor:pointer;color:inherit}
 .dv-histr.on{background:var(--indigo);border-color:var(--indigo);color:#fff}
@@ -13623,6 +13629,33 @@ function devCompleteSprint(sp, spCards){
 }
 /* 📜 History: every completed sprint of the team, newest first, with what shipped in it */
 let devHistRange = "all";
+/* Board / Backlog filter: by epic (an epic's id, or "none") and by kind (story / task / bug) */
+let devFilter = {epic:"", type:""};
+function devFilterPass(c){
+  if(devFilter.epic && (devFilter.epic==="none" ? !!c.epic : c.epic!==devFilter.epic)) return false;
+  return !devFilter.type || devType(c).key===devFilter.type;
+}
+function devFilterBar(spc, all, shown){
+  const epics = devEpicsOf(spc);
+  if(devFilter.epic && devFilter.epic!=="none" && !epics.some(e=>e.id===devFilter.epic)) devFilter.epic = "";
+  const bar = document.createElement("div"); bar.className = "dv-filter";
+  const mk = (key, first, opts)=>{
+    const sel = document.createElement("select"); sel.className = "dv-fsel"+(devFilter[key] ? " on" : "");
+    [["",first]].concat(opts).forEach(([v,l])=>{ const o = document.createElement("option"); o.value = v; o.textContent = l; sel.appendChild(o); });
+    sel.value = devFilter[key];
+    sel.onchange = ()=>{ devFilter[key] = sel.value; renderAll(); };
+    bar.appendChild(sel);
+  };
+  const lab = document.createElement("span"); lab.className = "dv-flab"; lab.textContent = "Filter"; bar.appendChild(lab);
+  mk("epic", "\u26A1 All epics", epics.map(e=>[e.id, "\u26A1 "+e.title]).concat([["none","No epic"]]));
+  mk("type", "All kinds", DEV_TYPES.filter(t=>t.key!=="epic").map(t=>[t.key, t.icon+" "+(t.key==="story" ? "Stories" : t.label+"s")]));
+  if(devFilter.epic || devFilter.type){
+    const n = document.createElement("span"); n.className = "dv-fn"; n.textContent = "Showing "+shown+" of "+all; bar.appendChild(n);
+    const x = document.createElement("button"); x.className = "dv-fclear"; x.textContent = "\u2715 Clear";
+    x.onclick = ()=>{ devFilter = {epic:"", type:""}; renderAll(); }; bar.appendChild(x);
+  }
+  return bar;
+}
 function devHistDate(sp){ return sp.completedOn ? devParseDay(sp.completedOn) : sp.end ? devParseDay(sp.end) : null; }
 function devHistorySection(spc){
   const box = document.createElement("section"); box.className = "module-block dv-hist";
@@ -13716,7 +13749,9 @@ function renderContentDev(){
     head.appendChild(row);
     const dl = devSprintDeadline(sp, spCards); if(dl) head.appendChild(dl);
     wrap.appendChild(head);
-    wrap.appendChild(kanbanBoard(spCards, devCardOpts(sp.id)));
+    const shownCards = spCards.filter(devFilterPass);
+    wrap.appendChild(devFilterBar(sp.space, spCards.length, shownCards.length));
+    wrap.appendChild(kanbanBoard(shownCards, devCardOpts(sp.id)));
   } else {
     const d = document.createElement("div");
     d.className = "empty";
@@ -13729,7 +13764,8 @@ function renderContentDev(){
   }
 
   const spc = currentSpace();
-  const backlog = DEV.cards.filter(c=>!c.sprint && c.space===spc && devWork(c));
+  const backlogAll = DEV.cards.filter(c=>!c.sprint && c.space===spc && devWork(c));
+  const backlog = backlogAll.filter(devFilterPass);
   const block = document.createElement("section");
   block.className = "module-block";
   const bh = document.createElement("div");
@@ -13739,6 +13775,7 @@ function renderContentDev(){
   pctb.textContent = backlog.length + " item(s)";
   bh.append(h2b, pctb);
   block.appendChild(bh);
+  if(backlogAll.length) block.appendChild(devFilterBar(spc, backlogAll.length, backlog.length));
 
   // keep only still-existing ids selected
   const backlogIds = new Set(backlog.map(c=>c.id));
@@ -13872,7 +13909,7 @@ function renderContentDev(){
   });
   if(!backlog.length){
     const e = document.createElement("div"); e.className = "empty";
-    e.textContent = "Backlog is empty \u2014 send items here from the Roadmap or Bugs (board icon in Edit mode), or add one below.";
+    e.textContent = backlogAll.length ? "Nothing in the backlog matches this filter." : "Backlog is empty \u2014 send items here from the Roadmap or Bugs (board icon in Edit mode), or add one below.";
     block.appendChild(e);
   }
   if(editMode){
