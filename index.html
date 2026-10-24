@@ -38,7 +38,7 @@
 <script src="hr.js"></script><!-- HR files: My HR file + Administration → Employees (HR) -->
 <script src="accounts.js"></script><!-- Accounts: payment requests, payroll, My payments -->
 <script src="wiki-docs.js"></script><!-- Our Wiki: write documents in the app -->
-<script src="my-todo.js"></script><!-- My To-do: everything assigned to me + my own to-dos -->
+<script src="my-todo.js"></script><!-- Our To-do: everything assigned to me + my own to-dos, shared with chosen teammates -->
 <script>
 /* ============================================================
    ONE-TIME SETUP with JSONBin (~3 minutes)
@@ -1621,6 +1621,28 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .td-frozen-msg{text-align:center;font-weight:600;color:#92400E;background:#FEF3C7;border-radius:10px;padding:10px;margin-bottom:12px}
 .td-frozen{opacity:.4;filter:grayscale(1);pointer-events:none;user-select:none}
 .ws-item.td-side{display:flex;align-items:center;justify-content:space-between;font-weight:600}
+.td-side-inv{margin-left:6px;font-size:10.5px;font-weight:600;background:var(--blocked-bg);color:var(--blocked);border-radius:99px;padding:1px 7px}
+/* Our To-do (my-todo.js): invites, the people on top of the plan, a teammate's plan (view only), shared ideas */
+.td-invite{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 14px;padding:12px 16px;border:1px solid var(--indigo);background:var(--indigo-soft);border-radius:12px}
+.td-invite-tx{flex:1 1 260px;display:flex;flex-direction:column;gap:2px;font-size:13px}
+.td-invite-tx span{color:var(--muted)}
+.td-people{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 12px}
+.td-people-l{font-size:12px;font-weight:600;color:var(--muted);margin-right:4px}
+.td-person{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card);border-radius:99px;padding:3px 12px 3px 3px;font:inherit;font-size:13px;cursor:pointer;color:inherit}
+.td-person:hover{border-color:var(--indigo)}
+.td-person.on{border-color:var(--indigo);background:var(--indigo-soft);color:var(--indigo);font-weight:600}
+.td-person.wait{opacity:.7;border-style:dashed;cursor:default}
+.td-person.add,.td-person.more{padding:4px 12px;color:var(--indigo);border-style:dashed}
+.td-person.more{border-style:solid;color:var(--muted)}
+.td-person-av{width:22px;height:22px;border-radius:50%;background:var(--indigo);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+.td-person-x{margin-left:2px;font-size:11px;color:var(--muted);cursor:pointer}
+.td-person-x:hover{color:var(--blocked)}
+.td-viewonly{margin-left:8px}
+.td-ro,.td-ro *{pointer-events:none}
+.td-ro .rmg-scroll{pointer-events:auto}
+.td-ro .td-gadd,.td-ro .rml-mini,.td-ro .td-subbtn,.td-ro .td-timechip:not(.on),.td-ro .td-type.none,.td-ro .td-clk-acts,.td-ro .td-phase-e,.td-ro .td-day-none,.td-ro .td-grip,.td-ro .td-tl-grip{display:none}
+.td-idea-scope{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:12px}
+.td-idea-by{color:var(--indigo);font-weight:500}
 .td-side-n{font-family:var(--mono);font-size:11px;background:var(--indigo-soft);color:var(--indigo);border-radius:99px;padding:1px 8px}
 @media(max-width:1100px){.kanban{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:600px){.kanban{grid-template-columns:1fr}}
@@ -5274,7 +5296,7 @@ const PERMS = [
   {key:"manage_hr",        label:"HR: manage employee files", hint:"Everything in “see employee files”, plus approve documents, send files back, answer ✏️ change requests, and send offer letters"},
   {key:"manage_policies",  label:"HR: edit company policies", hint:"Add and edit policies in Administration → HR → Policies, and ask everyone to sign a new version"},
   {key:"accounts",         label:"Accounts: payments & payroll", hint:"See and approve everyone's payment requests, mark them paid, run payroll and download bank files (Administration → Accounts). Includes people's bank details"},
-  {key:"my_todo",          label:"My To-do",              hint:"See a private ✅ My To-do board at the top of Spaces: everything assigned to you across the boards, plus your own to-dos"},
+  {key:"my_todo",          label:"Our To-do",             hint:"See the ✅ Our To-do board at the top of Spaces: everything assigned to you across the boards, your own to-dos, and the plans and ideas of the teammates you share it with"},
   {key:"hr_settings",      label:"HR: company details & offer letter", hint:"Change the company details and the offer letter wording in Administration → HR → Company and offer letter"},
 ];
 // what the 5 old role names meant, for anyone not yet on a custom role
@@ -8603,7 +8625,7 @@ function renderTabs(){
 }
 function renderHeader(){
   const _rm = view==="rmap" ? RMAPS.maps.find(m=>m.id===activeRmap) : null;
-  $("rm-title").textContent = view==="todo" ? "My To-do" : view==="admin" ? "Administration" : view==="okr" ? "Team OKRs" : view==="content" ? "Educational Content Roadmap" : view==="ideas" ? "Team Ideas" : view==="dev" ? "Development Board" : view==="bugs" ? "Bugs & Issues" : view==="cbugs" ? ((CSPACES.list.find(x=>x.id===activeCspace)||{}).name || "Bugs board") : view==="disc" ? (((currentDisc()||{}).name) || "Product roadmap") : view==="social" ? (((currentSocial()||{}).name) || "Social Media") : view==="campaign" ? (((currentCampaign()||{}).name) || "Campaign") : view==="watch" ? (((currentWatch()||{}).name) || "Keep an Eye") : view==="horizon" ? (((currentHorizon()||{}).name) || "Widen our Horizon") : view==="pdt" ? (((currentPdt()||{}).name) || "Product All in One") : view==="rmap" ? ((_rm && _rm.name) || "Roadmap") : (DATA.title || "Product Roadmap");
+  $("rm-title").textContent = view==="todo" ? "Our To-do" : view==="admin" ? "Administration" : view==="okr" ? "Team OKRs" : view==="content" ? "Educational Content Roadmap" : view==="ideas" ? "Team Ideas" : view==="dev" ? "Development Board" : view==="bugs" ? "Bugs & Issues" : view==="cbugs" ? ((CSPACES.list.find(x=>x.id===activeCspace)||{}).name || "Bugs board") : view==="disc" ? (((currentDisc()||{}).name) || "Product roadmap") : view==="social" ? (((currentSocial()||{}).name) || "Social Media") : view==="campaign" ? (((currentCampaign()||{}).name) || "Campaign") : view==="watch" ? (((currentWatch()||{}).name) || "Keep an Eye") : view==="horizon" ? (((currentHorizon()||{}).name) || "Widen our Horizon") : view==="pdt" ? (((currentPdt()||{}).name) || "Product All in One") : view==="rmap" ? ((_rm && _rm.name) || "Roadmap") : (DATA.title || "Product Roadmap");
   $("rm-subtitle").textContent = view==="todo"
     ? ""
     : view==="okr"
