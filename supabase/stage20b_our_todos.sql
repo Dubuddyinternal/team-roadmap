@@ -111,12 +111,13 @@ create policy "circle delete" on public.todo_circles for delete to authenticated
 drop policy if exists "members read" on public.todo_circle_members;
 create policy "members read" on public.todo_circle_members for select to authenticated
   using (user_id = auth.uid() or public.todo_circle_status(circle_id) is not null or public.todo_circle_owner(circle_id) = auth.uid());
--- the one who started a circle puts themself in as joined; a joined member invites teammates
+-- the one who started a circle puts themself in as joined; a joined member adds teammates
+-- (straight in as 'joined' — the app does that; 'invited' still allowed for older rows)
 drop policy if exists "members add" on public.todo_circle_members;
 create policy "members add" on public.todo_circle_members for insert to authenticated
   with check (
     (user_id = auth.uid() and status = 'joined' and public.todo_circle_owner(circle_id) = auth.uid())
-    or (status = 'invited' and invited_by = auth.uid() and user_id <> auth.uid()
+    or (status in ('invited','joined') and invited_by = auth.uid() and user_id <> auth.uid()
         and public.todo_circle_status(circle_id) = 'joined'
         and public.todo_circle_teammate(circle_id, user_id))
   );
