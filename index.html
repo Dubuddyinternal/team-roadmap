@@ -14718,14 +14718,15 @@ function rmgTaskDocs(m, it){
   }
   return changed;
 }
-/* a task's documents: the one it was made with (.doc) and the ones its phases gave it (.docs) */
+/* a task's documents: the one it was made with (.doc), the ones its phases gave it and the ones added
+   with ＋ Add document (.docs) — as many as it needs: product brief, PRD, test plan… */
 function rmgOpenDocs(it, title){
-  const list = (it.doc ? [{ d: it.doc, from:"made with" }] : []).concat((it.docs||[]).map(d=> ({ d, from: d.phase || "" })));
-  if(list.length===1) return rmgEditDoc(it, list[0].d, title);
+  const list = (it.doc ? [{ d: it.doc, from:"made with" }] : []).concat((it.docs||[]).map(d=> ({ d, from: d.phase || (d.added ? "added " + rmlFmt(d.added) : "") })));
+  if(list.length===1 && !editMode) return rmgEditDoc(it, list[0].d, title);
   const ov = document.createElement("div"); ov.className = "overlay show";
   const dg = document.createElement("div"); dg.className = "dialog"; dg.style.maxWidth = "520px";
   const h = document.createElement("h3"); h.textContent = "📄 Documents — " + title; dg.appendChild(h);
-  const sub = document.createElement("div"); sub.className = "hint"; sub.style.margin = "-6px 0 10px"; sub.textContent = "One from each phase it has been in. Click one to open it."; dg.appendChild(sub);
+  const sub = document.createElement("div"); sub.className = "hint"; sub.style.margin = "-6px 0 10px"; sub.textContent = list.length ? "Click one to open it." : "No documents yet."; dg.appendChild(sub);
   const close = ()=> ov.remove();
   list.forEach(({ d, from })=>{
     const r = document.createElement("button"); r.className = "rmd-row";
@@ -14735,15 +14736,31 @@ function rmgOpenDocs(it, title){
     dg.appendChild(r);
   });
   const btns = document.createElement("div"); btns.className = "btns";
+  if(editMode){ const ad = document.createElement("button"); ad.className = "btn"; ad.textContent = "\uFF0B Add document"; ad.onclick = ()=>{ close(); rmgAddDoc(it, title); }; btns.appendChild(ad); }
   const cl = document.createElement("button"); cl.className = "btn save"; cl.textContent = "Close"; cl.onclick = close; btns.appendChild(cl);
   dg.appendChild(btns); ov.appendChild(dg); ov.addEventListener("mousedown", e=>{ if(e.target===ov) close(); });
   document.body.appendChild(ov);
 }
+/* ＋ Add document: a blank one, or a copy of any template (Administration → Templates) — every time */
+function rmgAddDoc(it, title){
+  const tpls = RMAPS.templates || [];
+  openChoice("\uD83D\uDCC4 Add a document to \u201C" + title + "\u201D",
+    [{ label:"\uD83D\uDCDD Blank document", value:"" }].concat(tpls.map(t=> ({ label:"\uD83D\uDCC4 From template: " + t.name, value:t.id }))), id=>{
+    const tp = id && tpls.find(t=> t.id===id);
+    const d = { id:"dc-"+Date.now().toString(36)+Math.random().toString(36).slice(2,5), name: tp ? tp.name : "", text: tp ? (tp.body || "") : "", html: tp ? !!tp.html : true, added: todayISO() };
+    if(tp) d.tpl = tp.id;
+    it.docs = it.docs || []; it.docs.push(d);
+    saveRmaps();
+    rmgEditDoc(it, d, title);   /* straight in, to name it and fill it */
+  });
+}
 function rmgEditDoc(it, d, title){
   const ttl = "📄 " + (d.name || "Document") + " — " + title + (d.phase ? " · " + d.phase : "");
   if(!editMode){ rmlModal(ttl, [], ()=>{}, { width: 860, noSave: true, sub: "View only — you don’t have edit access here", html: docHtml(d.text, d.html) }); return; }
-  rmlModal(ttl, [{ k:"text", label:"Fill it in — the prompts are from the template", type:"rich", value: docHtml(d.text, d.html) }],
-    v=>{ d.text = v.text; d.html = true; d.edited = todayISO(); saveRmaps(); toast("Saved"); }, {
+  rmlModal(ttl, [
+    { k:"name", label:"Document name", type:"text", value: d.name || "", ph:"e.g. Product brief, PRD, Test plan" },
+    { k:"text", label: d.tpl ? "Fill it in — the prompts are from the template" : "Write it", type:"rich", value: docHtml(d.text, d.html) }],
+    v=>{ d.name = (v.name || "").trim() || d.name || "Document"; d.text = v.text; d.html = true; d.edited = todayISO(); saveRmaps(); toast("Saved"); }, {
     width: 860,
     extra: [["Remove document", "Take this document off the task", ()=>{
       if(!confirm("Remove “" + (d.name||"document") + "” from this task? What’s written in it is lost.")) return false;
@@ -15068,7 +15085,7 @@ function renderRmapGantt(m, wrap, byTid){
       const _nd = (it.doc ? 1 : 0) + (it.docs||[]).length;
       if(_nd){
         const db = document.createElement("button"); db.className = "rmg-doc"; db.textContent = "📄" + (_nd > 1 ? " " + _nd : "");
-        db.title = _nd > 1 ? _nd + " documents — one from each phase it has been in" : "Open its " + ((it.doc || it.docs[0]).name || "document");
+        db.title = _nd > 1 ? _nd + " documents" : "Open its " + ((it.doc || it.docs[0]).name || "document") + (editMode ? " · ＋ add more" : "");
         db.onclick = e=>{ e.stopPropagation(); rmgOpenDocs(it, en.task.title || "(untitled)"); };
         tacts.appendChild(db);
       }
@@ -15824,7 +15841,8 @@ function rmlEditItem(m, it, en){
     sub: en.path,
     extra: [
       ["🔒 Blocked by…", "Pick what this one is waiting on — tasks on this chart first, or cards on any board", ()=> rmlBlockers(en, m)],
-      ...(m.view==="gantt" ? [["🔗 Link boards…", "Boards this task opens with one click", ()=> rmgLinkPicker(it, en.task.title || "this task")],
+      ...(m.view==="gantt" ? [["\uD83D\uDCC4 Documents\u2026", "Product brief, PRD, test plan\u2026 \u2014 add as many as it needs (blank or from a template)", ()=> rmgOpenDocs(it, en.task.title || "this task")],
+        ["🔗 Link boards…", "Boards this task opens with one click", ()=> rmgLinkPicker(it, en.task.title || "this task")],
         ["🧪 QA testing…", "The Engineering epic where this gets tested — its QA testers add improvement cards there", ()=> rmgQaPicker(it, en.task.title || "this task")]] : []),
       ["Remove", own ? "Delete this item" : "Remove from this roadmap (the card itself stays)", ()=>{
         if(!confirm(own ? "Delete “"+(en.task.title||"")+"”?" : "Remove “"+(en.task.title||"")+"” from this roadmap? The card itself is not deleted.")) return false;
