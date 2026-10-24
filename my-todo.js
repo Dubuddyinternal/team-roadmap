@@ -74,7 +74,7 @@
    renderAll, rmlModal, rmlTreeLines, rmgColResizer, allTasks, effStatus,
    dNum, dISO, fmtD, toast …).
    ===================================================================== */
-var TODO = { team: null, loaded: false, loading: false, local: false, why: null, whyMin: false, over: {}, planner: { groups: [], tasks: [] }, ideas: [], clock: { wake: "06:00", sleep: "22:00" }, sleepLog: {}, phase: null, temple: [], rest: {} };
+var TODO = { team: null, loaded: false, loading: false, local: false, why: null, whyMin: false, over: {}, planner: { groups: [], tasks: [] }, ideas: [], clock: { wake: "06:00", sleep: "22:00" }, sleepLog: {}, phase: null, temple: [], prayLog: {}, rest: {} };
 var TODO_IDEA_KINDS = [["idea", "💡", "Idea"], ["imagine", "🌌", "Imagination"], ["question", "❓", "Question"], ["note", "📝", "Note"]];
 var todoIdeaKind = "idea";     // the kind picked for the next one I write
 var todoIdeaFilter = "";       // "" = all, else a kind
@@ -123,13 +123,14 @@ function todoPlannerNorm(p) {
 function todoApply(d) {
   d = d && typeof d === "object" ? d : {};
   TODO.rest = {};
-  Object.keys(d).forEach(function (k) { if (["why", "whyMin", "planner", "over", "ideas", "clock", "sleepLog", "phase", "temple"].indexOf(k) < 0) TODO.rest[k] = d[k]; });   // older My To-do data: kept untouched
+  Object.keys(d).forEach(function (k) { if (["why", "whyMin", "planner", "over", "ideas", "clock", "sleepLog", "phase", "temple", "prayLog"].indexOf(k) < 0) TODO.rest[k] = d[k]; });   // older My To-do data: kept untouched
   TODO.why = todoWhyNorm(d.why);
   TODO.whyMin = !!d.whyMin;
   TODO.over = d.over && typeof d.over === "object" ? d.over : {};
   TODO.planner = todoPlannerNorm(d.planner);
   Object.assign(TODO, todoDayNorm(d));
   TODO.temple = todoTempleNorm(d.temple);
+  TODO.prayLog = d.prayLog && typeof d.prayLog === "object" ? d.prayLog : {};
   TODO.ideas = Array.isArray(d.ideas) ? d.ideas.filter(function (x) { return x && x.id && x.text; }) : [];
 }
 // the parts of a plan the Day view draws besides tasks: wake / sleep targets and log, the phase banner
@@ -169,7 +170,7 @@ async function todoLoad() {
 var _todoSaveT = {}, _todoSaveRun = {};
 function todoSave() {
   var who = todoOwnerId(), key = todoLocalKey();
-  var data = Object.assign({}, TODO.rest, { why: TODO.why, whyMin: TODO.whyMin, over: TODO.over, planner: TODO.planner, ideas: TODO.ideas, clock: TODO.clock, sleepLog: TODO.sleepLog, phase: TODO.phase, temple: TODO.temple });
+  var data = Object.assign({}, TODO.rest, { why: TODO.why, whyMin: TODO.whyMin, over: TODO.over, planner: TODO.planner, ideas: TODO.ideas, clock: TODO.clock, sleepLog: TODO.sleepLog, phase: TODO.phase, temple: TODO.temple, prayLog: TODO.prayLog });
   clearTimeout(_todoSaveT[who]);
   var run = _todoSaveRun[who] = async function () {
     if (_todoSaveRun[who] !== run) return;
@@ -1473,8 +1474,62 @@ function todoTemple() {
     it.onclick = function () { todoTempleEdit(x); };
     box.appendChild(it);
   });
+  box.appendChild(todoPrayBtn());
   return box;
 }
+/* 🪔 prayer time: 10 minutes, a soft bell at the start and the end; the day it's done goes in TODO.prayLog
+   ({ "YYYY-MM-DD": minutes }). The end time is kept in this browser, so a reload doesn't stop it. */
+var TODO_PRAY_MIN = 10;
+function todoPrayKey() { return "cf-pray-" + ((currentUser() || {}).id || "anon"); }
+function todoPrayUntil() { try { return Number(localStorage.getItem(todoPrayKey())) || 0; } catch (_) { return 0; } }
+function todoPraySet(t) { try { if (t) localStorage.setItem(todoPrayKey(), String(t)); else localStorage.removeItem(todoPrayKey()); } catch (_) { } }
+function todoBell() {
+  try {
+    var A = window.AudioContext || window.webkitAudioContext; if (!A) return;
+    var ac = new A(), t0 = ac.currentTime;
+    [[528, 0], [792, 0.02], [1056, 0.04]].forEach(function (f) {   // a small temple bell: a few tones fading out
+      var o = ac.createOscillator(), g = ac.createGain();
+      o.type = "sine"; o.frequency.value = f[0];
+      g.gain.setValueAtTime(0.0001, t0 + f[1]); g.gain.exponentialRampToValueAtTime(0.18, t0 + f[1] + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + f[1] + 3.5);
+      o.connect(g); g.connect(ac.destination); o.start(t0 + f[1]); o.stop(t0 + f[1] + 3.6);
+    });
+    setTimeout(function () { try { ac.close(); } catch (_) { } }, 4000);
+  } catch (_) { }
+}
+function todoPrayLeft() { return Math.max(0, todoPrayUntil() - Date.now()); }
+function todoPrayFmt(ms) { var s = Math.ceil(ms / 1000); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+function todoPrayBtn() {
+  var wrap = todoEl("div", "td-pray"), left = todoPrayLeft();
+  if (left > 0) {
+    wrap.classList.add("on");
+    var t = todoEl("span", "td-pray-t", "🪔 " + todoPrayFmt(left));
+    t.title = "Prayer time — " + TODO_PRAY_MIN + " minutes";
+    var bar = todoEl("span", "td-pray-bar"), fill = todoEl("i"); fill.style.width = (100 - left / (TODO_PRAY_MIN * 600)) + "%"; bar.appendChild(fill);
+    var st = todoEl("button", "td-act", "Stop"); st.title = "End prayer time now";
+    st.onclick = function () { todoPraySet(0); renderAll(); };
+    wrap.append(t, bar, st);
+    return wrap;
+  }
+  var b = todoEl("button", "td-pray-go", "🪔 Start prayer · " + TODO_PRAY_MIN + " min");
+  b.title = "Ten quiet minutes — a bell at the start and at the end";
+  b.onclick = function () { todoPraySet(Date.now() + TODO_PRAY_MIN * 60000); todoBell(); renderAll(); };
+  wrap.appendChild(b);
+  if (TODO.prayLog[todoToday()]) wrap.appendChild(todoEl("span", "td-pray-done", "🙏 prayed today"));
+  return wrap;
+}
+setInterval(function () {
+  var until = todoPrayUntil(); if (!until) return;
+  var left = until - Date.now();
+  if (left > 0) {
+    var t = document.querySelector(".td-pray-t"); if (t) t.textContent = "🪔 " + todoPrayFmt(left);
+    var f = document.querySelector(".td-pray-bar i"); if (f) f.style.width = (100 - left / (TODO_PRAY_MIN * 600)) + "%";
+    return;
+  }
+  todoPraySet(0); todoBell();
+  toast("🙏 Prayer time complete");
+  if (TODO.loaded && !todoPeek) { var d = todoToday(); TODO.prayLog[d] = (TODO.prayLog[d] || 0) + TODO_PRAY_MIN; todoSave(); }   // todoSave redraws
+  else renderAll();
+}, 1000);
 
 /* ---------- the phase banner: what this stretch of days is about ("Next 21 days — slow, focused work") ---------- */
 function todoPhaseEdit() {
