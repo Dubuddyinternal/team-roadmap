@@ -1656,6 +1656,8 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 button.dv-spowner{cursor:pointer}
 button.dv-spowner:hover{border-color:var(--indigo);color:var(--indigo)}
 .dv-spowner.none{color:var(--muted);border-style:dashed}
+#loginas-bar{position:sticky;top:0;z-index:2000;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;padding:8px 16px;background:#1F1A17;color:#fff;font-size:13.5px}
+#loginas-bar button{border:0;border-radius:99px;padding:5px 14px;background:var(--indigo);color:#fff;font:inherit;font-weight:600;cursor:pointer}
 .td-side-n{font-family:var(--mono);font-size:11px;background:var(--indigo-soft);color:var(--indigo);border-radius:99px;padding:1px 8px}
 @media(max-width:1100px){.kanban{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:600px){.kanban{grid-template-columns:1fr}}
@@ -5437,6 +5439,7 @@ async function authBoot(){
   AUTH_UID = (data && data.session) ? data.session.user.id : null;
   if(!AUTH_UID){ USERS = []; return false; }
   await loadPeople();
+  loginAsBanner();   // 🔑 logged in as someone else? show the way back
   return !!SESSION;
 }
 function restoreSession(){ return !!SESSION; }   // kept for older callers; authBoot() does the work now
@@ -5583,6 +5586,49 @@ async function emailLoginDetails(user){
     }
   }catch(e){ toast("Couldn't email them: "+e.message); }
 }
+/* 🔑 Log in as (super-admin only): the "login-as" server function makes a one-time sign-in for that person
+   (no password made or changed, every use logged in login_as_log). My own session is kept aside in this
+   browser (LOGIN_AS_KEY) so the banner's "Back to me" — and Log out — return to it without signing them out. */
+const LOGIN_AS_KEY = "cf-login-as-back";
+function loginAsBackSaved(){ try{ return JSON.parse(localStorage.getItem(LOGIN_AS_KEY) || "null"); }catch(_){ return null; } }
+async function loginAs(user){
+  if(!confirm("Log in as "+userDisplayName(user)+"?\n\nYou'll see the app exactly as they do. A banner at the top takes you back to your own account. This is recorded.")) return;
+  toast("Signing in as "+userDisplayName(user)+"\u2026");
+  try{
+    const s = (await SUPA.auth.getSession()).data.session;
+    if(!s) throw new Error("Sign in first.");
+    const { data, error } = await SUPA.functions.invoke("login-as", { body:{ user_id:user.id, team:TEAM } });
+    if(error){ let msg = error.message; try{ const j = await error.context.json(); if(j && j.error) msg = j.error; }catch(_){ } throw new Error(msg); }
+    if(!data || data.error || !data.token_hash) throw new Error((data && data.error) || "No sign-in came back.");
+    const back = { access_token:s.access_token, refresh_token:s.refresh_token, uid:s.user.id, name:userDisplayName(currentUser()) };
+    try{ localStorage.setItem(LOGIN_AS_KEY, JSON.stringify(back)); }catch(_){ }
+    const v = await SUPA.auth.verifyOtp({ token_hash:data.token_hash, type:"magiclink" });
+    if(v.error){
+      await SUPA.auth.setSession({ access_token:back.access_token, refresh_token:back.refresh_token });
+      try{ localStorage.removeItem(LOGIN_AS_KEY); }catch(_){ }
+      throw new Error(v.error.message);
+    }
+    location.reload();
+  }catch(e){ toast("Couldn't log in as them: "+e.message); }
+}
+async function loginAsBack(){
+  const back = loginAsBackSaved(); if(!back) return;
+  const r = await SUPA.auth.setSession({ access_token:back.access_token, refresh_token:back.refresh_token });   // replaces theirs here only; their own devices stay signed in
+  try{ localStorage.removeItem(LOGIN_AS_KEY); }catch(_){ }
+  if(r.error){ alert("Your own sign-in has expired \u2014 please sign in again."); await SUPA.auth.signOut({ scope:"local" }); }
+  location.reload();
+}
+function loginAsBanner(){
+  const old = document.getElementById("loginas-bar"); if(old) old.remove();
+  const back = loginAsBackSaved();
+  if(!back || !SESSION) return;
+  if(SESSION.id === back.uid){ try{ localStorage.removeItem(LOGIN_AS_KEY); }catch(_){ } return; }   // already back
+  const bar = document.createElement("div"); bar.id = "loginas-bar";
+  bar.innerHTML = "<span>\uD83D\uDD11 You're logged in as <b></b></span><button type='button'></button>";
+  bar.querySelector("b").textContent = userDisplayName(SESSION);
+  const btn = bar.querySelector("button"); btn.textContent = "\u21A9 Back to " + (back.name || "my account"); btn.onclick = loginAsBack;
+  document.body.prepend(bar);
+}
 // Owner/Admin edits a teammate's name, username, sign-in email and/or password.
 // Built on the fly so it needs no extra HTML; saved through the server function,
 // which applies the same rules as a password reset.
@@ -5661,6 +5707,7 @@ async function deletePersonForever(user, afterDone){
   }catch(e){ toast("Couldn't delete: " + e.message); }
 }
 function logout(){
+  if(loginAsBackSaved()){ loginAsBack(); return; }   // in someone else's account: Log out = back to mine (never signs them out)
   SUPA.auth.signOut().catch(()=>{}).then(()=>{
     SESSION = null; AUTH_UID = null;
     sessionStorage.removeItem("rm-ok");
@@ -26536,6 +26583,11 @@ function renderAdminUsers(wrap){
         const del = document.createElement("button"); del.className="person-del"; del.textContent="\u00d7"; del.title="Remove from team";
         del.onclick = async ()=>{ if(confirm("Remove "+u.name+" from this team? Their account stays; they lose access here.")){ await removeMemberFromTeam(u); renderAdminPage(); } };
         ac.append(editBtn, mailBtn, del);
+        if(iAmSuper){
+          const asBtn = document.createElement("button"); asBtn.className="person-del"; asBtn.textContent="\uD83D\uDD11"; asBtn.title="Log in as "+userDisplayName(u)+" (super-admin only, recorded)";
+          asBtn.onclick = ()=> loginAs(u);
+          ac.insertBefore(asBtn, editBtn);
+        }
         if(hasPerm("send_notifications")){
           const bell = document.createElement("button"); bell.className="person-del"; bell.textContent="\uD83D\uDD14"; bell.title="Send "+userDisplayName(u)+" a notification (bell or pop-up)";
           bell.onclick = ()=> ntfOpenComposer(u);
@@ -26950,6 +27002,12 @@ function renderPeopleList(target){
         const editBtn = document.createElement("button"); editBtn.className = "person-del"; editBtn.textContent = "\u270F\uFE0F";
         editBtn.title = "Edit name, email, username or password";
         editBtn.onclick = ()=> openEditPerson(u, ()=> renderPeopleList(wrap));
+        if(iAmSuper && !u.super){
+          const asBtn = document.createElement("button"); asBtn.className = "person-del"; asBtn.textContent = "\uD83D\uDD11";
+          asBtn.title = "Log in as "+userDisplayName(u)+" (super-admin only, recorded)";
+          asBtn.onclick = ()=> loginAs(u);
+          row.appendChild(asBtn);
+        }
         row.append(editBtn, mailBtn);
       }
       // remove from team (not allowed on yourself or, for admins, on owners)
