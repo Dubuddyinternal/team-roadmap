@@ -1623,6 +1623,8 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .ws-item.td-side{display:flex;align-items:center;justify-content:space-between;font-weight:600}
 /* Our To-do (my-todo.js): Mine / theirs on top of the page, shared ideas */
 .td-people{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 12px}
+#td-people-top{margin:22px 0 0;padding:0 30px}
+#td-people-top+.tabstrip{margin-top:10px}
 .td-person{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card);border-radius:99px;padding:3px 12px 3px 3px;font:inherit;font-size:13px;cursor:pointer;color:inherit}
 .td-person:hover{border-color:var(--indigo)}
 .td-person.on{border-color:var(--indigo);background:var(--indigo-soft);color:var(--indigo);font-weight:600}
@@ -8605,6 +8607,7 @@ function renderTabs(){
   const strip=$("tabstrip"); if(!strip) return;
   // My To-do: no title or Summary; just its own two tabs (my-todo.js)
   if(view==="todo" && typeof todoTabs==="function"){ strip.innerHTML=""; paneTab="work"; applyPaneTab(); todoTabs(strip); return; }
+  if(typeof todoPeopleTop==="function") todoPeopleTop(null);   // Our To-do's people row only on Our To-do
   const sig=[view,activeCspace,activeModule,activeSection,devSpace,devSprint,activeRmap,activeCycle].join("|");
   if(sig!==_lastNavSig){ _lastNavSig=sig; paneTab="work"; }
   strip.innerHTML="";
