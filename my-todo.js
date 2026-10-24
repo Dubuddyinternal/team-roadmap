@@ -1394,9 +1394,10 @@ function todoIdeas() {
   return box;
 }
 
-/* ---------- 🛕 Temple: the gods I pray to, and why — four small circles on my own plan (not shown on a teammate's) ----------
-   Each: { id, name, sym, bg, why, photo } in TODO.temple. Hover a circle to read why; click it to change the
-   name, the words, or upload a photo (kept small, as a data URL, in my row). */
+/* ---------- 🛕 Temple: the gods I pray to, and why — small circles on the plan, each person their own ----------
+   Empty until set up ("＋ Set up your temple": the four below, or empty to add your own). Each:
+   { id, name, why, photo } in TODO.temple. Hover a circle to read why; click it to change the name, the
+   words, upload a photo (kept small, as a data URL, in the row) or remove it; ＋ adds another. */
 var TODO_TEMPLE = [
   { id: "krishna", name: "Krishna Ji", sym: "🪈", bg: "linear-gradient(135deg,#1E3A8A,#2563EB)",
     why: "For the wisdom of the Gita — do my work fully and let go of the result." },
@@ -1407,14 +1408,13 @@ var TODO_TEMPLE = [
   { id: "saraswati", name: "Saraswati Mata", sym: "🦢", bg: "linear-gradient(135deg,#CA8A04,#FDE68A)",
     why: "For knowledge, clear thinking and the right words — to keep learning every day." },
 ];
+// each person sets up their own temple (empty until they do): any gods, in their own words
 function todoTempleNorm(v) {
-  var have = Array.isArray(v) ? v.filter(function (x) { return x && x.id; }) : [];
-  return TODO_TEMPLE.map(function (g) {
-    var x = have.find(function (y) { return y.id === g.id; }) || {};
-    return { id: g.id, name: String(x.name || g.name), why: x.why != null ? String(x.why) : g.why, photo: typeof x.photo === "string" && x.photo.indexOf("data:image/") === 0 ? x.photo : "" };
+  return (Array.isArray(v) ? v : []).filter(function (x) { return x && x.id && x.name; }).map(function (x) {
+    return { id: String(x.id), name: String(x.name), why: String(x.why || ""), photo: typeof x.photo === "string" && x.photo.indexOf("data:image/") === 0 ? x.photo : "" };
   });
 }
-function todoTempleDef(id) { return TODO_TEMPLE.find(function (g) { return g.id === id; }) || TODO_TEMPLE[0]; }
+function todoTempleDef(id) { return TODO_TEMPLE.find(function (g) { return g.id === id; }) || { sym: "🙏", bg: "linear-gradient(135deg,#B45309,#F59E0B)", name: "" }; }
 // a picked photo → a small square JPEG (centre crop), so the row stays light
 function todoPhotoSquare(file, size, done) {
   var rd = new FileReader();
@@ -1437,9 +1437,9 @@ function todoTempleFace(x, el) {
   if (x.photo) { var im = todoEl("img"); im.src = x.photo; im.alt = x.name; el.appendChild(im); el.style.background = ""; }
   else { el.textContent = g.sym; el.style.background = g.bg; }
 }
-function todoTempleEdit(x) {
+function todoTempleEdit(x, isNew) {
   var name, why, photo = x.photo, face;
-  todoDialog("🛕 " + x.name, function (body) {
+  todoDialog(isNew ? "🛕 Add to my temple" : "🛕 " + x.name, function (body) {
     var pr = todoEl("div", "td-temple-ed");
     face = todoEl("div", "td-temple-c big"); todoTempleFace(x, face); pr.appendChild(face);
     var acts = todoEl("div", "td-temple-edacts");
@@ -1452,14 +1452,40 @@ function todoTempleEdit(x) {
     body.appendChild(pr);
     name = todoEl("input"); name.value = x.name;
     why = todoEl("textarea"); why.rows = 3; why.value = x.why; why.dataset.plain = "1";
+    name.placeholder = "e.g. Shiv Ji, Durga Maa, Guru Nanak Dev Ji";
     body.append(todoField("Name", name), todoField("Why I pray to them", why));
+    if (!isNew) {
+      var del = todoEl("button", "td-act danger", "Remove from my temple"); del.type = "button";
+      del.onclick = function () {
+        if (!confirm("Remove " + x.name + " from your temple?")) return;
+        TODO.temple = TODO.temple.filter(function (y) { return y !== x; });
+        var ov = del.closest(".overlay"); if (ov) ov.remove();
+        todoSave();
+      };
+      body.appendChild(del);
+    }
   }, function () {
-    x.name = name.value.trim() || todoTempleDef(x.id).name;
-    x.why = why.value.trim();
-    x.photo = photo || "";
+    var nm = name.value.trim(); if (!nm) return "Write a name.";
+    x.name = nm; x.why = why.value.trim(); x.photo = photo || "";
+    if (isNew) TODO.temple.push(x);
   });
 }
+// not set up yet: one line to start it — with the four I'd suggest, or empty to add my own
+function todoTempleSetup() {
+  var a = todoEl("button", "td-phase-add td-temple-add", "🛕 ＋ Set up your temple — the gods you pray to, and why");
+  a.onclick = function () {
+    openChoice("Set up your temple", [
+      { label: "🪈🪷🚩🦢 Start with Krishna Ji, Laxmi Ji, Bajrang Bali and Saraswati Mata", value: "four" },
+      { label: "🙏 Start empty — I'll add my own", value: "own" },
+    ], function (k) {
+      if (k === "four") { TODO.temple = TODO_TEMPLE.map(function (g) { return { id: g.id, name: g.name, why: g.why, photo: "" }; }); todoSave(); }
+      else todoTempleEdit({ id: todoId(), name: "", why: "", photo: "" }, true);
+    });
+  };
+  return a;
+}
 function todoTemple() {
+  if (!TODO.temple.length) return todoTempleSetup();
   var box = todoEl("section", "td-temple");
   box.appendChild(todoEl("span", "td-temple-l", "🛕 Temple"));
   TODO.temple.forEach(function (x) {
@@ -1474,6 +1500,10 @@ function todoTemple() {
     it.onclick = function () { todoTempleEdit(x); };
     box.appendChild(it);
   });
+  var add = todoEl("button", "td-temple-i td-temple-plus"); add.type = "button"; add.title = "Add to my temple";
+  add.append(todoEl("span", "td-temple-c", "＋"), todoEl("span", "td-temple-n", "Add"));
+  add.onclick = function () { todoTempleEdit({ id: todoId(), name: "", why: "", photo: "" }, true); };
+  box.appendChild(add);
   box.appendChild(todoPrayBtn());
   return box;
 }
@@ -1733,7 +1763,7 @@ function renderContentTodo() {
   try { if (todoAutoPlace()) setTimeout(todoSave, 0); } catch (_) { }   // sprints I've been made owner of
   todoPlanBar(wrap);
   wrap.appendChild(todoPhaseBanner());
-  if (!todoPeek) wrap.appendChild(todoTemple());   // 🛕 only on my own plan
+  wrap.appendChild(todoTemple());   // 🛕 each person's own (set up when they want, like the banner)
   todoPlanBody(wrap);
 }
 // the bar: Month · Quarter · Week · Day, ‹ Today ›, and where things come from (only on my own plan)
