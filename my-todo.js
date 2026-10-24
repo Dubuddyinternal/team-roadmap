@@ -49,7 +49,8 @@
    targets; TODO.sleepLog = { "YYYY-MM-DD": { wake, sleep } } (a bedtime
    after midnight counts for the evening before).
 
-   🇮🇳 Why do I exist? has its own tab, next to My plan.
+   🧭 Why I do what I do has its own tab, next to My plan: point 1 is 🇮🇳 Why do I exist?
+   (the ladder), then my own points — a question and the answer (TODO.why.points).
 
    💡 Ideas warehouse (third tab): one private place for every idea,
    imagination, question or note — instead of writing them in a WhatsApp
@@ -410,13 +411,15 @@ function todoWhyNorm(w) {
     from: String(w.from || TODO_WHY.from),
     line: w.line != null ? String(w.line) : TODO_WHY.line,
     seen: String(w.seen || ""),
+    // the other points under "Why I do what I do": a question and my answer
+    points: Array.isArray(w.points) ? w.points.filter(function (x) { return x && x.id && x.q; }).map(function (x) { return { id: String(x.id), q: String(x.q), a: String(x.a || "") }; }) : [],
   };
 }
 // the ladder: goal at the top, me at the bottom, the dots in between
 function todoWhyCard(inPop) {
   var W = TODO.why, box = todoEl("div", "td-why" + (inPop ? " pop" : ""));
   var hd = todoEl("div", "td-why-hd");
-  hd.appendChild(todoEl("b", "", "🇮🇳 Why do I exist?"));
+  hd.appendChild(todoEl("b", "", inPop ? "🇮🇳 Why do I exist?" : "1 · 🇮🇳 Why do I exist?"));
   if (!inPop) { var ed = todoEl("button", "td-act", "✏️ Edit"); ed.onclick = todoWhyEdit; hd.appendChild(ed); }
   box.appendChild(hd);
   var lad = todoEl("ol", "td-why-lad");
@@ -442,6 +445,50 @@ function todoWhyEdit() {
     W.goal = goal.value.trim(); W.from = from.value.trim() || TODO_WHY.from; W.line = line.value.trim();
     W.steps = steps.value.split("\n").map(function (s) { return s.trim(); }).filter(Boolean);
   });
+}
+
+/* the "Why I do what I do" tab: point 1 is Why do I exist? (the ladder), then my own points — a question and its answer */
+function todoWhyPointEdit(x) {
+  var q, a;
+  todoDialog("✏️ Edit point", function (body) {
+    q = todoEl("input"); q.value = x.q;
+    a = todoEl("textarea"); a.rows = 5; a.value = x.a; a.dataset.plain = "1";
+    body.append(todoField("Question", q), todoField("Answer", a));
+  }, function () {
+    var v = q.value.trim(); if (!v) return "Write the question.";
+    x.q = v; x.a = a.value.trim();
+  });
+}
+function todoWhyPage() {
+  var W = TODO.why, box = todoEl("div", "td-whypage");
+  box.appendChild(todoEl("h2", "td-whypage-h", "🧭 Why I do what I do"));
+  box.appendChild(todoWhyCard(false));
+  W.points.forEach(function (x, i) {
+    var c = todoEl("section", "td-why td-whypt");
+    var hd = todoEl("div", "td-why-hd");
+    hd.appendChild(todoEl("b", "", (i + 2) + " · " + x.q));
+    var acts = todoEl("span", "td-whypt-acts");
+    var ed = todoEl("button", "td-act", "✏️ Edit"); ed.onclick = function () { todoWhyPointEdit(x); };
+    var rm = todoEl("button", "td-act danger", "Remove");
+    rm.onclick = function () { if (!confirm("Remove “" + x.q + "”?")) return; W.points = W.points.filter(function (y) { return y !== x; }); todoSave(); };
+    acts.append(ed, rm); hd.appendChild(acts);
+    c.appendChild(hd);
+    c.appendChild(todoEl("div", "td-whypt-a" + (x.a ? "" : " none"), x.a || "No answer yet — ✏️ Edit to write it."));
+    box.appendChild(c);
+  });
+  // ＋ another point: a question, and the answer in my words
+  var add = todoEl("section", "td-why-add");
+  add.appendChild(todoEl("b", "", "＋ Add a point"));
+  var q = todoEl("input", "td-why-q"); q.placeholder = "A question — e.g. Why did I start Dubuddy?";
+  var a = todoEl("textarea", "td-why-a"); a.rows = 3; a.dataset.plain = "1"; a.placeholder = "Your answer…";
+  var go = todoEl("button", "btn save", "Add point");
+  go.onclick = function () {
+    var v = q.value.trim(); if (!v) { toast("Write the question"); q.focus(); return; }
+    W.points.push({ id: todoId(), q: v, a: a.value.trim() }); todoSave();
+  };
+  add.append(q, a, go);
+  box.appendChild(add);
+  return box;
 }
 
 /* ---------- tasks: own or linked to a board ---------- */
@@ -1742,7 +1789,7 @@ function todoCounts() {
 // the tab strip at the top of the page (index.html renderTabs calls this on My To-do)
 function todoTabs(strip) {
   todoPeopleTop(strip);
-  [["plan", "🗓 Plan"], ["ideas", "💡 Ideas warehouse"], ["why", "🇮🇳 Why do I exist?"]].forEach(function (T) {
+  [["plan", "🗓 Plan"], ["ideas", "💡 Ideas warehouse"], ["why", "🧭 Why I do what I do"]].forEach(function (T) {
     var b = todoEl("button", "tab" + (todoTab === T[0] ? " active" : ""), T[1]);
     b.onclick = function () { if (todoTab === T[0]) return; todoTab = T[0]; renderAll(); };
     strip.appendChild(b);
@@ -1758,7 +1805,7 @@ function renderContentTodo() {
     todoLoad(); return;
   }
   if (TODO.local) wrap.appendChild(todoEl("div", "td-note", "Couldn't reach the database — your plan is saved in this browser for now."));
-  if (todoTab === "why") { wrap.appendChild(todoWhyCard(false)); return; }
+  if (todoTab === "why") { wrap.appendChild(todoWhyPage()); return; }
   if (todoTab === "ideas") { wrap.appendChild(todoIdeas()); return; }
   try { if (todoAutoPlace()) setTimeout(todoSave, 0); } catch (_) { }   // sprints I've been made owner of
   todoPlanBar(wrap);
