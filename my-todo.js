@@ -1329,13 +1329,13 @@ function todoIdeas() {
   // 🔒 only me · 👥 shared with the people in Our To-do
   if (OUR.circle) {
     var sc = todoEl("div", "td-idea-scope"), seg0 = todoEl("span", "rmg-seg");
-    [["mine", todoPeek ? "🔒 " + todoFirstName(todoPeek) + "'s own" : "🔒 Only me"], ["shared", "👥 Shared with " + todoCircleNames()]].forEach(function (k) {
+    [["shared", "👥 Shared — " + todoFirstName((currentUser() || {}).id) + " & " + todoCircleNames()], ["mine", "🔒 Only " + todoFirstName(todoOwnerId())]].forEach(function (k) {
       var b = todoEl("button", todoIdeaScope === k[0] ? "on" : "", k[1]);
       b.onclick = function () { if (todoIdeaScope === k[0]) return; todoIdeaScope = k[0]; todoIdeaFilter = ""; if (k[0] === "shared") todoSharedIdeasLoad(); renderAll(); };
       seg0.appendChild(b);
     });
     sc.appendChild(seg0);
-    if (ST.shared) sc.appendChild(todoEl("span", "hint", "Everyone in Our To-do sees and adds to these."));
+    if (ST.shared) sc.appendChild(todoEl("span", "hint", "The same list in both your Ideas warehouses — you both see and add to it."));
     box.appendChild(sc);
   }
   // write box: pick a kind, type (or speak), Enter keeps it
@@ -1521,7 +1521,7 @@ function todoPhaseBanner() {
    A circle (supabase/stage20b_our_todos.sql) is a few people in this team
    who share their To-do with each other — e.g. two co-founders. It's set
    up in the database (no invite / remove buttons in the app). Each
-   one's chip on top of the page ("Mine" / "Pancham's") opens that person's
+   one's chip above the tabs ("Sumit" / "Pancham") opens that person's
    whole To-do, and everything works there as in my own: add, move, tick,
    delete (their row in my_todos, which the database lets circle members
    read and write). Saves go to whoever's To-do was open. And the
@@ -1530,7 +1530,7 @@ function todoPhaseBanner() {
    Without that SQL run, none of this shows and My To-do works as before. */
 var OUR = { team: null, loaded: false, loading: false, off: false, circle: null, members: [], ideas: [] };
 var todoPeek = null;          // id of the teammate whose To-do is open (null = mine)
-var todoIdeaScope = "mine";   // mine | shared — which ideas warehouse list
+var todoIdeaScope = "shared"; // shared | mine — which ideas warehouse list (shared when there's an Our To-do)
 function todoUserName(id) {
   var u = (typeof USERS !== "undefined" ? USERS : []).find(function (x) { return x.id === id; });
   return u ? userDisplayName(u) : "A teammate";
@@ -1557,7 +1557,6 @@ async function todoCircleLoad() {
   } catch (e) { OUR.off = true; OUR.circle = null; OUR.members = []; }   // stage20b not run yet
   OUR.team = TEAM; OUR.loaded = true; OUR.loading = false;
   if (todoPeek && !todoMates("joined").some(function (x) { return x.user_id === todoPeek; })) { todoPeek = null; TODO.loaded = false; }
-  if (!OUR.circle) todoIdeaScope = "mine";
   if (OUR.circle) await todoSharedIdeasLoad(true);
   renderAll();
 }
@@ -1592,7 +1591,15 @@ async function todoSwitch(uid) {
   todoAddIn = todoSubAdd = todoIdeaEdit = null;
   renderAll();
 }
-// the people on top of the page: Mine · theirs
+// the people row sits above the tab strip: each person, then that person's tabs (Plan · Ideas · Why)
+function todoPeopleTop(strip) {
+  var old = document.getElementById("td-people-top"); if (old) old.remove();
+  if (!strip) return;
+  var ppl = todoPeople(); if (!ppl) return;
+  ppl.id = "td-people-top";
+  strip.parentNode.insertBefore(ppl, strip);
+}
+// the people: me · them
 function todoPeople() {
   if (!OUR.loaded || OUR.off || OUR.team !== TEAM || !todoMates("joined").length) return null;
   var me = currentUser(), bar = todoEl("div", "td-people");
@@ -1606,9 +1613,9 @@ function todoPeople() {
     bar.appendChild(b);
     return b;
   };
-  chip(me.id, "Mine", !todoPeek, function () { todoSwitch(null); }).title = "My To-do";
+  chip(me.id, todoFirstName(me.id), !todoPeek, function () { todoSwitch(null); }).title = "My To-do";
   todoMates("joined").forEach(function (m) {
-    chip(m.user_id, todoFirstName(m.user_id) + "'s", todoPeek === m.user_id, function () { todoSwitch(m.user_id); })
+    chip(m.user_id, todoFirstName(m.user_id), todoPeek === m.user_id, function () { todoSwitch(m.user_id); })
       .title = todoUserName(m.user_id) + "'s To-do — you can change anything here, as they can in yours";
   });
   return bar;
@@ -1636,7 +1643,8 @@ function todoCounts() {
 /* ---------- the page ---------- */
 // the tab strip at the top of the page (index.html renderTabs calls this on My To-do)
 function todoTabs(strip) {
-  [["plan", OUR.circle ? "🗓 Our plans" : "🗓 My plan"], ["ideas", "💡 Ideas warehouse"], ["why", "🇮🇳 Why do I exist?"]].forEach(function (T) {
+  todoPeopleTop(strip);
+  [["plan", "🗓 Plan"], ["ideas", "💡 Ideas warehouse"], ["why", "🇮🇳 Why do I exist?"]].forEach(function (T) {
     var b = todoEl("button", "tab" + (todoTab === T[0] ? " active" : ""), T[1]);
     b.onclick = function () { if (todoTab === T[0]) return; todoTab = T[0]; renderAll(); };
     strip.appendChild(b);
@@ -1652,7 +1660,6 @@ function renderContentTodo() {
     todoLoad(); return;
   }
   if (TODO.local) wrap.appendChild(todoEl("div", "td-note", "Couldn't reach the database — your plan is saved in this browser for now."));
-  var ppl = todoPeople(); if (ppl) wrap.appendChild(ppl);
   if (todoTab === "why") { wrap.appendChild(todoWhyCard(false)); return; }
   if (todoTab === "ideas") { wrap.appendChild(todoIdeas()); return; }
   try { if (todoAutoPlace()) setTimeout(todoSave, 0); } catch (_) { }   // sprints I've been made owner of
