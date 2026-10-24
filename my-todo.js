@@ -240,6 +240,17 @@ function todoAssigned() {
       write: hasPerm("edit") ? function (k) { if (k === "done") { if (isEpic && typeof devEpicSetCol === "function") { delete TODO.over[key]; devEpicSetCol(c, "done"); return; } c.col = "done"; delete TODO.over[key]; saveDev(); } else if (k === "todo") delete TODO.over[key]; else TODO.over[key] = k; } : null,
       open: function () { view = "dev"; devSpace = c.space || null; devSprint = c.sprint || null; renderAll(); } });
   });
+  // sprints I own (Engineering → the sprint's 👤 owner): one bar for the whole sprint, its dates
+  ((DEV && DEV.sprints) || []).forEach(function (sp) {
+    if (!sp.owner || String(sp.owner).toLowerCase() !== me.email) return;
+    var cards = (DEV.cards || []).filter(function (c) { return c.sprint === sp.id && (typeof devWork !== "function" || devWork(c)); });
+    var done = cards.filter(function (c) { return c.col === "done"; }).length;
+    var team = (DEV.spaces || []).find(function (x) { return x.id === sp.space; }), r = typeof devSprintRange === "function" ? devSprintRange(sp) : null;
+    out.push({ key: "sprint:" + sp.id, hat: "product", icon: "🏃", src: "Sprint", title: "Sprint: " + sp.name, where: team ? team.name : "Development",
+      board: "Engineering · " + (team ? team.name : "Development"), status: sp.completed ? "Completed" : "Sprint owner · " + done + "/" + cards.length + " done",
+      col: sp.completed ? "done" : done ? "progress" : "todo", start: r ? r.start : "", due: r ? r.end : "", write: null,
+      open: function () { view = "dev"; devSpace = sp.space; devSprint = sp.id; devView = "board"; renderAll(); } });
+  });
   // bugs
   (typeof teamBugs === "function" ? teamBugs() : []).forEach(function (t) {
     if ((t.assignee || "").toLowerCase() !== me.email) return;
@@ -351,6 +362,18 @@ function todoAssigned() {
   return out;
 }
 
+/* a sprint someone is made owner of lands on their plan by itself (in "Sprints", with the sprint's dates) —
+   once: if it's taken off, it stays off (TODO.over["auto:<key>"] remembers) */
+function todoAutoPlace() {
+  var on = todoOnPlan(), added = 0;
+  todoAssigned().forEach(function (e) {
+    if (e.key.indexOf("sprint:") !== 0 || e.col === "done" || on[e.key] || TODO.over["auto:" + e.key]) return;
+    var st = e.start || todoToday(), en = e.due && e.due >= st ? e.due : todoAddDays(st, 13);
+    todoNewTask(e.title, todoGroupFor("Sprints"), st, en, { k: "asg", key: e.key });
+    TODO.over["auto:" + e.key] = 1; added++;
+  });
+  return added;
+}
 /* a small settings window */
 function todoDialog(title, build, onSave) {
   var ov = todoEl("div", "overlay show"), dg = todoEl("div", "dialog td-setdlg");
@@ -1548,6 +1571,7 @@ function renderContentTodo() {
   var ppl = todoPeople(); if (ppl) wrap.appendChild(ppl);
   if (todoTab === "why") { wrap.appendChild(todoWhyCard(false)); return; }
   if (todoTab === "ideas") { wrap.appendChild(todoIdeas()); return; }
+  try { if (todoAutoPlace()) setTimeout(todoSave, 0); } catch (_) { }   // sprints I've been made owner of
   todoPlanBar(wrap);
   wrap.appendChild(todoPhaseBanner());
   todoPlanBody(wrap);
