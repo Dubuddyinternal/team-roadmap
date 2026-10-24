@@ -74,7 +74,7 @@
    renderAll, rmlModal, rmlTreeLines, rmgColResizer, allTasks, effStatus,
    dNum, dISO, fmtD, toast …).
    ===================================================================== */
-var TODO = { team: null, loaded: false, loading: false, local: false, why: null, whyMin: false, over: {}, planner: { groups: [], tasks: [] }, ideas: [], clock: { wake: "06:00", sleep: "22:00" }, sleepLog: {}, phase: null, rest: {} };
+var TODO = { team: null, loaded: false, loading: false, local: false, why: null, whyMin: false, over: {}, planner: { groups: [], tasks: [] }, ideas: [], clock: { wake: "06:00", sleep: "22:00" }, sleepLog: {}, phase: null, temple: [], rest: {} };
 var TODO_IDEA_KINDS = [["idea", "💡", "Idea"], ["imagine", "🌌", "Imagination"], ["question", "❓", "Question"], ["note", "📝", "Note"]];
 var todoIdeaKind = "idea";     // the kind picked for the next one I write
 var todoIdeaFilter = "";       // "" = all, else a kind
@@ -123,12 +123,13 @@ function todoPlannerNorm(p) {
 function todoApply(d) {
   d = d && typeof d === "object" ? d : {};
   TODO.rest = {};
-  Object.keys(d).forEach(function (k) { if (["why", "whyMin", "planner", "over", "ideas", "clock", "sleepLog", "phase"].indexOf(k) < 0) TODO.rest[k] = d[k]; });   // older My To-do data: kept untouched
+  Object.keys(d).forEach(function (k) { if (["why", "whyMin", "planner", "over", "ideas", "clock", "sleepLog", "phase", "temple"].indexOf(k) < 0) TODO.rest[k] = d[k]; });   // older My To-do data: kept untouched
   TODO.why = todoWhyNorm(d.why);
   TODO.whyMin = !!d.whyMin;
   TODO.over = d.over && typeof d.over === "object" ? d.over : {};
   TODO.planner = todoPlannerNorm(d.planner);
   Object.assign(TODO, todoDayNorm(d));
+  TODO.temple = todoTempleNorm(d.temple);
   TODO.ideas = Array.isArray(d.ideas) ? d.ideas.filter(function (x) { return x && x.id && x.text; }) : [];
 }
 // the parts of a plan the Day view draws besides tasks: wake / sleep targets and log, the phase banner
@@ -168,7 +169,7 @@ async function todoLoad() {
 var _todoSaveT = {}, _todoSaveRun = {};
 function todoSave() {
   var who = todoOwnerId(), key = todoLocalKey();
-  var data = Object.assign({}, TODO.rest, { why: TODO.why, whyMin: TODO.whyMin, over: TODO.over, planner: TODO.planner, ideas: TODO.ideas, clock: TODO.clock, sleepLog: TODO.sleepLog, phase: TODO.phase });
+  var data = Object.assign({}, TODO.rest, { why: TODO.why, whyMin: TODO.whyMin, over: TODO.over, planner: TODO.planner, ideas: TODO.ideas, clock: TODO.clock, sleepLog: TODO.sleepLog, phase: TODO.phase, temple: TODO.temple });
   clearTimeout(_todoSaveT[who]);
   var run = _todoSaveRun[who] = async function () {
     if (_todoSaveRun[who] !== run) return;
@@ -1392,6 +1393,89 @@ function todoIdeas() {
   return box;
 }
 
+/* ---------- 🛕 Temple: the gods I pray to, and why — four small circles on my own plan (not shown on a teammate's) ----------
+   Each: { id, name, sym, bg, why, photo } in TODO.temple. Hover a circle to read why; click it to change the
+   name, the words, or upload a photo (kept small, as a data URL, in my row). */
+var TODO_TEMPLE = [
+  { id: "krishna", name: "Krishna Ji", sym: "🪈", bg: "linear-gradient(135deg,#1E3A8A,#2563EB)",
+    why: "For the wisdom of the Gita — do my work fully and let go of the result." },
+  { id: "laxmi", name: "Laxmi Ji", sym: "🪷", bg: "linear-gradient(135deg,#BE123C,#F59E0B)",
+    why: "For prosperity earned honestly, and the sense to use it well for my family, team and country." },
+  { id: "bajrang", name: "Bajrang Bali", sym: "🚩", bg: "linear-gradient(135deg,#C2410C,#F97316)",
+    why: "For strength, courage and selfless service — to stay fearless when things get hard." },
+  { id: "saraswati", name: "Saraswati Mata", sym: "🦢", bg: "linear-gradient(135deg,#CA8A04,#FDE68A)",
+    why: "For knowledge, clear thinking and the right words — to keep learning every day." },
+];
+function todoTempleNorm(v) {
+  var have = Array.isArray(v) ? v.filter(function (x) { return x && x.id; }) : [];
+  return TODO_TEMPLE.map(function (g) {
+    var x = have.find(function (y) { return y.id === g.id; }) || {};
+    return { id: g.id, name: String(x.name || g.name), why: x.why != null ? String(x.why) : g.why, photo: typeof x.photo === "string" && x.photo.indexOf("data:image/") === 0 ? x.photo : "" };
+  });
+}
+function todoTempleDef(id) { return TODO_TEMPLE.find(function (g) { return g.id === id; }) || TODO_TEMPLE[0]; }
+// a picked photo → a small square JPEG (centre crop), so the row stays light
+function todoPhotoSquare(file, size, done) {
+  var rd = new FileReader();
+  rd.onload = function () {
+    var im = new Image();
+    im.onload = function () {
+      var s = Math.min(im.width, im.height), c = document.createElement("canvas");
+      c.width = c.height = size;
+      c.getContext("2d").drawImage(im, (im.width - s) / 2, (im.height - s) / 2, s, s, 0, 0, size, size);
+      done(c.toDataURL("image/jpeg", 0.85));
+    };
+    im.onerror = function () { toast("Couldn't read that image"); };
+    im.src = rd.result;
+  };
+  rd.readAsDataURL(file);
+}
+function todoTempleFace(x, el) {
+  var g = todoTempleDef(x.id);
+  el.innerHTML = "";
+  if (x.photo) { var im = todoEl("img"); im.src = x.photo; im.alt = x.name; el.appendChild(im); el.style.background = ""; }
+  else { el.textContent = g.sym; el.style.background = g.bg; }
+}
+function todoTempleEdit(x) {
+  var name, why, photo = x.photo, face;
+  todoDialog("🛕 " + x.name, function (body) {
+    var pr = todoEl("div", "td-temple-ed");
+    face = todoEl("div", "td-temple-c big"); todoTempleFace(x, face); pr.appendChild(face);
+    var acts = todoEl("div", "td-temple-edacts");
+    var file = todoEl("input"); file.type = "file"; file.accept = "image/*"; file.style.display = "none";
+    var up = todoEl("button", "btn", x.photo ? "Change photo" : "Upload photo"); up.type = "button"; up.onclick = function () { file.click(); };
+    var rm = todoEl("button", "btn", "Remove photo"); rm.type = "button"; rm.style.display = x.photo ? "" : "none";
+    file.onchange = function () { var f = file.files && file.files[0]; if (!f) return; todoPhotoSquare(f, 240, function (url) { photo = url; todoTempleFace({ id: x.id, name: x.name, photo: url }, face); rm.style.display = ""; up.textContent = "Change photo"; }); };
+    rm.onclick = function () { photo = ""; todoTempleFace({ id: x.id, name: x.name, photo: "" }, face); rm.style.display = "none"; up.textContent = "Upload photo"; };
+    acts.append(up, rm, file); pr.appendChild(acts);
+    body.appendChild(pr);
+    name = todoEl("input"); name.value = x.name;
+    why = todoEl("textarea"); why.rows = 3; why.value = x.why; why.dataset.plain = "1";
+    body.append(todoField("Name", name), todoField("Why I pray to them", why));
+  }, function () {
+    x.name = name.value.trim() || todoTempleDef(x.id).name;
+    x.why = why.value.trim();
+    x.photo = photo || "";
+  });
+}
+function todoTemple() {
+  var box = todoEl("section", "td-temple");
+  box.appendChild(todoEl("span", "td-temple-l", "🛕 Temple"));
+  TODO.temple.forEach(function (x) {
+    var it = todoEl("button", "td-temple-i"); it.type = "button";
+    var c = todoEl("span", "td-temple-c"); todoTempleFace(x, c); it.appendChild(c);
+    it.appendChild(todoEl("span", "td-temple-n", x.name));
+    var tip = todoEl("span", "td-temple-tip");
+    tip.appendChild(todoEl("b", "", "🙏 " + x.name));
+    tip.appendChild(todoEl("span", "", x.why || "Click to write why you pray to them."));
+    it.appendChild(tip);
+    it.setAttribute("aria-label", x.name + (x.why ? " — " + x.why : ""));
+    it.onclick = function () { todoTempleEdit(x); };
+    box.appendChild(it);
+  });
+  return box;
+}
+
 /* ---------- the phase banner: what this stretch of days is about ("Next 21 days — slow, focused work") ---------- */
 function todoPhaseEdit() {
   var P = TODO.phase || {}, txt, note, until;
@@ -1574,6 +1658,7 @@ function renderContentTodo() {
   try { if (todoAutoPlace()) setTimeout(todoSave, 0); } catch (_) { }   // sprints I've been made owner of
   todoPlanBar(wrap);
   wrap.appendChild(todoPhaseBanner());
+  if (!todoPeek) wrap.appendChild(todoTemple());   // 🛕 only on my own plan
   todoPlanBody(wrap);
 }
 // the bar: Month · Quarter · Week · Day, ‹ Today ›, and where things come from (only on my own plan)
