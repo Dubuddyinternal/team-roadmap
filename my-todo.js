@@ -193,7 +193,7 @@ async function todoFlush() {
 
 /* ---------- things assigned to me on the team's boards ---------- */
 function todoMe() {   // the person whose To-do is open
-  var u = (todoPeek && (typeof USERS !== "undefined" ? USERS : []).find(function (x) { return x.id === todoPeek; })) || currentUser() || {};
+  var u = (todoPeek ? todoPerson(todoPeek) : currentUser()) || {};
   var names = [u.name, u.username, typeof userDisplayName === "function" ? userDisplayName(u) : ""]
     .filter(Boolean).map(function (s) { return String(s).trim().toLowerCase(); });
   return { email: (u.email || "").toLowerCase(), id: u.id || "", names: names };
@@ -1583,11 +1583,19 @@ function todoPhaseBanner() {
    Ideas warehouse gets a 👥 Shared list everyone in it writes to.
    People in a circle see Our To-do even without the "My To-do" permission.
    Without that SQL run, none of this shows and My To-do works as before. */
-var OUR = { team: null, loaded: false, loading: false, off: false, circle: null, members: [], ideas: [] };
+var OUR = { team: null, loaded: false, loading: false, off: false, circle: null, members: [], ideas: [], people: {} };
 var todoPeek = null;          // id of the teammate whose To-do is open (null = mine)
 var todoIdeaScope = "shared"; // shared | mine — which ideas warehouse list (shared when there's an Our To-do)
-function todoUserName(id) {
+// a person in my Our To-do: from the team's people, or from the circle itself (todo_circle_people) when I
+// can't see their profile — e.g. a super-admin who isn't a member of the team
+function todoPerson(id) {
   var u = (typeof USERS !== "undefined" ? USERS : []).find(function (x) { return x.id === id; });
+  if (u) return u;
+  var p = OUR.people[id];
+  return p ? { id: id, name: p.name || p.email || "", email: (p.email || "").toLowerCase(), username: "", profile: p.avatar_color ? { avatarColor: p.avatar_color } : {} } : null;
+}
+function todoUserName(id) {
+  var u = todoPerson(id);
   return u ? userDisplayName(u) : "A teammate";
 }
 function todoFirstName(id) { return todoUserName(id).split(/\s+/)[0]; }
@@ -1608,6 +1616,11 @@ async function todoCircleLoad() {
     var j = mine.find(function (x) { return x.status === "joined"; });
     OUR.circle = j ? circles.find(function (x) { return x.id === j.circle_id; }) || null : null;
     OUR.members = OUR.circle ? rows.filter(function (x) { return x.circle_id === OUR.circle.id; }) : [];
+    OUR.people = {};
+    if (OUR.circle) {   // names / emails of the people in it, even ones whose profile I can't read
+      var pp = await SUPA.rpc("todo_circle_people", { c: OUR.circle.id });
+      ((pp && pp.data) || []).forEach(function (x) { OUR.people[x.user_id] = x; });
+    }
     OUR.off = false;
   } catch (e) { OUR.off = true; OUR.circle = null; OUR.members = []; }   // stage20b not run yet
   OUR.team = TEAM; OUR.loaded = true; OUR.loading = false;
@@ -1659,7 +1672,7 @@ function todoPeople() {
   if (!OUR.loaded || OUR.off || OUR.team !== TEAM || !todoMates("joined").length) return null;
   var me = currentUser(), bar = todoEl("div", "td-people");
   var chip = function (uid, label, on, fn) {
-    var u = (typeof USERS !== "undefined" ? USERS : []).find(function (x) { return x.id === uid; });
+    var u = todoPerson(uid);
     var b = todoEl("button", "td-person" + (on ? " on" : ""));
     var av = todoEl("span", "td-person-av", (todoUserName(uid) || "?").charAt(0).toUpperCase());
     if (u && typeof userAvatarColor === "function") av.style.background = userAvatarColor(u);
