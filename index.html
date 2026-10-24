@@ -1629,6 +1629,10 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .td-person-av{width:22px;height:22px;border-radius:50%;background:var(--indigo);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
 .td-idea-scope{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:12px}
 .td-idea-by{color:var(--indigo);font-weight:500}
+.dv-spowner{font-size:12px;border:1px solid var(--line);background:var(--card);color:inherit;border-radius:99px;padding:2px 10px;margin-left:8px;font-family:inherit;white-space:nowrap}
+button.dv-spowner{cursor:pointer}
+button.dv-spowner:hover{border-color:var(--indigo);color:var(--indigo)}
+.dv-spowner.none{color:var(--muted);border-style:dashed}
 .td-side-n{font-family:var(--mono);font-size:11px;background:var(--indigo-soft);color:var(--indigo);border-radius:99px;padding:1px 8px}
 @media(max-width:1100px){.kanban{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:600px){.kanban{grid-template-columns:1fr}}
@@ -12769,7 +12773,7 @@ function currentSprint(){
     const sp = inSpace.find(x=>x.id===devSprint);
     if(sp) return sp;
   }
-  return inSpace.find(x=>!x.completed) || inSpace[0] || null;
+  return inSpace.find(x=>!x.completed) || null;   // completed sprints are looked at in 📜 History
 }
 
 // a dev team's ⋯ menu: new sprint, rename, move, delete (sidebar, under the engineering space)
@@ -12797,28 +12801,36 @@ function devTeamMenuItems(space){
       }
   };
   return [
-    {label:"\uFF0B New sprint", onClick:()=> openDialog("New sprint in \u201C"+space.name+"\u201D", {title:"Sprint "+(DEV.sprints.filter(x=>x.space===space.id).length+1)}, v=>{
+    {label:"\uFF0B New sprint", onClick:()=> openDialog("New sprint in \u201C"+space.name+"\u201D", {title:"Sprint "+(DEV.sprints.filter(x=>x.space===space.id).length+1), assignee:""}, v=>{
       const sp = { id:"sp-"+Date.now().toString(36), name:v.title, space:space.id };
       if(v.start) sp.start = v.start;
       if(v.deadline) sp.end = v.deadline;
+      if(v.assignee) sp.owner = v.assignee;
       DEV.sprints.push(sp); devSpace = space.id; devSprint = sp.id; devView = "board";
       saveDev(); toast("Sprint created \u2014 pull cards in from the Backlog tab");
-    }, {hideExtras:true, dates:true})},
+    }, DEV_SPRINT_DLG)},
     {label:"\u270F\uFE0F Rename team", onClick:()=> openDialog("Rename dev team", {title:space.name}, v=>{ space.name = v.title; saveDev(); }, {hideExtras:true, titleLabel:"Team / space name"})},
     i>0 && {label:"\u2191 Move up", onClick:()=>{ DEV.spaces.splice(i-1, 0, DEV.spaces.splice(i,1)[0]); saveDev(); }},
     i<DEV.spaces.length-1 && {label:"\u2193 Move down", onClick:()=>{ DEV.spaces.splice(i+1, 0, DEV.spaces.splice(i,1)[0]); saveDev(); }},
     {label:"Delete team\u2026", danger:true, onClick: doDelete},
   ].filter(Boolean);
 }
-// a sprint's ⋯ menu: edit name / dates, delete
+// the sprint dialog: name, dates and its owner (who's answerable for it)
+const DEV_SPRINT_DLG = {hideExtras:true, dates:true, assignee:true, assigneeLabel:"Sprint owner (optional)"};
+function devEditSprint(sp){
+  openDialog("Edit sprint", {title:sp.name, start:sp.start, deadline:sp.end, assignee:sp.owner||""}, v=>{
+    sp.name = v.title;
+    if(v.start) sp.start = v.start; else delete sp.start;
+    if(v.deadline) sp.end = v.deadline; else delete sp.end;
+    if(v.assignee) sp.owner = v.assignee; else delete sp.owner;
+    saveDev();
+  }, DEV_SPRINT_DLG);
+}
+function devSprintOwnerName(sp){ const m = sp.owner ? assigneeMembers().find(u=>u.email===sp.owner) : null; return m ? userDisplayName(m) : (sp.owner || ""); }
+// a sprint's ⋯ menu: edit name / dates / owner, delete
 function devSprintMenuItems(sp){
   return [
-    {label:"\u270F\uFE0F Edit name / dates", onClick:()=> openDialog("Edit sprint", {title:sp.name, start:sp.start, deadline:sp.end}, v=>{
-      sp.name = v.title;
-      if(v.start) sp.start = v.start; else delete sp.start;
-      if(v.deadline) sp.end = v.deadline; else delete sp.end;
-      saveDev();
-    }, {hideExtras:true, dates:true})},
+    {label:"\u270F\uFE0F Edit name / dates / owner", onClick:()=> devEditSprint(sp)},
     {label:"Delete sprint\u2026", danger:true, onClick:()=>{
       const n2 = DEV.cards.filter(c=>c.sprint===sp.id).length;
       if(confirm("Delete "+sp.name+"? Its "+n2+" card(s) move back to the backlog.")){
@@ -12858,11 +12870,11 @@ function devSideTree(host, cs){
     if(editMode) menuBtn(t, ()=> devTeamMenuItems(team));
     host.appendChild(t);
     if(!on) return;
-    DEV.sprints.filter(sp=> sp.space===team.id).forEach(sp=>{
+    DEV.sprints.filter(sp=> sp.space===team.id && !sp.completed).forEach(sp=>{   // completed ones move to 📜 History
       const r = document.createElement("button");
       r.className = "ws-sub2 dv-sidesprint" + (cur && cur.id===sp.id ? " active" : "") + (sp.completed ? " done" : "");
       const n = document.createElement("span"); n.className = "dv-sn"; n.textContent = (sp.completed ? "\u2713 " : "") + sp.name; r.appendChild(n);
-      r.title = sp.name + (sp.start || sp.end ? " · " + (sp.start || "?") + " → " + (sp.end || "?") : "");
+      r.title = sp.name + (sp.start || sp.end ? " · " + (sp.start || "?") + " → " + (sp.end || "?") : "") + (sp.owner ? " · owner: " + devSprintOwnerName(sp) : "");
       r.onclick = ()=>{ view = "dev"; devSpace = team.id; devSprint = sp.id; renderAll(); };
       if(editMode) menuBtn(r, ()=> devSprintMenuItems(sp));
       host.appendChild(r);
@@ -12899,7 +12911,7 @@ function renderSidebarDev(){
   st.className = "side-title"; st.textContent = "Sprints";
   wrap.appendChild(st);
   const cur = currentSprint();
-  DEV.sprints.filter(sp=>sp.space===spc).forEach(sp=>{
+  DEV.sprints.filter(sp=>sp.space===spc && !sp.completed).forEach(sp=>{   // completed ones move to 📜 History
     const n = DEV.cards.filter(c=>c.sprint===sp.id && devWork(c)).length;
     const doneN = DEV.cards.filter(c=>c.sprint===sp.id && devWork(c) && c.col==="done").length;
     const b = mkSideCard(cur && cur.id===sp.id, ()=>{ devSprint = sp.id; renderAll(); });
@@ -12909,13 +12921,7 @@ function renderSidebarDev(){
     if(sp.completed) b.style.opacity = ".6";
     if(editMode){
       cardActs(b, [
-        actBtn("pencil","Edit sprint name / dates",false, ()=>
-          openDialog("Edit sprint", {title:sp.name, start:sp.start, deadline:sp.end}, v=>{
-            sp.name = v.title;
-            if(v.start) sp.start = v.start; else delete sp.start;
-            if(v.deadline) sp.end = v.deadline; else delete sp.end;
-            saveDev();
-          }, {hideExtras:true, dates:true})),
+        actBtn("pencil","Edit sprint name / dates / owner",false, ()=> devEditSprint(sp)),
         actBtn("trash","Delete sprint",true, ()=>{
           const n2 = DEV.cards.filter(c=>c.sprint===sp.id).length;
           if(confirm("Delete "+sp.name+"? Its "+n2+" card(s) move back to the backlog.")){
@@ -13746,6 +13752,9 @@ function devHistorySection(spc){
   ranges.forEach(([k,l])=>{ const b = document.createElement("button"); b.className = "dv-histr"+(devHistRange===k?" on":""); b.textContent = l;
     b.onclick = ()=>{ devHistRange = k; renderAll(); }; bar.appendChild(b); });
   box.appendChild(bar);
+  const hint = document.createElement("div"); hint.className = "hint"; hint.style.margin = "0 0 10px";
+  hint.textContent = "Completed sprints leave the sidebar and live here. Click a sprint to see the stories and work done in it.";
+  box.appendChild(hint);
   const months = (ranges.find(r=>r[0]===devHistRange)||[])[2] || 0;
   const since = months ? new Date(new Date().getFullYear(), new Date().getMonth()-months, new Date().getDate()) : null;
   const sprints = DEV.sprints.filter(x=>x.space===spc && x.completed)
@@ -13765,7 +13774,7 @@ function devHistorySection(spc){
   }
   sprints.forEach(sp=>{
     const items = shippedOf(sp); all += items.length;
-    const c = document.createElement("details"); c.className = "dv-sumcard dv-histsp"; c.open = sprints.indexOf(sp) < 3;
+    const c = document.createElement("details"); c.className = "dv-sumcard dv-histsp";   // closed: click a sprint to see what was done in it
     const s = document.createElement("summary");
     s.innerHTML = "<b></b><span class='dv-dl-date'></span><span class='dv-histn'></span>";
     s.querySelector("b").textContent = "\u2713 "+sp.name;
@@ -13773,6 +13782,7 @@ function devHistorySection(spc){
     s.querySelector(".dv-dl-date").textContent = (sp.start || sp.end ? (sp.start||"\u2026")+" \u2192 "+(sp.end||"\u2026") : "")
       + (sp.completedOn ? " \u00B7 closed "+d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}) : "");
     s.querySelector(".dv-histn").textContent = items.length+" shipped"+(sp.unfinished ? " \u00B7 "+sp.unfinished+" carried over" : "");
+    if(sp.owner){ const ow = document.createElement("span"); ow.className = "dv-spowner"; ow.textContent = "\uD83D\uDC64 " + devSprintOwnerName(sp); ow.title = "Sprint owner"; s.insertBefore(ow, s.querySelector(".dv-histn")); }
     c.appendChild(s);
     if(!items.length){ const e = document.createElement("div"); e.className = "hint"; e.textContent = "Nothing was marked done in this sprint."; c.appendChild(e); }
     const groups = {};
@@ -13816,6 +13826,13 @@ function renderContentDev(){
     const cnt = document.createElement("span"); cnt.className = "pct";
     cnt.textContent = spCards.filter(c=>c.col==="done").length + "/" + spCards.length + " done";
     row.appendChild(cnt);
+    if(sp.owner || editMode){   // 👤 the sprint's owner — click to change
+      const ow = document.createElement(editMode ? "button" : "span"); ow.className = "dv-spowner" + (sp.owner ? "" : " none");
+      ow.textContent = sp.owner ? "\uD83D\uDC64 " + devSprintOwnerName(sp) : "\uFF0B owner";
+      ow.title = sp.owner ? "Sprint owner" + (editMode ? " \u2014 click to change" : "") : "Give this sprint an owner";
+      if(editMode) ow.onclick = ()=> devEditSprint(sp);
+      row.appendChild(ow);
+    }
     if(editMode && !sp.completed){
       const spx = document.createElement("span"); spx.className = "spacer"; row.appendChild(spx);
       const btn = document.createElement("button");
