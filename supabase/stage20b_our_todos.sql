@@ -81,6 +81,16 @@ language sql stable security definer set search_path = '' as $$
   ) or exists (select 1 from public.profiles p where p.id = who and p.is_super)
 $$;
 
+-- names / emails of the people in a circle I've joined — so a member whose profile I can't read
+-- (e.g. a super-admin outside the team) still shows by name
+create or replace function public.todo_circle_people(c uuid)
+returns table (user_id uuid, name text, email text, avatar_color text)
+language sql stable security definer set search_path = '' as $$
+  select p.id, coalesce(nullif(p.profile->>'displayName', ''), nullif(p.name, ''), p.email), p.email, p.profile->>'avatarColor'
+  from public.todo_circle_members m join public.profiles p on p.id = m.user_id
+  where m.circle_id = c and public.todo_circle_status(c) = 'joined'
+$$;
+
 create or replace function public.todo_circle_owner(c uuid) returns uuid
 language sql stable security definer set search_path = '' as $$
   select t.owner_id from public.todo_circles t where t.id = c
@@ -144,9 +154,15 @@ drop policy if exists "ideas delete" on public.todo_circle_ideas;
 create policy "ideas delete" on public.todo_circle_ideas for delete to authenticated
   using (public.todo_circle_status(circle_id) = 'joined' and (author_id = auth.uid() or public.todo_circle_owner(circle_id) = auth.uid()));
 
--- my_todos: people in the same circle can read (not change) each other's plan
+-- my_todos: people in the same circle can read and change each other's plan
 drop policy if exists "shared to-dos read" on public.my_todos;
 create policy "shared to-dos read" on public.my_todos for select to authenticated
   using (public.todo_shares_with(user_id, team_slug));
+drop policy if exists "shared to-dos add" on public.my_todos;
+create policy "shared to-dos add" on public.my_todos for insert to authenticated
+  with check (public.todo_shares_with(user_id, team_slug));
+drop policy if exists "shared to-dos edit" on public.my_todos;
+create policy "shared to-dos edit" on public.my_todos for update to authenticated
+  using (public.todo_shares_with(user_id, team_slug)) with check (public.todo_shares_with(user_id, team_slug));
 
 commit;
