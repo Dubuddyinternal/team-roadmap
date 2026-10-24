@@ -1,7 +1,7 @@
 /* =====================================================================
    OUR TO-DO (was My To-do) — a planner, one per person per team, that a
    person can share with chosen teammates (👥 Our To-do, further down:
-   a co-founder sees my plan and I see theirs, view only, one shared ideas
+   a co-founder and I can each open and change the other's plan, one shared ideas
    warehouse). Plan top-down:
 
      🗓 Month / Quarter — a Gantt of everything I mean to get done: my own
@@ -104,7 +104,9 @@ function todoToday() { var d = new Date(); return d.getFullYear() + "-" + String
 function todoMonday(iso) { var w = (new Date(iso + "T00:00:00Z").getUTCDay() + 6) % 7; return todoAddDays(iso, -w); }
 
 /* ---------- load / save ---------- */
-function todoLocalKey() { var u = currentUser(); return "cf-todo-" + TEAM + "-" + (u ? u.id : "anon"); }
+// whose To-do is open: mine, or the teammate's I share Our To-do with (todoPeek) — both fully editable
+function todoOwnerId() { return todoPeek || (currentUser() || {}).id || ""; }
+function todoLocalKey() { return "cf-todo-" + TEAM + "-" + (todoOwnerId() || "anon"); }
 function todoPlannerNorm(p) {
   p = p && typeof p === "object" ? p : {};
   var groups = Array.isArray(p.groups) ? p.groups.filter(function (g) { return g && g.id && g.name; }) : [];
@@ -143,42 +145,53 @@ function todoDayNorm(d) {
 async function todoLoad() {
   if (TODO.loading) return;
   TODO.loading = true;
-  var d = null, local = false;
+  var who = todoOwnerId(), d = null, local = false;
   try {
     if (!SUPA) throw new Error("no database");
     var r = await SUPA.from("my_todos").select("data,user_id").eq("team_slug", TEAM);
     if (r.error) throw r.error;
-    // people in Our To-do can read each other's rows too: take mine
-    var uid = currentUser().id, own = (r.data || []).find(function (x) { return x.user_id === uid; }) || (r.data || []).find(function (x) { return !x.user_id; });
-    d = own ? own.data : null;
+    // the rows I can read: mine and the people I share Our To-do with — take the one that's open
+    var rows = r.data || [], row = rows.find(function (x) { return x.user_id === who; }) || (!todoPeek ? rows.find(function (x) { return !x.user_id; }) : null);
+    d = row ? row.data : null;
   } catch (e) {
     local = true;   // table not reachable or offline: keep them in this browser
     try { d = JSON.parse(localStorage.getItem(todoLocalKey()) || "null"); } catch (_) { d = null; }
   }
+  TODO.loading = false;
+  if (who !== todoOwnerId()) { todoLoad(); return; }   // switched to the other person meanwhile
   todoApply(d);
-  TODO.local = local; TODO.team = TEAM; TODO.loaded = true; TODO.loading = false;
+  TODO.local = local; TODO.team = TEAM; TODO.loaded = true;
   renderAll();   // the page and the sidebar count
-  todoCircleLoad();   // who I share Our To-do with, shared ideas
+  if (!OUR.loaded || OUR.team !== TEAM) todoCircleLoad();   // who I share Our To-do with, shared ideas
 }
-var _todoSaveT = null;
+// saves wait 600ms (typing, dragging); one timer per person, so switching never mixes two plans
+var _todoSaveT = {}, _todoSaveRun = {};
 function todoSave() {
-  if (todoPeekOn) { renderAll(); return; }   // looking at someone else's plan: never save it as mine
+  var who = todoOwnerId(), key = todoLocalKey();
   var data = Object.assign({}, TODO.rest, { why: TODO.why, whyMin: TODO.whyMin, over: TODO.over, planner: TODO.planner, ideas: TODO.ideas, clock: TODO.clock, sleepLog: TODO.sleepLog, phase: TODO.phase });
-  clearTimeout(_todoSaveT);
-  _todoSaveT = setTimeout(async function () {
+  clearTimeout(_todoSaveT[who]);
+  var run = _todoSaveRun[who] = async function () {
+    if (_todoSaveRun[who] !== run) return;
+    delete _todoSaveRun[who]; delete _todoSaveT[who];
     if (!TODO.local && SUPA) {
-      var r = await SUPA.from("my_todos").upsert({ team_slug: TEAM, data: data, updated_at: new Date().toISOString() }, { onConflict: "user_id,team_slug" });
+      var r = await SUPA.from("my_todos").upsert({ user_id: who, team_slug: TEAM, data: data, updated_at: new Date().toISOString() }, { onConflict: "user_id,team_slug" });
       if (!r.error) return;
       TODO.local = true;
     }
-    try { localStorage.setItem(todoLocalKey(), JSON.stringify(data)); } catch (_) { }
-  }, 600);
+    try { localStorage.setItem(key, JSON.stringify(data)); } catch (_) { }
+  };
+  _todoSaveT[who] = setTimeout(run, 600);
   renderAll();
+}
+function todoSaving() { return Object.keys(_todoSaveT).length > 0; }
+async function todoFlush() {
+  var runs = Object.keys(_todoSaveRun).map(function (k) { clearTimeout(_todoSaveT[k]); return _todoSaveRun[k]; });
+  for (var i = 0; i < runs.length; i++) await runs[i]();
 }
 
 /* ---------- things assigned to me on the team's boards ---------- */
-function todoMe() {
-  var u = currentUser() || {};
+function todoMe() {   // the person whose To-do is open
+  var u = (todoPeek && (typeof USERS !== "undefined" ? USERS : []).find(function (x) { return x.id === todoPeek; })) || currentUser() || {};
   var names = [u.name, u.username, typeof userDisplayName === "function" ? userDisplayName(u) : ""]
     .filter(Boolean).map(function (s) { return String(s).trim().toLowerCase(); });
   return { email: (u.email || "").toLowerCase(), id: u.id || "", names: names };
@@ -413,14 +426,12 @@ function todoSources() {
   try { todoAssigned().forEach(function (e) { S.asg[e.key] = e; }); } catch (_) { }
   try { allTasks().forEach(function (x) { if (x.tid) S.reg[x.tid] = x; }); } catch (_) { }
   S.me = todoMe();
-  S.peek = todoPeekOn;   // drawing a teammate's plan: their linked cards aren't mine to check
   return S;
 }
 // a task linked from a board or roadmap that's now someone else's (or no longer assigned to me) stays off My plan —
 // kept in the data, so it comes back if it's handed back
 function todoGone(t, S) {
   var r = t.ref;
-  if (S.peek) return false;
   if (t.parent) { var p = todoGroupTask(t.parent); if (p && p !== t && todoGone(p, S)) return true; }
   if (!r) return false;
   if (r.k === "asg") return !S.asg[r.key];
@@ -443,7 +454,7 @@ function todoInfo(t, S) {
   if (r && r.k === "asg") {
     var e = S.asg[r.key];
     if (e) { i.title = e.title || i.title; i.src = e.icon + " " + (e.board || e.where); i.done = i.done || e.col === "done"; i.open = e.open; }
-    else i.src = S.peek ? "📥 assigned to them" : "📥 no longer assigned to you";
+    else i.src = "📥 no longer assigned";
   } else if (r && r.k === "tid") {
     var x = S.reg[r.tid];
     if (x) { i.title = x.task.title || x.task.name || i.title; i.src = "🔗 " + x.path; try { i.done = i.done || effStatus(x.task) === "done"; } catch (_) { } }
@@ -1294,7 +1305,7 @@ function todoIdeas() {
   // 🔒 only me · 👥 shared with the people in Our To-do
   if (OUR.circle) {
     var sc = todoEl("div", "td-idea-scope"), seg0 = todoEl("span", "rmg-seg");
-    [["mine", "🔒 Only me"], ["shared", "👥 Shared with " + todoCircleNames()]].forEach(function (k) {
+    [["mine", todoPeek ? "🔒 " + todoFirstName(todoPeek) + "'s own" : "🔒 Only me"], ["shared", "👥 Shared with " + todoCircleNames()]].forEach(function (k) {
       var b = todoEl("button", todoIdeaScope === k[0] ? "on" : "", k[1]);
       b.onclick = function () { if (todoIdeaScope === k[0]) return; todoIdeaScope = k[0]; todoIdeaFilter = ""; if (k[0] === "shared") todoSharedIdeasLoad(); renderAll(); };
       seg0.appendChild(b);
@@ -1403,14 +1414,15 @@ function todoPhaseBanner() {
    A circle (supabase/stage20b_our_todos.sql) is a few people in this team
    who share their To-do with each other — e.g. two co-founders. It's set
    up in the database (no invite / remove buttons in the app). Each
-   one's chip on top of the plan opens their plan, view only (their own row
-   in my_todos, which the database now lets circle members read), and the
+   one's chip on top of the page ("Mine" / "Pancham's") opens that person's
+   whole To-do, and everything works there as in my own: add, move, tick,
+   delete (their row in my_todos, which the database lets circle members
+   read and write). Saves go to whoever's To-do was open. And the
    Ideas warehouse gets a 👥 Shared list everyone in it writes to.
    People in a circle see Our To-do even without the "My To-do" permission.
    Without that SQL run, none of this shows and My To-do works as before. */
-var OUR = { team: null, loaded: false, loading: false, off: false, circle: null, members: [], ideas: [], plans: {} };
-var todoPeek = null;          // id of the teammate whose plan I'm looking at (null = mine)
-var todoPeekOn = false;       // true only while their plan is being drawn
+var OUR = { team: null, loaded: false, loading: false, off: false, circle: null, members: [], ideas: [] };
+var todoPeek = null;          // id of the teammate whose To-do is open (null = mine)
 var todoIdeaScope = "mine";   // mine | shared — which ideas warehouse list
 function todoUserName(id) {
   var u = (typeof USERS !== "undefined" ? USERS : []).find(function (x) { return x.id === id; });
@@ -1437,7 +1449,7 @@ async function todoCircleLoad() {
     OUR.off = false;
   } catch (e) { OUR.off = true; OUR.circle = null; OUR.members = []; }   // stage20b not run yet
   OUR.team = TEAM; OUR.loaded = true; OUR.loading = false;
-  if (todoPeek && !todoMates("joined").some(function (x) { return x.user_id === todoPeek; })) todoPeek = null;
+  if (todoPeek && !todoMates("joined").some(function (x) { return x.user_id === todoPeek; })) { todoPeek = null; TODO.loaded = false; }
   if (!OUR.circle) todoIdeaScope = "mine";
   if (OUR.circle) await todoSharedIdeasLoad(true);
   renderAll();
@@ -1464,12 +1476,16 @@ async function todoSharedIdeaDel(x) {
   var r = await SUPA.from("todo_circle_ideas").delete().eq("id", x.id);
   if (r.error) { toast("Couldn't delete it: " + r.error.message); todoSharedIdeasLoad(); }
 }
-async function todoPeekLoad(uid) {
-  var r = await SUPA.from("my_todos").select("data,updated_at").eq("team_slug", TEAM).eq("user_id", uid).maybeSingle();
-  OUR.plans[uid] = { data: r.error ? null : (r.data ? r.data.data : {}), err: r.error ? r.error.message : "", at: r.data ? r.data.updated_at : "" };
+// open my To-do or theirs — everything works the same in both
+async function todoSwitch(uid) {
+  uid = uid || null;
+  if (uid === todoPeek) return;
+  await todoFlush();   // anything still waiting to save goes to the right person first
+  todoPeek = uid; TODO.loaded = false;
+  todoAddIn = todoSubAdd = todoIdeaEdit = null;
   renderAll();
 }
-// the people on top of the plan: Me · them (click to see their plan, view only)
+// the people on top of the page: Mine · theirs
 function todoPeople() {
   if (!OUR.loaded || OUR.off || OUR.team !== TEAM || !todoMates("joined").length) return null;
   var me = currentUser(), bar = todoEl("div", "td-people");
@@ -1483,36 +1499,19 @@ function todoPeople() {
     bar.appendChild(b);
     return b;
   };
-  chip(me.id, "Mine", !todoPeek, function () { if (todoPeek) { todoPeek = null; renderAll(); } }).title = "My plan";
+  chip(me.id, "Mine", !todoPeek, function () { todoSwitch(null); }).title = "My To-do";
   todoMates("joined").forEach(function (m) {
-    chip(m.user_id, todoFirstName(m.user_id) + "'s", todoPeek === m.user_id, function () {
-      if (todoPeek === m.user_id) return;
-      todoPeek = m.user_id; todoTab = "plan"; delete OUR.plans[m.user_id]; renderAll();
-    }).title = "See " + todoUserName(m.user_id) + "'s plan (view only)";
+    chip(m.user_id, todoFirstName(m.user_id) + "'s", todoPeek === m.user_id, function () { todoSwitch(m.user_id); })
+      .title = todoUserName(m.user_id) + "'s To-do — you can change anything here, as they can in yours";
   });
   return bar;
 }
-// a teammate's plan, drawn with the same charts while their data stands in for mine — view only
-function todoPeekView(wrap, uid) {
-  var P = OUR.plans[uid], name = todoUserName(uid);
-  if (!P) { wrap.appendChild(todoEl("div", "empty", "Loading " + name + "'s plan…")); todoPeekLoad(uid); return; }
-  if (P.err) { wrap.appendChild(todoEl("div", "td-note", "Couldn't read " + name + "'s plan: " + P.err)); return; }
-  var d = P.data || {}, mine = { planner: TODO.planner, phase: TODO.phase, clock: TODO.clock, sleepLog: TODO.sleepLog };
-  todoPeekOn = true;
-  Object.assign(TODO, { planner: todoPlannerNorm(d.planner) }, todoDayNorm(d));
-  try {
-    todoPlanBar(wrap, "👀 " + name + "'s plan", P.at);
-    var ro = todoEl("div", "td-ro"); wrap.appendChild(ro);
-    if (!(d.planner && Array.isArray(d.planner.tasks) && d.planner.tasks.length)) ro.appendChild(todoEl("div", "td-day-empty", name + " hasn't planned anything here yet."));
-    todoPlanBody(ro);
-  } finally { Object.assign(TODO, mine); todoPeekOn = false; }
-}
-// keep Our To-do fresh while it's open: shared ideas and the teammate's plan I'm looking at
+// keep Our To-do fresh while it's open: we both edit, so pick up the other one's changes
 setInterval(function () {
   if (typeof view === "undefined" || view !== "todo" || !OUR.circle || document.visibilityState !== "visible") return;
   var a = document.activeElement; if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;   // don't redraw under someone typing
   if (todoTab === "ideas" && todoIdeaScope === "shared") todoSharedIdeasLoad();
-  else if (todoTab === "plan" && todoPeek) todoPeekLoad(todoPeek);
+  else if (!todoSaving() && !todoIdeaEdit && TODO.loaded) todoLoad();
 }, 60000);
 
 /* ---------- counts (sidebar and Summary) ---------- */
@@ -1541,26 +1540,24 @@ function renderContentTodo() {
   wrap.innerHTML = "";
   if (!todoCan()) { wrap.appendChild(todoEl("div", "empty", "Our To-do isn't switched on for you yet.")); return; }
   if (!TODO.loaded || TODO.team !== TEAM) {
-    if (TODO.team !== TEAM) { TODO.loaded = false; OUR.loaded = false; todoPeek = null; OUR.plans = {}; }
-    wrap.appendChild(todoEl("div", "empty", "Loading your plan…"));
+    if (TODO.team !== TEAM) { TODO.loaded = false; OUR.loaded = false; todoPeek = null; }
+    wrap.appendChild(todoEl("div", "empty", todoPeek ? "Loading " + todoUserName(todoPeek) + "'s To-do…" : "Loading your plan…"));
     todoLoad(); return;
   }
   if (TODO.local) wrap.appendChild(todoEl("div", "td-note", "Couldn't reach the database — your plan is saved in this browser for now."));
+  var ppl = todoPeople(); if (ppl) wrap.appendChild(ppl);
   if (todoTab === "why") { wrap.appendChild(todoWhyCard(false)); return; }
   if (todoTab === "ideas") { wrap.appendChild(todoIdeas()); return; }
-  var ppl = todoPeople(); if (ppl) wrap.appendChild(ppl);
-  if (todoPeek) { todoPeekView(wrap, todoPeek); return; }
   todoPlanBar(wrap);
   wrap.appendChild(todoPhaseBanner());
   todoPlanBody(wrap);
 }
 // the bar: Month · Quarter · Week · Day, ‹ Today ›, and where things come from (only on my own plan)
-function todoPlanBar(wrap, title, at) {
+function todoPlanBar(wrap) {
   var S = todoSources();
   var head = todoEl("section", "module-block rm-bar");
   var row = todoEl("div", "module-head");
-  row.appendChild(todoEl("h2", "", title || "My plan"));
-  if (todoPeekOn) { var vo = todoEl("span", "td-logtag td-viewonly", "view only"); if (at) vo.title = "Last changed " + new Date(at).toLocaleString(); row.appendChild(vo); }
+  row.appendChild(todoEl("h2", "", todoPeek ? todoFirstName(todoPeek) + "'s plan" : "My plan"));
   var ctl = todoEl("span", "rmg-win"), seg = todoEl("span", "rmg-seg");
   TODO_LEVELS.forEach(function (L) {
     var b = todoEl("button", todoLevel === L[0] ? "on" : "", L[1]);
@@ -1583,23 +1580,17 @@ function todoPlanBar(wrap, title, at) {
   row.appendChild(ctl);
   row.appendChild(todoEl("span", "spacer"));
   var mk = function (txt, tip, fn, cls) { var b = todoEl("button", "tool sm" + (cls ? " " + cls : ""), txt); b.title = tip; b.onclick = fn; row.appendChild(b); };
-  if (todoPeekOn) {
-    var uid = todoPeek;
-    mk("↻ Refresh", "Load their latest plan", function () { todoPeekLoad(uid); });
-  } else {
-    var nAsg = 0; try { var onP = todoOnPlan(); nAsg = Object.keys(S.asg).filter(function (k) { return S.asg[k].col !== "done" && !onP[k]; }).length; } catch (_) { }
-    mk("📥 Assigned to me" + (nAsg ? " (" + nAsg + ")" : ""), "Cards on the team's boards that are yours — place them on your timeline", todoPickAssigned, "primary");
-    mk("🗺 From roadmaps", "Pick tasks from the team's roadmap charts (Gantt etc.) — with their phase, owner and dates", todoPickRoadmaps);
-    mk("＋ From boards", "Pick anything from any board to plan it here", todoPickBoards);
-    mk("＋ Group", "Add a group (like a phase)", function () { todoEditGroup(null); });
-  }
+  var nAsg = 0; try { var onP = todoOnPlan(); nAsg = Object.keys(S.asg).filter(function (k) { return S.asg[k].col !== "done" && !onP[k]; }).length; } catch (_) { }
+  mk("📥 Assigned to " + (todoPeek ? todoFirstName(todoPeek) : "me") + (nAsg ? " (" + nAsg + ")" : ""), "Cards on the team's boards that are yours — place them on your timeline", todoPickAssigned, "primary");
+  mk("🗺 From roadmaps", "Pick tasks from the team's roadmap charts (Gantt etc.) — with their phase, owner and dates", todoPickRoadmaps);
+  mk("＋ From boards", "Pick anything from any board to plan it here", todoPickBoards);
+  mk("＋ Group", "Add a group (like a phase)", function () { todoEditGroup(null); });
   head.appendChild(row);
   wrap.appendChild(head);
 }
 // the chart (or the day's list and timeline) for whatever plan TODO holds right now
 function todoPlanBody(wrap) {
   var S = todoSources();
-  if (todoPeekOn && TODO.phase) wrap.appendChild(todoPhaseBanner());
   if (todoLevel === "day") {   // the day starts with waking up and ends with going to bed
     var dd = todoWindow().from;
     wrap.appendChild(todoClock("wake", dd));
