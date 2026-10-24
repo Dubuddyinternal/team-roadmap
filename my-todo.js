@@ -1394,7 +1394,7 @@ function todoPhaseBanner() {
 /* ---------- 👥 Our To-do: share plans and ideas with chosen teammates ----------
    A circle (supabase/stage20b_our_todos.sql) is a few people in this team
    who share their To-do with each other — e.g. two co-founders. "＋ Invite"
-   asks a teammate; they see a Join / Decline banner here. Once joined, each
+   adds a teammate straight in (no need for them to accept). Each
    one's chip on top of the plan opens their plan, view only (their own row
    in my_todos, which the database now lets circle members read), and the
    Ideas warehouse gets a 👥 Shared list everyone in it writes to.
@@ -1467,9 +1467,9 @@ function todoInvite() {
     return { id: u.id, title: userDisplayName(u), sub: (u.profile && u.profile.title ? u.profile.title + " · " : "") + u.email + (can ? "" : " · needs the “Our To-do” permission to open it (Roles & permissions)"),
       on: !!have[u.id], onWhy: have[u.id] === "joined" ? "already in Our To-do" : "invited, waiting for an answer" };
   }).sort(function (a, b) { return a.on - b.on || a.title.localeCompare(b.title); });
-  todoPickDialog("👥 Invite to Our To-do", "Whoever joins sees your plan and you see theirs (view only), and you share one ideas warehouse. Your Why do I exist? and private ideas stay yours.", rows, function (ps) {
+  todoPickDialog("👥 Invite to Our To-do", "They're added straight away: they see your plan and you see theirs (view only), and you share one ideas warehouse. Your Why do I exist? and private ideas stay yours.", rows, function (ps) {
     todoSendInvites(ps.map(function (p) { return p.id; }));
-  }, true, { btn: "Send invite", none: "Nobody else in this team yet." });
+  }, true, { btn: "Add to Our To-do", none: "Nobody else in this team yet." });
 }
 async function todoSendInvites(uids) {
   var me = currentUser().id;
@@ -1480,9 +1480,9 @@ async function todoSendInvites(uids) {
     if (s.error) { toast("Couldn't start Our To-do: " + s.error.message); return; }
     OUR.circle = c.data;
   }
-  var r = await SUPA.from("todo_circle_members").insert(uids.map(function (u) { return { circle_id: OUR.circle.id, user_id: u, status: "invited", invited_by: me }; }));
-  if (r.error) { toast("Couldn't send the invite: " + r.error.message); await todoCircleLoad(); return; }
-  toast(uids.length === 1 ? "Invite sent to " + todoUserName(uids[0]) + " — they'll see it on their To-do" : uids.length + " invites sent");
+  var r = await SUPA.from("todo_circle_members").insert(uids.map(function (u) { return { circle_id: OUR.circle.id, user_id: u, status: "joined", invited_by: me }; }));   // accepted right away
+  if (r.error) { toast("Couldn't add them: " + r.error.message); await todoCircleLoad(); return; }
+  toast(uids.length === 1 ? todoUserName(uids[0]) + " is in Our To-do — you can now see each other's plans" : uids.length + " people added to Our To-do");
   todoCircleLoad();
 }
 async function todoAnswerInvite(inv, yes) {
