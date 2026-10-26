@@ -629,6 +629,11 @@ tr.in-mvp .an-rowhead{border-left:3px solid var(--indigo)}
 .ws-item.ws-sub{margin-left:22px;padding-top:6px;padding-bottom:6px;font-size:13px;color:var(--muted)}
 .ws-item.ws-sub.active{color:var(--indigo)}
 .disc-chip{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:10.5px;padding:3px 9px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--muted);cursor:pointer;white-space:nowrap}
+.disc-prods{display:flex;flex-wrap:wrap;gap:5px}
+.disc-chip.prod.has{background:#E8F1FB;color:#1D4ED8;border-color:transparent}
+.disc-prodbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 12px}
+.disc-prodf{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:4px 11px;font:inherit;font-size:12px;color:var(--muted);cursor:pointer}
+.disc-prodf.on{background:#1D4ED8;border-color:#1D4ED8;color:#fff}
 .disc-chip.theme.has{background:var(--indigo-soft);color:var(--indigo);border-color:transparent}
 .disc-chip.state.s-ontrack{background:var(--done-bg);color:var(--done);border-color:transparent}
 .disc-chip.state.s-atrisk{background:#FFF2DE;color:#9A6A1B;border-color:transparent}
@@ -17080,6 +17085,66 @@ function discThemeChip(idea, cs){
   };
   return c;
 }
+/* 📦 Product tags (Product Roadmap): which of our products an idea is for — User side, Panel, Internal tools…
+   An idea can carry several (idea.products = [keys]); the list is the space's own (cs.products, starts with these three). */
+const DISC_PRODUCTS = [{key:"pr-user", label:"User side"}, {key:"pr-panel", label:"Panel"}, {key:"pr-internal", label:"Internal tools"}];
+function discProductList(cs){ return Array.isArray(cs && cs.products) ? cs.products : DISC_PRODUCTS; }
+function discProductsOf(idea, cs){ const L = discProductList(cs); return (idea.products||[]).map(k=> L.find(x=> x.key===k)).filter(Boolean); }
+function discProductPick(anchor, idea, cs){
+  const on = new Set(idea.products||[]);
+  const opts = discProductList(cs).map(x=> ({ key:x.key, label:(on.has(x.key) ? "\u2713 " : "") + "\uD83D\uDCE6 " + x.label, cls:"prod" + (on.has(x.key) ? " has" : "") }));
+  opts.push({ key:"__new__", label:"\uFF0B New product", cls:"prod" });
+  openDiscPick(anchor, { search:true, options:opts, onPick: k=>{
+    if(k==="__new__"){
+      openDialog("New product", {}, v=>{
+        const txt = (v.title||"").trim(); if(!txt) return;
+        cs.products = discProductList(cs).slice();
+        const key = "pr-" + txt.toLowerCase().replace(/[^a-z0-9]+/g,"-").slice(0,20) + "-" + Math.random().toString(36).slice(2,5);
+        cs.products.push({ key, label:txt });
+        idea.products = (idea.products||[]).concat([key]); saveDisc();
+      }, {hideExtras:true, titleLabel:"Product (e.g. User app, Admin panel, Internal tools)"});
+      return;
+    }
+    const ps = new Set(idea.products||[]);
+    if(ps.has(k)) ps.delete(k); else ps.add(k);   /* a pick turns that product on / off */
+    if(ps.size) idea.products = [...ps]; else delete idea.products;
+    saveDisc();
+  }});
+}
+function discProductChips(idea, cs){
+  const box = document.createElement("span"); box.className = "disc-prods";
+  discProductsOf(idea, cs).forEach(x=>{
+    const c = document.createElement("button"); c.className = "disc-chip prod has"; c.textContent = "\uD83D\uDCE6 " + x.label;
+    c.title = editMode ? "Product \u2014 click to change" : "Product";
+    c.onclick = e=>{ e.stopPropagation(); if(editMode) discProductPick(c, idea, cs); };
+    box.appendChild(c);
+  });
+  if(editMode){
+    const a = document.createElement("button"); a.className = "disc-chip prod"; a.textContent = "+ product";
+    a.title = "Tag the product(s) this is for \u2014 User side, Panel, Internal tools\u2026";
+    a.onclick = e=>{ e.stopPropagation(); discProductPick(a, idea, cs); };
+    box.appendChild(a);
+  }
+  return box.children.length ? box : null;
+}
+let discProdFilter = {};   /* space id -> product key ("" all, "__none" untagged) */
+function discProductFilterBar(cs, shown){
+  const L = discProductList(cs), cur = discProdFilter[cs.id] || "";
+  const bar = document.createElement("div"); bar.className = "disc-prodbar";
+  const lab = document.createElement("span"); lab.className = "dv-flab"; lab.textContent = "Product"; bar.appendChild(lab);
+  [["", "All"]].concat(L.map(x=> [x.key, "\uD83D\uDCE6 " + x.label])).concat([["__none", "No product"]]).forEach(([k, l])=>{
+    const n = cs.ideas.filter(i=> k==="" ? true : k==="__none" ? !(i.products||[]).length : (i.products||[]).includes(k)).length;
+    const b = document.createElement("button"); b.className = "disc-prodf" + (cur===k ? " on" : "");
+    b.textContent = l + " " + n;
+    b.onclick = ()=>{ discProdFilter[cs.id] = k; renderAll(); };
+    bar.appendChild(b);
+  });
+  return bar;
+}
+function discProductPass(cs, idea){
+  const k = discProdFilter[cs.id] || "";
+  return !k || (k==="__none" ? !(idea.products||[]).length : (idea.products||[]).includes(k));
+}
 function discStateChip(idea){
   const c = document.createElement("button");
   c.className = "disc-chip state s-" + idea.state.toLowerCase().replace(/[^a-z]/g,"");
@@ -18351,9 +18416,12 @@ function discIdeasPane(cs){
   const head = document.createElement("div");
   head.className = "module-head";
   const h2 = document.createElement("h2"); h2.textContent = "All ideas";
-  const pc = document.createElement("span"); pc.className = "pct"; pc.textContent = cs.ideas.length + " idea(s)";
+  const _prodOn = cs.type==="discovery";   /* 📦 Product tags on the Product Roadmap */
+  const _shown = _prodOn ? cs.ideas.filter(i=> discProductPass(cs, i)).length : cs.ideas.length;
+  const pc = document.createElement("span"); pc.className = "pct"; pc.textContent = (_shown !== cs.ideas.length ? _shown + " of " : "") + cs.ideas.length + " idea(s)";
   head.append(h2, pc);
   block.appendChild(head);
+  if(_prodOn) block.appendChild(discProductFilterBar(cs));
 
   const scrollWrap = document.createElement("div");
   scrollWrap.className = "disc-table-scroll";
@@ -18376,6 +18444,7 @@ function discIdeasPane(cs){
   table.appendChild(hr);
 
   cs.ideas.forEach(idea=>{
+    if(_prodOn && !discProductPass(cs, idea)) return;
     const r = document.createElement("div");
     r.className = "dt-row";
     const cSum = document.createElement("div");
@@ -18389,6 +18458,7 @@ function discIdeasPane(cs){
     if(typeof sidBadge === "function"){ const _sb = sidBadge(idea); if(_sb) cSum.appendChild(_sb); }
     if(idea.dept){ const _db = document.createElement("div"); _db.className = "proc-from"; _db.textContent = procFromText(idea); cSum.appendChild(_db); }
     if(cs.type==="discovery" && (idea.assignee || editMode)){ const _ow = document.createElement("div"); _ow.style.marginTop = "6px"; _ow.appendChild(discOwnerChip(cs, idea)); cSum.appendChild(_ow); }   // 🎓 student ▲ votes / 💡 pitched by
+    if(_prodOn){ const _pc = discProductChips(idea, cs); if(_pc){ _pc.style.marginTop = "6px"; cSum.appendChild(_pc); } }
     const cCmt = document.createElement("div");
     cCmt.className = "dt-cell dt-c";
     cCmt.appendChild(commentChip(idea, saveDisc));
@@ -18471,6 +18541,7 @@ function discRoadmapPane(cs){
       const _kps = photoStrip(idea.photos); if(_kps) card.appendChild(_kps);
       const meta = document.createElement("div"); meta.className = "kcard-meta disc-meta";
       if(cs.type==="discovery" && (idea.assignee || editMode || discWithEng(cs, idea))) meta.appendChild(discOwnerChip(cs, idea));
+      if(cs.type==="discovery") discProductsOf(idea, cs).forEach(x=>{ const pc = document.createElement("span"); pc.className = "disc-chip prod has"; pc.textContent = "\uD83D\uDCE6 " + x.label; meta.appendChild(pc); });
       meta.appendChild(discThemeChip(idea, cs));
       if(cs.type!=="social") meta.appendChild(discStateChip(idea));
       if(cs.type==="discovery"){
