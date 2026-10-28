@@ -818,8 +818,9 @@ function gateMsg(c,g){ const F=fmtOf(c), thumb=F.video&&c.vtype==="long"&&plats(
     return "Needs "+(need.join(" and ")||"the edited video")+"."; }
   if(g==="live") return "Needs the "+plats(c).map(pl=>regLabel("platform",pl)||pl).join(" / ")+" link"+(F.claude?" — Claude adds it when it posts.":".");
   return GATE_MSG[g]; }
+const forceMove = () => { try{ return !!(OPT.canForceMove && OPT.canForceMove()); }catch(_){ return false; } };
 function canMove(c,to){ const fi=STAGES.findIndex(s=>s.id===c.stage), ti=STAGES.findIndex(s=>s.id===to);
-  if(ti<=fi) return {ok:true};
+  if(ti<=fi || forceMove()) return {ok:true};   // backwards is always fine; Aditya may move any card anywhere
   for(let i=fi;i<ti;i++){ const g=gateFor(STAGES[i].id); if(g&&!gatePass(c,g))
     return {ok:false,msg:g==="prep"?`Fill in the research and copy before Editing. Missing: ${prepMissing(c).join(", ")}.`:gateMsg(c,g)}; }
   return {ok:true}; }
