@@ -13,6 +13,9 @@
        becomes due 7 days after publishing) or send it back with a reason.
      * Payouts — Base pay and Bonuses (enter the 30-day views, the slab
        picks the amount). Only the payout head releases money.
+     * ✉️ Emails — every email creators got from maverick@dubuddy.in (each
+       step above sends one through the maverick-mail Edge Function, in
+       Dubuddyinternal/maverick), and a link to open that mailbox.
    It is its own space in the sidebar (index.html, type "maverick", added
    from Administration → Spaces). index.html calls MX.render(space, host, opt)
    when the space is open and MX.boot(opt) once after sign-in; it is drawn
@@ -40,6 +43,7 @@ const CFG = {
   reviewDays:"2 to 4 days",
   remindBefore:3,       // flag base pay this many days before it is due
   viewFloor:1500,
+  mailbox:"https://mail.zoho.in/zm/",   // maverick@dubuddy.in, where creators' replies land
   slabs:[
     {min:1500,   max:5000,   bonus:50,   label:"1,500 to 5,000"},
     {min:5000,   max:15000,  bonus:150,  label:"5,000 to 15,000"},
@@ -281,6 +285,7 @@ let HOST=null, R=null, OPT={}, SPACE=null;
 let TAB="all", PAYTAB="base", SEARCH="";
 let VIDEOS=[], LOADED=false, LOADING=null, ERR="", LAST_LOAD=0;
 let CH=null, RELOAD_T=null, BUSY=false, BELL_OPEN=false;
+let EMAILS=[], EMAILS_ERR="";
 
 function esc(s){ return String(s===null||s===undefined?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 /* only ever link out to http(s); a bare "drive.google.com/…" gets https:// */
@@ -359,6 +364,10 @@ async function load(){
       VIDEOS = (s.data||[]).map(r=> toV(r, pays));
       ERR = "";
     }
+    /* the email log is read on its own, so a missing table never hides the videos */
+    const em = await sb.from("maverick_emails").select("*").order("created_at", { ascending:false }).limit(300);
+    EMAILS = em.error ? [] : (em.data || []);
+    EMAILS_ERR = em.error ? (em.error.message || "couldn't load") : "";
     LOADED = true; LAST_LOAD = Date.now();
   })();
   try{ await LOADING; } finally { LOADING = null; }
@@ -384,6 +393,7 @@ function subscribe(){
       reloadSoon();
     })
     .on("postgres_changes", { event:"*", schema:"public", table:"maverick_payouts" }, ()=> reloadSoon())
+    .on("postgres_changes", { event:"INSERT", schema:"public", table:"maverick_emails" }, ()=> reloadSoon())
     .subscribe();
 }
 /* a message inside the space if it's open, else the app's own toast */
@@ -433,6 +443,26 @@ async function addPendingBase(v){
     due_on: ymd(baseDue(v)), upi_id: v.upi || null
   }, { onConflict:"submission_id,kind", ignoreDuplicates:true });
   return r.error || null;
+}
+/* email the creator about what just happened (maverick-mail Edge Function, from maverick@dubuddy.in).
+   The function checks the video really is in that state and logs every email (✉️ Emails tab). */
+async function notify(id, event){
+  const sb = supa();
+  if(!sb || !sb.functions || typeof sb.functions.invoke !== "function") return;
+  let msg = "";
+  try{
+    const r = await sb.functions.invoke("maverick-mail", { body:{ submission_id:id, event:event } });
+    const d = r && r.data;
+    if(d && d.sent) msg = "✉️ Email sent to " + d.to + ".";
+    else if(d && d.reason) msg = "Saved, but no email went: " + d.reason + ".";
+    else if(r && r.error){
+      let why = r.error.message || "unknown error";
+      try{ const j = await r.error.context.json(); if(j && (j.reason || j.error)) why = j.reason || j.error; }catch(_){ }
+      msg = "Saved, but no email went: " + why + ".";
+    }
+  } catch(e){ msg = "Saved, but no email went: " + ((e && e.message) || e) + "."; }
+  if(msg) setTimeout(()=> toast(msg), 1600);   /* after the "saved" message has been read */
+  reloadSoon();
 }
 async function release(v, kind){
   const amount = kind==="base" ? CFG.base : bonusFor(v.views);
@@ -642,6 +672,44 @@ function viewPayouts(){
     rows2, '', 'stickylast').replace(/<\/div><\/div>$/, '</div>'+slabNote+'</div>');
 }
 
+/* ---------- TAB 5: EMAILS ---------- */
+const MAIL_KIND = { approved:"Approved", rejected:"Rejected", needs_info:"Question", sent_back:"Link sent back",
+                    verified:"Verified, base pay due", base_paid:"Base pay released", bonus_paid:"Bonus released" };
+function viewEmails(){
+  const bySub = {}; VIDEOS.forEach(v=>{ bySub[v.id] = v; });
+  const q = SEARCH.toLowerCase();
+  const list = EMAILS.filter(e=>{
+    if(!q) return true;
+    const v = bySub[e.submission_id];
+    return [e.to_email, e.subject, v && v.name, v && String(v.sn)].some(x=> String(x||"").toLowerCase().indexOf(q) >= 0);
+  });
+  const sent = EMAILS.filter(e=> e.status==="sent").length, failed = EMAILS.filter(e=> e.status==="failed").length;
+  const rows = list.length ? list.map(e=>{
+    const v = bySub[e.submission_id];
+    const when = new Date(e.created_at);
+    const st = e.status==="sent" ? '<span class="chip green"><span class="d"></span>Sent</span>'
+      : e.status==="failed" ? '<span class="chip red"><span class="d"></span>Failed</span>' : '<span class="chip"><span class="d"></span>Not sent</span>';
+    return '<tr>'+
+      '<td class="tnum">'+fmt(when)+'<div class="meta">'+when.toLocaleTimeString("en-IN",{hour:"numeric",minute:"2-digit"})+'</div></td>'+
+      '<td>'+(v ? snBtn(v) : dash())+'</td>'+
+      '<td><b>'+(v ? esc(v.name) : dash())+'</b><div class="meta">'+(e.to_email ? esc(e.to_email) : "no email")+'</div></td>'+
+      '<td>'+esc(MAIL_KIND[e.kind] || e.kind)+'</td>'+
+      '<td style="white-space:normal;min-width:260px">'+esc(e.subject || "")+'</td>'+
+      '<td>'+st+(e.error ? '<div class="meta" style="white-space:normal;max-width:260px">'+esc(e.error)+'</div>' : '')+'</td>'+
+    '</tr>';
+  }).join('') : emptyRow(6, EMAILS_ERR ? 'The email log isn’t set up yet.' : 'No emails yet.',
+      EMAILS_ERR ? esc(EMAILS_ERR) : 'Creators get an email from maverick@dubuddy.in each time you approve, reject, verify or release a payout. Every one shows here.', '');
+  return '<div class="kpis">'+
+      '<div class="kpi c3"><h6>Emails sent</h6><b>'+sent+'</b><p>From maverick@dubuddy.in</p>'+ic("i-mail","bg")+'</div>'+
+      '<div class="kpi c1"><h6>Didn’t go</h6><b>'+failed+'</b><p>Shown with the reason below</p>'+ic("i-flag","bg")+'</div>'+
+      '<div class="kpi c2"><h6>Replies</h6><b style="font-size:24px">In the mailbox</b><p>Creators reply to maverick@dubuddy.in</p>'+ic("i-link","bg")+'</div>'+
+      '<div class="kpi c4"><h6>When</h6><b style="font-size:24px">Every step</b><p>Approve, reject, question, verify, payouts</p>'+ic("i-clock","bg")+'</div>'+
+    '</div>'+
+    panel('Emails to creators', 'newest first, the last 300',
+      '<th>Sent</th><th>S. No.</th><th>Creator</th><th>Email</th><th>Subject</th><th>Status</th>', rows,
+      '<a class="btn g sm" href="'+esc(CFG.mailbox)+'" target="_blank" rel="noopener noreferrer" style="text-decoration:none">Open the Maverick mailbox ↗</a>');
+}
+
 /* the parts of a bonus row that follow the views typed in */
 function bonusCells(v){
   const s = slabFor(v.views), amt = bonusFor(v.views);
@@ -654,7 +722,7 @@ function bonusCells(v){
   };
 }
 
-const VIEWS = { all:viewAll, review:viewReview, verify:viewVerify, payouts:viewPayouts };
+const VIEWS = { all:viewAll, review:viewReview, verify:viewVerify, payouts:viewPayouts, emails:viewEmails };
 
 function draw(){
   if(!R) return;
@@ -662,7 +730,7 @@ function draw(){
   const keepFocus = R.activeElement && R.activeElement.matches && R.activeElement.matches("[data-search]") ? R.activeElement.selectionStart : null;
   const c = counts();
   const b = bellHtml(c);
-  const tabs = [["all","All videos",c.all],["review","Review queue",c.review],["verify","Publish to verify",c.verify],["payouts","Payouts",c.payouts]];
+  const tabs = [["all","All videos",c.all],["review","Review queue",c.review],["verify","Publish to verify",c.verify],["payouts","Payouts",c.payouts],["emails","✉️ Emails",EMAILS.length]];
   let body;
   if(!isStaff()) body = '<div class="notice"><b>This desk is for the Maverick team.</b><p>To review videos you need “Review Maverick videos”, and to release payouts “Release Maverick payouts”. An owner can tick them for your role in Administration → Roles.</p></div>';
   else if(!LOADED) body = '<div class="notice"><b>Loading…</b><p>Fetching every Maverick video.</p></div>';
@@ -750,7 +818,12 @@ function openRecord(id){
       if(key==="verified") return await addPendingBase(v);
       return null;
     }, "Video #"+v.sn+" moved to "+STATUS[key].label+".");
-    if(ok) closeModal(); else this.disabled = false;
+    if(ok){
+      closeModal();
+      const ev = key==="rejected" ? "rejected" : key==="needs_info" ? "needs_info" : key==="verified" ? "verified"
+        : key==="approved" ? ((v.db==="published" || v.db==="verified") && txt ? "sent_back" : "approved") : null;
+      if(ev && DB_OF[key] !== v.db) notify(v.id, ev);
+    } else this.disabled = false;
   };
 }
 
@@ -786,7 +859,7 @@ function openReject(id, kind){
       : { status:"rejected", reviewer_note:txt };
     const ok = await act(()=> setSub(v, patch),
       kind==="verify" ? "Sent back to "+v.name+". They can publish again and reattach the link." : "Rejected. "+v.name+" sees the reason in their dashboard.");
-    if(ok) closeModal(); else this.disabled = false;
+    if(ok){ closeModal(); notify(v.id, kind==="verify" ? "sent_back" : "rejected"); } else this.disabled = false;
   };
 }
 
@@ -812,7 +885,8 @@ function wire(){
     if(ap){
       const v = vid(ap.dataset.approve); if(!v) return;
       act(()=> setSub(v, { status:"approved", reviewer_note:null, creator_reply:null }),
-        "Approved. "+v.name+" now sees it as approved: publish it and attach the published link in their dashboard.");
+        "Approved. "+v.name+" now sees it as approved: publish it and attach the published link in their dashboard.")
+        .then(ok=>{ if(ok) notify(v.id, "approved"); });
       return;
     }
     const rj = t.closest("[data-reject]");
@@ -823,7 +897,8 @@ function wire(){
       const v = vid(vf.dataset.verify); if(!v) return;
       const left = daysBetween(today(), baseDue(v));
       act(async ()=>{ const e1 = await setSub(v, { status:"verified", reviewer_note:null }); if(e1) return e1; return await addPendingBase(v); },
-        "Verified. It has moved to Payouts, base pay "+(left<=0?"due now":"due in "+left+" days")+".");
+        "Verified. It has moved to Payouts, base pay "+(left<=0?"due now":"due in "+left+" days")+".")
+        .then(ok=>{ if(ok) notify(v.id, "verified"); });
       return;
     }
     const vr = t.closest("[data-vreject]");
@@ -846,13 +921,15 @@ function wire(){
         if(!set.length){ toast("Nothing due right now."); return; }
         if(!confirm("Release "+money(set.length*CFG.base)+" base pay to "+set.length+" creator(s)? Do this once the UPI transfers are done.")) return;
         act(async ()=>{ for(const v of set){ const e1 = await release(v, "base"); if(e1) return e1; } return null; },
-          money(set.length*CFG.base)+" released to "+set.length+" creator(s). It shows in each payment history with the date, UPI ID and amount.");
+          money(set.length*CFG.base)+" released to "+set.length+" creator(s). It shows in each payment history with the date, UPI ID and amount.")
+          .then(async ok=>{ if(ok) for(const v of set) await notify(v.id, "base_paid"); });
         return;
       }
       const v = vid(id); if(!v) return;
       const amt = kind==="base" ? CFG.base : bonusFor(v.views);
       if(!confirm("Release "+money(amt)+(kind==="base"?" base pay":" bonus")+" to "+v.name+(v.upi?" ("+v.upi+")":"")+"? Do this once the UPI transfer is done.")) return;
-      act(()=> release(v, kind), money(amt)+(kind==="base"?" base pay":" bonus")+" released to "+v.name+(v.upi?" on "+v.upi:"")+". Their payment history now shows it.");
+      act(()=> release(v, kind), money(amt)+(kind==="base"?" base pay":" bonus")+" released to "+v.name+(v.upi?" on "+v.upi:"")+". Their payment history now shows it.")
+        .then(ok=>{ if(ok) notify(v.id, kind==="base" ? "base_paid" : "bonus_paid"); });
     }
   });
 
@@ -910,14 +987,14 @@ function mount(){
 
 /* ============================================================ API */
 window.MX = {
-  tabs: [["all","All videos"],["review","Review queue"],["verify","Publish to verify"],["payouts","Payouts"]],
+  tabs: [["all","All videos"],["review","Review queue"],["verify","Publish to verify"],["payouts","Payouts"],["emails","✉️ Emails"]],
   normalize: function(space){ /* nothing is stored on the space itself: all data lives in the maverick_* tables */ return space; },
   /* opt: { supa, tab, canReview(), canPay(), me() → {id,name}, setTab(t), toast(msg) } */
   render: function(space, wrap, opt){
     mount();
     OPT = opt || {};
     if(SPACE !== space){ SPACE = space; SEARCH = ""; closeModal(); }
-    TAB = ["all","review","verify","payouts"].includes(OPT.tab) ? OPT.tab : "all";
+    TAB = ["all","review","verify","payouts","emails"].includes(OPT.tab) ? OPT.tab : "all";
     if(HOST.parentNode !== wrap) wrap.appendChild(HOST);
     subscribe();
     draw();

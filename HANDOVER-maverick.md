@@ -43,7 +43,15 @@ tools.dubuddy.in deploys from the Vercel project `dubuddy2/team-roadmap` wheneve
 | Database | `supabase/maverick_schema.sql` in `Dubuddyinternal/maverick`. Tables `maverick_creators`, `maverick_submissions`, `maverick_payouts`; creators only ever see their own rows. Nothing about Maverick is stored in `team_data`. |
 | Numbers | `CFG` at the top of `maverick-space.js`, and `lib/config.js` in the creator site. Keep them the same. |
 
+## Emails to creators
+
+Each step emails the creator from **maverick@dubuddy.in**: approved, rejected (with the reason), a question (Needs info), link sent back, verified, base pay released, bonus released. Replies go to that mailbox.
+
+- Sent by the Edge Function `maverick-mail` (`supabase/functions/maverick-mail` in `Dubuddyinternal/maverick`, "Verify JWT" ON). It only sends when the caller has a Maverick permission and the video really is in that state, and it won't send the same email for the same video twice within 10 minutes.
+- Secrets: `MAVERICK_SMTP_USER` (maverick@dubuddy.in) and `MAVERICK_SMTP_PASS` (its Zoho app password). Internal tools.dubuddy.in mail still uses `SMTP_USER` / `SMTP_PASS`.
+- Every attempt is logged in `maverick_emails` and shown in the space's **✉️ Emails** tab, with **Open the Maverick mailbox ↗** (mail.zoho.in).
+- The words are in `compose()` in that function.
+
 ## Not done yet
 
-- **Emails to creators.** Approvals, rejections and payouts show on the creator's dashboard, but no email is sent yet. The `idea-mail` Edge Function (Zoho) could be reused.
-- **Phone OTP** on the creator site needs an SMS provider in Supabase (with DLT registration for Indian numbers).
+- **Phone OTP** on the creator site needs an SMS provider in Supabase (with DLT registration for Indian numbers). Until then, test with the test number in Authentication → Sign In / Providers → Phone, and delete it when real SMS goes live.
