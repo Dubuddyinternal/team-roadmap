@@ -30,6 +30,10 @@ The 🔔 in the space and the "waiting on us" sticker count what's waiting. Anyo
 
 The database checks these too (`maverick_is_reviewer()`, `maverick_can_pay()`), so a hidden button can't be bypassed.
 
+## Deploying
+
+tools.dubuddy.in deploys from the Vercel project `dubuddy2/team-roadmap` whenever `main` changes. The repo moved from `sumitkumarimages777-stack/team-roadmap` to `Dubuddyinternal/team-roadmap`. If a merge doesn't show up in Vercel → Deployments, check that Settings → Git points at `Dubuddyinternal/team-roadmap`, then use ⋯ → Create Deployment → `main`.
+
 ## Where things live
 
 | Part | Where |
