@@ -18036,6 +18036,8 @@ function renderContentSocial(){
     canEditTargets: ()=>hasPerm("edit_targets"),
     // deleting a Content Process card: Owners and Admins, plus any role given "Delete Social Media cards"
     canDeleteCards: ()=>{ const r = roleOf(currentUser(), TEAM); return r==="owner" || r==="admin" || hasPerm("delete_social_cards"); },
+    // these logins may move any card to any column, even when what a column needs isn't filled in yet
+    canForceMove: ()=>{ const u = currentUser(); return !!u && ["aditya.dubuddy@gmail.com"].includes(String(u.email||"").toLowerCase()); },
     saveTargets: (sp, obj)=>{ SOCIAL_TARGETS[sp.id] = obj; pushAll(); },
     save: saveSocial,
   });
