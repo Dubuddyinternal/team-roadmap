@@ -2276,8 +2276,10 @@ function schedSummary(){
   if(SCHED.view==="week"){ const [s,e]=weekRange(SCHED.cursor), a=iso(s), b=iso(e);
     list=all.filter(c=>c.scheduled>=a&&c.scheduled<=b);
     label=`the week of ${s.toLocaleDateString("en-GB",{day:"numeric",month:"long"})}`;
-  } else { const d=new Date(SCHED.cursor+"T00:00:00"), mm=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-    list=all.filter(c=>c.scheduled.startsWith(mm)); label=d.toLocaleDateString("en-GB",{month:"long",year:"numeric"}); }
+  } else { const d=new Date(SCHED.cursor+"T00:00:00"), n=new Date(d.getFullYear(), d.getMonth()+1, 1);
+    const ym=x=>`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}`, a=ym(d), b=ym(n);
+    list=all.filter(c=>c.scheduled.startsWith(a)||c.scheduled.startsWith(b));
+    label=`${d.toLocaleDateString("en-GB",{month:"long"})} – ${n.toLocaleDateString("en-GB",{month:"long",year:"numeric"})}`; }
 
   if(!list.length) return `<div class="note"><div class="lbl">Scheduled content</div>
     Nothing on the calendar for ${label} with these filters. <em>A thin week is a planning problem, not a calendar problem.</em></div>`;
@@ -2316,16 +2318,22 @@ function renderSchedule(){
           ||`<span class="hint" style="font-size:11px">—</span>`}</div>`; }
     grid=`<div style="overflow-x:auto"><div class="weekgrid">${cells}</div></div>`;
   } else {
-    heading=cur.toLocaleDateString("en-GB",{month:"long",year:"numeric"});
-    const y=cur.getFullYear(), m=cur.getMonth();
-    const start=(new Date(y,m,1).getDay()+6)%7, dim=new Date(y,m+1,0).getDate();
-    let cells=""; for(let i=0;i<start;i++) cells+=`<div class="day pad"></div>`;
-    for(let dd=1;dd<=dim;dd++){ const key=iso(new Date(y,m,dd)); const evts=all.filter(c=>c.scheduled===key);
-      cells+=`<div class="day ${key===TODAY?"today":""}" data-date="${key}"><span class="dn">${dd}</span>
-        ${evts.map(c=>`<button class="evt" style="border-left-color:${vtypeColor(c.vtype)}" data-card="${c.id}" ${dragAttr(c)}>
-          <b>${esc(c.pre.title||c.idea)}</b>${esc(platShort(c.platform))} · ${esc(vtypeLabel(c.vtype))}</button>`).join("")}</div>`; }
-    grid=`<div style="overflow-x:auto"><div class="cal">
-      ${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=>`<div class="dow">${d}</div>`).join("")}${cells}</div></div>`;
+    // two months, one under the other: this one and the next (cards drag between them). "Today" puts the current month
+    // on top, so when a month is over the next one moves up and the one after appears below.
+    const months=[0,1].map(k=>new Date(cur.getFullYear(), cur.getMonth()+k, 1));
+    const mname=d=>d.toLocaleDateString("en-GB",{month:"long",year:"numeric"});
+    heading=months[0].getFullYear()===months[1].getFullYear()
+      ? `${months[0].toLocaleDateString("en-GB",{month:"long"})} – ${mname(months[1])}` : `${mname(months[0])} – ${mname(months[1])}`;
+    grid=months.map((md,k)=>{ const y=md.getFullYear(), m=md.getMonth();
+      const start=(new Date(y,m,1).getDay()+6)%7, dim=new Date(y,m+1,0).getDate();
+      let cells=""; for(let i=0;i<start;i++) cells+=`<div class="day pad"></div>`;
+      for(let dd=1;dd<=dim;dd++){ const key=iso(new Date(y,m,dd)); const evts=all.filter(c=>c.scheduled===key);
+        cells+=`<div class="day ${key===TODAY?"today":""}" data-date="${key}"><span class="dn">${dd}</span>
+          ${evts.map(c=>`<button class="evt" style="border-left-color:${vtypeColor(c.vtype)}" data-card="${c.id}" ${dragAttr(c)}>
+            <b>${esc(c.pre.title||c.idea)}</b>${esc(platShort(c.platform))} · ${esc(vtypeLabel(c.vtype))}</button>`).join("")}</div>`; }
+      return `<h4 class="cal-month" style="margin:${k?"22px":"4px"} 0 8px">${mname(md)}</h4>
+        <div style="overflow-x:auto"><div class="cal">
+        ${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=>`<div class="dow">${d}</div>`).join("")}${cells}</div></div>`; }).join("");
   }
 
   $("#pane-schedule").innerHTML=`
