@@ -341,6 +341,7 @@ details.isec .hint{font-size:12px}
 .pre-n.ok{background:var(--good);border-color:var(--good);color:#fff}
 .pre-note{margin:-4px 0 10px;font-size:12px}
 .ebrief{margin:0 0 12px}
+.bin-row{display:flex;gap:8px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
 .bf-drop{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px;border:1.5px dashed var(--line-2);border-radius:10px}
 .bf-drop.over{border-color:var(--accent);background:var(--accent-soft)}
 .bf-list{list-style:none;margin:8px 0 0;padding:0;font-size:13px}.bf-list li{display:flex;gap:8px;align-items:center;padding:3px 0}
@@ -560,6 +561,8 @@ function normalize(space){
   s.formats = DEFAULT_FORMATS.map(d=>Object.assign({}, d, fm.find(f=>f.key===d.key)||{})).concat(fm.filter(f=>!DEFAULT_FORMATS.some(d=>d.key===f.key)));
   FORMATS = s.formats.filter(f=>!f.hidden).length ? s.formats : DEFAULT_FORMATS;
   s.cards = Array.isArray(s.cards) ? s.cards : [];
+  // 🗑 recycle bin: deleted cards wait here 7 days (Restore), then they and their files are gone: [{card, at, by}]
+  s.bin = Array.isArray(s.bin) ? s.bin.filter(x=>x && x.card && x.card.id && x.at) : [];
   s.reg = s.reg && typeof s.reg==="object" ? s.reg : {};
   Object.keys(DEFAULT_REG).forEach(k=>{ s.reg[k] = Object.assign({}, DEFAULT_REG[k], s.reg[k]||{}); });
   s.igFollowers = Array.isArray(s.igFollowers) ? s.igFollowers.filter(f=>f && f.d && f.v!=null) : [];
@@ -2231,10 +2234,12 @@ function renderProcess(){
       and leaves <b>Your check</b> only with the title, description and hashtags.</p></div>
     <div class="sec"><div class="sec-h"><h3>Content Process</h3>
       <span class="hint">${BC.length} card${BC.length===1?"":"s"} · ${ro?"click a card to open it":"drag cards between columns, or click one to open it"}</span>
-      ${ro?"":`<button class="btn pri" id="newCard" style="margin-left:auto">+ New card</button>`}</div>
+      <span style="margin-left:auto;display:flex;gap:8px">${S.bin.length&&canDeleteCards()?`<button class="btn" id="openBin">🗑 Recycle bin (${S.bin.length})</button>`:""}
+      ${ro?"":`<button class="btn pri" id="newCard">+ New card</button>`}</span></div>
       <div class="board">${cols}</div></div>`;
 
   const nc=$("#newCard"); if(nc) nc.onclick=()=>openCard(null);
+  const ob=$("#openBin"); if(ob) ob.onclick=()=>openBin();
   const P=$("#pane-process");
   P.querySelectorAll(".kcard").forEach(el=>{
     el.addEventListener("click",()=>{ if(!DRAG) openCard(el.dataset.card); });
@@ -2409,6 +2414,25 @@ function watchVideo(w, title){
   o.onclick=e=>{ if(e.target===o||e.target.closest("[data-x]")) close(); };
   document.addEventListener("keydown",key); R.appendChild(o);
 }
+// 🗑 recycle bin for Content Process cards
+const BIN_DAYS = 7;
+const binLeft = x => Math.max(0, Math.ceil((new Date(x.at).getTime() + BIN_DAYS*864e5 - Date.now()) / 864e5));
+function binCard(c){   // Delete: the card leaves the board for the bin; its files stay until the bin lets it go
+  const k=CARDS.findIndex(x=>x.id===c.id); if(k<0) return false;
+  CARDS.splice(k,1); S.bin.unshift({ card:c, at:new Date().toISOString(), by:meName() });
+  return true; }
+function restoreCard(id){
+  const k=S.bin.findIndex(x=>x.card.id===id); if(k<0) return false;
+  const c=S.bin[k].card; S.bin.splice(k,1); if(!CARDS.some(x=>x.id===c.id)) CARDS.push(c); return true; }
+function purgeBinned(id){   // gone for good: out of the bin, and every file it has out of storage
+  const k=S.bin.findIndex(x=>x.card.id===id); if(k<0) return false;
+  S.bin.splice(k,1); freeCardFiles(id); return true; }
+// cards that sat in the bin 7 days leave by themselves, the next time an editor has the space open
+let BIN_SWEEP=0;
+function sweepBin(){
+  if(!S || !S.bin.length || !canEdit() || Date.now()-BIN_SWEEP < 60000) return;
+  const old=S.bin.filter(x=>binLeft(x)<=0); if(!old.length) return;
+  BIN_SWEEP=Date.now(); old.forEach(x=>purgeBinned(x.card.id)); save(); }
 // a deleted card: remove its raw video, audio, Claude edit files and finished videos from storage
 function freeCardFiles(id, after){
   if(!window.PIPE || PIPE.mode()==="off") return;
@@ -2467,6 +2491,25 @@ function wireKw(prefix,cb){
 function mountComments(kind,id,title){ const h=$("#drawer").querySelector("[data-cmthost]");
   if(h && window.CMT && window.cmtCardPlace) try{ CMT.mount(h, cmtCardPlace(kind,id,title)); }catch(e){ console.warn("comments",e); } }
 // viewers see the drawers but not the buttons that change anything
+// 🗑 the Recycle bin: restore a deleted card, or delete it (and its files in storage) for good
+function openBin(){
+  const rows=S.bin.map(x=>{ const c=x.card, left=binLeft(x);
+    return `<div class="bin-row"><div style="min-width:0;flex:1"><b>${fmtIcon(c)} ${esc(c.pre&&c.pre.title||c.idea||"Untitled")}</b>
+        <div class="hint">${esc((STAGES.find(s=>s.id===c.stage)||{}).label||c.stage)} · deleted ${dmy(x.at.slice(0,10))}${x.by?" by "+esc(x.by):""} ·
+          ${left>0?`deleted for good in ${left} day${left===1?"":"s"}`:"deleted for good today"}</div></div>
+      <button class="btn sm" data-binrestore="${esc(c.id)}">↩ Restore</button>
+      <button class="btn sm danger" data-binpurge="${esc(c.id)}">Delete forever</button></div>`; }).join("");
+  openDrawer(`<div class="dr-h"><div><div class="dr-k">CONTENT PROCESS</div><h3>🗑 Recycle bin</h3></div><button class="btn sm" id="xClose">Close</button></div>
+    <p class="hint" style="margin:0 0 12px">Deleted cards stay here ${BIN_DAYS} days, then they and their files (raw video, audio, Claude's edit and finished videos) are deleted for good.
+      “Delete forever” does that now and frees the storage on Cloudflare.</p>
+    ${rows||`<p class="hint">The bin is empty.</p>`}`,false,"bin");
+  const D=$("#drawer");
+  D.querySelector("#xClose").onclick=()=>closeDrawer(true);
+  D.querySelectorAll("[data-binrestore]").forEach(b=>b.onclick=()=>{ if(restoreCard(b.dataset.binrestore) && save()){ toast("Card restored to the board"); refresh(); S.bin.length?openBin():closeDrawer(true); } });
+  D.querySelectorAll("[data-binpurge]").forEach(b=>b.onclick=()=>{
+    if(!confirm("Delete this card for good? Its files are removed from storage now. This can't be undone.")) return;
+    if(purgeBinned(b.dataset.binpurge) && save()){ toast("Deleted for good"); refresh(); S.bin.length?openBin():closeDrawer(true); } });
+}
 function lockDrawer(){ if(canEdit()) return;
   $("#drawer").querySelectorAll("input,select,textarea").forEach(e=>e.disabled=true);
   $("#drawer").querySelectorAll("[data-w]").forEach(e=>e.remove()); }
@@ -2634,8 +2677,8 @@ function openIdea(id,focusComments,fmtKey){
       if(window.PIPE && PIPE.busy(i.id+"__r")) PIPE.cancel(i.id+"__r").catch(()=>{});
       if(running) [card.id, card.id+"__r", card.id+"__s"].forEach(k=>{ if(PIPE.busy(k)) PIPE.cancel(k).catch(()=>{}); });
       const k=IDEAS.findIndex(x=>x.id===i.id); if(k>=0) IDEAS.splice(k,1);
-      if(card){ const ci=CARDS.indexOf(card); if(ci>=0) CARDS.splice(ci,1); freeCardFiles(card.id); }
-      if(save()){ dirty=false; closeDrawer(true); toast(card?"Idea and its card deleted":"Idea deleted"); } };
+      if(card) binCard(card);
+      if(save()){ dirty=false; closeDrawer(true); toast(card?`Idea deleted — its card is in the Recycle bin for ${BIN_DAYS} days`:"Idea deleted"); } };
     const oc=$("#drawer").querySelector("[data-opencard]");
     if(oc) oc.onclick=()=>{ if(CLOSE_GUARD && !CLOSE_GUARD()) return; openCard(oc.dataset.opencard); };
     const rb=$("#drawer").querySelector("[data-research]");
@@ -2979,7 +3022,9 @@ function openCard(id,showGate){
           ${idx>0?`<button class="btn sm" data-move="${STAGES[idx-1].id}">← ${STAGES[idx-1].label}</button>`:""}
           ${nextSt?`<button class="btn sm pri" data-move="${nextSt.id}" ${nextOk.ok?"":"disabled"}>${nextSt.label} →</button>`:""}</div>
         ${nextSt&&!nextOk.ok?`<div class="stat-miss"><b>Before “${esc(nextSt.label)}”:</b> ${esc(nextOk.msg)}</div>`:""}
-        <p class="hint" style="margin:8px 0 0">Or drag the card on the board.</p></div>`}
+        <p class="hint" style="margin:8px 0 0">Or drag the card on the board.</p>
+        ${canDeleteCards()?`<button class="btn sm danger" id="delCard" data-w="1" style="margin-top:10px">🗑 Delete card</button>
+          <p class="hint" style="margin:4px 0 0">Goes to the Recycle bin for ${BIN_DAYS} days — restore it from the board.</p>`:""}</div>`}
       <div class="sbox"><h5>Details</h5>
         <div class="fld"><label>Post on</label>${platPicker("c-platform",plats(c),F)}</div>
         <div class="fld" ${vtypeOptions(plats(c),F).length<2?"hidden":""}><label for="c-vtype">${F.video?"Video type":"Format"}</label>
@@ -3003,8 +3048,7 @@ function openCard(id,showGate){
     <div class="row dr-foot">
       <button class="btn pri" id="saveCard" data-w="1">${isNew?"Create card":"Save changes"}</button>
       <button class="btn" id="xClose2">${canEdit()?"Cancel":"Close"}</button>
-      <span id="dirtyDot" class="dirty" ${dirty?"":"hidden"}>● Unsaved changes</span>
-      ${!isNew&&canDeleteCards()?`<button class="btn danger" id="delCard" style="margin-left:auto" data-w="1">Delete</button>`:""}</div>`,true,"card:"+(isNew?"new":c.id));
+      <span id="dirtyDot" class="dirty" ${dirty?"":"hidden"}>● Unsaved changes</span></div>`,true,"card:"+(isNew?"new":c.id));
     // remember which steps are open / folded while the card is open
     $("#drawer").querySelectorAll("details.stp").forEach(d=>d.addEventListener("toggle",()=>{ SO[d.dataset.step]=d.open; }));
     const oi=$("#drawer").querySelector("[data-openidea]");
@@ -3268,10 +3312,10 @@ function openCard(id,showGate){
     const del=$("#delCard"); if(del) del.onclick=()=>{
       if(!canDeleteCards()){ toast("Only Admins can delete cards"); return; }
       const running=window.PIPE && (PIPE.busy(c.id) || PIPE.busy(c.id+"__r"));   // a Claude job working on this card gets stopped first
-      if(!confirm(running?"Claude is working on this card right now. Deleting it stops that job (files already made are kept). Delete the card?"
-        :"Delete this card? The idea it came from stays in Ideation.")) return;
-      const stop=running?Promise.all([PIPE.busy(c.id)&&PIPE.cancel(c.id), PIPE.busy(c.id+"__r")&&PIPE.cancel(c.id+"__r")].map(p=>p&&p.catch(()=>{}))):Promise.resolve();
-      const k=CARDS.findIndex(x=>x.id===c.id); if(k>=0) CARDS.splice(k,1); if(save()){ closeDrawer(true); toast("Card deleted"); freeCardFiles(c.id, stop); } };
+      if(!confirm((running?"Claude is working on this card right now. Deleting it stops that job.\n\n":"")
+        +`Move this card to the Recycle bin? You can restore it for ${BIN_DAYS} days; after that it and its files are deleted for good. The idea it came from stays in Ideation.`)) return;
+      if(running) [c.id, c.id+"__r"].forEach(k=>{ if(PIPE.busy(k)) PIPE.cancel(k).catch(()=>{}); });
+      if(binCard(c) && save()){ closeDrawer(true); toast(`Moved to the Recycle bin — restore it within ${BIN_DAYS} days`); } };
     const ov=$("#override"); if(ov) ov.onclick=()=>{ read(); persist(); openOverride(c); };
     $("#drawer").querySelectorAll("[data-move]").forEach(b=>b.onclick=()=>{
       read(); if(!c.idea&&!c.pre.title){toast("A card needs an idea or a title");return;}
@@ -3512,6 +3556,7 @@ window.SX = {
     if(LIVE.team!==OPT.team || LIVE.status==="idle") loadLive(false);
     refresh();
     if(window.PIPE) PIPE.attach(R, { onJobs: syncPipelineStages });
+    sweepBin();
     if(window.DICTATE) DICTATE.attach(R);   // 🎤 in every text box of this space
   },
   // board counts for the team dashboard: {stageId: n}
