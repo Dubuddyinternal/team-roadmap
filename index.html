@@ -2981,8 +2981,20 @@ body.rm-chart #pane-work > .controls{display:none}
 .mag-ach b{font-family:var(--mono);font-size:13px}
 .mag-ach small{font-size:11px;color:var(--muted)}
 .mag-ach.ok b{color:var(--done)}
-.mag-er{display:grid;grid-template-columns:minmax(150px,2fr) 110px 130px 80px 120px minmax(170px,1.6fr) 34px;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line)}
+.mag-er{display:grid;grid-template-columns:minmax(150px,2fr) 110px 130px 80px 120px minmax(170px,1.6fr) 120px 34px;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line)}
 .mag-er:last-child{border-bottom:0}
+.mag-ppl{border:1px solid var(--line-strong);border-radius:7px;background:var(--card);font:inherit;font-size:12.5px;padding:6px 8px;cursor:pointer;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.mag-ppl.none{color:var(--muted)}
+.mag-ppl:disabled{cursor:default}
+.mag-pplpop{position:fixed;z-index:600;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.15);padding:8px;width:260px;max-height:340px;overflow:auto}
+.mag-pplpop label{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;font-size:13.5px;cursor:pointer}
+.mag-pplpop label:hover{background:var(--paper)}
+.mag-pplpop .h{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:4px 8px 6px}
+.mag-soc{margin-top:14px}
+.mag-soc .mag-sr{display:flex;align-items:center;gap:12px;padding:8px 12px;border-bottom:1px solid var(--line)}
+.mag-soc .mag-sr:last-child{border-bottom:0}
+.mag-soc .mag-sr b{flex:1;font-size:13.5px}
+.mag-soc .mag-ppl{width:220px}
 .mag-eh{background:var(--paper);font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .mag-er input,.mag-er select{width:100%;padding:6px 8px;border:1px solid var(--line-strong);border-radius:7px;font:inherit;font-size:13px;background:var(--card);min-width:0}
 .mag-btns{display:flex;gap:8px;align-items:center;margin-top:12px}
@@ -13715,7 +13727,7 @@ function mktAgreementPane(mk){
   const draw = ()=>{
     list.innerHTML = "";
     const hr = document.createElement("div"); hr.className = "mag-er mag-eh";
-    ["Target","Number","Achieved","Unit","Period","How it's counted",""].forEach(t=>{ const c = document.createElement("span"); c.textContent = t; hr.appendChild(c); });
+    ["Target","Number","Achieved","Unit","Period","How it's counted","👥 People",""].forEach(t=>{ const c = document.createElement("span"); c.textContent = t; hr.appendChild(c); });
     list.appendChild(hr);
     D.forEach((g, i)=>{
       const r = document.createElement("div"); r.className = "mag-er";
@@ -13739,10 +13751,27 @@ function mktAgreementPane(mk){
       const so = sel(MKT_AG_SOURCES, g.source, !editMode); so.onchange = ()=> g.source = so.value;
       const x = document.createElement("button"); x.className = "rml-mini"; x.textContent = "×"; x.title = "Remove"; x.style.opacity = "1";
       x.onclick = ()=>{ D.splice(i, 1); draw(); }; x.disabled = !editMode;
-      r.append(nm, tg, ac, un, pe, so, x); list.appendChild(r);
+      const pp = magPeopleBtn(g.owners || [], !editMode, v=>{ g.owners = v; });
+      r.append(nm, tg, ac, un, pe, so, pp, x); list.appendChild(r);
     });
   };
   draw();
+  /* 👥 the weekly content agreement of each Social Media space inside Marketing: who it's on */
+  const socs = (CSPACES.list||[]).filter(x=> x.parent===mk.id && x.type==="social");
+  const SO = JSON.parse(JSON.stringify(A.socialOwners || {}));
+  if(socs.length){
+    const sh = document.createElement("div"); sh.className = "hint"; sh.style.margin = "16px 0 6px";
+    sh.textContent = "Social Media's weekly content agreement — who's responsible in each space (it counts in their 📈 My Performance):";
+    block.appendChild(sh);
+    const sl = document.createElement("div"); sl.className = "mag-edit mag-soc"; sl.style.marginTop = "0";
+    socs.forEach(x=>{
+      const r = document.createElement("div"); r.className = "mag-sr";
+      const b = document.createElement("b"); b.textContent = x.name + " — weekly content agreement";
+      r.append(b, magPeopleBtn(SO[x.id] || [], !editMode, v=>{ SO[x.id] = v; }));
+      sl.appendChild(r);
+    });
+    block.appendChild(sl);
+  }
   if(editMode){
     const bar = document.createElement("div"); bar.className = "mag-btns";
     const add = document.createElement("button"); add.className = "tool sm"; add.textContent = "＋ Add a target";
@@ -13752,7 +13781,9 @@ function mktAgreementPane(mk){
     const save = document.createElement("button"); save.className = "btn save"; save.textContent = "Save targets";
     save.onclick = ()=>{
       if(D.some(g=> !String(g.name||"").trim())){ toast("Give every target a name"); return; }
-      A.goals = D.map(g=> Object.assign(g, { name:String(g.name).trim() })); pushAll(); renderAll(); toast("Targets saved");
+      A.goals = D.map(g=> Object.assign(g, { name:String(g.name).trim() }));
+      A.socialOwners = SO;
+      pushAll(); renderAll(); toast("Targets saved");
     };
     bar.append(add, sp, undo, save); block.appendChild(bar);
   } else {
@@ -13760,6 +13791,36 @@ function mktAgreementPane(mk){
     block.appendChild(ro);
   }
   wrap.appendChild(block);
+}
+/* 👥 who an agreement is on: a button showing the names; editors tick people from the team */
+function magPeopleBtn(cur, ro, onChange){
+  let list = (cur||[]).slice();
+  const b = document.createElement("button"); b.type = "button"; b.disabled = ro;
+  const label = ()=>{
+    const names = list.map(e=> okrOwnerName(e).split(" ")[0]);
+    b.textContent = names.length ? "👥 " + (names.length > 2 ? names.slice(0, 2).join(", ") + " +" + (names.length - 2) : names.join(", ")) : (ro ? "—" : "＋ People");
+    b.className = "mag-ppl" + (names.length ? "" : " none");
+    b.title = names.length ? "Responsible: " + list.map(okrOwnerName).join(", ") : "Who this agreement is on — it counts in their 📈 My Performance";
+  };
+  label();
+  b.onclick = e=>{
+    e.stopPropagation();
+    const old = document.querySelector(".mag-pplpop"); if(old){ old.remove(); if(old._for===b) return; }
+    const pop = document.createElement("div"); pop.className = "mag-pplpop"; pop._for = b;
+    const h = document.createElement("div"); h.className = "h"; h.textContent = "Who's responsible"; pop.appendChild(h);
+    assigneeMembers().slice().sort((x, y)=> userDisplayName(x).localeCompare(userDisplayName(y))).forEach(u=>{
+      const l = document.createElement("label"), c = document.createElement("input"); c.type = "checkbox"; c.checked = list.indexOf(u.email) >= 0;
+      c.onchange = ()=>{ list = c.checked ? list.concat([u.email]) : list.filter(x=> x!==u.email); onChange(list.slice()); label(); };
+      l.append(c, document.createTextNode(userDisplayName(u))); pop.appendChild(l);
+    });
+    document.body.appendChild(pop);
+    const r = b.getBoundingClientRect();
+    pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 270)) + "px";
+    pop.style.top = (r.bottom + 6 + 340 > window.innerHeight ? Math.max(8, r.top - Math.min(340, pop.offsetHeight) - 6) : r.bottom + 6) + "px";
+    const off = ev=>{ if(!pop.contains(ev.target) && ev.target!==b){ pop.remove(); document.removeEventListener("mousedown", off, true); } };
+    setTimeout(()=> document.addEventListener("mousedown", off, true), 0);
+  };
+  return b;
 }
 /* Marketing → Summary: the spaces inside it, and what's late / coming up on its Timeline */
 function mktRenderSummary(pane, show){

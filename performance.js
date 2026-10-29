@@ -464,10 +464,12 @@ function perfAgreements(u) {
   if (typeof mktLoadSnaps === "function") mktLoadSnaps();
   (CSPACES.list || []).filter(function (x) { return x.type === "marketing"; }).forEach(function (mk) {
     var kids = (CSPACES.list || []).filter(function (x) { return x.parent === mk.id; });
+    /* who an agreement is on: the 👥 People set on it in Our agreement; a target without any falls back to
+       everyone in Marketing (members / 👑 heads of it or the spaces inside it) */
+    var A = mktAgreement(mk), rows = [], SO = A.socialOwners || {};
     var inMk = perfInSpace(mk, email) || kids.some(function (k) { return perfInSpace(k, email); });
-    if (!inMk) return;
-    var A = mktAgreement(mk), rows = [];
-    A.goals.filter(function (g) { return Number(g.target) > 0; }).forEach(function (g) {
+    var onIt = function (owners) { return owners && owners.length ? owners.indexOf(email) >= 0 : inMk; };
+    A.goals.filter(function (g) { return Number(g.target) > 0 && onIt(g.owners); }).forEach(function (g) {
       var cells = perfPeriods(g.period || "month", N[g.period] || 3).map(function (p) {
         var v = perfGoalValue(mk, g, p.from, p.to, email), ok = v == null ? null : v >= Number(g.target);
         if (!p.now && ok != null) { total++; if (ok) kept++; }
@@ -476,7 +478,7 @@ function perfAgreements(u) {
       rows.push({ name: g.name + (g.source === "lms" ? " (their own)" : ""), target: g, cells: cells });
     });
     /* Social Media's weekly content agreement, for the social spaces they're in */
-    kids.filter(function (x) { return x.type === "social" && perfInSpace(x, email); }).forEach(function (x) {
+    kids.filter(function (x) { return x.type === "social" && (SO[x.id] && SO[x.id].length ? SO[x.id].indexOf(email) >= 0 : perfInSpace(x, email)); }).forEach(function (x) {
       if (typeof mktSlaGaps !== "function") return;
       var cells = perfPeriods("week", 26).map(function (p) {
         var gaps = mktSlaGaps(x, p.from), ok = p.now ? (gaps.length ? null : true) : !gaps.length;
