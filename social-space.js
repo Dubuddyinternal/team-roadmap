@@ -188,6 +188,13 @@ th.sortable:hover,th.sorted{color:var(--accent)}
 .tchips{display:flex;gap:7px;flex-wrap:wrap}
 .tchip{font-size:12px;border:1px solid var(--line);background:var(--surface-4);border-radius:999px;padding:4px 11px;color:var(--ink-2);white-space:nowrap}
 .tchip b{color:var(--ink);font-variant-numeric:tabular-nums}
+.pf-list{display:flex;flex-direction:column;gap:6px;margin:8px 0 2px}
+.pf-item{display:flex;align-items:center;gap:10px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface,#fff)}
+.pf-item img{width:44px;height:44px;object-fit:cover;border-radius:6px;cursor:zoom-in;flex:none}
+.pf-ic{width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:var(--surface-4);border-radius:6px;flex:none}
+.pf-t{flex:1;min-width:0;display:flex;flex-direction:column;font-size:12.5px}.pf-t b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pf-t span{color:var(--ink-3);font-size:11.5px}.pf-t a{color:var(--accent-ink)}
+.pf-item .x{border:0;background:none;cursor:pointer;color:var(--ink-3);font-size:16px}
 .trow{max-width:860px;display:grid;grid-template-columns:minmax(160px,1.4fr) 140px 140px 130px 30px;gap:8px;align-items:center;margin-bottom:8px}
 .trow select,.trow input{width:100%;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-s);padding:7px 9px;font-size:12.5px}
 .trow .x{border:1px solid var(--line-2);border-radius:var(--r-s);padding:6px 0;text-align:center;color:var(--ink-3)}
@@ -580,6 +587,7 @@ function normalize(space){
   s.rivals = Array.isArray(s.rivals) ? s.rivals.filter(r=>r && r.name) : [];
   s.rivals.forEach(r=>{ if(!r.id) r.id=uid("rv"); r.f = r.f && typeof r.f==="object" ? r.f : {}; r.readings = Array.isArray(r.readings) ? r.readings.filter(x=>x && x.d) : []; });
   s.manual = s.manual && typeof s.manual==="object" ? s.manual : {};   // typed-in counts: "yt:webinars:2026-10-06" -> n
+  s.proofs = s.proofs && typeof s.proofs==="object" ? s.proofs : {};   // proof behind each: same key -> [{id, n, link, img, note, by, at}]
   s.postTags = s.postTags && typeof s.postTags==="object" ? s.postTags : {};
   // Reels' new followers, typed in from Instagram Insights (Meta's API won't give them): post key -> n
   s.typedFollows = s.typedFollows && typeof s.typedFollows==="object" ? s.typedFollows : {};   // post key -> {tag name: value}
@@ -1096,10 +1104,55 @@ function goalHTML(g,col){
   const pc=tgt?Math.min(100,cur/tgt*100):0, left=days(today(),calEnd(g.period))+1;
   return `<div class="goal"><div class="gt"><span>${name}</span><b>${fmt(cur)}${unit} / ${fmt(tgt)}${unit} ${PERIOD_NOW[g.period]}</b></div>
     <div class="meter"><i style="width:${pc}%;background:${cur>=tgt&&tgt?"var(--good)":col}"></i></div>
-    ${m.untracked?`<div class="gf" style="margin-top:6px"><span>typed in by hand</span>${canEdit()?`<span>Done ${PERIOD_NOW[g.period]}:
-      <input type="number" min="0" data-manual="${esc(manualKey(g))}" value="${cur}" style="width:64px;padding:2px 6px;border:1px solid var(--line-2);border-radius:5px;font:inherit;font-size:11.5px">
-      <button class="btn sm" data-manualsave="${esc(manualKey(g))}" style="padding:2px 8px">Save</button></span>`:""}</div>`:""}
+    ${m.untracked?proofHTML(g):""}
     <div class="gf"><span>${Math.round(pc)}%</span><span>${cur>=tgt&&tgt?"reached 🎉":m.noRate?`${left} day${left===1?"":"s"} left`:`${fmt(Math.max(0,tgt-cur))} to go · ${left} day${left===1?"":"s"} left`}</span></div></div>`;
+}
+/* 📎 hand-counted targets (webinars, community posts…) need proof: each one done is added with a link and/or a
+   screenshot, and the count is the proofs added (plus any number typed before proofs existed) */
+function proofHTML(g){
+  const k=manualKey(g), list=S.proofs[k]||[];
+  const items=list.map(p=>`<div class="pf-item">
+      ${p.img?`<img src="${esc(p.img)}" data-pfimg="${esc(p.img)}" alt="proof">`:`<span class="pf-ic">🔗</span>`}
+      <div class="pf-t"><b>${p.n>1?p.n+" × ":""}${esc(p.note||GOAL_METRICS[g.metric].label)}</b>
+        <span>${esc(dmy(String(p.at).slice(0,10)))}${p.by?" · "+esc(p.by):""}${p.link?` · <a href="${esc(p.link)}" target="_blank" rel="noopener">open link ↗</a>`:""}</span></div>
+      ${canEdit()?`<button class="x" data-pfdel="${esc(k)}|${esc(p.id)}" title="Remove this proof">×</button>`:""}</div>`).join("");
+  return `<div class="gf" style="margin-top:6px"><span>counted from proof · ${list.length} added ${PERIOD_NOW[g.period]}</span>
+      ${canEdit()?`<button class="btn sm" data-pfadd="${esc(k)}" data-pfmetric="${esc(g.metric)}" style="padding:2px 10px">＋ Add proof</button>`:""}</div>
+    ${items?`<div class="pf-list">${items}</div>`:""}`;
+}
+function openProof(k, metric){
+  const m=GOAL_METRICS[metric]||{label:"it"};
+  const ov=document.createElement("div"); ov.className="overlay show"; ov.style.zIndex="480";
+  ov.innerHTML=`<div class="dialog" role="dialog" aria-modal="true" style="max-width:460px"><h3></h3><div class="dlg-body">
+      <div class="hint" style="margin-bottom:12px">Show that it happened: a link (the post, the recording, the event page) and/or a screenshot. At least one is needed.</div>
+      <div class="field"><label>What was it?</label><input type="text" id="pf-note" maxlength="140" placeholder="e.g. CUET strategy webinar with 120 students"></div>
+      <div class="field"><label>Link</label><input type="url" id="pf-link" placeholder="https://…"></div>
+      <div class="field"><label>Screenshot / photo</label><input type="file" id="pf-file" accept="image/*"><div class="hint" id="pf-st" style="margin-top:4px"></div></div>
+      <div class="field"><label>How many does this prove?</label><input type="number" id="pf-n" min="1" value="1" style="max-width:100px"></div>
+      <div class="hint" id="pf-err" style="color:var(--blocked,#B42318);min-height:16px"></div></div>
+      <div class="btns"><button class="btn" data-k="c">Cancel</button><button class="btn save" data-k="s">Add proof</button></div></div>`;
+  ov.querySelector("h3").textContent="📎 Proof — "+m.label;
+  document.body.appendChild(ov);
+  const close=()=>ov.remove();
+  ov.querySelector('[data-k="c"]').onclick=close;
+  ov.onmousedown=e=>{ if(e.target===ov) close(); };
+  const sv=ov.querySelector('[data-k="s"]'), err=ov.querySelector("#pf-err");
+  sv.onclick=async ()=>{
+    const link=ov.querySelector("#pf-link").value.trim(), file=ov.querySelector("#pf-file").files[0];
+    const note=ov.querySelector("#pf-note").value.trim(), n=Math.max(1, Math.round(Number(ov.querySelector("#pf-n").value)||1));
+    if(!link && !file){ err.textContent="Add a link or a screenshot."; return; }
+    if(link && !/^https?:\/\//i.test(link)){ err.textContent="The link should start with https://"; return; }
+    let img="";
+    if(file){
+      if(typeof uploadPhoto!=="function"){ err.textContent="Uploading isn't available here — add a link instead."; return; }
+      sv.disabled=true; ov.querySelector("#pf-st").textContent="Uploading…";
+      try{ img=await uploadPhoto(file); }catch(e){ sv.disabled=false; ov.querySelector("#pf-st").textContent=""; err.textContent="Couldn't upload the picture: "+(e.message||e); return; }
+    }
+    (S.proofs[k]=S.proofs[k]||[]).push({ id:uid("pf"), n, link, img, note, by:meName(), at:new Date().toISOString() });
+    S.manual[k]=(Number(S.manual[k])||0)+n;
+    close(); if(save()) toast("Proof added"); renderSummary();
+  };
+  setTimeout(()=>ov.querySelector("#pf-note").focus(),30);
 }
 // how many of this week's posts went out within an hour of the planned time
 function postingTimeHTML(pl,col){
@@ -1812,9 +1865,11 @@ function renderSummary(){
   P.querySelectorAll("[data-updf]").forEach(b=>b.onclick=openFollowers);
   const sn=$("#syncNow"); if(sn) sn.onclick=syncNow;
   P.querySelectorAll("[data-okrmore]").forEach(b=>b.onclick=()=>{ OKR_OPEN[b.dataset.okrmore]=!OKR_OPEN[b.dataset.okrmore]; renderSummary(); });
-  P.querySelectorAll("[data-manualsave]").forEach(b=>b.onclick=()=>{ const k=b.dataset.manualsave, inp=P.querySelector(`[data-manual="${k}"]`);
-    const v=inp.value===""?null:Math.max(0,Number(inp.value)); if(v==null||isNaN(v)){ toast("Type a number"); return; }
-    S.manual[k]=v; if(save()) toast("Saved"); });
+  P.querySelectorAll("[data-pfadd]").forEach(b=>b.onclick=()=>openProof(b.dataset.pfadd, b.dataset.pfmetric));
+  P.querySelectorAll("[data-pfimg]").forEach(i=>i.onclick=()=>{ if(typeof showPhoto==="function") showPhoto(i.dataset.pfimg); else window.open(i.dataset.pfimg,"_blank"); });
+  P.querySelectorAll("[data-pfdel]").forEach(b=>b.onclick=()=>{ const [k,id]=b.dataset.pfdel.split("|"), list=S.proofs[k]||[], i=list.findIndex(p=>p.id===id); if(i<0) return;
+    if(!confirm("Remove this proof? The count goes down with it.")) return;
+    S.manual[k]=Math.max(0,(Number(S.manual[k])||0)-(list[i].n||1)); list.splice(i,1); if(save()) toast("Proof removed"); renderSummary(); });
   P.querySelectorAll("[data-tile]").forEach(t=>{
     const go=()=>{ OPEN_TILE = OPEN_TILE===t.dataset.tile ? null : t.dataset.tile; placeDetail(); };
     t.onclick=go; t.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); go(); } };
