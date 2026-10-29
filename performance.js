@@ -89,15 +89,15 @@ async function renderPerformance() {
   var okrs = perfOkrs(who);
   var okrAvg = okrs.list.length ? Math.round(okrs.list.reduce(function (a, x) { return a + objPct(x.ob); }, 0) / okrs.list.length) : null;
   var okrTile = tile(okrAvg == null ? "—" : okrAvg + "%", "OKR progress", okrs.list.length ? okrs.list.length + " objective" + (okrs.list.length === 1 ? "" : "s") + (okrs.cyc ? " · " + (okrs.cyc.name || okrs.cyc.key) : "") : "no OKRs this cycle");
-  okrTile.classList.add("go"); okrTile.title = "Go to the OKRs below";
-  okrTile.onclick = function () { var e = document.getElementById("perf-okrs"); if (e) e.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  okrTile.classList.add("go"); okrTile.title = "Open the OKRs" + (mine ? " (My OKRs)" : "");
+  okrTile.onclick = function () { closePerformance(); if (okrs.cyc) activeCycle = okrs.cyc.key; if (mine && typeof okrBoardMine !== "undefined") okrBoardMine = true; view = "okr"; renderAll(); window.scrollTo(0, 0); };
   var fbTile = tile("…", "Feedback sent");
   var ciTile = tile("…", "OKR check-ins");
 
   var mSec = perfSection("📅 Month by month"); body.appendChild(mSec.el);
   mSec.body.appendChild(perfEl("div", "hint", "Loading…"));
   var pSec = perfSection("🧠 Personality profile"); body.appendChild(pSec.el);
-  var okrEl = perfOkrSection(okrs, who, mine); body.appendChild(okrEl);
+  /* the OKR list itself isn't shown here: the tile opens the OKRs, and the month table has Update OKRs */
   var fbSec = perfSection("📝 Monthly feedback & manager's review"); body.appendChild(fbSec.el);
   var ciSec = perfSection("📈 OKR check-ins"); body.appendChild(ciSec.el);
 
@@ -287,7 +287,14 @@ function perfMonthly(box, fbRows, ciRows, ag, okrs, mine) {
     r.appendChild(perfEl("span", "mood", m.mood ? MOOD[m.mood - 1] + " " + m.mood + "/5" : "—"));
     r.appendChild(perfEl("span", null, m.support ? m.support + "/5" : "—"));
     r.appendChild(perfEl("span", null, m.sent ? (m.reviewed ? "✓" : "waiting") : "—"));
-    r.appendChild(perfEl("span", null, m.ciOn ? m.ci + " of 2" : "—"));
+    var cic = perfEl("span", null, m.ciOn ? m.ci + " of 2" : "—");
+    /* your own running month: straight to the OKR check-in to update the numbers */
+    if (mine && m.now && typeof okrOpenCheckin === "function") {
+      var ub = perfEl("button", "perf-fill", "Update OKRs →"); ub.type = "button"; ub.title = "Type in the current numbers on your key results";
+      ub.onclick = function () { closePerformance(); okrOpenCheckin(); };
+      cic.append(document.createTextNode(" "), ub);
+    }
+    r.appendChild(cic);
     r.appendChild(pctCell(m.okr));
     t.appendChild(r);
   });
