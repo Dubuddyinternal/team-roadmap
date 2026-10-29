@@ -91,6 +91,8 @@ async function renderPerformance() {
   var ciTile = tile("…", "OKR check-ins");
   var agTile = tile("…", "Agreements kept");
 
+  var mSec = perfSection("📅 Month by month"); body.appendChild(mSec.el);
+  mSec.body.appendChild(perfEl("div", "hint", "Loading…"));
   body.appendChild(perfOkrSection(okrs, who));
   var fbSec = perfSection("📝 Monthly feedback & manager's review"); body.appendChild(fbSec.el);
   var ciSec = perfSection("📈 OKR check-ins"); body.appendChild(ciSec.el);
@@ -102,23 +104,108 @@ async function renderPerformance() {
   agTile.querySelector(".n").textContent = ag.total ? Math.round(ag.kept / ag.total * 100) + "%" : "—";
   agTile.appendChild(perfEl("div", "s", ag.total ? ag.kept + " of " + ag.total + " periods kept" : "not part of any agreement yet"));
 
-  if (!SUPA) return;
-  /* 📝 feedback (RLS: yours, or sent ones of people below you) */
-  SUPA.from("monthly_feedback").select("*").eq("team_slug", TEAM).eq("user_id", who.id).order("month", { ascending: false }).then(function (r) {
-    var rows = (r && r.data) || [];
-    var sent = rows.filter(function (x) { return x.status === "submitted"; });
-    fbTile.querySelector(".n").textContent = String(sent.length);
-    fbTile.appendChild(perfEl("div", "s", sent.length ? sent.filter(function (x) { return !x.late; }).length + " on time · " + sent.filter(function (x) { return x.discussed_at; }).length + " reviewed" : "nothing sent yet"));
-    perfFeedbackView(fbSec.body, rows, mine);
-  });
+  if (!SUPA) { mSec.body.innerHTML = ""; perfMonthly(mSec.body, [], [], ag, okrs); return; }
+  var res = await Promise.all([
+    SUPA.from("monthly_feedback").select("*").eq("team_slug", TEAM).eq("user_id", who.id).order("month", { ascending: false }),   /* RLS: yours, or sent ones of people below you */
+    SUPA.from("okr_checkins").select("period,done_at,note,updates").eq("team_slug", TEAM).eq("user_id", who.id).order("done_at", { ascending: false }).limit(48)
+  ]);
+  /* 📝 feedback */
+  var fbRows = (res[0] && res[0].data) || [];
+  var sent = fbRows.filter(function (x) { return x.status === "submitted"; });
+  fbTile.querySelector(".n").textContent = String(sent.length);
+  fbTile.appendChild(perfEl("div", "s", sent.length ? sent.filter(function (x) { return !x.late; }).length + " on time · " + sent.filter(function (x) { return x.discussed_at; }).length + " reviewed" : "nothing sent yet"));
+  perfFeedbackView(fbSec.body, fbRows, mine);
   /* 📈 check-ins */
-  SUPA.from("okr_checkins").select("period,done_at,note,updates").eq("team_slug", TEAM).eq("user_id", who.id).order("done_at", { ascending: false }).limit(24).then(function (r) {
-    if (r.error) { ciTile.querySelector(".n").textContent = "—"; ciSec.body.appendChild(perfEl("div", "hint", "OKR check-ins aren't set up yet.")); return; }
-    var rows = r.data || [];
-    ciTile.querySelector(".n").textContent = String(rows.length);
-    ciTile.appendChild(perfEl("div", "s", rows.length ? "last " + perfShort(rows[0].done_at.slice(0, 10)) : "none yet"));
-    perfCheckinView(ciSec.body, rows);
+  var ciRows = [];
+  if (res[1].error) { ciTile.querySelector(".n").textContent = "—"; ciSec.body.appendChild(perfEl("div", "hint", "OKR check-ins aren't set up yet.")); }
+  else {
+    ciRows = res[1].data || [];
+    ciTile.querySelector(".n").textContent = String(ciRows.length);
+    ciTile.appendChild(perfEl("div", "s", ciRows.length ? "last " + perfShort(ciRows[0].done_at.slice(0, 10)) : "none yet"));
+    perfCheckinView(ciSec.body, ciRows);
+  }
+  /* 📅 month by month, with the average */
+  mSec.body.innerHTML = "";
+  perfMonthly(mSec.body, fbRows, ciRows, ag, okrs);
+}
+/* ---------- 📅 month by month: the last 6 months and their average ---------- */
+function perfMonthKeys(n) {
+  var d = new Date(), out = [];
+  for (var i = 0; i < n; i++) { var x = new Date(d.getFullYear(), d.getMonth() - i, 1); out.push(x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0")); }
+  return out;
+}
+/* OKR progress as of a check-in: the key results it updated, scored against their targets */
+function perfCheckinPct(ci, okrs) {
+  if (!okrs.cyc) return null;
+  var ps = (ci.updates || []).map(function (u) {
+    var ob = (okrs.cyc.objectives || []).find(function (o) { return o.id === u.oid; }), kr = ob && (ob.krs || [])[u.k];
+    return kr ? krPct(Object.assign({}, kr, { current: Number(u.current) || 0 })) : null;
+  }).filter(function (x) { return x != null; });
+  return ps.length ? Math.round(ps.reduce(function (a, b) { return a + b; }, 0) / ps.length) : null;
+}
+function perfMonthly(box, fbRows, ciRows, ag, okrs) {
+  var cur = perfMonthKeys(1)[0];
+  var liveOkr = okrs.list.length ? Math.round(okrs.list.reduce(function (a, x) { return a + objPct(x.ob); }, 0) / okrs.list.length) : null;
+  /* months before their first feedback / first check-in don't count (it didn't exist for them yet) */
+  var prev = perfMonthKeys(2)[1];
+  var fbStart = fbRows.map(function (r) { return r.month; }).sort()[0] || prev;
+  var ciStart = ciRows.map(function (c) { return String(c.period).slice(0, 7); }).sort()[0] || cur;
+  var months = perfMonthKeys(6).map(function (k) {
+    var fb = fbRows.find(function (r) { return r.month === k; }), sentFb = fb && fb.status === "submitted" ? fb : null;
+    var cis = ciRows.filter(function (c) { return String(c.period).slice(0, 7) === k; });
+    var last = cis.slice().sort(function (a, b) { return String(b.done_at).localeCompare(String(a.done_at)); })[0];
+    var okr = last ? perfCheckinPct(last, okrs) : (k === cur ? liveOkr : null);
+    var kept = 0, judged = 0;
+    ag.groups.forEach(function (g) { g.rows.forEach(function (row) { row.cells.forEach(function (c) {
+      if (c.p.now || c.ok == null || c.p.from.slice(0, 7) !== k) return;
+      judged++; if (c.ok) kept++;
+    }); }); });
+    var mood = sentFb && sentFb.answers && +sentFb.answers.mood ? +sentFb.answers.mood : null;
+    var support = sentFb && sentFb.answers && +sentFb.answers.support ? +sentFb.answers.support : null;
+    return { k: k, now: k === cur, fb: fb, fbOn: k >= fbStart, ciOn: k >= ciStart, sent: !!sentFb, late: !!(sentFb && sentFb.late), reviewed: !!(sentFb && sentFb.discussed_at),
+      mood: mood, support: support, ci: cis.length, okr: okr, kept: kept, judged: judged, ag: judged ? Math.round(kept / judged * 100) : null };
   });
+  var t = perfEl("div", "perf-mtab");
+  var hdr = ["Month", "Feedback", "Mood", "Manager support", "Reviewed", "OKR check-ins", "OKR progress", "Agreements kept"];
+  var hr = perfEl("div", "perf-mrow head"); hdr.forEach(function (h) { hr.appendChild(perfEl("span", null, h)); }); t.appendChild(hr);
+  var MOOD = (typeof FB_Q !== "undefined" ? (FB_Q.find(function (q) { return q.k === "mood"; }) || {}).opts : null) || ["1", "2", "3", "4", "5"];
+  var pctCell = function (v) { var e = perfEl("span", "pc", v == null ? "—" : v + "%"); if (v != null) e.style.color = scoreColor(v); return e; };
+  months.forEach(function (m) {
+    var r = perfEl("div", "perf-mrow" + (m.now ? " now" : ""));
+    var a = m.k.split("-");
+    r.appendChild(perfEl("b", null, new Date(+a[0], +a[1] - 1, 1).toLocaleDateString("en-GB", { month: "short", year: "numeric" }) + (m.now ? " · now" : "")));
+    r.appendChild(perfEl("span", "fbs " + (m.sent ? (m.late ? "late" : "ok") : m.fb ? "draft" : m.fbOn ? "none" : "draft"), m.sent ? (m.late ? "✓ late" : "✓ sent") : m.fb ? "draft" : m.now ? "not yet" : m.fbOn ? "✕ not sent" : "—"));
+    r.appendChild(perfEl("span", "mood", m.mood ? MOOD[m.mood - 1] + " " + m.mood + "/5" : "—"));
+    r.appendChild(perfEl("span", null, m.support ? m.support + "/5" : "—"));
+    r.appendChild(perfEl("span", null, m.sent ? (m.reviewed ? "✓" : "waiting") : "—"));
+    r.appendChild(perfEl("span", null, m.ciOn ? m.ci + " of 2" : "—"));
+    r.appendChild(pctCell(m.okr));
+    var agc = pctCell(m.ag); if (m.judged) agc.title = m.kept + " of " + m.judged + " periods kept"; r.appendChild(agc);
+    t.appendChild(r);
+  });
+  /* the average over the months that have something to count (the running month only once it has data) */
+  var avg = function (xs) { xs = xs.filter(function (x) { return x != null; }); return xs.length ? xs.reduce(function (a, b) { return a + b; }, 0) / xs.length : null; };
+  var past = months.filter(function (m) { return !m.now; });
+  var fbPast = past.filter(function (m) { return m.fbOn; });
+  var sentRate = fbPast.length ? Math.round(fbPast.filter(function (m) { return m.sent; }).length / fbPast.length * 100) : null;
+  var onTime = months.filter(function (m) { return m.sent; });
+  var moodA = avg(months.map(function (m) { return m.mood; })), supA = avg(months.map(function (m) { return m.support; }));
+  var revRate = onTime.length ? Math.round(onTime.filter(function (m) { return m.reviewed; }).length / onTime.length * 100) : null;
+  var ciA = avg(past.filter(function (m) { return m.ciOn; }).map(function (m) { return m.ci; }));
+  var okrA = avg(months.map(function (m) { return m.okr; }));
+  var kTot = months.reduce(function (a, m) { return a + m.kept; }, 0), jTot = months.reduce(function (a, m) { return a + m.judged; }, 0);
+  var ar = perfEl("div", "perf-mrow avg");
+  ar.appendChild(perfEl("b", null, "Average"));
+  ar.appendChild(perfEl("span", null, sentRate == null ? "—" : sentRate + "% sent" + (onTime.length ? " · " + onTime.filter(function (m) { return !m.late; }).length + " on time" : "")));
+  ar.appendChild(perfEl("span", "mood", moodA == null ? "—" : MOOD[Math.round(moodA) - 1] + " " + moodA.toFixed(1) + "/5"));
+  ar.appendChild(perfEl("span", null, supA == null ? "—" : supA.toFixed(1) + "/5"));
+  ar.appendChild(perfEl("span", null, revRate == null ? "—" : revRate + "%"));
+  ar.appendChild(perfEl("span", null, ciA == null ? "—" : ciA.toFixed(1) + " of 2"));
+  ar.appendChild(pctCell(okrA == null ? null : Math.round(okrA)));
+  var aa = pctCell(jTot ? Math.round(kTot / jTot * 100) : null); if (jTot) aa.title = kTot + " of " + jTot + " periods kept"; ar.appendChild(aa);
+  t.appendChild(ar);
+  var wrap = perfEl("div", "perf-mscroll"); wrap.appendChild(t); box.appendChild(wrap);
+  box.appendChild(perfEl("div", "hint", "OKR progress is taken from the last check-in that month (this month: live). Agreements: the share of that month's weeks / months that were kept. The average leaves out months with nothing to count; feedback and check-ins average the finished months since the first one, so months before them show —.")).style.marginTop = "8px";
 }
 function perfSection(title) {
   var el = perfEl("section", "perf-sec"), h = perfEl("h2", null, title), body = perfEl("div");
@@ -264,7 +351,7 @@ function perfGoalValue(mk, g, from, to, email) {
 }
 function perfAgreements(u) {
   var email = u.email, groups = [], kept = 0, total = 0;
-  var N = { week: 8, month: 3, quarter: 2 };
+  var N = { week: 26, month: 6, quarter: 2 };   /* about 6 months, for 📅 Month by month */
   if (typeof mktLoadSnaps === "function") mktLoadSnaps();
   (CSPACES.list || []).filter(function (x) { return x.type === "marketing"; }).forEach(function (mk) {
     var kids = (CSPACES.list || []).filter(function (x) { return x.parent === mk.id; });
@@ -282,7 +369,7 @@ function perfAgreements(u) {
     /* Social Media's weekly content agreement, for the social spaces they're in */
     kids.filter(function (x) { return x.type === "social" && perfInSpace(x, email); }).forEach(function (x) {
       if (typeof mktSlaGaps !== "function") return;
-      var cells = perfPeriods("week", 8).map(function (p) {
+      var cells = perfPeriods("week", 26).map(function (p) {
         var gaps = mktSlaGaps(x, p.from), ok = p.now ? (gaps.length ? null : true) : !gaps.length;
         if (!p.now) { total++; if (ok) kept++; }
         return { p: p, gaps: gaps, ok: ok };
@@ -302,9 +389,9 @@ function perfAgreementView(box, ag, mine) {
       var r = perfEl("div", "perf-agrow");
       var nm = perfEl("div", "nm", row.name);
       var keptN = row.cells.filter(function (c) { return !c.p.now && c.ok === true; }).length, doneN = row.cells.filter(function (c) { return !c.p.now && c.ok != null; }).length;
-      nm.appendChild(perfEl("small", null, doneN ? keptN + " of " + doneN + " kept" + (row.target ? " · target " + fmt(row.target.target) + " a " + (row.target.period || "month") : "") : "no past periods to judge yet"));
+      nm.appendChild(perfEl("small", null, doneN ? keptN + " of " + doneN + " kept in the last 6 months" + (row.target ? " · target " + fmt(row.target.target) + " a " + (row.target.period || "month") : "") : "no past periods to judge yet"));
       var cs = perfEl("div", "cells");
-      row.cells.forEach(function (c) {
+      row.cells.slice(-9).forEach(function (c) {
         var dot = perfEl("span", "perf-dot " + (c.p.now ? "now" : c.ok === true ? "ok" : c.ok === false ? "miss" : "unk"));
         dot.textContent = c.p.now ? "…" : c.ok === true ? "✓" : c.ok === false ? "✕" : "?";
         var tip = perfShort(c.p.from) + " – " + perfShort(c.p.to) + (c.p.now ? " (running now)" : "") + ": ";
@@ -362,6 +449,14 @@ function perfAgreementView(box, ag, mine) {
     + ".perf-dot{width:24px;height:24px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;cursor:help}"
     + ".perf-dot.ok{background:var(--done-bg,#E3F4EA);color:var(--done,#2E9466)}.perf-dot.miss{background:#FDE8E6;color:#B42318}"
     + ".perf-dot.unk{background:#EEF1F5;color:#64748B}.perf-dot.now{background:var(--indigo-soft);color:var(--indigo);border:1px dashed var(--indigo)}"
+    + ".perf-mscroll{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--card)}"
+    + ".perf-mtab{min-width:860px}"
+    + ".perf-mrow{display:grid;grid-template-columns:1.3fr 1.1fr 1fr 1fr .9fr 1fr 1fr 1fr;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid var(--line);font-size:13.5px}"
+    + ".perf-mrow.head{border-top:0;font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}"
+    + ".perf-mrow.now{background:color-mix(in srgb,var(--indigo) 5%,transparent)}"
+    + ".perf-mrow.avg{background:var(--paper);font-weight:700;border-top:2px solid var(--line-strong)}"
+    + ".perf-mrow .pc{font-family:var(--mono);font-weight:700}"
+    + ".perf-mrow .fbs.ok{color:var(--done,#2E9466)}.perf-mrow .fbs.late{color:#B4541A}.perf-mrow .fbs.none{color:#B42318}.perf-mrow .fbs.draft{color:var(--muted)}"
     + "#nav-perf.on{background:var(--indigo);color:#fff}"
     + "@media(max-width:760px){.perf-tiles{grid-template-columns:repeat(2,1fr)}}";
   var st = document.createElement("style"); st.textContent = css; (document.head || document.documentElement).appendChild(st);
