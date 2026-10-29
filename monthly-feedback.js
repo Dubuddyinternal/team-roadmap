@@ -54,6 +54,81 @@ var FB_SA = [
   { k: "sa_3yrs", type: "area", req: true, label: "Where do I see myself in 3 years?" }
 ];
 var FB_STEPS = [["1", "Monthly feedback"], ["2", "Personality"], ["3", "Self-awareness"]];
+/* what each trait means, with a work example: "if you've done this, you have it" */
+var FB_TRAIT_INFO = {
+  Adventurous: ["Happy to try new and unfamiliar things.", "You volunteered for a project nobody had done before, or tried a new tool or format just to see if it works."],
+  Affectionate: ["Openly warm and caring towards people.", "You check in on a teammate who seems low, or show you're glad when someone joins or does well."],
+  Ambitious: ["Wants to grow and achieve big goals.", "You set yourself targets higher than what was asked, or you're working towards a bigger role."],
+  Authentic: ["True to yourself; you don't pretend.", "You say \"I don't know\" when you don't, instead of faking it in a meeting."],
+  Brave: ["Does the right thing even when it's scary.", "You told your manager about a mistake you made before anyone found out."],
+  Calm: ["Stays steady under pressure.", "The site went down or a deadline moved up, and you kept working through it without panicking."],
+  Caring: ["Looks out for others' wellbeing.", "You covered for a sick colleague or asked a new joiner if they needed help."],
+  Charismatic: ["Draws people in; people like listening to you.", "People naturally gather around your ideas, or your presentations get the room excited."],
+  Cheerful: ["Usually in a good mood and lifts others.", "You keep the team's spirits up on a bad day with a joke or a positive word."],
+  Clever: ["Quick to understand and solve problems.", "You found a smart shortcut or fix that others hadn't thought of."],
+  Confident: ["Believes in your own ability.", "You share your opinion in meetings, even with seniors, without needing someone to push you."],
+  Considerate: ["Thinks about how your actions affect others.", "You don't message people late at night unless it's urgent, and you keep shared spaces tidy."],
+  Courageous: ["Faces hard situations head-on.", "You had a difficult conversation with someone instead of avoiding it."],
+  Creative: ["Comes up with original ideas.", "You suggested a new content idea, design or way of doing something that the team used."],
+  Curious: ["Wants to learn how and why things work.", "You asked questions or read up on something outside your job just to understand it."],
+  Decisive: ["Makes clear decisions without dragging.", "When the team was stuck between options, you picked one, explained why, and moved on."],
+  Dependable: ["People can count on you.", "When you say \"I'll do it by Friday\", it's done by Friday, without reminders."],
+  Determined: ["Keeps going until the goal is reached.", "Your first few attempts failed, and you kept trying different ways until it worked."],
+  Diligent: ["Careful and hard-working; does things properly.", "You double-check your work before sending it, so others rarely find mistakes."],
+  Diplomatic: ["Handles disagreements tactfully.", "You helped two people who disagreed find a middle ground without anyone feeling insulted."],
+  Disciplined: ["Sticks to routines and plans.", "You start on time, follow your daily plan, and finish tasks even when you don't feel like it."],
+  Easygoing: ["Relaxed and easy to work with.", "Plans changed last minute and you adjusted without fuss."],
+  Efficient: ["Gets results without wasting time.", "You finished a task in half the expected time by organising it well or automating part of it."],
+  Empathetic: ["Understands how others feel.", "You noticed a colleague was stressed and changed how you spoke to them."],
+  Encouraging: ["Helps others believe in themselves.", "You told a junior \"you can do this\" and helped them get started."],
+  Energetic: ["Brings lots of energy to work.", "You're the one keeping the pace up in long sessions or busy weeks."],
+  Enthusiastic: ["Genuinely excited about the work.", "You jump on new projects with interest and get others excited too."],
+  Expressive: ["Shows thoughts and feelings clearly.", "People always know where you stand because you explain your view clearly."],
+  Fair: ["Treats everyone equally and justly.", "You gave credit to the person who actually did the work, even when it wasn't your friend."],
+  Faithful: ["Loyal to people and commitments.", "You stood by the team and its decisions during a tough period."],
+  Flexible: ["Adapts easily to change.", "Your priorities changed mid-week and you switched without complaining."],
+  Forgiving: ["Lets go of others' mistakes.", "A colleague's mistake cost you time, and you moved on without holding a grudge."],
+  Friendly: ["Kind and easy to approach.", "New people feel comfortable coming to you with questions."],
+  Generous: ["Gives time, help or credit freely.", "You spent your own time helping someone finish their work."],
+  Genuine: ["Sincere; what you say is what you mean.", "Your praise and your concerns are real, not just said to please people."],
+  Gracious: ["Polite and kind, even when things go wrong.", "You lost an argument or didn't get your way, and still thanked everyone and supported the decision."],
+  Aggressive: ["Pushes too hard; can come across as hostile.", "You raised your voice, or pressured someone until they gave in."],
+  Arrogant: ["Thinks you're better than others.", "You dismissed someone's idea because you assumed yours was better, without really listening."],
+  Critical: ["Often finds fault in others.", "Your first reaction to someone's work is to point out what's wrong, before anything good."],
+  Cynical: ["Expects the worst of people or plans.", "When a new plan is announced, you assume it won't work or that there's a hidden motive."],
+  Dishonest: ["Not always truthful.", "You said a task was done when it wasn't, or hid a mistake."],
+  Disrespectful: ["Doesn't treat others with respect.", "You interrupted people, ignored messages, or spoke rudely about someone behind their back."],
+  Envious: ["Resents others' success.", "You felt upset or annoyed when a colleague got praise or a promotion."],
+  Flaky: ["Unreliable; doesn't follow through.", "You agreed to something and then didn't do it or didn't show up, without telling anyone."],
+  Greedy: ["Wants more than your fair share.", "You took credit or rewards that should have been shared with the team."],
+  Harsh: ["Too blunt or severe.", "Your feedback left someone feeling hurt rather than helped."],
+  Hostile: ["Unfriendly or confrontational.", "You reacted angrily or defensively when someone asked a simple question."],
+  Impatient: ["Gets frustrated with waiting or slowness.", "You got irritated when someone took time to understand, or pushed for answers immediately."],
+  Inconsiderate: ["Doesn't think about how actions affect others.", "You left work for others to clean up, or made plans that ignored others' time."],
+  Inflexible: ["Struggles to change your mind or plans.", "You insisted on doing it your way even after better options were shown."],
+  Insensitive: ["Doesn't notice or care how others feel.", "You made a joke or comment that upset someone, and didn't realise it."],
+  Intolerant: ["Doesn't accept views or ways different from yours.", "You got annoyed when someone did a task differently from how you would."],
+  Irrational: ["Acts on emotion rather than facts.", "You made a decision in anger or panic that didn't make sense later."],
+  Irresponsible: ["Doesn't take ownership.", "Something went wrong on your task and you blamed others or circumstances."],
+  Judgmental: ["Quick to form negative opinions about people.", "You decided someone was lazy or useless after one bad day."],
+  Lazy: ["Avoids effort.", "You put off tasks until the last minute or did the minimum when you could do more."],
+  Manipulative: ["Influences people unfairly for your own gain.", "You told different people different stories to get what you wanted."],
+  Moody: ["Mood changes a lot and affects others.", "People had to check what mood you were in before talking to you."],
+  Needy: ["Needs a lot of attention or reassurance.", "You needed constant check-ins or approval before you could move on with work."],
+  Negative: ["Tends to focus on the bad side.", "You often complain or say why something won't work, more than suggesting what could."],
+  Nervous: ["Easily anxious or worried.", "You avoided speaking up or taking a task because you worried about getting it wrong."],
+  Obnoxious: ["Annoying or offensive to be around.", "You were loud, showed off, or made others uncomfortable in a meeting."],
+  Overbearing: ["Tries to control others too much.", "You took over someone else's task or kept telling them exactly how to do it."],
+  Pessimistic: ["Expects things to go badly.", "Before starting a project you were already sure it would fail."],
+  Possessive: ["Doesn't like sharing work, people or credit.", "You got upset when someone else worked on \"your\" project or client."],
+  Rude: ["Impolite.", "You didn't greet people, ignored messages, or spoke sharply."],
+  "Self-centered": ["Thinks mostly about yourself.", "In team discussions you mostly talk about your own work and needs, rarely others'."],
+  Selfish: ["Puts your own interests first.", "You picked the easy tasks and left the hard ones for others."],
+  Stubborn: ["Refuses to change position.", "You kept arguing for your idea even after the team agreed on another one."],
+  Superficial: ["Cares about appearances more than substance.", "You focused on making work look good rather than making it actually work."],
+  Suspicious: ["Doesn't trust others easily.", "You assumed a colleague had bad intentions behind a simple request."],
+  Thoughtless: ["Acts without thinking about consequences.", "You sent a message or made a change without thinking how it would affect others."]
+};
 var FB_KINDS = [
   ["suggestion", "💡 Suggestion"], ["improvement", "🛠 Improvement"], ["complaint", "😤 Complaint"],
   ["appreciation", "💛 Appreciation"], ["other", "💬 Something else"]
@@ -176,6 +251,10 @@ function fbErr(e) { return (e && (e.message || e.error_description)) || String(e
     + ".fb-tr{display:flex;align-items:center;gap:6px;font-size:13.5px;padding:5px 6px;border-radius:8px;cursor:pointer;user-select:none}"
     + ".fb-tr input{width:16px;height:16px;accent-color:#2F6DB5;margin:0}.fb-tr.neg input{accent-color:#D9443A}"
     + ".fb-tr.on.pos{background:#E8F0FB;color:#1F4E8C;font-weight:600}.fb-tr.on.neg{background:#FDECEA;color:#9B2A22;font-weight:600}"
+    + ".fb-ti{margin-left:auto;flex:none;width:18px;height:18px;border-radius:50%;border:1px solid var(--line-strong);background:#fff;color:var(--muted);font:italic 700 11px Georgia,serif;line-height:16px;text-align:center;padding:0;cursor:pointer}"
+    + ".fb-ti:hover{border-color:#2F6DB5;color:#2F6DB5}.fb-tr.neg .fb-ti:hover{border-color:#D9443A;color:#D9443A}"
+    + ".fb-tpop{position:fixed;z-index:600;background:#fff;border:1px solid var(--line);border-top:3px solid #2F6DB5;border-radius:12px;padding:12px 14px;box-shadow:0 12px 32px rgba(0,0,0,.14);font-size:13.5px;line-height:1.5}"
+    + ".fb-tpop.neg{border-top-color:#D9443A}.fb-tpop b{font-size:14.5px}.fb-tpop .m{margin:3px 0 7px}.fb-tpop .ex{color:var(--muted);font-size:13px}"
     + ".fb-q.miss .fb-traits{box-shadow:0 0 0 2px #F3B3AE;border-radius:12px}"
     + ".fb-trview{display:flex;flex-wrap:wrap;gap:6px}.fb-trview .fb-tr{cursor:default;padding:3px 10px;border-radius:99px;font-size:12.5px}"
     + "@media(max-width:700px){.fb-traits{grid-template-columns:1fr}}"
@@ -352,6 +431,12 @@ function fbForm(month, row, onSent) {
         lb.classList.toggle("on", cb.checked); trBox.classList.remove("miss"); upd(); changed();
       };
       lb.append(cb, document.createTextNode(" " + t));
+      if (FB_TRAIT_INFO[t]) {
+        var ib = fbEl("button", "fb-ti", "i"); ib.type = "button"; ib.title = FB_TRAIT_INFO[t][0];
+        ib.setAttribute("aria-label", "What does " + t + " mean?");
+        ib.onclick = function (e) { e.preventDefault(); e.stopPropagation(); fbTraitInfo(ib, t, g[0]); };
+        lb.appendChild(ib);
+      }
       list.appendChild(lb);
     });
     upd(); col.appendChild(list); cols.appendChild(col);
@@ -423,6 +508,25 @@ function fbForm(month, row, onSent) {
   card._flush = function () { if (dirty) save(false, true); };
   window.addEventListener("beforeunload", card._flush);
   return card;
+}
+
+/* the ⓘ next to a trait: what it means, and an example */
+function fbTraitInfo(anchor, t, kind) {
+  var old = document.getElementById("fb-tpop"); if (old) { var same = old.dataset.t === t; old.remove(); if (same) return; }
+  var x = FB_TRAIT_INFO[t]; if (!x) return;
+  var pop = fbEl("div", "fb-tpop " + kind); pop.id = "fb-tpop"; pop.dataset.t = t;
+  pop.append(fbEl("b", null, t), fbEl("div", "m", x[0]), fbEl("div", "ex", "Example: " + x[1] + (kind === "neg" ? " If that sounds like you, you may be " : " If that's you, you're ") + t.toLowerCase() + "."));
+  document.body.appendChild(pop);
+  var r = anchor.getBoundingClientRect(), w = Math.min(320, window.innerWidth - 24);
+  pop.style.width = w + "px";
+  pop.style.left = Math.max(12, Math.min(r.left - w / 2, window.innerWidth - w - 12)) + "px";
+  var top = r.bottom + 8; if (top + pop.offsetHeight > window.innerHeight - 8) top = r.top - pop.offsetHeight - 8;
+  pop.style.top = Math.max(8, top) + "px";
+  setTimeout(function () {
+    var off = function (e) { if (!pop.contains(e.target) && e.target !== anchor) { pop.remove(); document.removeEventListener("mousedown", off, true); window.removeEventListener("scroll", off2, true); } };
+    var off2 = function () { pop.remove(); document.removeEventListener("mousedown", off, true); window.removeEventListener("scroll", off2, true); };
+    document.addEventListener("mousedown", off, true); window.addEventListener("scroll", off2, true);
+  }, 0);
 }
 
 /* =====================================================================
