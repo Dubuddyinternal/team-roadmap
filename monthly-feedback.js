@@ -189,6 +189,9 @@ function renderAdminMyFeedback(wrap) {
     if (res[1].error) { holder.className = "hint"; holder.textContent = "Couldn't load: " + res[1].error.message; return; }
     var rows = res[1].data || [];
     var target = fbTargetMonth();
+    /* 🎯 month end: the OKR check-in sits on top of the feedback form */
+    var okrBox = fbEl("div"); holder.appendChild(okrBox);
+    SUPA.rpc("okr_me", { p_team: TEAM }).then(function (o) { if (!o.error && o.data && o.data.pending && o.data.kind === "end") okrCheckinCard(okrBox, o.data, true); });
     var cur = target ? rows.find(function (r) { return r.month === target; }) : null;
     if (target && !(cur && cur.status === "submitted")) holder.appendChild(fbForm(target, cur, function () { holder.innerHTML = ""; renderAdminMyFeedbackInto(wrap); }));
     else if (target) {
@@ -453,7 +456,17 @@ function fbSettingsDialog() {
   stl.append(stc, document.createTextNode("Show a “feedback pending” strip at the top of every page"));
   var h2 = fbEl("div", "hint", "Until someone sends theirs they also get emails, the strip, and a “pending” mark on their account menu. Super-admins are left out.");
   h2.style.marginTop = "8px";
-  body.append(on, f, h, fe, stl, h2);
+  var okl = fbEl("label"); okl.style.cssText = "display:flex;gap:8px;align-items:center;margin-top:16px";
+  var okc = fbEl("input"); okc.type = "checkbox"; okc.checked = !FB.settings || FB.settings.okr_on !== false;
+  okl.append(okc, document.createTextNode("🎯 OKR check-in twice a month"));
+  var fm = fbEl("div", "field"); fm.style.marginTop = "8px";
+  var lm = fbEl("label", "", "Mid-month check-in on day"); var sm = fbEl("select");
+  var curM = (FB.settings && FB.settings.okr_mid_day) || 15;
+  for (var md = 5; md <= 25; md++) { var om = fbEl("option", "", md + " of the month"); om.value = md; if (md === curM) om.selected = true; sm.appendChild(om); }
+  fm.append(lm, sm);
+  var h3 = fbEl("div", "hint", "Everyone who owns an objective or key result updates their numbers on that day, and again at month end together with their feedback. Same reminders as the feedback until it's done.");
+  h3.style.marginTop = "6px";
+  body.append(on, f, h, fe, stl, h2, okl, fm, h3);
   var btns = fbEl("div", "btns");
   var c = fbEl("button", "btn", "Cancel"), sv = fbEl("button", "btn save", "Save");
   c.onclick = function () { bg.remove(); };
@@ -464,6 +477,9 @@ function fbSettingsDialog() {
       var r2 = await SUPA.rpc("feedback_set_nudges", { p_team: TEAM, p_emails: +se.value, p_strip: stc.checked });
       if (r2.error) { sv.disabled = false; toast("Couldn't save the reminders: " + r2.error.message); return; }
       r = r2;
+      var r3 = await SUPA.rpc("okr_set_checkin", { p_team: TEAM, p_on: okc.checked, p_mid_day: +sm.value });
+      if (r3.error) { sv.disabled = false; toast("Couldn't save the OKR check-in: " + r3.error.message); return; }
+      r = r3;
     }
     sv.disabled = false;
     if (r.error) { toast("Couldn't save: " + r.error.message); return; }
@@ -598,27 +614,57 @@ function fbDueText(s) {
 }
 async function fbNudgeCheck() {
   if (!SUPA || typeof TEAM === "undefined" || !TEAM || !currentUser()) return;
-  var r = await SUPA.rpc("feedback_me", { p_team: TEAM });
-  if (r.error) return;   /* stage 22a not run yet: stay quiet */
-  var s = r.data || { pending: false };
-  FBN.me = s;
-  fbNudgeStrip(s.pending && s.strip ? s : null);
+  var res = await Promise.all([SUPA.rpc("feedback_me", { p_team: TEAM }), SUPA.rpc("okr_me", { p_team: TEAM })]);
+  var r = res[0], ro = res[1];
+  var s = (!r.error && r.data) || { pending: false };
+  var o = (!ro.error && ro.data) || { pending: false };   /* stage 22a / 22b not run yet: stay quiet */
+  FBN.me = s; FBN.okr = o;
+  fbNudgeStrip(s.pending && s.strip ? s : null, o.pending && o.strip !== false ? o : null);
   fbNudgeMark(s.pending ? s : null);
+  okrNudgeMark(o.pending ? o : null);
+  var day = new Date().toISOString().slice(0, 10);
   if (s.pending) {
-    var key = "fb-nudge-" + s.month + "-" + new Date().toISOString().slice(0, 10);
+    var key = "fb-nudge-" + s.month + "-" + day;
     try { if (!localStorage.getItem(key)) { localStorage.setItem(key, "1"); toast("📝 Your " + fbLabel(s.month, true) + " feedback is pending: Administration → My monthly feedback"); } } catch (_) { }
+  } else if (o.pending) {
+    var key2 = "okr-nudge-" + o.period + "-" + day;
+    try { if (!localStorage.getItem(key2)) { localStorage.setItem(key2, "1"); toast("🎯 Your OKR check-in is waiting: Administration → My OKR check-in"); } } catch (_) { }
   }
 }
-function fbNudgeStrip(s) {
+function fbNudgeStrip(s, o) {
   var bar = document.getElementById("fb-strip");
-  document.documentElement.classList.toggle("fb-strip-on", !!s);
-  if (!s) { if (bar) bar.remove(); return; }
+  document.documentElement.classList.toggle("fb-strip-on", !!(s || o));
+  if (!s && !o) { if (bar) bar.remove(); return; }
   if (!bar) { bar = fbEl("div"); bar.id = "fb-strip"; document.body.appendChild(bar); }
   bar.innerHTML = "";
-  var t = fbEl("span", "t", "📝 Your " + fbLabel(s.month, true) + " feedback is " + (s.late ? "overdue" : "pending") + ". " + fbDueText(s));
-  var go = fbEl("button", null, s.draft ? "Finish it →" : "Fill it now →"); go.type = "button"; go.onclick = fbOpenForm;
+  var txt, label, open;
+  if (s && o) { txt = "📝 Your " + fbLabel(s.month, true) + " feedback and 🎯 OKR check-in are " + (s.late ? "overdue" : "waiting") + ". " + fbDueText(s); label = "Fill it now →"; open = fbOpenForm; }
+  else if (s) { txt = "📝 Your " + fbLabel(s.month, true) + " feedback is " + (s.late ? "overdue" : "pending") + ". " + fbDueText(s); label = s.draft ? "Finish it →" : "Fill it now →"; open = fbOpenForm; }
+  else { txt = "🎯 " + (o.kind === "mid" ? "Your mid-month OKR check-in is waiting." : "Your " + fbLabel(o.period.slice(0, 7), true) + " OKR check-in is waiting.") + " Update the numbers on your key results."; label = "Update my OKRs →"; open = okrOpenCheckin; }
+  var t = fbEl("span", "t", txt);
+  var go = fbEl("button", null, label); go.type = "button"; go.onclick = open;
   bar.append(t, go);
-  bar.classList.toggle("urgent", !!s.late);
+  bar.classList.toggle("urgent", !!(s && s.late));
+}
+function okrOpenCheckin() {
+  if (typeof hrClosePage === "function") { var hp = document.getElementById("hr-page"); if (hp && hp.style.display !== "none") hrClosePage(); }
+  if (typeof closeTeam === "function") closeTeam();
+  if (typeof openAdmin === "function") openAdmin("okrcheckin");
+}
+function okrNudgeMark(o) {
+  var nav = document.getElementById("nav-account");
+  if (nav) nav.classList.toggle("okr-pending", !!o);
+  var item = document.getElementById("acct-okr");
+  if (!o) { if (item) item.remove(); return; }
+  if (!item) {
+    var after = document.getElementById("acct-fb") || document.getElementById("acct-hr") || document.getElementById("acct-profile");
+    if (!after) return;
+    item = fbEl("button", "acct-item"); item.id = "acct-okr";
+    item.onclick = function () { var ov = document.getElementById("account-overlay"); if (ov) ov.classList.remove("show"); okrOpenCheckin(); };
+    after.parentNode.insertBefore(item, after.nextSibling);
+  }
+  item.innerHTML = "";
+  item.append(document.createTextNode("🎯 OKR check-in "), fbEl("span", "fb-pend", "Pending"));
 }
 function fbNudgeMark(s) {
   var nav = document.getElementById("nav-account");
@@ -647,8 +693,8 @@ function fbNudgeMark(s) {
     + "html.fb-strip-on.hr-strip-on #fb-strip{top:44px}"
     + "html.fb-strip-on.hr-strip-on body{padding-top:88px}"
     + "html.fb-strip-on.hr-strip-on .admin-page,html.fb-strip-on.hr-strip-on .product-page,html.fb-strip-on.hr-strip-on .team-page,html.fb-strip-on.hr-strip-on .docs-page,html.fb-strip-on.hr-strip-on .hr-page{top:88px}"
-    + "#nav-account.fb-pending{position:relative}"
-    + "#nav-account.fb-pending::after{content:'';position:absolute;top:2px;right:2px;width:10px;height:10px;border-radius:50%;background:#E5484D;box-shadow:0 0 0 2px var(--card,#fff)}"
+    + "#nav-account.fb-pending,#nav-account.okr-pending{position:relative}"
+    + "#nav-account.fb-pending::after,#nav-account.okr-pending::after{content:'';position:absolute;top:2px;right:2px;width:10px;height:10px;border-radius:50%;background:#E5484D;box-shadow:0 0 0 2px var(--card,#fff)}"
     + ".fb-pend{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;border-radius:99px;padding:2px 8px;background:#FDE8E6;color:#B42318}"
     + "@media(max-width:640px){#fb-strip{height:auto;min-height:44px;padding:6px 12px;font-size:12.5px}#fb-strip .t{white-space:normal}}";
   var st = document.createElement("style"); st.textContent = css; (document.head || document.documentElement).appendChild(st);
@@ -661,7 +707,94 @@ function fbNudgeMark(s) {
     if (typeof SUPA === "undefined" || !SUPA || typeof currentUser !== "function" || !currentUser() || typeof TEAM === "undefined" || !TEAM) return;
     clearInterval(t);
     fbNudgeCheck(); clearInterval(FBN.timer); FBN.timer = setInterval(function () { if (!document.hidden) fbNudgeCheck(); }, 10 * 60000);
-    var wants = false; try { wants = new URL(location.href).searchParams.get("fb") === "1"; } catch (_) { }
-    if (wants) setTimeout(fbOpenForm, 300);
+    var q = null; try { q = new URL(location.href).searchParams; } catch (_) { }
+    if (q && q.get("fb") === "1") setTimeout(fbOpenForm, 300);
+    else if (q && q.get("okr") === "1") setTimeout(okrOpenCheckin, 300);
   }, 500);
+})();
+
+/* =====================================================================
+   🎯 OKR check-in (stage 22b): twice a month — on the mid-month day and at
+   month end with the feedback — everyone updates the numbers on the key
+   results they own (all key results of objectives they own). Saved through
+   okr_checkin_save(), which writes the numbers into the team's OKRs and
+   records the check-in, so the reminders stop.
+   ===================================================================== */
+function okrMyItems() {
+  var me = currentUser(); if (!me || typeof OKRS === "undefined" || !OKRS || !(OKRS.cycles || []).length) return { cyc: null, list: [] };
+  var cyc = OKRS.cycles[OKRS.cycles.length - 1], em = String(me.email || "").toLowerCase(), list = [];
+  var has = function (arr) { return (arr || []).some(function (e) { return String(e || "").toLowerCase() === em; }); };
+  (cyc.objectives || []).forEach(function (ob) {
+    var ownObj = has(okrOwners(ob));
+    (ob.krs || []).forEach(function (k, i) { if (ownObj || has(krOwners(k))) list.push({ ob: ob, kr: k, k: i }); });
+  });
+  return { cyc: cyc, list: list };
+}
+function okrCheckinCard(box, info, inFeedback) {
+  box.innerHTML = "";
+  var my = okrMyItems();
+  var card = fbEl("div", "fb-card okr-ci");
+  var h = fbEl("h3", "", info && info.pending ? (info.kind === "mid" ? "🎯 Mid-month OKR check-in" : "🎯 " + fbLabel(info.period.slice(0, 7), true) + " OKR check-in")
+    : "🎯 Update your OKRs");
+  card.appendChild(h);
+  var p = fbEl("p", "hint", (inFeedback ? "Before your feedback, update" : "Update") + " the current number on each of your key results" + (my.cyc ? " in " + (my.cyc.name || my.cyc.key) : "") + ". Leave a number as it is if it hasn't moved.");
+  card.appendChild(p);
+  if (!my.list.length) { card.appendChild(fbEl("div", "fb-empty", "You don't own any key results in the current cycle.")); box.appendChild(card); return; }
+  var rows = [], lastOb = null;
+  my.list.forEach(function (x) {
+    if (x.ob !== lastOb) { lastOb = x.ob; card.appendChild(fbEl("div", "okr-ci-ob", x.ob.title || "Objective")); }
+    var row = fbEl("div", "okr-ci-row");
+    var t = fbEl("div", "okr-ci-t", x.kr.title || "Key result");
+    var inp = fbEl("input"); inp.type = "number"; inp.step = "any"; inp.value = x.kr.current != null ? x.kr.current : 0;
+    var of = fbEl("span", "okr-ci-of", "/ " + fmt(x.kr.target) + (x.kr.unit ? " " + x.kr.unit : ""));
+    var pc = fbEl("span", "okr-ci-pct", krPct(x.kr) + "%");
+    inp.oninput = function () { var tmp = Object.assign({}, x.kr, { current: Number(inp.value) || 0 }); pc.textContent = krPct(tmp) + "%"; };
+    var r = fbEl("div", "okr-ci-in"); r.append(inp, of, pc);
+    row.append(t, r); card.appendChild(row);
+    rows.push({ x: x, inp: inp });
+  });
+  var note = fbEl("textarea"); note.placeholder = "Anything to add? (optional) — what moved, what's stuck"; note.maxLength = 4000;
+  note.style.cssText = "width:100%;min-height:60px;border:1px solid var(--line-strong);border-radius:10px;padding:8px 10px;font-size:13.5px;margin-top:12px";
+  card.appendChild(note);
+  var bar = fbEl("div"); bar.style.cssText = "display:flex;gap:10px;align-items:center;margin-top:12px";
+  var st = fbEl("span", "hint", ""); st.style.marginRight = "auto";
+  var sv = fbEl("button", "btn save", info && info.pending ? "Save check-in ✓" : "Save numbers");
+  sv.onclick = async function () {
+    var ups = rows.map(function (r) { return { oid: r.x.ob.id, k: r.x.k, current: Number(r.inp.value) || 0 }; });
+    sv.disabled = true; st.textContent = "Saving…";
+    var res = await SUPA.rpc("okr_checkin_save", { p_team: TEAM, p_period: info && info.pending ? info.period : null, p_updates: ups, p_note: note.value });
+    sv.disabled = false;
+    if (res.error) { st.textContent = "Couldn't save: " + res.error.message; toast("Couldn't save: " + res.error.message); return; }
+    rows.forEach(function (r, i) { r.x.kr.current = ups[i].current; r.x.kr.checkedAt = new Date().toISOString(); });
+    toast(info && info.pending ? "🎯 Check-in saved — thank you!" : "Saved");
+    fbNudgeCheck();
+    if (info && info.pending) { box.innerHTML = ""; var ok = fbEl("div", "fb-card fb-hero"); ok.appendChild(fbEl("h3", "", "✅ OKR check-in done")); ok.appendChild(fbEl("p", "", "Your numbers are updated on the OKRs.")); box.appendChild(ok); }
+    else st.textContent = "Saved";
+  };
+  bar.append(st, sv); card.appendChild(bar);
+  box.appendChild(card);
+}
+/* Administration → 🎯 My OKR check-in */
+function renderAdminOkrCheckin(wrap) {
+  var head = fbEl("div", "admin-userhead"), left = fbEl("div");
+  var h2 = fbEl("h2", "", "🎯 My OKR check-in"); h2.style.margin = "0";
+  var sub = fbEl("div", "hint", "Twice a month — mid-month and at month end with your feedback — update the numbers on your key results. You can update them here any time.");
+  sub.style.marginTop = "4px"; left.append(h2, sub); head.appendChild(left); wrap.appendChild(head);
+  var box = fbEl("div", "hint", "Loading…"); wrap.appendChild(box);
+  SUPA.rpc("okr_me", { p_team: TEAM }).then(function (o) {
+    box.className = "";
+    okrCheckinCard(box, (!o.error && o.data) || { pending: false }, false);
+  });
+}
+(function () {
+  var css = ".okr-ci h3{margin:0 0 4px;font-size:17px}.okr-ci>.hint{margin:0 0 10px}"
+    + ".okr-ci-ob{font-weight:700;font-size:13.5px;margin:14px 0 4px;color:var(--ink)}"
+    + ".okr-ci-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-top:1px dashed var(--line)}"
+    + ".okr-ci-t{flex:1;min-width:0;font-size:13.5px}"
+    + ".okr-ci-in{display:flex;align-items:center;gap:8px;flex:none}"
+    + ".okr-ci-in input{width:96px;border:1px solid var(--line-strong);border-radius:8px;padding:6px 8px;font:inherit;font-size:14px;background:#fff}"
+    + ".okr-ci-of{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap;min-width:64px}"
+    + ".okr-ci-pct{font-family:var(--mono);font-size:12px;font-weight:700;width:42px;text-align:right}"
+    + "@media(max-width:640px){.okr-ci-row{flex-direction:column;align-items:stretch}}";
+  var st = document.createElement("style"); st.textContent = css; (document.head || document.documentElement).appendChild(st);
 })();

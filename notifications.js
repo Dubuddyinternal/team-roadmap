@@ -247,7 +247,7 @@ function ntfShowBox(n, asPopup) {
     acts.appendChild(later);
   }
   /* monthly feedback reminder (monthly-feedback.js): straight to the form */
-  var fill = mine && !n.stopped && n.ref && /^feedback:/.test(n.ref) && typeof openAdmin === "function";
+  var fill = mine && !n.stopped && n.ref && /^(feedback|okrci):/.test(n.ref) && typeof openAdmin === "function";
   var ok = ntfEl("button", "ntf-btn" + (drop || fill ? "" : " primary"), ack ? "Got it ✓" : drop ? "Close" : fill && asPopup ? "Later" : asPopup ? "OK" : "Close");
   ok.onclick = function () { if (mine) ntfMark(n, ack ? "ack" : "read").then(ntfRenderBell); close(); };
   acts.appendChild(ok);
@@ -259,8 +259,9 @@ function ntfShowBox(n, asPopup) {
     ok.className = "ntf-btn"; if (asPopup && !ack) ok.textContent = "Later";
   }
   if (fill) {
-    var go = ntfEl("button", "ntf-btn primary", "✍️ Fill it now");
-    go.onclick = function () { ntfMark(n, "read").then(ntfRenderBell); close(); if (typeof closeTeam === "function") closeTeam(); openAdmin("myfeedback"); };
+    var okrci = /^okrci:/.test(n.ref);
+    var go = ntfEl("button", "ntf-btn primary", okrci ? "🎯 Update my OKRs" : "✍️ Fill it now");
+    go.onclick = function () { ntfMark(n, "read").then(ntfRenderBell); close(); if (typeof closeTeam === "function") closeTeam(); openAdmin(okrci ? "okrcheckin" : "myfeedback"); };
     acts.appendChild(go);
   }
   box.appendChild(acts);
@@ -287,6 +288,7 @@ function ntfRoute(n) {
   var isHr = has("hrIsAdmin") && hrIsAdmin();
   if (/^place:/.test(ref) && has("cmtGo")) { var pp = ref.split(":"); return function () { leave(); cmtGo(pp[1], pp[2]); }; }   // 💬 tagged in a comment
   if (/^feedback:/.test(ref)) return admin("myfeedback");
+  if (/^okrci:/.test(ref)) return admin("okrcheckin");
   if (/^hr:/.test(ref)) { var st = ref.split(":")[1] || ""; return myhr(has("hrStepIx") && hrStepIx(st) >= 0 ? st : null); }
   if (/^admin:/.test(ref)) return admin(ref.slice(6));
   // HR

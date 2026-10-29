@@ -25627,6 +25627,7 @@ function adminSections(){
                                                                         show: !!me,                           group:"me", render: renderAdminHidden },
     { k:"myideas",     ico:"💡", lbl:"My product ideas",     show: !!me && !!SUPA && typeof pitchTarget === "function" && !!pitchTarget(), group:"me", render: renderAdminMyIdeas },
     { k:"myfeedback",  ico:"📝", lbl:"My monthly feedback",  show: !!me && !!SUPA && typeof renderAdminMyFeedback === "function", group:"me", render: renderAdminMyFeedback },
+    { k:"okrcheckin",  ico:"🎯", lbl:"My OKR check-in",      show: !!me && !!SUPA && typeof renderAdminOkrCheckin === "function", group:"me", render: renderAdminOkrCheckin },
     { k:"notifications", ico:"📣", lbl:"Notifications",      show: hasPerm("send_notifications") && !!SUPA, group:"me", render: renderAdminNotifications },
     { k:"mygames",     ico:"\uD83C\uDFAE", lbl:"My games",             show: hasPerm("create_games"),        group:"me", render: renderMyGames },
     { k:"danger",      ico:"⚠️", lbl:"Danger zone",          show: sup,                            render: renderAdminDanger },
