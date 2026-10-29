@@ -1,16 +1,17 @@
 /* =====================================================================
-   CAMPAIGN SPACE — Fill in Details · Assignment · Calendar · Dashboard
+   CAMPAIGN SPACE — Campaign Details · Assignment · Calendar · Dashboard
    (Cyberflow team app, tools.dubuddy.in)
 
    WHAT THIS IS: one sale, one place — the team's "Campaign Creator" design
    (claude.ai artifact "Campaign Creator"), same layout, fonts and colours.
    A campaign lives inside a Marketing space (index.html, type "marketing";
    campaigns are type "campaign" with parent = that space).
-     * Fill in Details — a hero (icon, name, tagline, offer code, live
+     * Campaign Details — a hero (icon, name, tagline, offer code, live
        countdown), the details form built from tap-to-pick fields (campaign
        type, offer type, duration, plus channels / audience / goal / budget /
-       messaging / your own, dragged in from the field library), a target box
-       per department, and every content piece that goes out.
+       messaging / your own, dragged in from the field library), the
+       campaign's overall targets (each with one owner and a deadline), and
+       every content piece that goes out.
      * Assignment & distribution of work — give each item an accountable
        teammate (they get an email + a 🔔), then press its action:
        reels / videos / stories / influencer videos land on the Social Media
@@ -20,7 +21,9 @@
        with filters.
      * Dashboard — counts read straight off the campaign.
    Only admins edit (index.html decides through opt.canEdit); everyone else
-   sees Fill in Details read-only.
+   sees Campaign Details read-only: only what was chosen, as plain text.
+   Admins switch between "Marketing Head view" (edit) and "Member view" (the
+   read-only page their team sees) with the toggle at the top.
    index.html calls CX.render(space, host, opt) when a campaign is open; it is
    drawn inside a shadow root so its styles and the app's never touch.
    Data is saved with the team (team_data "cspaces") through opt.save
@@ -371,6 +374,38 @@ input,select,textarea{font:inherit;color:inherit}
   text-transform:uppercase;font-weight:600;color:#fff;border:1px solid rgba(255,255,255,.5);
   border-radius:999px;padding:3px 11px}
 .tedit:hover{background:rgba(255,255,255,.18)}
+.tmeta{position:relative;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:10px}
+.towner,.tdue{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600}
+.towner i,.tdue i{display:block;font-style:normal;font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;opacity:.75;font-weight:500}
+.towner .av{box-shadow:0 0 0 2px rgba(255,255,255,.55)}
+
+/* --- Marketing Head view / Member view --- */
+.vtog{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.vt-seg{display:inline-flex;border:1.5px solid var(--ink);border-radius:999px;overflow:hidden;background:var(--surface)}
+.vt-seg button{padding:7px 15px;font-size:12.5px;font-weight:700;color:var(--ink-2)}
+.vt-seg button+button{border-left:1.5px solid var(--ink)}
+.vt-seg button.on{background:var(--ink);color:var(--bg)}
+.vtog .hint{font-size:12px}
+.rofb .fblock-h{margin-bottom:6px}
+.rov{font-size:15px;font-weight:700;letter-spacing:-.01em;line-height:1.45;white-space:pre-line;overflow-wrap:anywhere}
+.rosum{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:13px}
+.rosum-i{display:inline-flex;align-items:center;gap:7px;border:1.5px solid var(--ink);border-left:4px solid var(--ic);border-radius:10px;padding:6px 11px;font-size:13px;font-weight:600;background:var(--surface)}
+.rosum-i i{font-style:normal}
+.rosum-i b{font-family:var(--mono);font-size:12px;background:var(--ink);color:var(--bg);border-radius:999px;padding:1px 8px;margin-left:2px}
+
+/* --- Assignment: who is responsible for what --- */
+tr.mine td{background:color-mix(in srgb,var(--good) 7%,transparent)}
+.rgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.rcard{border:1.5px solid var(--line-2);border-radius:12px;padding:12px 13px;background:var(--surface);display:flex;flex-direction:column;gap:6px;min-width:0}
+.rcard.mine{border-color:var(--good);box-shadow:0 0 0 1px var(--good)}
+.rcard-h{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:2px}
+.rcard-h b{font-size:14px}
+.rcard-n{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:var(--ink-3)}
+.rline{display:flex;gap:7px;align-items:baseline;font-size:12.5px;line-height:1.4;min-width:0}
+.rline span{flex:1;min-width:0;overflow-wrap:anywhere}
+.rline.t span{font-weight:700}
+.rline em{font-style:normal;font-family:var(--mono);font-size:10.5px;color:var(--ink-3);white-space:nowrap}
+.rline.more{color:var(--ink-3);font-size:12px}
 
 /* --- content type tiles --- */
 .ktiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(102px,1fr));gap:9px;margin-bottom:15px}
@@ -721,6 +756,7 @@ p{margin:0}
 
 let HOST=null, R=null, SPACE=null, OPT={};
 let CTAB="details", CALVIEW="grid", ASSIGNFILTER="All", CALMONTH="";
+let MEMBERVIEW=false;   /* an admin looking at the campaign the way the team sees it */
 let CALFILTER={ range:"all", anchor:"", type:"all", platform:"all", owner:"all" };
 const $ = s => R.querySelector(s);
 
@@ -736,9 +772,13 @@ const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(
 function hue(name){ let h=0; for(const ch of String(name)) h=(h*31+ch.charCodeAt(0))%360; return h; }
 function avatar(name){ const n=String(name||"?").trim()||"?";
   return `<span class="av" style="background:hsl(${hue(n)} 48% 42%)">${esc(n.charAt(0).toUpperCase())}</span>`; }
-const canEdit = () => !OPT.canEdit || OPT.canEdit();
+/* admins really can edit; in Member view they see what everyone else sees */
+const isAdmin = () => !OPT.canEdit || OPT.canEdit();
+const canEdit = () => isAdmin() && !MEMBERVIEW;
 /* a Team Manager (or admin): moves pieces on the calendar, works the Assignment tab */
-const canPlan = () => canEdit() || !!(OPT.canPlan && OPT.canPlan());
+const canPlan = () => !MEMBERVIEW && (isAdmin() || !!(OPT.canPlan && OPT.canPlan()));
+const me = () => (OPT.me && OPT.me()) || "";
+const dmyY = s => s ? new Date(s+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}) : "";
 /* the line a Team Member sees on every tab */
 const memberBar = () => `<div class="bar2"><span class="ic2">VIEW ONLY</span><p><b>This campaign is the plan — you can see all of it.</b>
   Your own work happens on your board (Content Process, or wherever a piece was handed to you): open it there to change its status or add to it.</p></div>`;
@@ -1097,11 +1137,24 @@ function mount(){
 function draw(){
   const c = SPACE; if(!c) return;
   const B = $("#body");
-  B.innerHTML = CTAB==="details" ? detailsPane(c) : CTAB==="assign" ? assignPane(c) : CTAB==="dash" ? dashPane(c) : calendarPane(c);
+  B.innerHTML = viewToggle() + (CTAB==="details" ? detailsPane(c) : CTAB==="assign" ? assignPane(c) : CTAB==="dash" ? dashPane(c) : calendarPane(c));
   B.querySelectorAll("[data-ctab]").forEach(b=>b.onclick=()=>goTab(b.dataset.ctab));
+  B.querySelectorAll("[data-mv]").forEach(b=>b.onclick=()=>{ MEMBERVIEW = b.dataset.mv==="1"; draw(); });
   if(CTAB==="details"){ wireDetails(c); tickCountdown(); }
   else if(CTAB==="assign") wireAssign(c);
   else if(CTAB==="calendar") wireCalendar(c);
+}
+/* admins only: edit the campaign, or see it exactly as a team member does */
+function viewToggle(){
+  if(!isAdmin()) return "";
+  return `<div class="vtog" role="group" aria-label="Which view">
+    <div class="vt-seg">
+      <button type="button" data-mv="0" class="${MEMBERVIEW?"":"on"}" aria-pressed="${!MEMBERVIEW}">✏️ Marketing Head view</button>
+      <button type="button" data-mv="1" class="${MEMBERVIEW?"on":""}" aria-pressed="${MEMBERVIEW}">👀 Member view</button>
+    </div>
+    <span class="hint">${MEMBERVIEW ? "This is what your team sees. Nothing can be changed here; switch back to edit."
+      : "You can change everything. Member view shows how the campaign looks to your team."}</span>
+  </div>`;
 }
 /* keep "X days to go" honest while the tab sits open overnight */
 let CDTIMER = null;
@@ -1125,20 +1178,23 @@ function notifyOwner(c, it){
   });
 }
 
-/* ============================================================ FILL IN DETAILS */
+/* ============================================================ CAMPAIGN DETAILS */
 function heroHTML(c, ro){
-  const d = c.details, t = findOpt(c,"type",d.type), ol = offerLine(c), dis = ro ? "disabled" : "";
+  const d = c.details, t = findOpt(c,"type",d.type), ol = offerLine(c);
   return `
     <div class="hero">
       <div class="hero-in">
-        <button class="hero-emo ${d.icon?"hasimg":""}" id="heroEmo" title="${ro?"":"Change the icon"}" ${dis}>${
-          d.icon ? `<img src="${esc(d.icon)}" alt="">` : esc(d.emoji||"📣")}</button>
+        ${ro ? `<span class="hero-emo ${d.icon?"hasimg":""}">${d.icon ? `<img src="${esc(d.icon)}" alt="">` : esc(d.emoji||"📣")}</span>`
+          : `<button class="hero-emo ${d.icon?"hasimg":""}" id="heroEmo" title="Change the icon">${
+          d.icon ? `<img src="${esc(d.icon)}" alt="">` : esc(d.emoji||"📣")}</button>`}
         <div class="hero-txt">
-          <input class="hero-name" data-f="name" value="${esc(d.name||c.name)}" placeholder="Campaign name" ${dis}>
-          <input class="hero-tag" data-f="tagline" value="${esc(d.tagline||"")}" placeholder="${ro?"":"One line that sells it"}" ${dis}>
+          ${ro ? `<h2 class="hero-name">${esc(d.name||c.name)}</h2>${d.tagline ? `<p class="hero-tag">${esc(d.tagline)}</p>` : ""}`
+            : `<input class="hero-name" data-f="name" value="${esc(d.name||c.name)}" placeholder="Campaign name">
+          <input class="hero-tag" data-f="tagline" value="${esc(d.tagline||"")}" placeholder="One line that sells it">`}
           <div class="hero-meta">
-            ${ro && !d.code ? "" : `<span class="codewrap"><i>🎟</i><input class="codein" data-f="code"
-              value="${esc(d.code||"")}" placeholder="OFFER CODE" spellcheck="false" ${dis}></span>`}
+            ${ro ? (d.code ? `<span class="codewrap"><i>🎟</i><span class="codein">${esc(d.code)}</span></span>` : "")
+              : `<span class="codewrap"><i>🎟</i><input class="codein" data-f="code"
+              value="${esc(d.code||"")}" placeholder="OFFER CODE" spellcheck="false"></span>`}
             ${t?`<span class="hmeta">${t.emo||""} ${esc(t.label)}</span>`:""}
             ${ol?`<span class="hmeta">${esc(ol)}</span>`:""}
             ${d.start?`<span class="hmeta">${dmy(d.start)}${d.end?` → ${dmy(d.end)}`:""}</span>`:""}
@@ -1185,8 +1241,33 @@ function budgetEditor(c, ro){
     <label class="fsel" style="margin-left:auto"><span>Or type an amount</span>
       <input data-f="budget" inputmode="numeric" value="${esc(d.budget||"")}" placeholder="45000" ${ro?"disabled":""}></label></div>`;
 }
+/* what a field says once it's filled in, as plain text ("" when nothing is chosen) */
+function fieldText(c, key){
+  const def = fieldDef(c, key), d = c.details, kind = def.kind || "line";
+  if(kind==="chips"){
+    const sel = def.multi ? (d[key]||[]) : (d[key] ? [d[key]] : []);
+    return sel.map(k=>{ const o = findOpt(c,key,k); return o ? (o.emo ? o.emo+" " : "") + o.label : ""; }).filter(Boolean).join("  ·  ");
+  }
+  if(kind==="offer") return offerLine(c);
+  if(kind==="duration"){
+    if(!d.start) return "";
+    const n = parseInt(d.days,10);
+    return dmyY(d.start) + (d.end && d.end!==d.start ? " → " + dmyY(d.end) : "") + (n>0 ? `  ·  ${n} day${n===1?"":"s"}` : "");
+  }
+  if(kind==="budget") return d.budget && !isNaN(d.budget) ? "₹" + Number(d.budget).toLocaleString("en-IN") : String(d.budget||"");
+  return String(d[key]||"").trim();
+}
+/* Member view: only the fields that were filled in, no controls */
+function fieldRead(c, key){
+  const def = fieldDef(c, key), v = fieldText(c, key);
+  if(!v) return "";
+  return `<div class="fblock rofb ${def.wide?"wide":""}" style="--fc:${fieldColor(key)}">
+    <div class="fblock-h"><span class="fdot">${esc(def.emo||"")}</span><span class="flabel">${esc(def.label)}</span></div>
+    <div class="rov">${esc(v)}</div></div>`;
+}
 /* one block on the form */
 function fieldBlock(c, key, ro){
+  if(ro) return fieldRead(c, key);
   const def = fieldDef(c, key), d = c.details, dis = ro ? "disabled" : "";
   const kind = def.kind || "line";
   const body =
@@ -1218,28 +1299,64 @@ function fieldNav(c){
     <button class="fnav-add" type="button" id="addCustomField">＋ Custom field</button>
   </aside>`;
 }
-/* targets, one coloured box per department */
+/* targets: the campaign's overall goals ("Conduct 8 webinars"), each with one owner and a deadline */
 function targetSection(c, ro){
   return `
     <div class="sec-h secbig" style="margin-top:30px">
-      <h3>🎯 Target</h3>
-      <span class="hint">What each department is carrying</span>
-      ${ro?"":`<button class="btn pri" id="addDept" style="margin-left:auto">＋ Add department</button>`}
+      <h3>🎯 Targets</h3>
+      <span class="hint">${ro ? "What this campaign has to achieve, and who is responsible" : "Overall goals for the whole campaign. Each one gets one owner, who sees it in Assignment."}</span>
+      ${ro?"":`<button class="btn pri" id="addDept" style="margin-left:auto">＋ Add target</button>`}
     </div>
     ${c.targets.length ? `<div class="tgrid">
-      ${c.targets.map((t,i)=>`
+      ${c.targets.map((t,i)=>{ const who = ownerName(t); return `
         <div class="tcard" style="--tc:${t.color || TCOLORS[i % TCOLORS.length]}">
           <button class="tx" type="button" data-rmdept="${i}" title="Remove">✕</button>
-          <span class="tdept">${esc(t.dept)}</span>
+          <span class="tdept">${esc(t.dept || "Target " + (i+1))}</span>
           <div class="tval">${esc(t.target)}</div>
+          <div class="tmeta">
+            <span class="towner">${who ? `${avatar(who)}<span><i>Owner</i>${esc(who)}</span>` : `<span><i>Owner</i>${ro ? "Not set" : "Nobody yet"}</span>`}</span>
+            ${t.deadline ? `<span class="tdue"><i>By</i>${esc(dmyY(t.deadline))}</span>` : ""}
+          </div>
           ${t.note?`<p class="tnote">${esc(t.note)}</p>`:""}
           <button class="tedit" type="button" data-editdept="${i}">Edit</button>
-        </div>`).join("")}
+        </div>`; }).join("")}
     </div>` : `<div class="empty bold">
       <h4>No targets set</h4>
       <p>${ro ? "Nobody has set a target for this campaign yet."
-        : "Add a department and the number it is carrying — enrolments, installs, leads, whatever that team is on the hook for."}</p>
+        : "Add what the whole campaign has to achieve, like “Conduct 8 webinars” or “Get 500 form applicants”, and who owns it."}</p>
     </div>`}`;
+}
+/* who owns a target: a dialog from Campaign Details or Assignment; the owner gets an email + a 🔔 */
+function notifyTargetOwner(c, t){
+  const msg = { ownerId:t.ownerId, owner:t.owner, name:"Target: " + t.target, kind:"other", kindOther:"Target",
+    date:t.deadline||"", platform:"", details:t.note||"" };
+  notifyOwner(c, msg); t.notifiedAt = msg.notifiedAt;
+}
+function targetDialog(c, idx){
+  const t = idx==null ? { target:"", ownerId:"", deadline:c.details.end||"", note:"" } : c.targets[idx];
+  const ppl = people();
+  openDialog({
+    title: idx==null ? "Add a target" : "Edit target",
+    sub:"One goal for the whole campaign, the one person responsible for it, and the deadline.",
+    okLabel: idx==null ? "Add target" : "Save",
+    fields:[
+      { k:"target",   label:"Target", ph:"Conduct 8 webinars", value:t.target },
+      { k:"ownerId",  label:"Owner (the one person responsible)", type:"select", value:t.ownerId||"",
+        opts:[["","— nobody yet —"]].concat(ppl.map(p=>[p.id, p.name + (p.role?" · "+p.role:"")])) },
+      { k:"deadline", label:"Deadline", type:"date", value:t.deadline||"" },
+      { k:"color",    label:"Box colour", type:"swatch", value:t.color||"" },
+      { k:"note",     label:"Note (optional)", type:"area", ph:"How it is counted.", value:t.note }
+    ],
+    onSave:(v)=>{
+      if(!v.target){ toast("Write the target"); return false; }
+      const was = t.ownerId || "", p = ppl.find(x=>x.id===v.ownerId);
+      v.owner = p ? p.name : "";
+      const T = idx==null ? v : Object.assign(c.targets[idx], v);
+      if(idx==null) c.targets.push(T);
+      if(T.ownerId && T.ownerId !== was) notifyTargetOwner(c, T);
+      save(); toast(idx==null ? "Target added" : "Saved");
+    }
+  });
 }
 /* the content pieces */
 /* ---------- the content list: one tab per day, pieces grouped by type ---------- */
@@ -1339,6 +1456,10 @@ function itemsSection(c, ro){
       }).join("");
     }
   }
+  /* read-only: how many of each type are going out, e.g. "🎥 Webinars 5" */
+  const sum = [];
+  if(ro) c.items.forEach(it=>{ const g = groupKey(it); let S = sum.find(x=>x.key===g);
+    if(!S){ S = { key:g, k:kindOf(it), name:kindName(it), n:0 }; sum.push(S); } S.n++; });
   return `
     <div class="sec-h secbig" style="margin-top:30px">
       ${ro ? `<h3>${esc(c.contentsLabel)}</h3>`
@@ -1346,6 +1467,7 @@ function itemsSection(c, ro){
       <span class="hint">${c.items.length} piece${c.items.length===1?"":"s"} across ${new Set(c.items.map(i=>i.date||"none")).size} day${new Set(c.items.map(i=>i.date||"none")).size===1?"":"s"}</span>
       ${ro ? "" : `<button class="btn pri" id="bulkCreate" style="margin-left:auto">＋ Create content piece</button>`}
     </div>
+    ${sum.length ? `<div class="rosum">${sum.map(S=>`<span class="rosum-i" style="--ic:${S.k.c}"><i>${S.k.emo}</i>${esc(plural(S.name, S.n))}<b>${S.n}</b></span>`).join("")}</div>` : ""}
     ${strip}
     <div class="daybody">${body}</div>`;
 }
@@ -1360,7 +1482,7 @@ function detailsPane(c){
     </div>
     <div class="detwrap">
       <div class="fgridwrap" data-fdrop="1">
-        ${c.fields.length
+        ${c.fields.length && (!ro || c.fields.some(k=>fieldText(c,k)))
           ? `<div class="fgrid2">${c.fields.map(k=>fieldBlock(c,k,ro)).join("")}</div>`
           : `<div class="empty bold"><h4>No fields on the form</h4>
              <p>${ro?"Nothing filled in yet.":"Drag one across from the field library, or add your own."}</p></div>`}
@@ -1492,32 +1614,12 @@ function wireDetails(c){
   });
 
   /* targets */
-  const deptDialog = (idx)=>{
-    const t = idx==null ? { dept:"", target:"", note:"" } : c.targets[idx];
-    openDialog({
-      title: idx==null ? "Add a department target" : "Edit target",
-      sub:"Who is carrying it, and how much.",
-      okLabel: idx==null ? "Add target" : "Save",
-      fields:[
-        { k:"dept",   label:"Department", ph:"Social media, Sales, App…", value:t.dept },
-        { k:"target", label:"Target",     ph:"500 enrolments", value:t.target },
-        { k:"color",  label:"Box colour", type:"swatch", value:t.color||"" },
-        { k:"note",   label:"Note (optional)", type:"area", ph:"How it is counted, or by when.", value:t.note }
-      ],
-      onSave:(v)=>{
-        if(!v.dept){ toast("Name the department"); return false; }
-        if(!v.target){ toast("Give it a target"); return false; }
-        if(idx==null) c.targets.push(v); else c.targets[idx] = Object.assign(c.targets[idx], v);
-        save(); toast(idx==null ? `${v.dept} target added` : "Saved");
-      }
-    });
-  };
-  const ad = $("#addDept"); if(ad) ad.onclick = ()=>deptDialog(null);
-  W.querySelectorAll("[data-editdept]").forEach(b=>b.onclick=()=>deptDialog(Number(b.dataset.editdept)));
+  const ad = $("#addDept"); if(ad) ad.onclick = ()=>targetDialog(c, null);
+  W.querySelectorAll("[data-editdept]").forEach(b=>b.onclick=()=>targetDialog(c, Number(b.dataset.editdept)));
   W.querySelectorAll("[data-rmdept]").forEach(b=>b.onclick=()=>{
     const i = Number(b.dataset.rmdept), gone = c.targets[i];
     c.targets.splice(i,1); save();
-    toastUndo(`${gone.dept} target removed`, ()=>{ c.targets.splice(i,0,gone); save(); });
+    toastUndo(`“${gone.target}” removed`, ()=>{ c.targets.splice(i,0,gone); save(); });
   });
 
   /* the hero icon */
@@ -1720,17 +1822,56 @@ function itemDialog(c, idx, pre){
 }
 
 /* ============================================================ ASSIGNMENT */
+/* who is responsible for what: each target's owner, then everyone's targets and pieces side by side */
+function respSection(c, ro){
+  const mine = me();
+  const T = c.targets.map((t,i)=>({ t, i, who:ownerName(t) }));
+  const by = {};
+  const add = (id, name) => { const k = id || "n:" + name; return by[k] = by[k] || { id, name, targets:[], items:[] }; };
+  T.forEach(x=>{ if(x.who) add(x.t.ownerId, x.who).targets.push(x.t); });
+  c.items.forEach(it=>{ const w = ownerName(it); if(w) add(it.ownerId, w).items.push(it); });
+  const list = Object.values(by).sort((a,b)=> (b.id===mine && !!mine) - (a.id===mine && !!mine) || a.name.localeCompare(b.name));
+  const nobody = T.filter(x=>!x.who).length;
+  return `
+    <div class="sec-h secbig">
+      <h3>🎯 Targets and owners</h3>
+      <span class="hint">Set in Campaign Details. Each owner is responsible for their target.</span>
+    </div>
+    ${T.length ? `<div class="tw"><table style="min-width:640px">
+      <thead><tr><th>Target</th><th>Deadline</th><th>Owner</th></tr></thead>
+      <tbody>${T.map(x=>`<tr class="${x.t.ownerId && x.t.ownerId===mine ? "mine" : ""}">
+        <td class="td-idea" style="border-left:3px solid ${x.t.color || TCOLORS[x.i % TCOLORS.length]}">${esc(x.t.target)}${x.t.note?`<div class="hint" style="margin-top:3px;font-size:11.5px">${esc(x.t.note)}</div>`:""}</td>
+        <td class="vol" style="white-space:nowrap">${x.t.deadline ? esc(dmyY(x.t.deadline)) : `<span class="miss">not set</span>`}</td>
+        <td style="min-width:200px">${x.who ? `<div class="who">${avatar(x.who)}${esc(x.who)}${x.t.ownerId && x.t.ownerId===mine ? ` <span class="badge good">you</span>` : ""}</div>` : `<span class="miss">nobody</span>`}
+          ${ro ? "" : `<button class="btn sm" data-towner="${x.i}" style="margin-top:6px">${x.who ? "Change owner" : "Give it an owner"}</button>`}</td>
+      </tr>`).join("")}</tbody></table></div>
+      ${nobody && !ro ? `<p class="hint" style="margin:9px 0 0;color:var(--crit)">${nobody} target${nobody>1?"s have":" has"} no owner yet.</p>` : ""}`
+    : `<div class="empty bold"><h4>No targets yet</h4><p>${canEdit() ? "Add them in Campaign Details, each with an owner." : "The campaign's targets show up here once they're set."}</p></div>`}
+    ${list.length ? `
+    <div class="sec-h secbig" style="margin-top:28px"><h3>👥 Who is responsible for what</h3><span class="hint">Every target and piece, by person</span></div>
+    <div class="rgrid">${list.map(P=>`<div class="rcard ${P.id && P.id===mine ? "mine" : ""}">
+      <div class="rcard-h">${avatar(P.name)}<b>${esc(P.name)}</b>${P.id && P.id===mine ? `<span class="badge good">you</span>` : ""}
+        <span class="rcard-n">${P.targets.length} target${P.targets.length===1?"":"s"} · ${P.items.length} piece${P.items.length===1?"":"s"}</span></div>
+      ${P.targets.map(t=>`<div class="rline t">🎯 <span>${esc(t.target)}</span>${t.deadline?`<em>by ${esc(dmy(t.deadline))}</em>`:""}</div>`).join("")}
+      ${P.items.slice(0,6).map(it=>`<div class="rline">${kindOf(it).emo} <span>${esc(it.name)}</span>${it.date?`<em>${esc(dmy(it.date))}</em>`:""}</div>`).join("")}
+      ${P.items.length>6 ? `<div class="rline more">＋ ${P.items.length-6} more piece${P.items.length-6===1?"":"s"} in the table below</div>` : ""}
+    </div>`).join("")}</div>` : ""}`;
+}
 function assignPane(c){
-  if(!c.items.length) return `<div class="empty">
-    <h4>Nothing to hand out yet</h4>
-    <p>Add items under Fill in Details, then share them out here by platform.</p>
-    <button class="btn pri" data-ctab="details">Go to Fill in Details</button></div>`;
   const ro = !canPlan();
+  const resp = respSection(c, ro);
+  if(!c.items.length) return `${ro ? memberBar() : ""}${resp}
+    <div class="sec-h secbig" style="margin-top:28px"><h3>📦 Content pieces</h3></div>
+    <div class="empty">
+    <h4>No content pieces to hand out yet</h4>
+    <p>Add items under Campaign Details, then share them out here by platform.</p>
+    <button class="btn pri" data-ctab="details">Go to Campaign Details</button></div>`;
   const plats = allPlats(c);
   if(ASSIGNFILTER!=="All" && !plats.includes(ASSIGNFILTER)) ASSIGNFILTER="All";
   const rows = ASSIGNFILTER==="All" ? c.items : c.items.filter(i=>platsOf(i).includes(ASSIGNFILTER));
   const unassigned = c.items.filter(i=>!ownerName(i)).length;
-  return `${ro ? memberBar() : ""}
+  return `${ro ? memberBar() : ""}${resp}
+    <div class="sec-h secbig" style="margin-top:28px"><h3>📦 Content pieces</h3><span class="hint">Who makes each piece, and where it goes</span></div>
     <div class="bar2" ${ro?"hidden":""}>
       <span class="ic2">HAND-OFF</span>
       <p><b>Give every item a name, then press its action.</b> Whoever you put in Accountable gets an email and a 🔔 the moment
@@ -1779,6 +1920,23 @@ function wireAssign(c){
   B.querySelectorAll("[data-plat]").forEach(b=>b.onclick=()=>{ ASSIGNFILTER=b.dataset.plat; draw(); });
   B.querySelectorAll("[data-goprocess]").forEach(b=>b.onclick=()=>{ if(OPT.goProcess) OPT.goProcess(c); });
   if(!canPlan()) return;
+  B.querySelectorAll("[data-towner]").forEach(b=>b.onclick=()=>{
+    const t = c.targets[Number(b.dataset.towner)]; if(!t) return;
+    const ppl = people();
+    openDialog({
+      title:`Who owns “${t.target}”?`,
+      sub:"The one person responsible for this target. They get an email and a 🔔 when you save.",
+      okLabel:"Save and notify",
+      fields:[{ k:"ownerId", label:"Owner", type:"select", value:t.ownerId||"",
+        opts:[["","— nobody yet —"]].concat(ppl.map(p=>[p.id, p.name + (p.role?" · "+p.role:"")])) }],
+      onSave:(v)=>{
+        const was = t.ownerId || "", p = ppl.find(x=>x.id===v.ownerId);
+        t.ownerId = v.ownerId; t.owner = p ? p.name : "";
+        if(t.ownerId && t.ownerId !== was) notifyTargetOwner(c, t);
+        save();
+      }
+    });
+  });
   B.querySelectorAll("[data-assign]").forEach(b=>b.onclick=()=>{
     const it = c.items.find(x=>x.id===b.dataset.assign); if(!it) return;
     const ppl = people();
@@ -1822,8 +1980,8 @@ function campDates(list){ return [...new Set(list.filter(i=>i.date).map(i=>i.dat
 function dashPane(c){
   if(!c.items.length) return `<div class="empty">
     <h4>Nothing to summarise yet</h4>
-    <p>Add items under Fill in Details and this page fills itself in.</p>
-    <button class="btn pri" data-ctab="details">Go to Fill in Details</button></div>`;
+    <p>Add items under Campaign Details and this page fills itself in.</p>
+    <button class="btn pri" data-ctab="details">Go to Campaign Details</button></div>`;
   const n = c.items.length;
   const ds = campDates(c.items);
   const byKind = Object.entries(ITEM_KINDS)
@@ -1879,8 +2037,8 @@ const filterOn = () => CALFILTER.range!=="all" || CALFILTER.type!=="all" || CALF
 function calendarPane(c){
   if(!c.items.length) return `<div class="empty">
     <h4>Nothing to show yet</h4>
-    <p>Add items under Fill in Details and they appear here, arranged by date and coloured by type.</p>
-    <button class="btn pri" data-ctab="details">Go to Fill in Details</button></div>`;
+    <p>Add items under Campaign Details and they appear here, arranged by date and coloured by type.</p>
+    <button class="btn pri" data-ctab="details">Go to Campaign Details</button></div>`;
   const shown = filtered(c);
   const dated = shown.filter(i=>i.date), undated = shown.filter(i=>!i.date);
   const kinds = [...new Set(c.items.map(i=>i.kind))];
@@ -2112,7 +2270,7 @@ function openPiece(c, id){
 
 /* ============================================================ API */
 window.CX = {
-  tabs: [["details","Fill in Details"],["assign","Assignment & distribution of work"],["calendar","Calendar"],["dash","Dashboard"]],
+  tabs: [["details","Campaign Details"],["assign","Assignment & distribution of work"],["calendar","Calendar"],["dash","Dashboard"]],
   normalize: normalize,
   kinds: ITEM_KINDS,
   typeKey: typeKey,
