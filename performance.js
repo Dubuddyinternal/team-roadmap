@@ -106,7 +106,6 @@ async function renderPerformance() {
 
   var mSec = perfSection("📅 Month by month"); body.appendChild(mSec.el);
   mSec.body.appendChild(perfEl("div", "hint", "Loading…"));
-  var pSec = perfSection("🧠 Personality profile"); body.appendChild(pSec.el);
   /* the OKR list itself isn't shown here: the tile opens the OKRs, and the month table has Update OKRs */
   var fbSec = { body: fbPane };
   var ciSec = perfSection("📈 OKR check-ins"); body.appendChild(ciSec.el);
@@ -127,7 +126,6 @@ async function renderPerformance() {
   fbTile.querySelector(".n").textContent = String(sent.length);
   fbTile.appendChild(perfEl("div", "s", sent.length ? sent.filter(function (x) { return !x.late; }).length + " on time · " + sent.filter(function (x) { return x.discussed_at; }).length + " reviewed" : "nothing sent yet"));
   perfFeedbackView(fbSec.body, fbRows, mine);
-  perfPersonality(pSec.body, fbRows, mine);
   /* 📈 check-ins */
   var ciRows = [];
   if (res[1].error) { ciTile.querySelector(".n").textContent = "—"; ciSec.body.appendChild(perfEl("div", "hint", "OKR check-ins aren't set up yet.")); }
@@ -409,7 +407,7 @@ function perfFeedbackView(box, rows, mine) {
       if (mv) { var mh = perfEl("div", "perf-sub", "Manager's review"); b.append(mh, mv); mv.style.margin = "6px 0 16px"; }
       else b.appendChild(perfEl("div", "hint", "No review notes yet.")).style.margin = "10px 0";
     }
-    b.appendChild(perfTestTabs(r.answers || {}));
+    b.appendChild(perfTestTabs(r.answers || {}, rows, r));
     d.appendChild(b);
     if (i === 0) d.open = true;
     box.appendChild(d);
@@ -417,7 +415,7 @@ function perfFeedbackView(box, rows, mine) {
 }
 
 /* the three tests of a month's feedback, each in its own tab: Monthly feedback · Personality · Self-awareness */
-function perfTestTabs(a) {
+function perfTestTabs(a, rows, row) {
   var w = perfEl("div", "perf-tests"), bar = perfEl("div", "perf-ttabs"), pane = perfEl("div", "perf-tpane");
   var qView = function (qs) {
     var x = perfEl("div");
@@ -432,14 +430,9 @@ function perfTestTabs(a) {
   };
   var traits = function () {
     var x = perfEl("div"), pos = Array.isArray(a.traits_pos) ? a.traits_pos : [], neg = Array.isArray(a.traits_neg) ? a.traits_neg : [];
-    if (!pos.length && !neg.length) { x.appendChild(perfEl("div", "hint", "No traits ticked this month.")); return x; }
-    [["Positive traits", pos, "pos"], ["Negative traits", neg, "neg"]].forEach(function (g) {
-      x.appendChild(perfEl("div", "perf-sub", g[0] + " · " + g[1].length));
-      var tw = perfEl("div", "fb-trview");
-      g[1].forEach(function (t) { tw.appendChild(perfEl("span", "fb-tr " + g[2] + " on", t)); });
-      if (!g[1].length) tw.appendChild(perfEl("span", "hint", "none"));
-      x.appendChild(tw);
-    });
+    if (!pos.length && !neg.length) { x.appendChild(perfEl("div", "hint", "No traits ticked this month.")); }
+    else x.appendChild(perfStrengthBoxes(pos, neg));
+    x.appendChild(perfTraitLog(rows || [row]));
     return x;
   };
   var T = [["1 · Monthly feedback", function () { return qView(typeof FB_Q !== "undefined" ? FB_Q : []); }],
@@ -452,6 +445,46 @@ function perfTestTabs(a) {
   });
   pane.appendChild(T[0][1]());
   w.append(bar, pane);
+  return w;
+}
+
+/* 💪 Strengths (the strongest areas, with the traits ticked in them) · 🌱 To work on (each negative trait, what it means) */
+function perfStrengthBoxes(pos, neg) {
+  var two = perfEl("div", "perf-ptwo");
+  var ranked = PERF_THEMES.map(function (th) {
+    var p = th.pos.filter(function (x) { return pos.indexOf(x) >= 0; }), n = th.neg.filter(function (x) { return neg.indexOf(x) >= 0; });
+    return { th: th, p: p, score: p.length / th.pos.length - n.length / th.neg.length * 0.8 };
+  }).filter(function (x) { return x.p.length; }).sort(function (a, b) { return b.score - a.score; });
+  var st = perfEl("div", "perf-pbox pos"); st.appendChild(perfEl("h4", null, "💪 Strengths"));
+  if (ranked.length) ranked.slice(0, 3).forEach(function (x) { st.appendChild(perfEl("div", null, "• " + x.th.name + ": " + x.p.join(", "))); });
+  else st.appendChild(perfEl("div", "hint", "No positive traits ticked."));
+  var wk = perfEl("div", "perf-pbox neg"); wk.appendChild(perfEl("h4", null, "🌱 To work on"));
+  if (neg.length) neg.forEach(function (n) {
+    var info = typeof FB_TRAIT_INFO !== "undefined" && FB_TRAIT_INFO[n];
+    wk.appendChild(perfEl("div", null, "• " + n + (info ? " — " + info[0].charAt(0).toLowerCase() + info[0].slice(1) : "")));
+  });
+  else wk.appendChild(perfEl("div", "hint", "No negative traits ticked."));
+  two.append(st, wk);
+  return two;
+}
+/* month by month: the traits ticked each month */
+function perfTraitLog(rows) {
+  var w = perfEl("div");
+  var list = (rows || []).filter(function (r) { var t = perfTraitsOf(r); return t.pos.length || t.neg.length; });
+  w.appendChild(perfEl("div", "perf-sub", "Month by month"));
+  if (!list.length) { w.appendChild(perfEl("div", "hint", "Nothing ticked yet.")); return w; }
+  var t = perfEl("div", "perf-table");
+  list.forEach(function (r) {
+    var tr = perfTraitsOf(r), row = perfEl("div", "perf-tlog");
+    row.appendChild(perfEl("b", null, (typeof fbLabel === "function" ? fbLabel(r.month) : r.month) + (r.status !== "submitted" ? " (draft)" : "")));
+    var tags = perfEl("div", "fb-trview");
+    tr.pos.forEach(function (x) { tags.appendChild(perfEl("span", "fb-tr pos on", x)); });
+    tr.neg.forEach(function (x) { tags.appendChild(perfEl("span", "fb-tr neg on", x)); });
+    row.appendChild(tags);
+    row.appendChild(perfEl("span", "hint", tr.pos.length + " : " + tr.neg.length));
+    t.appendChild(row);
+  });
+  w.appendChild(t);
   return w;
 }
 
@@ -680,6 +713,8 @@ function perfAgreementView(box, ag, mine) {
     + ".perf-ttabs{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}"
     + ".perf-ttab{border:1.5px solid var(--line-strong);background:#fff;border-radius:99px;padding:6px 13px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;color:var(--ink)}"
     + ".perf-ttab.on{border-color:var(--indigo);background:var(--indigo-soft);color:var(--indigo)}"
+    + ".perf-tlog{display:grid;grid-template-columns:150px 1fr 50px;gap:12px;align-items:center;padding:10px 14px;border-top:1px solid var(--line)}.perf-tlog:first-child{border-top:0}"
+    + ".perf-tests .perf-ptwo{margin-bottom:6px}"
     + ".perf-fill{border:0;border-radius:99px;background:#E8622B;color:#fff;font:700 11.5px var(--sans,system-ui);padding:4px 10px;cursor:pointer;margin-left:4px;white-space:nowrap}"
     + ".perf-mrow .pc{font-family:var(--mono);font-weight:700}"
     + ".perf-mrow .fbs.ok{color:var(--done,#2E9466)}.perf-mrow .fbs.late{color:#B4541A}.perf-mrow .fbs.none{color:#B42318}.perf-mrow .fbs.draft{color:var(--muted)}"
