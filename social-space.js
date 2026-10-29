@@ -1289,7 +1289,7 @@ function renderTargets(){
     ${ro?`<div class="apibar"><span class="ic">VIEW ONLY</span><p><b>Only people allowed to edit targets can change these.</b>
       An owner can give a role the <b>Edit social targets</b> permission in Administration → Roles &amp; permissions.</p></div>`
       :`<div class="apibar live"><span class="ic">TARGETS</span><p><b>Set what the team is aiming for.</b> Progress shows on the Summary,
-      under each platform's card (<b>Other targets ▾</b>). Counts come from posts published in the chosen period — weeks start Monday.
+      under each platform's card (<b>Agreement status ▾</b>). Counts come from posts published in the chosen period — weeks start Monday.
       Leave a field empty for no target.</p></div>`}
     <div class="sec">${card("yt","var(--c1)","var(--c1)")}${card("ig","var(--c3)","var(--c3)")}</div>
     ${ro?"":`<div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" id="tReset">Undo changes</button><button class="btn pri" id="tSave">Save targets</button></div>`}`;
@@ -1851,8 +1851,8 @@ function renderSummary(){
 
   const yt=ytSeries(), ig=igSeries();
   const more=(k,col)=>{ const gs=TG.goals.filter(g=>g.platform===k&&g.target>0), n=gs.length+(TG.plan[k].time?1:0), open=!!OKR_OPEN[k];
-    return `<div class="okr-more ${open?"open":""}"><button data-okrmore="${k}">${open?"▴":"▾"} Other targets (${n})</button>
-      ${open?(n?postingTimeHTML(k,col)+gs.map(g=>goalHTML(g,col)).join(""):`<p class="hint" style="margin:8px 0 0">No other targets for ${PLAT_NAME[k]} yet — set them in the <b>Our agreement</b> tab.</p>`):""}</div>`; };
+    return `<div class="okr-more ${open?"open":""}"><button data-okrmore="${k}">${open?"▴":"▾"} Agreement status (${n})</button>
+      ${open?(n?postingTimeHTML(k,col)+gs.map(g=>goalHTML(g,col)).join(""):`<p class="hint" style="margin:8px 0 0">No agreement targets for ${PLAT_NAME[k]} yet — set them in the <b>Our agreement</b> tab.</p>`):""}</div>`; };
   const okr=(k,n,col,series,isLive)=>{
     const tgt=TG.targets[k];
     if(!series.length) return `<div class="okr"><div class="okr-top"><div><div class="lbl" style="margin-bottom:4px">${n} ${AUD(k)}</div>
