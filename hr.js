@@ -932,6 +932,19 @@ function hrDrawList(body) {
       var c4 = hrEl("td"); c4.appendChild(hrChip(rec ? rec.status : "none"));
       var asks = (HRA.changes[u.id] || []).filter(function (x) { return x.status === "pending"; }).length;
       if (asks) { var ak = hrEl("span", "hr-chip hr-amber", "✏️ " + asks + " to answer"); ak.style.marginLeft = "6px"; c4.appendChild(ak); }
+      if (hrIsAdmin() && (!rec || rec.status !== "complete" && rec.status !== "signed")) {
+        var qa = hrEl("button", "btn hr-qapprove", "✅ Approve"); qa.type = "button";
+        qa.title = "Already working here? Mark their HR file complete now: reminders stop and their account opens";
+        qa.onclick = async function (e) {
+          e.stopPropagation();
+          if (!confirm("Approve " + userDisplayName(u) + "'s HR file directly?\n\nIt will be marked Complete: reminders stop and their account opens. You can reopen it later.")) return;
+          qa.disabled = true;
+          var r = await SUPA.rpc("hr_admin_update", { p_user: u.id, p_action: "complete", p_job: null, p_note: null, p_contract_html: null });
+          if (r.error) { qa.disabled = false; hrToast(hrErr(r.error)); return; }
+          HRA.rows[u.id] = r.data; hrToast("Approved — " + userDisplayName(u)); hrDrawList(body);
+        };
+        c4.appendChild(qa);
+      }
       var c5 = hrEl("td", "hide-s", rec ? hrDate(rec.updated_at) : "—");
       tr.append(c1, c2, c3, c3b, c4, c5);
       function go() { HRA.open = u.id; HRA.reveal = {}; renderAdminPage(); }
@@ -977,6 +990,17 @@ function hrRenderPerson(wrap, uid) {
     var cm = hrEl("button", "btn save", "✅ Mark complete");
     cm.onclick = async function () { if (await act("complete")) { hrToast("Marked complete"); renderAdminPage(); } };
     acts.appendChild(cm);
+  }
+  /* older employees: approve straight away, without the file or the offer-letter steps.
+     Counts as done everywhere: the HR rules' strip, emails and account lock stop. */
+  if (!rec || rec.status !== "complete" && rec.status !== "signed") {
+    var ap = hrEl("button", "btn save", "✅ Approve directly");
+    ap.title = "For people already working here: mark their HR file complete now, so reminders stop and their account opens";
+    ap.onclick = async function () {
+      if (!confirm("Approve " + userDisplayName(u) + "'s HR file without the remaining steps?\n\nIt will be marked Complete: reminders stop, and if their account was locked by HR rules it opens again. You can reopen the file later.")) return;
+      if (await act("complete")) { hrToast("Approved — " + userDisplayName(u) + "'s account is open"); renderAdminPage(); }
+    };
+    acts.appendChild(ap);
   }
   if (rec && rec.status === "complete") {
     var ro = hrEl("button", "btn", "Reopen the file");
@@ -1992,6 +2016,7 @@ function hrRuleLock(on) {
     + "#hr-rule-lock .box{max-width:460px;text-align:center;background:#fff;border:1px solid var(--line,#E5DDD5);border-radius:16px;padding:28px 26px;box-shadow:0 10px 40px rgba(0,0,0,.08)}"
     + "#hr-rule-lock .big{font-size:40px}#hr-rule-lock h2{margin:6px 0 8px}#hr-rule-lock p{color:var(--muted,#6B5F57);font-size:14px;line-height:1.55;margin:0}"
     + "@media(max-width:640px){#hr-rule-strip{height:auto;min-height:44px;padding:6px 12px;font-size:12.5px}#hr-rule-strip .t{white-space:normal}}";
+  css += ".hr-qapprove{display:block;margin-top:6px;padding:4px 10px;font-size:12px;border-radius:99px}";
   var st = document.createElement("style"); st.textContent = css; (document.head || document.documentElement).appendChild(st);
 })();
 
