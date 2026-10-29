@@ -1844,9 +1844,8 @@ function renderSummary(){
      `<button data-pview="${k}" class="${PLATVIEW===k?"on":""}">${k==="yt"?`<span class="sdot" style="background:var(--c1)"></span>`:k==="ig"?`<span class="sdot" style="background:var(--c3)"></span>`:""}${l}</button>`).join("")}
      <span class="hint">${PLATVIEW==="all"?"Everything below covers YouTube and Instagram together":`Everything below — targets, ideas, cards, posts, keywords — is ${PLATVIEW==="yt"?"YouTube":"Instagram"} only`}</span>
      <button class="btn pri" id="cmpOpen" style="margin-left:auto">⇄ Compare Instagram vs YouTube</button></div>
-   ${liveBar()}
 
-   <div class="sec">${fdrop("sum", `🔎 Filters · ${FILTERS.period==="week"?"Last 7 days":FILTERS.period==="month"?"Last 30 days":"Last 90 days"} · ${(()=>{ const all=Object.keys(REG.vtype).filter(typeVisible), on=all.filter(k=>FILTERS.vtypes.includes(k)); return on.length===all.length?"all types":on.length+" of "+all.length+" types"; })()}`, `<div class="row">
+   <div class="sec">${fdrop("sum", `🔎 Filters & sync · ${FILTERS.period==="week"?"Last 7 days":FILTERS.period==="month"?"Last 30 days":"Last 90 days"} · ${(()=>{ const all=Object.keys(REG.vtype).filter(typeVisible), on=all.filter(k=>FILTERS.vtypes.includes(k)); return on.length===all.length?"all types":on.length+" of "+all.length+" types"; })()}`, `${liveBar()}<div class="row">
      <span class="lbl">Period</span>
      ${["week","month","quarter"].map(p=>`<button class="chip ${FILTERS.period===p?"on":""}" data-period="${p}">${p==="week"?"Last 7 days":p==="month"?"Last 30 days":"Last 90 days"}</button>`).join("")}
      <span style="width:8px"></span><span class="lbl">Type</span>
