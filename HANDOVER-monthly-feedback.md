@@ -84,3 +84,15 @@ Everything is saved in the same `monthly_feedback.answers`, so the review reader
 | Screens | `monthly-feedback.js`. The org chart's Linked login field and the My Team tab are in `index.html`. The pop-up's "Fill it now" button is in `notifications.js`. |
 | Database | `supabase/stage16a_monthly_feedback.sql` (applied). It contains the tables `monthly_feedback`, `feedback_settings` and `suggestion_box`, plus functions `feedback_*`, `fb_reports` and `suggestion_send`. |
 | Reminders | pg_cron job `feedback-reminders` (`0 4 * * *` UTC = 9:30 IST), which calls `feedback_remind()`. |
+
+### Manager's feedback (stage 22d)
+
+- When someone's feedback is sent, their **direct manager** sees **📋 Write your Oct feedback →** on their box in My Team → Reporting lines. The direct manager is the nearest linked box above them; super-admins see it too. Others above see **Read**.
+- The reader opens with **📋 Your feedback for …**:
+  - an overall rating, 1 (Needs improvement) to 5 (Outstanding),
+  - What went well, What to improve, Focus for next month, How you'll support them,
+  - the personality traits the manager sees.
+
+  **Save draft** keeps it private. **Share** shows it to the person and sends them a 🔔.
+- The person sees it in **📈 My Performance → My monthly feedback → 4 · Manager's feedback**. That includes the rating, the answers, and where the manager's trait ticks match or differ from their own. The **Manager's rating** column in Month by month shows it too.
+- Stored in `monthly_feedback.manager_review` and saved through `feedback_manager_review()`. Run `supabase/stage22d_manager_review.sql`.
