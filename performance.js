@@ -376,6 +376,15 @@ function perfOkrSection(okrs, u, mine) {
 
 /* ---------- 📝 feedback + the senior's review ---------- */
 function perfFeedbackView(box, rows, mine) {
+  /* ＋ this month's feedback isn't sent yet: a button to fill it right here */
+  var tm = mine && typeof fbTargetMonth === "function" ? fbTargetMonth() : null;
+  if (tm && typeof fbOpenForm === "function" && !rows.some(function (r) { return r.month === tm && r.status === "submitted"; })) {
+    var draft = rows.some(function (r) { return r.month === tm; });
+    var nb = perfEl("div", "perf-new"), lbl = typeof fbLabel === "function" ? fbLabel(tm) : tm;
+    nb.appendChild(perfEl("span", null, (draft ? "Your " + lbl + " feedback is started but not sent." : "Your " + lbl + " feedback is waiting.")));
+    var go = perfEl("button", "perf-fill big", draft ? "Finish it →" : "＋ Fill it now"); go.type = "button"; go.onclick = fbOpenForm;
+    nb.appendChild(go); box.appendChild(nb);
+  }
   if (!rows.length) { box.appendChild(perfEl("div", "perf-empty", mine ? "You haven't sent any monthly feedback yet." : "No feedback sent yet (drafts stay private).")); return; }
   rows.forEach(function (r, i) {
     var d = perfEl("details", "fb-hist"), s = perfEl("summary");
@@ -655,6 +664,8 @@ function perfAgreementView(box, ag, mine) {
     + ".perf-tile .n{font-size:26px;font-weight:750;font-family:var(--disp)}.perf-tile .l{font-size:13px;font-weight:600}.perf-tile .s{font-size:12px;color:var(--muted);margin-top:2px}"
     + ".perf-sec{margin:26px 0 0}.perf-sec h2{font-family:var(--disp);font-size:19px;margin:0 0 12px}"
     + ".perf-sub{font-family:var(--mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:12px 0 6px}"
+    + ".perf-new{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 18px;margin:0 0 12px;border:1.5px solid #F3C9B5;background:#FFF4EE;border-radius:14px;font-weight:600}"
+    + ".perf-fill.big{font-size:13.5px;padding:8px 16px}"
     + ".perf-empty{color:var(--muted);padding:18px;border:1.5px dashed var(--line-strong);border-radius:14px;text-align:center}"
     + ".perf-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 10px}"
     + ".perf-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px}"
