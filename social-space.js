@@ -201,6 +201,7 @@ details.fdrop{margin-bottom:14px}
 .wl-r.ok b,.wl-r.ok .wl-m{color:var(--good)}.wl-r.miss b,.wl-r.miss .wl-m{color:var(--crit)}
 .wl-r>span:first-child{color:var(--ink-2);font-family:var(--sans,inherit);font-size:12.5px}
 .wl-r.now{background:var(--surface-4)}
+.wl-r.up>span:first-child{color:var(--ink-3)}.wl-r.tot{background:var(--surface-4);border-top:1.5px solid var(--line-strong)}
 .wl-h{background:var(--surface-4);position:sticky;top:0;z-index:1}.wl-h>span{font-family:var(--mono,monospace)!important;font-size:10px!important;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3)!important;text-align:right}
 .wl-h>span:first-child{text-align:left}
 .wl-at{font-family:var(--mono,monospace);text-align:right;font-weight:600}.wl-at.behind{color:var(--crit)}.wl-at.ahead{color:var(--good)}.wl-n{color:var(--ink-3);font-size:11.5px;text-align:right}.wl-m{font-weight:700;text-align:center}
@@ -1185,14 +1186,15 @@ function weekLog(k, series, st, tgt){
       <span class="wl-m">${r.now?"…":r.gain>=need?"✓":"✕"}</span></div>`; }).join("");
   return fdrop("wl-"+k, `📅 Week by week · ${done?met+" of "+done+" weeks on pace":"first week running"}`, `<div class="wl">${head}${body}</div>`);
 }
-/* 📅 the agreement week by week: for each weekly (or daily ×7) target, how many were posted in each week since
-   the "counting from" date — like the subscriber log above */
+/* 📅 the agreement week by week, for the whole quarter: for each weekly (or daily ×7) target, how many were posted
+   in each week from the "counting from" date to the end of the quarter (weeks still to come show what's needed),
+   with the quarter's total at the bottom — like the subscriber log above */
 function postLog(k, gs){
   gs=gs.filter(g=>g.period==="week"||g.period==="day");
   if(!gs.length) return "";
   const mon=d=>{ const x=new Date(d+"T00:00:00"); x.setDate(x.getDate()-((x.getDay()+6)%7)); return iso(x); };
-  const end=today(), weeks=[]; let w=mon((TG.from&&TG.from[k])||quarterStart());
-  while(w<=end && weeks.length<60){ weeks.push(w); w=addDays(w,7); }
+  const end=today(), qEnd=quarterEnd(), weeks=[]; let w=mon((TG.from&&TG.from[k])||quarterStart());
+  while(w<=qEnd && weeks.length<60){ weeks.push(w); w=addDays(w,7); }
   if(!weeks.length) return "";
   const valIn=(g,ws)=>{ const m=GOAL_METRICS[g.metric], we=addDays(ws,6);
     if(m.untracked){ if(g.period!=="week") return null; const v=S.manual[`${g.platform}:${g.metric}:${ws}`]; return v==null?0:Number(v); }
@@ -1201,14 +1203,22 @@ function postLog(k, gs){
   const cols=`minmax(92px,1fr) ${gs.map(()=>"minmax(64px,auto)").join(" ")} 54px`;
   const short=g=>{ const l=GOAL_METRICS[g.metric].label; return l.length>14?l.split(" ")[0]:l; };
   const head=`<div class="wl-r wl-h" style="grid-template-columns:${cols}"><span>Week</span>${gs.map(g=>`<span title="${esc(GOAL_METRICS[g.metric].label)} · ${fmt(tgtOf(g))} a week">${esc(short(g))}</span>`).join("")}<span>Kept</span></div>`;
-  let kept=0, full=0;
-  const body=weeks.slice().reverse().map(ws=>{ const now=addDays(ws,6)>=end; let ok=0, n=0;
-    const cells=gs.map(g=>{ const v=valIn(g,ws), t=tgtOf(g); if(v==null) return `<span class="wl-n">—</span>`; n++; const hit=v>=t; if(hit) ok++;
+  const sum=gs.map(()=>0); let kept=0, full=0, past=0;
+  const body=weeks.map(ws=>{ const we=addDays(ws,6), future=ws>end, now=!future && we>=end;
+    if(future) return `<div class="wl-r up" style="grid-template-columns:${cols}"><span>Week of ${dmy(ws)}</span>${gs.map(g=>`<span class="wl-n">–/${fmt(tgtOf(g))}</span>`).join("")}<span class="wl-m wl-n">·</span></div>`;
+    past++; let ok=0, n=0;
+    const cells=gs.map((g,gi)=>{ const v=valIn(g,ws), t=tgtOf(g); if(v==null) return `<span class="wl-n">—</span>`; n++; sum[gi]+=v; const hit=v>=t; if(hit) ok++;
       return `<span class="wl-at ${hit?"ahead":now?"":"behind"}" title="${esc(GOAL_METRICS[g.metric].label)}: ${fmt(v)} of ${fmt(t)}">${fmt(v)}<small style="color:var(--ink-3);font-weight:400">/${fmt(t)}</small></span>`; }).join("");
     if(!now){ full++; if(n && ok===n) kept++; }
     return `<div class="wl-r ${now?"now":n&&ok===n?"ok":"miss"}" style="grid-template-columns:${cols}">
       <span>${now?"This week":"Week of "+dmy(ws)}</span>${cells}<span class="wl-m">${now?"…":n?ok+"/"+n:"—"}</span></div>`; }).join("");
-  return fdrop("pl-"+k, `📅 Posted week by week · ${full?kept+" of "+full+" weeks fully kept":"first week running"}`, `<div class="wl">${head}${body}</div>`);
+  /* the quarter: posted so far against what the weeks so far needed, and against the whole quarter */
+  const tot=(lbl, wk, cls)=>`<div class="wl-r ${cls}" style="grid-template-columns:${cols}"><span><b style="font-family:inherit;text-align:left">${lbl}</b></span>${gs.map((g,gi)=>{
+      if(GOAL_METRICS[g.metric].untracked && g.period!=="week") return `<span class="wl-n">—</span>`;
+      const t=tgtOf(g)*wk, hit=sum[gi]>=t;
+      return `<span class="wl-at ${hit?"ahead":"behind"}" title="${esc(GOAL_METRICS[g.metric].label)}: ${fmt(sum[gi])} of ${fmt(t)}">${fmt(sum[gi])}<small style="color:var(--ink-3);font-weight:400">/${fmt(t)}</small></span>`; }).join("")}<span></span></div>`;
+  const foot=tot(`Quarter so far (${past} wk${past===1?"":"s"})`, past, "tot")+tot(`Whole quarter (${weeks.length} wks)`, weeks.length, "tot");
+  return fdrop("pl-"+k, `📅 Posted week by week · this quarter · ${full?kept+" of "+full+" weeks fully kept":"first week running"}`, `<div class="wl" style="max-height:none">${head}${body}${foot}</div>`);
 }
 /* 📎 hand-counted targets (webinars, community posts…) need proof: each one done is added with a link and/or a
    screenshot, and the count is the proofs added (plus any number typed before proofs existed) */
