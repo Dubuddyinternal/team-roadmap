@@ -30,6 +30,18 @@ Emails a day (0 to 3) and the strip are set in **My Team → Monthly feedback �
 
 Setup: run `supabase/stage22a_feedback_nudges.sql`, then create the Edge Function **`feedback-remind`** from `supabase/functions/feedback-remind/index.ts` with **Verify JWT OFF**. It uses the same Zoho secrets as `hr-remind`. The hourly job is pg_cron `feedback-mail-tick` (`17 * * * *`), which calls `feedback_mail_tick()`. Until the SQL is run, the browser part stays quiet.
 
+### OKR check-in, twice a month (stage 22b)
+
+Everyone who owns an objective or a key result in the newest OKR cycle updates the current numbers on their key results:
+- **mid-month**, from the check-in day (default the **15th**) until the day before the feedback form opens
+- **at month end**, together with monthly feedback (open day to the 10th of the next month). The check-in shows at the top of **📝 My monthly feedback**.
+
+They do it in **Administration → 🎯 My OKR check-in**. Until it's saved they get the same reminders as feedback: a 🔔 and a daily pop-up (`okr_checkin_remind()`, pg_cron `okr-checkin-reminders`, 9:30 IST), the strip, **🎯 OKR check-in · Pending** in the account menu, and emails. One email covers both feedback and the check-in. Saving goes through `okr_checkin_save()`, which writes the numbers into the team's OKRs (only key results the person owns, or of objectives they own) and records the check-in in `okr_checkins`.
+
+Switch it on or off and pick the mid-month day in **My Team → Monthly feedback → ⚙️ Settings**.
+
+Setup: run `supabase/stage22b_okr_checkins.sql`, then redeploy **`feedback-remind`** with the new code.
+
 ### One-time setup (owners)
 
 1. Go to **My Team → Reporting lines**. For each box, press ✎ and choose its **Linked login**. Boxes that aren't linked show "not linked". A senior only sees people whose boxes are linked below theirs.
