@@ -15,7 +15,9 @@
    The form opens on the team's open day (default the 25th, India time), is
    due on the last day of the month, and can be sent late until the 10th.
    Reminders (🔔 + a daily pop-up) come from the database every morning until
-   the person sends it — see feedback_remind().
+   the person sends it — see feedback_remind(). On top of that (stage 22a):
+   emails (feedback_mail_tick → feedback-remind), a strip at the top of every
+   page and a "pending" mark on the account menu (fbNudgeCheck).
    ===================================================================== */
 
 var FB = { settings: null, month: null, open: null };
@@ -297,7 +299,7 @@ function fbForm(month, row, onSent) {
     busy = false; draft.disabled = send.disabled = false;
     if (r.error) { st.textContent = "Couldn't save: " + r.error.message; if (!quiet) toast("Couldn't save: " + r.error.message); return; }
     dirty = false;
-    if (submit) { toast("Sent — thank you! 🙌"); if (onSent) onSent(); return; }
+    if (submit) { toast("Sent — thank you! 🙌"); fbNudgeCheck(); if (onSent) onSent(); return; }
     st.textContent = "Draft saved " + new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
     if (!quiet) toast("Draft saved");
   }
@@ -441,16 +443,31 @@ function fbSettingsDialog() {
   f.append(l, s);
   var h = fbEl("div", "hint", "From that day, everyone who hasn't sent theirs gets a 🔔 and a pop-up every morning (9:30) until they do. It's due on the last day of the month; late sends are allowed until the 10th of the next month.");
   h.style.marginTop = "10px";
-  body.append(on, f, h);
+  var fe = fbEl("div", "field"); fe.style.marginTop = "14px";
+  var le = fbEl("label", "", "Reminder emails a day"); var se = fbEl("select");
+  var curE = FB.settings && FB.settings.emails_per_day != null ? FB.settings.emails_per_day : 1;
+  [[0, "No emails"], [1, "1 a day"], [2, "2 a day"], [3, "3 a day"]].forEach(function (x) { var o = fbEl("option", "", x[1]); o.value = x[0]; if (x[0] === curE) o.selected = true; se.appendChild(o); });
+  fe.append(le, se);
+  var stl = fbEl("label"); stl.style.cssText = "display:flex;gap:8px;align-items:center;margin-top:12px";
+  var stc = fbEl("input"); stc.type = "checkbox"; stc.checked = !FB.settings || FB.settings.strip !== false;
+  stl.append(stc, document.createTextNode("Show a “feedback pending” strip at the top of every page"));
+  var h2 = fbEl("div", "hint", "Until someone sends theirs they also get emails, the strip, and a “pending” mark on their account menu. Super-admins are left out.");
+  h2.style.marginTop = "8px";
+  body.append(on, f, h, fe, stl, h2);
   var btns = fbEl("div", "btns");
   var c = fbEl("button", "btn", "Cancel"), sv = fbEl("button", "btn save", "Save");
   c.onclick = function () { bg.remove(); };
   sv.onclick = async function () {
     sv.disabled = true;
     var r = await SUPA.rpc("feedback_set_settings", { p_team: TEAM, p_enabled: cb.checked, p_open_day: +s.value });
+    if (!r.error) {
+      var r2 = await SUPA.rpc("feedback_set_nudges", { p_team: TEAM, p_emails: +se.value, p_strip: stc.checked });
+      if (r2.error) { sv.disabled = false; toast("Couldn't save the reminders: " + r2.error.message); return; }
+      r = r2;
+    }
     sv.disabled = false;
     if (r.error) { toast("Couldn't save: " + r.error.message); return; }
-    FB.settings = r.data; bg.remove(); toast("Saved"); fbRenderTeamView();
+    FB.settings = r.data; bg.remove(); toast("Saved"); fbRenderTeamView(); fbNudgeCheck();
   };
   btns.append(c, sv); dlg.append(body, btns); bg.appendChild(dlg);
   bg.onclick = function (e) { if (e.target === bg) bg.remove(); };
@@ -563,3 +580,88 @@ function renderAdminSuggestionBox(wrap) {
     });
   });
 }
+
+/* =====================================================================
+   Feedback pending: strip at the top, a mark on the account menu, a nudge
+   once a day (stage 22a, feedback_me). Checked on load, every 10 minutes,
+   and right after sending. ?fb=1 (the reminder email's button) opens the form.
+   ===================================================================== */
+var FBN = { me: null, timer: null };
+function fbOpenForm() {
+  if (typeof hrClosePage === "function") { var hp = document.getElementById("hr-page"); if (hp && hp.style.display !== "none") hrClosePage(); }
+  if (typeof closeTeam === "function") closeTeam();
+  if (typeof openAdmin === "function") openAdmin("myfeedback");
+}
+function fbDueText(s) {
+  var d = function (iso) { var a = String(iso).split("-"); return new Date(+a[0], +a[1] - 1, +a[2]).toLocaleDateString("en-GB", { day: "numeric", month: "short" }); };
+  return s.late ? "It was due " + d(s.due) + " — send it by " + d(s.late_until) + "." : "Please send it by " + d(s.due) + ".";
+}
+async function fbNudgeCheck() {
+  if (!SUPA || typeof TEAM === "undefined" || !TEAM || !currentUser()) return;
+  var r = await SUPA.rpc("feedback_me", { p_team: TEAM });
+  if (r.error) return;   /* stage 22a not run yet: stay quiet */
+  var s = r.data || { pending: false };
+  FBN.me = s;
+  fbNudgeStrip(s.pending && s.strip ? s : null);
+  fbNudgeMark(s.pending ? s : null);
+  if (s.pending) {
+    var key = "fb-nudge-" + s.month + "-" + new Date().toISOString().slice(0, 10);
+    try { if (!localStorage.getItem(key)) { localStorage.setItem(key, "1"); toast("📝 Your " + fbLabel(s.month, true) + " feedback is pending: Administration → My monthly feedback"); } } catch (_) { }
+  }
+}
+function fbNudgeStrip(s) {
+  var bar = document.getElementById("fb-strip");
+  document.documentElement.classList.toggle("fb-strip-on", !!s);
+  if (!s) { if (bar) bar.remove(); return; }
+  if (!bar) { bar = fbEl("div"); bar.id = "fb-strip"; document.body.appendChild(bar); }
+  bar.innerHTML = "";
+  var t = fbEl("span", "t", "📝 Your " + fbLabel(s.month, true) + " feedback is " + (s.late ? "overdue" : "pending") + ". " + fbDueText(s));
+  var go = fbEl("button", null, s.draft ? "Finish it →" : "Fill it now →"); go.type = "button"; go.onclick = fbOpenForm;
+  bar.append(t, go);
+  bar.classList.toggle("urgent", !!s.late);
+}
+function fbNudgeMark(s) {
+  var nav = document.getElementById("nav-account");
+  if (nav) { nav.classList.toggle("fb-pending", !!s); if (s) nav.title = "Your account — your " + fbLabel(s.month, true) + " feedback is pending"; }
+  var item = document.getElementById("acct-fb");
+  if (!s) { if (item) item.remove(); return; }
+  if (!item) {
+    var after = document.getElementById("acct-hr") || document.getElementById("acct-profile");
+    if (!after) return;
+    item = fbEl("button", "acct-item"); item.id = "acct-fb";
+    item.onclick = function () { var o = document.getElementById("account-overlay"); if (o) o.classList.remove("show"); fbOpenForm(); };
+    after.parentNode.insertBefore(item, after.nextSibling);
+  }
+  item.innerHTML = "";
+  item.append(document.createTextNode("📝 Monthly feedback "), fbEl("span", "fb-pend", s.late ? "Overdue" : "Pending"));
+}
+(function () {
+  var css = "#fb-strip{position:fixed;top:0;left:0;right:0;z-index:394;height:44px;display:flex;align-items:center;justify-content:center;gap:14px;padding:0 16px;"
+    + "background:#EEF2FF;border-bottom:1px solid #C7D2FE;color:#312E81;font:600 13.5px var(--sans,system-ui);box-shadow:0 1px 6px rgba(0,0,0,.05)}"
+    + "#fb-strip.urgent{background:#FDE8E6;border-color:#F3B9B2;color:#8E1F14}"
+    + "#fb-strip .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}"
+    + "#fb-strip button{flex:none;border:0;border-radius:99px;background:#E8622B;color:#fff;font:700 12.5px var(--sans,system-ui);padding:7px 14px;cursor:pointer}"
+    + "html.fb-strip-on body{padding-top:44px}"
+    + "html.fb-strip-on .admin-page,html.fb-strip-on .product-page,html.fb-strip-on .team-page,html.fb-strip-on .docs-page,html.fb-strip-on .hr-page{top:44px}"
+    /* both strips: HR's on top, this one under it */
+    + "html.fb-strip-on.hr-strip-on #fb-strip{top:44px}"
+    + "html.fb-strip-on.hr-strip-on body{padding-top:88px}"
+    + "html.fb-strip-on.hr-strip-on .admin-page,html.fb-strip-on.hr-strip-on .product-page,html.fb-strip-on.hr-strip-on .team-page,html.fb-strip-on.hr-strip-on .docs-page,html.fb-strip-on.hr-strip-on .hr-page{top:88px}"
+    + "#nav-account.fb-pending{position:relative}"
+    + "#nav-account.fb-pending::after{content:'';position:absolute;top:2px;right:2px;width:10px;height:10px;border-radius:50%;background:#E5484D;box-shadow:0 0 0 2px var(--card,#fff)}"
+    + ".fb-pend{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;border-radius:99px;padding:2px 8px;background:#FDE8E6;color:#B42318}"
+    + "@media(max-width:640px){#fb-strip{height:auto;min-height:44px;padding:6px 12px;font-size:12.5px}#fb-strip .t{white-space:normal}}";
+  var st = document.createElement("style"); st.textContent = css; (document.head || document.documentElement).appendChild(st);
+})();
+(function () {
+  var tries = 0;
+  var t = setInterval(function () {
+    tries++;
+    if (tries > 240) { clearInterval(t); return; }
+    if (typeof SUPA === "undefined" || !SUPA || typeof currentUser !== "function" || !currentUser() || typeof TEAM === "undefined" || !TEAM) return;
+    clearInterval(t);
+    fbNudgeCheck(); clearInterval(FBN.timer); FBN.timer = setInterval(function () { if (!document.hidden) fbNudgeCheck(); }, 10 * 60000);
+    var wants = false; try { wants = new URL(location.href).searchParams.get("fb") === "1"; } catch (_) { }
+    if (wants) setTimeout(fbOpenForm, 300);
+  }, 500);
+})();

@@ -99,6 +99,10 @@ Files can be PDF, JPG, PNG or WEBP, up to 10 MB each.
 - **Strip and lock:** in the browser (`hrRuleCheck`, every 10 minutes). The lock screen only allows My HR file and Sign out. It's a page lock, not a database lock.
 - Database: `supabase/stage18i_hr_rules.sql`.
 
+## Approving directly (older employees)
+
+- **Administration → HR → Employees:** HR (`manage_hr`) can press **✅ Approve** on a row, or **✅ Approve directly** on a person's page, for anyone whose file isn't Complete or Signed. This marks the file **Complete** without the remaining steps (`hr_admin_update` action `complete`). The person gets a 🔔, the rule's strip, emails and pop-ups stop, and a locked account opens again within 10 minutes (or on reload). **Reopen the file** undoes it.
+
 ## Notes for the next developer
 
 - **Front end:** `hr.js`, loaded after `monthly-feedback.js`. It adds its own styles. The admin section is registered in `adminSections()` in `index.html` (`k:"hr"`).

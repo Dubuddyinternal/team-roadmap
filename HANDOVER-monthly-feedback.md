@@ -16,6 +16,20 @@
 
 Drafts are visible to nobody else. An owner in a different branch of the chart can't read it either.
 
+### Reminders until it's sent (stage 22a)
+
+From the open day until it's sent (including the late window, up to the 10th of the next month), each person who hasn't sent theirs gets:
+- the 🔔 and the daily pop-up (as before, from `feedback_remind()`)
+- **emails**: 1 a day by default, spread over 9 am to 9 pm India time. The email's button links to `?fb=1`, which opens the form.
+- a **strip at the top** of every page: "Your October feedback is pending". It turns red once it's late.
+- a red dot on the **account button**, and **📝 Monthly feedback · Pending** in the account menu
+- a reminder message once a day when they open the site
+
+All of these stop as soon as they send it. Super-admins are left out.
+Emails a day (0 to 3) and the strip are set in **My Team → Monthly feedback → ⚙️ Settings**.
+
+Setup: run `supabase/stage22a_feedback_nudges.sql`, then create the Edge Function **`feedback-remind`** from `supabase/functions/feedback-remind/index.ts` with **Verify JWT OFF**. It uses the same Zoho secrets as `hr-remind`. The hourly job is pg_cron `feedback-mail-tick` (`17 * * * *`), which calls `feedback_mail_tick()`. Until the SQL is run, the browser part stays quiet.
+
 ### One-time setup (owners)
 
 1. Go to **My Team → Reporting lines**. For each box, press ✎ and choose its **Linked login**. Boxes that aren't linked show "not linked". A senior only sees people whose boxes are linked below theirs.
