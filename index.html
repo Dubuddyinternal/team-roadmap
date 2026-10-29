@@ -13775,16 +13775,16 @@ function mktAgreementPane(mk){
   }
   if(editMode){
     const bar = document.createElement("div"); bar.className = "mag-btns";
-    const add = document.createElement("button"); add.className = "tool sm"; add.textContent = "＋ Add a target";
+    const add = document.createElement("button"); add.className = "tool sm"; add.textContent = "＋ Add an agreement";
     add.onclick = ()=>{ D.push({ id:"ag-"+Date.now().toString(36), name:"", target:null, unit:"count", period:"month", source:"hand" }); draw(); };
     const sp = document.createElement("span"); sp.style.flex = "1";
     const undo = document.createElement("button"); undo.className = "btn"; undo.textContent = "Undo changes"; undo.onclick = ()=> renderAll();
-    const save = document.createElement("button"); save.className = "btn save"; save.textContent = "Save targets";
+    const save = document.createElement("button"); save.className = "btn save"; save.textContent = "Save agreements";
     save.onclick = ()=>{
-      if(D.some(g=> !String(g.name||"").trim())){ toast("Give every target a name"); return; }
+      if(D.some(g=> !String(g.name||"").trim())){ toast("Give every agreement a name"); return; }
       A.goals = D.map(g=> Object.assign(g, { name:String(g.name).trim() }));
       A.socialOwners = SO;
-      pushAll(); renderAll(); toast("Targets saved");
+      pushAll(); renderAll(); toast("Agreements saved");
     };
     bar.append(add, sp, undo, save); block.appendChild(bar);
   } else {
