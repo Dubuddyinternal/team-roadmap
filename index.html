@@ -4029,12 +4029,12 @@ body.rmg-busy,body.rmg-busy *{user-select:none!important;cursor:grabbing!importa
   <div class="dialog" role="dialog" aria-modal="true" style="max-width:440px">
     <h3 id="mt-title">Add person</h3>
     <div class="dlg-body">
+      <div class="field"><label for="mt-f-uid">Team member</label><select id="mt-f-uid"></select>
+        <div class="hint" style="margin-top:5px;font-size:12px">Pick the person from your team: it links their login, so everyone above them can read their monthly feedback once it's sent. Leave it on “not linked” for a box that isn't one person (e.g. HR).</div></div>
       <div class="field"><label for="mt-f-name">Name</label><input id="mt-f-name" type="text" placeholder="e.g. Aisha Khan" autocomplete="off"></div>
       <div class="field"><label for="mt-f-role">Role / title</label><input id="mt-f-role" type="text" placeholder="e.g. Product Designer" autocomplete="off"></div>
       <div class="field"><label for="mt-f-dept">Team / department (optional)</label><input id="mt-f-dept" type="text" placeholder="e.g. Product" autocomplete="off"></div>
       <div class="field"><label for="mt-f-ownrole">Accountabilities (from Ownership)</label><select id="mt-f-ownrole"></select></div>
-      <div class="field"><label for="mt-f-uid">Linked login</label><select id="mt-f-uid"></select>
-        <div class="hint" style="margin-top:5px;font-size:12px">Whose box is this? Everyone above a linked box can read that person's monthly feedback once it's sent.</div></div>
       <div class="field"><label>Avatar colour</label><div class="mt-sw" id="mt-sw"></div><input type="hidden" id="mt-f-color"></div>
     </div>
     <div class="btns">
@@ -20697,12 +20697,26 @@ function mtOpenDlg(title, vals, onSave, showDel){
   mtSave=onSave;
   $("mt-del").style.display = showDel ? "inline" : "none";
   $("mt-dialog").classList.add("show");
-  setTimeout(function(){ $("mt-f-name").focus(); }, 30);
+  setTimeout(function(){ (vals.name ? $("mt-f-name") : $("mt-f-uid")).focus(); }, 30);
 }
 function mtCloseDlg(){ $("mt-dialog").classList.remove("show"); mtSave=null; }
 function mtReadVals(){ return { name:$("mt-f-name").value.trim(), role:$("mt-f-role").value.trim(), dept:$("mt-f-dept").value.trim(), color:$("mt-f-color").value, ownRole:$("mt-f-ownrole").value, uid:$("mt-f-uid").value }; }
 // the login behind a box: decides who reads whose monthly feedback (supabase/stage16a)
-function mtFillUid(cur){ var o='<option value="">— not linked —</option>'; var ppl=(typeof USERS!=="undefined"?USERS:[]).filter(function(u){ return isMember(u, TEAM) || u.id===cur; }); ppl.sort(function(a,b){ return userDisplayName(a).localeCompare(userDisplayName(b)); }); ppl.forEach(function(u){ o+='<option value="'+mtEsc(u.id)+'">'+mtEsc(userDisplayName(u))+' · '+mtEsc(u.email)+'</option>'; }); $("mt-f-uid").innerHTML=o; $("mt-f-uid").value=cur||""; }
+function mtFillUid(cur){
+  var inChart={}; (function walk(n){ if(!n) return; if(n.uid) inChart[n.uid]=1; (n.children||[]).forEach(walk); })(typeof TEAMORG!=="undefined"?TEAMORG:null);
+  var o='<option value="">— not linked —</option>'; var ppl=(typeof USERS!=="undefined"?USERS:[]).filter(function(u){ return isMember(u, TEAM) || u.id===cur; });
+  ppl.sort(function(a,b){ return (inChart[a.id]&&a.id!==cur?1:0)-(inChart[b.id]&&b.id!==cur?1:0) || userDisplayName(a).localeCompare(userDisplayName(b)); });
+  ppl.forEach(function(u){ o+='<option value="'+mtEsc(u.id)+'">'+mtEsc(userDisplayName(u))+' · '+mtEsc(u.email)+(inChart[u.id]&&u.id!==cur?' (already in the chart)':'')+'</option>'; });
+  $("mt-f-uid").innerHTML=o; $("mt-f-uid").value=cur||"";
+  /* picking a member fills in their name (unless one was typed by hand) */
+  var last=$("mt-f-uid").value ? userDisplayName((typeof USERS!=="undefined"?USERS:[]).find(function(u){ return u.id===cur; })||{}) : "";
+  $("mt-f-uid").onchange=function(){
+    var u=(typeof USERS!=="undefined"?USERS:[]).find(function(x){ return x.id===$("mt-f-uid").value; });
+    var nm=$("mt-f-name"), cur0=nm.value.trim();
+    if(u && (!cur0 || cur0===last)){ nm.value=userDisplayName(u); last=nm.value; }
+    else if(!u && cur0===last){ nm.value=""; last=""; }
+  };
+}
 // the org chart decides who reads whose feedback, so only owners (and super-admins) change it
 function mtCanEditOrg(){ var u=currentUser(); return !!u && (u.super || roleOf(u, TEAM)==="owner"); }
 function mtFillOwnRole(cur){ var roles=(typeof TEAMOWN!=="undefined"&&TEAMOWN&&TEAMOWN.roles)?TEAMOWN.roles:[]; var o='<option value="">Auto-match by role name</option>'; roles.forEach(function(r){ o+='<option value="'+r.id+'"'+(r.id===cur?" selected":"")+'>'+mtEsc(r.name||"(unnamed role)")+'</option>'; }); o+='<option value="__none__"'+(cur==="__none__"?" selected":"")+'>None — hide accountabilities</option>'; $("mt-f-ownrole").innerHTML=o; $("mt-f-ownrole").value=cur||""; }
