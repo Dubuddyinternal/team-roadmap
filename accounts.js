@@ -89,7 +89,8 @@ async function accZoho(body, quiet) {
     + ".acc-tbl input.note{width:150px;text-align:left}.acc-tbl .num{text-align:right;white-space:nowrap}.acc-tbl tfoot td{font-weight:800}"
     + ".acc-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}.acc-stats .s{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px}"
     + ".acc-stats .s b{display:block;font-size:20px}.acc-stats .s span{color:var(--muted);font-size:12.5px}"
-    + "@media(max-width:820px){.acc-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.acc-row{flex-wrap:wrap}.acc-row .side{align-items:flex-start}.acc-tbl-wrap{overflow-x:auto}}";
+    + ".acc-stats.five{grid-template-columns:repeat(5,minmax(0,1fr))}.acc-stats .s.go{cursor:pointer}.acc-stats .s.go:hover{border-color:var(--indigo)}"
+    + "@media(max-width:820px){.acc-stats.five,.acc-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.acc-row{flex-wrap:wrap}.acc-row .side{align-items:flex-start}.acc-tbl-wrap{overflow-x:auto}}";
   var st = document.createElement("style"); st.textContent = css; (document.head || document.documentElement).appendChild(st);
 })();
 
@@ -923,18 +924,37 @@ function renderAdminAccSales(wrap) {
   wrap.appendChild(accEl("p", "hint", "Every Cashfree payment lands here within 10 minutes, with the next invoice number and its GST split (price includes GST). Download a month for the CA or GST returns."));
   var body = accEl("div"); body.appendChild(accEl("div", "hint", "Loading…")); wrap.appendChild(body);
   var M = ACC.month, y = Number(M.slice(0, 4)), mo = Number(M.slice(5)), N = mo === 12 ? (y + 1) + "-01" : y + "-" + String(mo + 1).padStart(2, "0");
-  ACC.saleAll = ACC.saleAll || false; ACC.saleQ = ACC.saleQ || "";
+  ACC.saleAll = ACC.saleAll || false; ACC.saleQ = ACC.saleQ || ""; ACC.saleToday = ACC.saleToday || false;
+  /* 📅 today (India time), whatever month is picked: today's and yesterday's successful sales */
+  var istDay = function (t) { return accIstTime(t).slice(0, 10); };
+  var todayD = istDay(new Date().toISOString()), yestD = istDay(new Date(Date.now() - 864e5).toISOString());
+  var dayStart = new Date(Date.now() - 2 * 864e5).toISOString();
   ACC.saleState = ACC.saleState || "";
   Promise.all([SUPA.from("acc_sales").select("*").gte("txn_time", M + "-01T00:00:00+05:30").lt("txn_time", N + "-01T00:00:00+05:30").order("txn_time", { ascending: false }).limit(20000),
                SUPA.from("acc_sales_settings").select("*").eq("id", 1).maybeSingle(), accLoadStates(),
-               SUPA.from("acc_sale_refunds").select("*").gte("refund_time", M + "-01T00:00:00+05:30").lt("refund_time", N + "-01T00:00:00+05:30").order("refund_time", { ascending: false })]).then(function (res) {
+               SUPA.from("acc_sale_refunds").select("*").gte("refund_time", M + "-01T00:00:00+05:30").lt("refund_time", N + "-01T00:00:00+05:30").order("refund_time", { ascending: false }),
+               SUPA.from("acc_sales").select("txn_time,txn_amount,status").eq("status", "SUCCESS").gte("txn_time", dayStart)]).then(function (res) {
     body.innerHTML = "";
     if (res[0].error) { body.appendChild(accEl("div", "hr-note warn", "Run supabase/stage19d_cashfree_sales.sql first (" + accErr(res[0].error) + ")")); return; }
     var all = res[0].data || [], S = res[1].data || { prefix: "CYBRCT", next_no: 4730, gst_rate: 18 };
     var ok = all.filter(function (r) { return r.status === "SUCCESS"; });
     var sum = function (k, list) { return (list || ok).reduce(function (a, r) { return a + Number(r[k] || 0); }, 0); };
     var refunded = ok.filter(function (r) { return r.refunded; });
-    var stats = accEl("div", "acc-stats");
+    var stats = accEl("div", "acc-stats five");
+    var recent = (res[4] && res[4].data) || [];
+    var tSales = recent.filter(function (r) { return istDay(r.txn_time) === todayD; }), ySales = recent.filter(function (r) { return istDay(r.txn_time) === yestD; });
+    var tAmt = sum("txn_amount", tSales), yAmt = sum("txn_amount", ySales);
+    var ts = accEl("div", "s go" + (ACC.saleToday ? " on" : ""));
+    ts.style.cssText = ACC.saleToday ? "border-color:var(--indigo);box-shadow:0 0 0 2px var(--indigo-soft)" : "";
+    ts.title = ACC.saleToday ? "Show the whole month again" : "Show only today's sales below";
+    ts.append(accEl("b", null, accInr(tAmt)), accEl("span", null, "📅 Today · " + tSales.length + " sale" + (tSales.length === 1 ? "" : "s") + " · yesterday " + accInr(yAmt) + " (" + ySales.length + ")"));
+    ts.onclick = function () {
+      ACC.saleToday = !ACC.saleToday;
+      var curM = todayD.slice(6, 10) + "-" + todayD.slice(3, 5);
+      if (ACC.saleToday && ACC.month !== curM) ACC.month = curM;   /* today lives in this month */
+      renderAdminPage();
+    };
+    stats.appendChild(ts);
     [[accInr(sum("txn_amount")), ok.length + " sale" + (ok.length === 1 ? "" : "s") + " · " + accMonthLabel(M)], [accInr(sum("taxable")), "taxable value"],
      [accInr(sum("cgst") + sum("sgst") + sum("igst")), "GST (CGST " + accInr(sum("cgst")) + " + SGST " + accInr(sum("sgst")) + " + IGST " + accInr(sum("igst")) + ")"],
      [accInr(refunded.reduce(function (a, r) { return a + Number(r.refund_amount || r.txn_amount); }, 0)), refunded.length + " refunded"]].forEach(function (x, i) {
@@ -964,7 +984,7 @@ function renderAdminAccSales(wrap) {
     var card = accEl("div", "hr-card acc-tbl-wrap"); card.setAttribute("data-plain", ""); card.style.overflowX = "auto"; body.appendChild(card);
     function list() {
       var s = ACC.saleQ.toLowerCase();
-      return (ACC.saleAll ? all : ok).filter(function (r) { return (!ACC.saleState || r.place_of_supply === ACC.saleState) && (!s || [r.invoice_no, r.order_id, r.cf_order_id, r.cf_payment_id, r.customer_phone, r.customer_id, r.customer_email, r.customer_name].join(" ").toLowerCase().indexOf(s) >= 0); });
+      return (ACC.saleAll ? all : ok).filter(function (r) { return (!ACC.saleToday || istDay(r.txn_time) === todayD) && (!ACC.saleState || r.place_of_supply === ACC.saleState) && (!s || [r.invoice_no, r.order_id, r.cf_order_id, r.cf_payment_id, r.customer_phone, r.customer_id, r.customer_email, r.customer_name].join(" ").toLowerCase().indexOf(s) >= 0); });
     }
     function draw() {
       card.innerHTML = "";
@@ -1269,3 +1289,84 @@ function accCloseMonth(wrap, M) {
     inner.appendChild(act);
   });
 }
+
+/* =====================================================================
+   💳 Sales at a glance — the fourth tab on Our To-do (my-todo.js), for
+   anyone who can see Accounts (owners, super-admins). Today, yesterday,
+   this week, this month, the last 30 days day by day, and the latest
+   sales. The full list stays in Administration → Accounts → Sales.
+   ===================================================================== */
+function accSalesGlance() {
+  var wrap = accEl("div", "acc-glance");
+  if (!accCan() || !SUPA) { wrap.appendChild(accEl("div", "empty", "Sales are only for people who can see Accounts.")); return wrap; }
+  wrap.appendChild(accEl("div", "hint", "Loading sales…"));
+  var day = function (t) { var d = accIstTime(t); return d.slice(6, 10) + "-" + d.slice(3, 5) + "-" + d.slice(0, 2); };   /* YYYY-MM-DD, India time */
+  var now = Date.now(), today = day(new Date(now).toISOString());
+  var keyAgo = function (n) { return day(new Date(now - n * 864e5).toISOString()); };
+  var monthStart = today.slice(0, 7) + "-01", from30 = keyAgo(29);
+  var since = (monthStart < from30 ? monthStart : from30) + "T00:00:00+05:30";
+  SUPA.from("acc_sales").select("txn_time,txn_amount,invoice_no,customer_name,customer_phone,payment_mode,refunded")
+    .eq("status", "SUCCESS").gte("txn_time", since).order("txn_time", { ascending: false }).limit(20000).then(function (res) {
+    wrap.innerHTML = "";
+    if (res.error) { wrap.appendChild(accEl("div", "hr-note warn", "Couldn't load sales: " + accErr(res.error))); return; }
+    var rows = res.data || [], by = {};
+    rows.forEach(function (r) { var k = day(r.txn_time); (by[k] = by[k] || { n: 0, amt: 0 }); by[k].n++; by[k].amt += Number(r.txn_amount || 0); });
+    var range = function (a, b) { var n = 0, amt = 0; Object.keys(by).forEach(function (k) { if (k >= a && k <= b) { n += by[k].n; amt += by[k].amt; } }); return { n: n, amt: amt }; };
+    var wd = new Date(today + "T00:00:00"), monday = keyAgo((wd.getDay() + 6) % 7);
+    var T = range(today, today), Y = range(keyAgo(1), keyAgo(1)), W = range(monday, today), M = range(monthStart, today);
+    var dayOfMonth = Number(today.slice(8, 10));
+    var head = accEl("div", "module-head"); head.appendChild(accEl("h2", null, "💳 Sales at a glance"));
+    var full = accEl("button", "btn", "Open full sales →"); full.onclick = function () { if (typeof openAdmin === "function") openAdmin("accsales"); };
+    head.appendChild(full); wrap.appendChild(head);
+    var stats = accEl("div", "acc-stats");
+    var diff = Y.amt ? Math.round((T.amt - Y.amt) / Y.amt * 100) : null;
+    [[accInr(T.amt), "📅 Today · " + T.n + " sale" + (T.n === 1 ? "" : "s") + (diff != null ? " · " + (diff >= 0 ? "▲ " : "▼ ") + Math.abs(diff) + "% vs yesterday" : "")],
+     [accInr(Y.amt), "Yesterday · " + Y.n + " sale" + (Y.n === 1 ? "" : "s")],
+     [accInr(W.amt), "This week (from Monday) · " + W.n],
+     [accInr(M.amt), accMonthLabel(today.slice(0, 7)) + " · " + M.n + " sales · ~" + accInr(Math.round(M.amt / dayOfMonth)) + "/day"]].forEach(function (x, i) {
+      var s = accEl("div", "s"); if (i === 0) s.style.cssText = "background:var(--indigo-soft);border-color:#F5CDB6";
+      s.append(accEl("b", null, x[0]), accEl("span", null, x[1])); stats.appendChild(s);
+    });
+    wrap.appendChild(stats);
+    /* the last 30 days, one bar a day */
+    var days = []; for (var i = 29; i >= 0; i--) { var k = keyAgo(i); days.push({ k: k, v: by[k] || { n: 0, amt: 0 } }); }
+    var max = Math.max.apply(null, days.map(function (d) { return d.v.amt; }).concat([1]));
+    var chart = accEl("div", "hr-card"); chart.setAttribute("data-plain", "");
+    chart.appendChild(accEl("div", "acc-gl-t", "Last 30 days"));
+    var bars = accEl("div", "acc-gl-bars");
+    days.forEach(function (d) {
+      var col = accEl("div", "acc-gl-col" + (d.k === today ? " now" : ""));
+      var b = accEl("i"); b.style.height = Math.max(2, Math.round(d.v.amt / max * 100)) + "%";
+      col.title = d.k.slice(8, 10) + "/" + d.k.slice(5, 7) + " · " + accInr(d.v.amt) + " · " + d.v.n + " sale" + (d.v.n === 1 ? "" : "s");
+      col.append(b, accEl("span", null, d.k.slice(8, 10)));
+      bars.appendChild(col);
+    });
+    chart.appendChild(bars); wrap.appendChild(chart);
+    /* the latest sales */
+    var lat = accEl("div", "hr-card acc-tbl-wrap"); lat.setAttribute("data-plain", ""); lat.style.overflowX = "auto";
+    lat.appendChild(accEl("div", "acc-gl-t", "Latest sales"));
+    if (!rows.length) lat.appendChild(accEl("div", "hint", "No sales yet."));
+    else {
+      var t = accEl("table", "acc-tbl"), tb = accEl("tbody");
+      rows.slice(0, 10).forEach(function (r) {
+        var tr = accEl("tr");
+        tr.append(accEl("td", null, accIstTime(r.txn_time)), accEl("td", null, r.invoice_no || "—"), accEl("td", null, r.customer_name || r.customer_phone || "—"),
+          accEl("td", null, r.payment_mode || ""), accEl("td", "num", accInr(r.txn_amount) + (r.refunded ? " ↩" : "")));
+        tb.appendChild(tr);
+      });
+      t.appendChild(tb); lat.appendChild(t);
+    }
+    wrap.appendChild(lat);
+  });
+  return wrap;
+}
+(function () {
+  var st = document.createElement("style");
+  st.textContent = ".acc-glance{max-width:1100px}.acc-glance .module-head{display:flex;align-items:center;justify-content:space-between;gap:10px}"
+    + ".acc-gl-t{font-weight:700;margin:0 0 10px}.acc-glance .hr-card{margin:12px 0}"
+    + ".acc-gl-bars{display:flex;align-items:flex-end;gap:4px;height:150px}"
+    + ".acc-gl-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:0;cursor:default}"
+    + ".acc-gl-col i{display:block;width:100%;background:color-mix(in srgb,var(--indigo) 55%,transparent);border-radius:4px 4px 0 0}"
+    + ".acc-gl-col.now i{background:var(--indigo)}.acc-gl-col span{font-size:10px;color:var(--muted);margin-top:4px}";
+  (document.head || document.documentElement).appendChild(st);
+})();

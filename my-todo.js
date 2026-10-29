@@ -1789,7 +1789,10 @@ function todoCounts() {
 // the tab strip at the top of the page (index.html renderTabs calls this on My To-do)
 function todoTabs(strip) {
   todoPeopleTop(strip);
-  [["plan", "🗓 Plan"], ["ideas", "💡 Ideas warehouse"], ["why", "🧭 Why I do what I do"]].forEach(function (T) {
+  var tabs = [["plan", "🗓 Plan"], ["ideas", "💡 Ideas warehouse"], ["why", "🧭 Why I do what I do"]];
+  if (typeof accSalesGlance === "function" && typeof accCan === "function" && accCan()) tabs.push(["sales", "💳 Sales"]);   // accounts.js: owners + super-admins
+  else if (todoTab === "sales") todoTab = "plan";
+  tabs.forEach(function (T) {
     var b = todoEl("button", "tab" + (todoTab === T[0] ? " active" : ""), T[1]);
     b.onclick = function () { if (todoTab === T[0]) return; todoTab = T[0]; renderAll(); };
     strip.appendChild(b);
@@ -1807,6 +1810,7 @@ function renderContentTodo() {
   if (TODO.local) wrap.appendChild(todoEl("div", "td-note", "Couldn't reach the database — your plan is saved in this browser for now."));
   if (todoTab === "why") { wrap.appendChild(todoWhyPage()); return; }
   if (todoTab === "ideas") { wrap.appendChild(todoIdeas()); return; }
+  if (todoTab === "sales") { wrap.appendChild(accSalesGlance()); return; }
   try { if (todoAutoPlace()) setTimeout(todoSave, 0); } catch (_) { }   // sprints I've been made owner of
   todoPlanBar(wrap);
   wrap.appendChild(todoPhaseBanner());
