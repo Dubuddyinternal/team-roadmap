@@ -16,7 +16,7 @@
    same rule as monthly feedback (feedback_overview).
    ===================================================================== */
 
-var PERF = { who: null, people: null };
+var PERF = { who: null, people: null, tab: "perf" };   /* tab: "perf" (My performance) | "fb" (Monthly feedback & manager's review) */
 /* My Performance starts counting here: earlier months and periods aren't shown or counted */
 var PERF_START = "2026-10-01";
 
@@ -77,12 +77,22 @@ async function renderPerformance() {
   }
   var who = perfUser(PERF.who) || me, mine = who.id === me.id;
   var head = perfEl("div", "mt-head"), hl = perfEl("div");
-  hl.append(perfEl("h1", null, mine ? "My performance" : userDisplayName(who) + "’s performance"),
-    perfEl("div", "mt-sub", "OKRs, monthly feedback and the manager's review, the personality profile, and OKR check-ins."));
+  hl.append(perfEl("h1", null, mine ? "My performance" : userDisplayName(who) + "’s performance"));
   head.appendChild(hl); shell.appendChild(head);
+  /* two tabs: 📈 My performance · 📝 Monthly feedback & manager's review */
+  var tabs = perfEl("div", "perf-tabs");
+  var perfPane = perfEl("div"), fbPane = perfEl("div");
+  [["perf", "📈 " + (mine ? "My performance" : "Performance")], ["fb", "📝 " + (mine ? "My monthly feedback" : "Monthly feedback") + " & manager's review"]].forEach(function (x) {
+    var b = perfEl("button", "perf-tab" + (PERF.tab === x[0] ? " on" : ""), x[1]); b.type = "button";
+    b.onclick = function () { PERF.tab = x[0]; [].forEach.call(tabs.children, function (c) { c.classList.remove("on"); }); b.classList.add("on");
+      perfPane.style.display = x[0] === "perf" ? "" : "none"; fbPane.style.display = x[0] === "fb" ? "" : "none"; };
+    tabs.appendChild(b);
+  });
+  shell.append(tabs, perfPane, fbPane);
+  perfPane.style.display = PERF.tab === "perf" ? "" : "none"; fbPane.style.display = PERF.tab === "fb" ? "" : "none";
 
-  var tiles = perfEl("div", "perf-tiles"); shell.appendChild(tiles);
-  var body = perfEl("div", "perf-body"); shell.appendChild(body);
+  var tiles = perfEl("div", "perf-tiles"); perfPane.appendChild(tiles);
+  var body = perfEl("div", "perf-body"); perfPane.appendChild(body);
   var tile = function (n, l, sub) { var t = perfEl("div", "perf-tile"); t.append(perfEl("div", "n", n), perfEl("div", "l", l)); if (sub) t.appendChild(perfEl("div", "s", sub)); tiles.appendChild(t); return t; };
 
   /* 🎯 OKRs */
@@ -98,7 +108,7 @@ async function renderPerformance() {
   mSec.body.appendChild(perfEl("div", "hint", "Loading…"));
   var pSec = perfSection("🧠 Personality profile"); body.appendChild(pSec.el);
   /* the OKR list itself isn't shown here: the tile opens the OKRs, and the month table has Update OKRs */
-  var fbSec = perfSection("📝 Monthly feedback & manager's review"); body.appendChild(fbSec.el);
+  var fbSec = { body: fbPane };
   var ciSec = perfSection("📈 OKR check-ins"); body.appendChild(ciSec.el);
 
   /* agreements are worked out in the browser */
@@ -399,12 +409,50 @@ function perfFeedbackView(box, rows, mine) {
       if (mv) { var mh = perfEl("div", "perf-sub", "Manager's review"); b.append(mh, mv); mv.style.margin = "6px 0 16px"; }
       else b.appendChild(perfEl("div", "hint", "No review notes yet.")).style.margin = "10px 0";
     }
-    b.appendChild(perfEl("div", "perf-sub", mine ? "Your feedback" : "Their feedback"));
-    if (typeof fbAnswersView === "function") b.appendChild(fbAnswersView(r.answers || {}));
+    b.appendChild(perfTestTabs(r.answers || {}));
     d.appendChild(b);
     if (i === 0) d.open = true;
     box.appendChild(d);
   });
+}
+
+/* the three tests of a month's feedback, each in its own tab: Monthly feedback · Personality · Self-awareness */
+function perfTestTabs(a) {
+  var w = perfEl("div", "perf-tests"), bar = perfEl("div", "perf-ttabs"), pane = perfEl("div", "perf-tpane");
+  var qView = function (qs) {
+    var x = perfEl("div");
+    qs.forEach(function (q) {
+      var v = a[q.k], blk = perfEl("div", "fb-ans");
+      blk.appendChild(perfEl("div", "q", q.label));
+      var txt = v == null || v === "" ? "—" : q.type === "scale" ? (q.opts[+v - 1] || v) + " " + (q.names ? q.names[+v - 1] : "") : String(v);
+      blk.appendChild(perfEl("div", "a" + (v == null || v === "" ? " none" : ""), txt));
+      x.appendChild(blk);
+    });
+    return x;
+  };
+  var traits = function () {
+    var x = perfEl("div"), pos = Array.isArray(a.traits_pos) ? a.traits_pos : [], neg = Array.isArray(a.traits_neg) ? a.traits_neg : [];
+    if (!pos.length && !neg.length) { x.appendChild(perfEl("div", "hint", "No traits ticked this month.")); return x; }
+    [["Positive traits", pos, "pos"], ["Negative traits", neg, "neg"]].forEach(function (g) {
+      x.appendChild(perfEl("div", "perf-sub", g[0] + " · " + g[1].length));
+      var tw = perfEl("div", "fb-trview");
+      g[1].forEach(function (t) { tw.appendChild(perfEl("span", "fb-tr " + g[2] + " on", t)); });
+      if (!g[1].length) tw.appendChild(perfEl("span", "hint", "none"));
+      x.appendChild(tw);
+    });
+    return x;
+  };
+  var T = [["1 · Monthly feedback", function () { return qView(typeof FB_Q !== "undefined" ? FB_Q : []); }],
+           ["2 · Personality", traits],
+           ["3 · Self-awareness", function () { return qView(typeof FB_SA !== "undefined" ? FB_SA : []); }]];
+  T.forEach(function (t, i) {
+    var b = perfEl("button", "perf-ttab" + (i === 0 ? " on" : ""), t[0]); b.type = "button";
+    b.onclick = function () { [].forEach.call(bar.children, function (c) { c.classList.remove("on"); }); b.classList.add("on"); pane.innerHTML = ""; pane.appendChild(t[1]()); };
+    bar.appendChild(b);
+  });
+  pane.appendChild(T[0][1]());
+  w.append(bar, pane);
+  return w;
 }
 
 /* ---------- 📈 OKR check-ins ---------- */
@@ -626,6 +674,12 @@ function perfAgreementView(box, ag, mine) {
     + "@media(max-width:700px){.perf-ptwo{grid-template-columns:1fr}.perf-pbal{text-align:left}}"
     + ".perf-sec h2+.perf-okracts{display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 12px}"
     + ".perf-tile.go{cursor:pointer}.perf-tile.go:hover{border-color:var(--indigo)}"
+    + ".perf-tabs{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin:14px 0 4px}"
+    + ".perf-tab{border:0;background:none;padding:10px 14px;font:inherit;font-size:14.5px;font-weight:650;color:var(--muted);cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-1px}"
+    + ".perf-tab.on{color:var(--indigo);border-bottom-color:var(--indigo)}"
+    + ".perf-ttabs{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}"
+    + ".perf-ttab{border:1.5px solid var(--line-strong);background:#fff;border-radius:99px;padding:6px 13px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;color:var(--ink)}"
+    + ".perf-ttab.on{border-color:var(--indigo);background:var(--indigo-soft);color:var(--indigo)}"
     + ".perf-fill{border:0;border-radius:99px;background:#E8622B;color:#fff;font:700 11.5px var(--sans,system-ui);padding:4px 10px;cursor:pointer;margin-left:4px;white-space:nowrap}"
     + ".perf-mrow .pc{font-family:var(--mono);font-weight:700}"
     + ".perf-mrow .fbs.ok{color:var(--done,#2E9466)}.perf-mrow .fbs.late{color:#B4541A}.perf-mrow .fbs.none{color:#B42318}.perf-mrow .fbs.draft{color:var(--muted)}"
