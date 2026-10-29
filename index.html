@@ -2382,6 +2382,23 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 #acc-tip .acc-empty{color:#AEB7C7;font-style:italic}
 .mt-acc{margin-top:9px;display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--indigo);background:var(--indigo-soft);border:1px solid #C9D3F5;border-radius:99px;padding:3px 10px;cursor:pointer}
 .mt-acc:hover{background:var(--indigo);color:#fff;border-color:var(--indigo)}
+.mt-okr{margin-top:7px;display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:#B4541A;background:#FFF1E8;border:1px solid #F5CDB6;border-radius:99px;padding:3px 10px;cursor:pointer}
+.mt-okr:hover{background:#E8622B;color:#fff;border-color:#E8622B}
+.mt-okr-cyc{font-family:var(--mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:14px 0 8px}
+.mt-okr-cyc:first-child{margin-top:0}
+.mt-okr-card{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 10px;background:var(--card)}
+.mt-okr-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px}
+.mt-okr-lv{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#B4541A;background:#FFF1E8;border-radius:99px;padding:2px 8px}
+.mt-okr-how{color:var(--muted)}
+.mt-okr-pct{margin-left:auto;font-family:var(--mono);font-weight:700}
+.mt-okr-t{font-weight:700;font-size:14.5px;margin:6px 0 8px}
+.mt-okr-bar{height:6px;border-radius:99px;background:var(--line);overflow:hidden}
+.mt-okr-bar i{display:block;height:100%}
+.mt-okr-krs{list-style:none;margin:10px 0 0;padding:0}
+.mt-okr-krs li{display:flex;gap:10px;justify-content:space-between;font-size:13px;padding:5px 0;border-top:1px dashed var(--line)}
+.mt-okr-krs .kt{min-width:0}
+.mt-okr-krs .kv{flex:none;font-family:var(--mono);font-size:11.5px;font-weight:600}
+.mt-okr-go{margin-top:8px;border:0;background:none;color:var(--indigo);font-weight:600;font-size:12.5px;cursor:pointer;padding:0}
 .mx-col.acc-hot,.mx-row.acc-hot{cursor:help}
 .mx-head-lead{display:block;font-family:var(--disp);font-weight:600;font-size:12px;color:var(--indigo);margin-top:3px;text-transform:none;letter-spacing:0}
 .mx-col .mx-head-lead{color:#fff;opacity:.92}
@@ -20673,10 +20690,75 @@ function mtNodeHTML(n,isRoot,admin){
   var _acc=ownAccForNode(n);
   if(_acc){ var _k='node-'+n.id; accRegisterFull(_k,(_acc.name||n.role||n.name),(_acc.person||n.name||''),_acc.items,(_acc.color||n.color));
     h+='<span class="mt-acc"'+accAttrs(_k,true)+'>\u25C7 '+(_acc.items.length?_acc.items.length+' ':'')+'accountabilities</span>'; }
+  var _oe=mtNodeEmail(n), _ok=_oe?mtOkrsFor(_oe):[];
+  if(_ok.length){ var _cur=mtOkrCycle(), _nc=_ok.filter(function(x){ return !_cur || x.cyc===_cur; }).length;
+    h+='<span class="mt-okr" onclick="mtOpenOkrs(\''+n.id+'\')" title="OKRs '+mtEsc(n.name)+' owns, alone or jointly, or holds a key result in">\uD83C\uDFAF '+(_nc||_ok.length)+' OKR'+((_nc||_ok.length)===1?'':'s')+'</span>'; }
   h+='</div>';
   if(n.children&&n.children.length){ h+='<ul>'+n.children.map(function(c){return mtNodeHTML(c,false,admin);}).join('')+'</ul>'; }
   h+='</li>';
   return h;
+}
+
+/* 🎯 a box's OKRs: every objective the linked person owns (alone or jointly) or holds a key result in */
+function mtNodeEmail(n){ if(!n || !n.uid) return ""; var u=(typeof USERS!=="undefined"?USERS:[]).find(function(x){ return x.id===n.uid; }); return u ? u.email : ""; }
+function mtOkrCycle(){ var cs=(typeof OKRS!=="undefined" && OKRS && OKRS.cycles) || []; return cs.find(function(c){ return c.key===activeCycle; }) || cs[cs.length-1] || null; }
+function mtOkrsFor(email){
+  var out=[], cs=(typeof OKRS!=="undefined" && OKRS && OKRS.cycles) || [];
+  cs.forEach(function(c){ (c.objectives||[]).forEach(function(ob){
+    var own=okrOwners(ob).indexOf(email)>=0, krs=(ob.krs||[]).filter(function(k){ return krOwners(k).indexOf(email)>=0; });
+    if(own || krs.length) out.push({ cyc:c, ob:ob, own:own, krs:krs });
+  }); });
+  return out;
+}
+function mtOpenOkrs(id){
+  var f=mtFind(id); if(!f) return;
+  var n=f.node, email=mtNodeEmail(n); if(!email) return;
+  var list=mtOkrsFor(email), cur=mtOkrCycle();
+  var cycles=[]; list.forEach(function(x){ if(cycles.indexOf(x.cyc)<0) cycles.push(x.cyc); });
+  cycles.sort(function(a,b){ return (b===cur)-(a===cur); });
+  var ov=document.createElement("div"); ov.className="overlay show"; ov.style.zIndex="470";
+  var dlg=document.createElement("div"); dlg.className="dialog mt-okrdlg"; dlg.setAttribute("role","dialog"); dlg.style.maxWidth="620px";
+  var h3=document.createElement("h3"); h3.textContent="\uD83C\uDFAF "+n.name+"\u2019s OKRs"; dlg.appendChild(h3);
+  var body=document.createElement("div"); body.className="dlg-body";
+  var close=function(){ ov.remove(); };
+  cycles.forEach(function(c){
+    var items=list.filter(function(x){ return x.cyc===c; });
+    var ch=document.createElement("div"); ch.className="mt-okr-cyc"; ch.textContent=(c.name||c.key)+(c===cur?" \u00b7 current":"")+" \u00b7 "+items.length+" objective"+(items.length===1?"":"s"); body.appendChild(ch);
+    items.forEach(function(x){
+      var ob=x.ob, pct=objPct(ob);
+      var card=document.createElement("div"); card.className="mt-okr-card";
+      var top=document.createElement("div"); top.className="mt-okr-top";
+      if((ob.level||"").trim()){ var lv=document.createElement("span"); lv.className="mt-okr-lv"; lv.textContent=ob.level; top.appendChild(lv); }
+      var others=okrOwners(ob).filter(function(e){ return e!==email; });
+      var how=document.createElement("span"); how.className="mt-okr-how";
+      how.textContent = x.own ? (others.length ? "Joint owner with "+others.map(okrOwnerName).join(", ") : "Owner") : "Key result owner";
+      top.appendChild(how);
+      var pc=document.createElement("span"); pc.className="mt-okr-pct"; pc.textContent=pct+"%"; pc.style.color=scoreColor(pct); top.appendChild(pc);
+      var t=document.createElement("div"); t.className="mt-okr-t"; t.textContent=ob.title||"Untitled objective";
+      var bar=document.createElement("div"); bar.className="mt-okr-bar"; var fi=document.createElement("i"); fi.style.width=pct+"%"; fi.style.background=scoreColor(pct); bar.appendChild(fi);
+      card.append(top, t, bar);
+      var krs = x.own ? (ob.krs||[]) : x.krs;
+      if(krs.length){
+        var ul=document.createElement("ul"); ul.className="mt-okr-krs";
+        krs.forEach(function(k){
+          var li=document.createElement("li"), kp=krPct(k), mine=krOwners(k).indexOf(email)>=0;
+          var kt=document.createElement("span"); kt.className="kt"; kt.textContent=(k.title||"Key result")+(mine && x.own && krOwners(k).length ? " \u00b7 theirs" : "");
+          var kv=document.createElement("span"); kv.className="kv"; kv.textContent=fmt(k.current)+" / "+fmt(k.target)+(k.unit?" "+k.unit:"")+" \u00b7 "+kp+"%"; kv.style.color=scoreColor(kp);
+          li.append(kt, kv); ul.appendChild(li);
+        });
+        card.appendChild(ul);
+      }
+      var go=document.createElement("button"); go.className="mt-okr-go"; go.textContent="Open in OKRs \u2192";
+      go.onclick=function(){ close(); closeTeam(); activeCycle=c.key; view="okr"; renderAll(); };
+      card.appendChild(go);
+      body.appendChild(card);
+    });
+  });
+  if(!list.length){ var e=document.createElement("div"); e.className="hint"; e.textContent="No OKRs yet."; body.appendChild(e); }
+  var btns=document.createElement("div"); btns.className="btns"; var cb=document.createElement("button"); cb.className="btn"; cb.textContent="Close"; cb.onclick=close; btns.appendChild(cb);
+  dlg.append(body, btns); ov.appendChild(dlg);
+  ov.onmousedown=function(e){ if(e.target===ov) close(); };
+  document.body.appendChild(ov);
 }
 
 /* dialog */
