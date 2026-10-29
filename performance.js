@@ -78,7 +78,7 @@ async function renderPerformance() {
   var who = perfUser(PERF.who) || me, mine = who.id === me.id;
   var head = perfEl("div", "mt-head"), hl = perfEl("div");
   hl.append(perfEl("h1", null, mine ? "My performance" : userDisplayName(who) + "’s performance"),
-    perfEl("div", "mt-sub", "OKRs, monthly feedback and the manager's review, OKR check-ins, and how often the agreements " + (mine ? "you're" : "they're") + " part of were kept."));
+    perfEl("div", "mt-sub", "OKRs, monthly feedback and the manager's review, the personality profile, and OKR check-ins."));
   head.appendChild(hl); shell.appendChild(head);
 
   var tiles = perfEl("div", "perf-tiles"); shell.appendChild(tiles);
@@ -89,25 +89,21 @@ async function renderPerformance() {
   var okrs = perfOkrs(who);
   var okrAvg = okrs.list.length ? Math.round(okrs.list.reduce(function (a, x) { return a + objPct(x.ob); }, 0) / okrs.list.length) : null;
   var okrTile = tile(okrAvg == null ? "—" : okrAvg + "%", "OKR progress", okrs.list.length ? okrs.list.length + " objective" + (okrs.list.length === 1 ? "" : "s") + (okrs.cyc ? " · " + (okrs.cyc.name || okrs.cyc.key) : "") : "no OKRs this cycle");
-  okrTile.classList.add("go"); okrTile.title = "Go to the OKRs below";
-  okrTile.onclick = function () { var e = document.getElementById("perf-okrs"); if (e) e.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  okrTile.classList.add("go"); okrTile.title = "Open the OKRs" + (mine ? " (My OKRs)" : "");
+  okrTile.onclick = function () { closePerformance(); if (okrs.cyc) activeCycle = okrs.cyc.key; if (mine && typeof okrBoardMine !== "undefined") okrBoardMine = true; view = "okr"; renderAll(); window.scrollTo(0, 0); };
   var fbTile = tile("…", "Feedback sent");
   var ciTile = tile("…", "OKR check-ins");
-  var agTile = tile("…", "Agreements kept");
 
   var mSec = perfSection("📅 Month by month"); body.appendChild(mSec.el);
   mSec.body.appendChild(perfEl("div", "hint", "Loading…"));
   var pSec = perfSection("🧠 Personality profile"); body.appendChild(pSec.el);
-  var okrEl = perfOkrSection(okrs, who, mine); body.appendChild(okrEl);
+  /* the OKR list itself isn't shown here: the tile opens the OKRs, and the month table has Update OKRs */
   var fbSec = perfSection("📝 Monthly feedback & manager's review"); body.appendChild(fbSec.el);
   var ciSec = perfSection("📈 OKR check-ins"); body.appendChild(ciSec.el);
-  var agSec = perfSection("🤝 Agreements"); body.appendChild(agSec.el);
 
   /* agreements are worked out in the browser */
   var ag = perfAgreements(who);
-  perfAgreementView(agSec.body, ag, mine);
-  agTile.querySelector(".n").textContent = ag.total ? Math.round(ag.kept / ag.total * 100) + "%" : "—";
-  agTile.appendChild(perfEl("div", "s", ag.total ? ag.kept + " of " + ag.total + " periods kept" : "not part of any agreement yet"));
+  /* 🤝 agreements kept: switched off for now (the tile, the month column and the section) */
 
   if (!SUPA) { mSec.body.innerHTML = ""; perfMonthly(mSec.body, [], [], ag, okrs, mine); return; }
   var res = await Promise.all([
@@ -273,7 +269,7 @@ function perfMonthly(box, fbRows, ciRows, ag, okrs, mine) {
       mood: mood, support: support, ci: cis.length, okr: okr, kept: kept, judged: judged, ag: judged ? Math.round(kept / judged * 100) : null };
   });
   var t = perfEl("div", "perf-mtab");
-  var hdr = ["Month", "Feedback", "Mood", "Manager support", "Reviewed", "OKR check-ins", "OKR progress", "Agreements kept"];
+  var hdr = ["Month", "Feedback", "Mood", "Manager support", "Reviewed", "OKR check-ins", "OKR progress"];
   var hr = perfEl("div", "perf-mrow head"); hdr.forEach(function (h) { hr.appendChild(perfEl("span", null, h)); }); t.appendChild(hr);
   var MOOD = (typeof FB_Q !== "undefined" ? (FB_Q.find(function (q) { return q.k === "mood"; }) || {}).opts : null) || ["1", "2", "3", "4", "5"];
   var pctCell = function (v) { var e = perfEl("span", "pc", v == null ? "—" : v + "%"); if (v != null) e.style.color = scoreColor(v); return e; };
@@ -291,9 +287,15 @@ function perfMonthly(box, fbRows, ciRows, ag, okrs, mine) {
     r.appendChild(perfEl("span", "mood", m.mood ? MOOD[m.mood - 1] + " " + m.mood + "/5" : "—"));
     r.appendChild(perfEl("span", null, m.support ? m.support + "/5" : "—"));
     r.appendChild(perfEl("span", null, m.sent ? (m.reviewed ? "✓" : "waiting") : "—"));
-    r.appendChild(perfEl("span", null, m.ciOn ? m.ci + " of 2" : "—"));
+    var cic = perfEl("span", null, m.ciOn ? m.ci + " of 2" : "—");
+    /* your own running month: straight to the OKR check-in to update the numbers */
+    if (mine && m.now && typeof okrOpenCheckin === "function") {
+      var ub = perfEl("button", "perf-fill", "Update OKRs →"); ub.type = "button"; ub.title = "Type in the current numbers on your key results";
+      ub.onclick = function () { closePerformance(); okrOpenCheckin(); };
+      cic.append(document.createTextNode(" "), ub);
+    }
+    r.appendChild(cic);
     r.appendChild(pctCell(m.okr));
-    var agc = pctCell(m.ag); if (m.judged) agc.title = m.kept + " of " + m.judged + " periods kept"; r.appendChild(agc);
     t.appendChild(r);
   });
   /* the average over the months that have something to count (the running month only once it has data) */
@@ -306,7 +308,6 @@ function perfMonthly(box, fbRows, ciRows, ag, okrs, mine) {
   var revRate = onTime.length ? Math.round(onTime.filter(function (m) { return m.reviewed; }).length / onTime.length * 100) : null;
   var ciA = avg(past.filter(function (m) { return m.ciOn; }).map(function (m) { return m.ci; }));
   var okrA = avg(months.map(function (m) { return m.okr; }));
-  var kTot = months.reduce(function (a, m) { return a + m.kept; }, 0), jTot = months.reduce(function (a, m) { return a + m.judged; }, 0);
   var ar = perfEl("div", "perf-mrow avg");
   ar.appendChild(perfEl("b", null, "Average"));
   ar.appendChild(perfEl("span", null, sentRate == null ? "—" : sentRate + "% sent" + (onTime.length ? " · " + onTime.filter(function (m) { return !m.late; }).length + " on time" : "")));
@@ -315,10 +316,8 @@ function perfMonthly(box, fbRows, ciRows, ag, okrs, mine) {
   ar.appendChild(perfEl("span", null, revRate == null ? "—" : revRate + "%"));
   ar.appendChild(perfEl("span", null, ciA == null ? "—" : ciA.toFixed(1) + " of 2"));
   ar.appendChild(pctCell(okrA == null ? null : Math.round(okrA)));
-  var aa = pctCell(jTot ? Math.round(kTot / jTot * 100) : null); if (jTot) aa.title = kTot + " of " + jTot + " periods kept"; ar.appendChild(aa);
   t.appendChild(ar);
   var wrap = perfEl("div", "perf-mscroll"); wrap.appendChild(t); box.appendChild(wrap);
-  box.appendChild(perfEl("div", "hint", "Counting starts from " + (typeof perfShort === "function" ? perfShort(PERF_START) : PERF_START) + " " + PERF_START.slice(0, 4) + ". OKR progress is taken from the last check-in that month (this month: live). Agreements: the share of that month's weeks / months that were kept. The average leaves out months with nothing to count; feedback and check-ins average the finished months since the first one, so months before them show —.")).style.marginTop = "8px";
 }
 function perfSection(title) {
   var el = perfEl("section", "perf-sec"), h = perfEl("h2", null, title), body = perfEl("div");
@@ -580,7 +579,7 @@ function perfAgreementView(box, ag, mine) {
 
 (function () {
   var css = ".perf-pick{border:1px solid var(--line-strong);border-radius:99px;padding:7px 12px;background:var(--card);font:inherit;font-size:13px}"
-    + ".perf-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:18px 0 8px}"
+    + ".perf-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:18px 0 8px}"
     + ".perf-tile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}"
     + ".perf-tile .n{font-size:26px;font-weight:750;font-family:var(--disp)}.perf-tile .l{font-size:13px;font-weight:600}.perf-tile .s{font-size:12px;color:var(--muted);margin-top:2px}"
     + ".perf-sec{margin:26px 0 0}.perf-sec h2{font-family:var(--disp);font-size:19px;margin:0 0 12px}"
@@ -606,7 +605,7 @@ function perfAgreementView(box, ag, mine) {
     + ".perf-dot.unk{background:#EEF1F5;color:#64748B}.perf-dot.now{background:var(--indigo-soft);color:var(--indigo);border:1px dashed var(--indigo)}"
     + ".perf-mscroll{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--card)}"
     + ".perf-mtab{min-width:860px}"
-    + ".perf-mrow{display:grid;grid-template-columns:1.3fr 1.1fr 1fr 1fr .9fr 1fr 1fr 1fr;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid var(--line);font-size:13.5px}"
+    + ".perf-mrow{display:grid;grid-template-columns:1.3fr 1.1fr 1fr 1fr .9fr 1fr 1fr;gap:10px;align-items:center;padding:10px 14px;border-top:1px solid var(--line);font-size:13.5px}"
     + ".perf-mrow.head{border-top:0;font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}"
     + ".perf-mrow.now{background:color-mix(in srgb,var(--indigo) 5%,transparent)}"
     + ".perf-mrow.avg{background:var(--paper);font-weight:700;border-top:2px solid var(--line-strong)}"
