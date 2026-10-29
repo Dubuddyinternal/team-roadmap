@@ -20701,9 +20701,10 @@ function renderOrgView(){
     return;
   }
   canvas.innerHTML = '<div class="mt-scroll"><div class="mt-chart"><ul>'+mtNodeHTML(TEAMORG,true,admin)+'</ul></div></div>';
+  if(typeof fbOrgChips==="function") fbOrgChips(canvas);   /* 📝 each report's monthly feedback, for the people above them */
 }
 function mtNodeHTML(n,isRoot,admin){
-  var h='<li><div class="mt-node'+(isRoot?' mt-root':'')+'">';
+  var h='<li><div class="mt-node'+(isRoot?' mt-root':'')+'"'+(n.uid?' data-uid="'+mtEsc(n.uid)+'"':'')+'>';
   if(admin){
     h+='<div class="mt-ctl">'
       +'<button title="Add report" onclick="mtAddReport(\''+n.id+'\')">＋</button>'
