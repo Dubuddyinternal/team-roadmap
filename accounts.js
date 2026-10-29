@@ -1289,3 +1289,84 @@ function accCloseMonth(wrap, M) {
     inner.appendChild(act);
   });
 }
+
+/* =====================================================================
+   💳 Sales at a glance — the fourth tab on Our To-do (my-todo.js), for
+   anyone who can see Accounts (owners, super-admins). Today, yesterday,
+   this week, this month, the last 30 days day by day, and the latest
+   sales. The full list stays in Administration → Accounts → Sales.
+   ===================================================================== */
+function accSalesGlance() {
+  var wrap = accEl("div", "acc-glance");
+  if (!accCan() || !SUPA) { wrap.appendChild(accEl("div", "empty", "Sales are only for people who can see Accounts.")); return wrap; }
+  wrap.appendChild(accEl("div", "hint", "Loading sales…"));
+  var day = function (t) { var d = accIstTime(t); return d.slice(6, 10) + "-" + d.slice(3, 5) + "-" + d.slice(0, 2); };   /* YYYY-MM-DD, India time */
+  var now = Date.now(), today = day(new Date(now).toISOString());
+  var keyAgo = function (n) { return day(new Date(now - n * 864e5).toISOString()); };
+  var monthStart = today.slice(0, 7) + "-01", from30 = keyAgo(29);
+  var since = (monthStart < from30 ? monthStart : from30) + "T00:00:00+05:30";
+  SUPA.from("acc_sales").select("txn_time,txn_amount,invoice_no,customer_name,customer_phone,payment_mode,refunded")
+    .eq("status", "SUCCESS").gte("txn_time", since).order("txn_time", { ascending: false }).limit(20000).then(function (res) {
+    wrap.innerHTML = "";
+    if (res.error) { wrap.appendChild(accEl("div", "hr-note warn", "Couldn't load sales: " + accErr(res.error))); return; }
+    var rows = res.data || [], by = {};
+    rows.forEach(function (r) { var k = day(r.txn_time); (by[k] = by[k] || { n: 0, amt: 0 }); by[k].n++; by[k].amt += Number(r.txn_amount || 0); });
+    var range = function (a, b) { var n = 0, amt = 0; Object.keys(by).forEach(function (k) { if (k >= a && k <= b) { n += by[k].n; amt += by[k].amt; } }); return { n: n, amt: amt }; };
+    var wd = new Date(today + "T00:00:00"), monday = keyAgo((wd.getDay() + 6) % 7);
+    var T = range(today, today), Y = range(keyAgo(1), keyAgo(1)), W = range(monday, today), M = range(monthStart, today);
+    var dayOfMonth = Number(today.slice(8, 10));
+    var head = accEl("div", "module-head"); head.appendChild(accEl("h2", null, "💳 Sales at a glance"));
+    var full = accEl("button", "btn", "Open full sales →"); full.onclick = function () { if (typeof openAdmin === "function") openAdmin("accsales"); };
+    head.appendChild(full); wrap.appendChild(head);
+    var stats = accEl("div", "acc-stats");
+    var diff = Y.amt ? Math.round((T.amt - Y.amt) / Y.amt * 100) : null;
+    [[accInr(T.amt), "📅 Today · " + T.n + " sale" + (T.n === 1 ? "" : "s") + (diff != null ? " · " + (diff >= 0 ? "▲ " : "▼ ") + Math.abs(diff) + "% vs yesterday" : "")],
+     [accInr(Y.amt), "Yesterday · " + Y.n + " sale" + (Y.n === 1 ? "" : "s")],
+     [accInr(W.amt), "This week (from Monday) · " + W.n],
+     [accInr(M.amt), accMonthLabel(today.slice(0, 7)) + " · " + M.n + " sales · ~" + accInr(Math.round(M.amt / dayOfMonth)) + "/day"]].forEach(function (x, i) {
+      var s = accEl("div", "s"); if (i === 0) s.style.cssText = "background:var(--indigo-soft);border-color:#F5CDB6";
+      s.append(accEl("b", null, x[0]), accEl("span", null, x[1])); stats.appendChild(s);
+    });
+    wrap.appendChild(stats);
+    /* the last 30 days, one bar a day */
+    var days = []; for (var i = 29; i >= 0; i--) { var k = keyAgo(i); days.push({ k: k, v: by[k] || { n: 0, amt: 0 } }); }
+    var max = Math.max.apply(null, days.map(function (d) { return d.v.amt; }).concat([1]));
+    var chart = accEl("div", "hr-card"); chart.setAttribute("data-plain", "");
+    chart.appendChild(accEl("div", "acc-gl-t", "Last 30 days"));
+    var bars = accEl("div", "acc-gl-bars");
+    days.forEach(function (d) {
+      var col = accEl("div", "acc-gl-col" + (d.k === today ? " now" : ""));
+      var b = accEl("i"); b.style.height = Math.max(2, Math.round(d.v.amt / max * 100)) + "%";
+      col.title = d.k.slice(8, 10) + "/" + d.k.slice(5, 7) + " · " + accInr(d.v.amt) + " · " + d.v.n + " sale" + (d.v.n === 1 ? "" : "s");
+      col.append(b, accEl("span", null, d.k.slice(8, 10)));
+      bars.appendChild(col);
+    });
+    chart.appendChild(bars); wrap.appendChild(chart);
+    /* the latest sales */
+    var lat = accEl("div", "hr-card acc-tbl-wrap"); lat.setAttribute("data-plain", ""); lat.style.overflowX = "auto";
+    lat.appendChild(accEl("div", "acc-gl-t", "Latest sales"));
+    if (!rows.length) lat.appendChild(accEl("div", "hint", "No sales yet."));
+    else {
+      var t = accEl("table", "acc-tbl"), tb = accEl("tbody");
+      rows.slice(0, 10).forEach(function (r) {
+        var tr = accEl("tr");
+        tr.append(accEl("td", null, accIstTime(r.txn_time)), accEl("td", null, r.invoice_no || "—"), accEl("td", null, r.customer_name || r.customer_phone || "—"),
+          accEl("td", null, r.payment_mode || ""), accEl("td", "num", accInr(r.txn_amount) + (r.refunded ? " ↩" : "")));
+        tb.appendChild(tr);
+      });
+      t.appendChild(tb); lat.appendChild(t);
+    }
+    wrap.appendChild(lat);
+  });
+  return wrap;
+}
+(function () {
+  var st = document.createElement("style");
+  st.textContent = ".acc-glance{max-width:1100px}.acc-glance .module-head{display:flex;align-items:center;justify-content:space-between;gap:10px}"
+    + ".acc-gl-t{font-weight:700;margin:0 0 10px}.acc-glance .hr-card{margin:12px 0}"
+    + ".acc-gl-bars{display:flex;align-items:flex-end;gap:4px;height:150px}"
+    + ".acc-gl-col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:0;cursor:default}"
+    + ".acc-gl-col i{display:block;width:100%;background:color-mix(in srgb,var(--indigo) 55%,transparent);border-radius:4px 4px 0 0}"
+    + ".acc-gl-col.now i{background:var(--indigo)}.acc-gl-col span{font-size:10px;color:var(--muted);margin-top:4px}";
+  (document.head || document.documentElement).appendChild(st);
+})();
