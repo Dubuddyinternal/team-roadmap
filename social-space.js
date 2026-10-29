@@ -209,6 +209,7 @@ details.fdrop>summary::-webkit-details-marker{display:none}
 details.fdrop>summary:hover{border-color:var(--accent-ink)}
 details.fdrop[open]>summary .fdc{display:inline-block;transform:rotate(180deg)}
 details.fdrop .fdb{margin-top:10px}
+.apibar.wkmail{display:flex;align-items:center;gap:12px}
 .pf-list{display:flex;flex-direction:column;gap:6px;margin:8px 0 2px}
 .pf-item{display:flex;align-items:center;gap:10px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface,#fff)}
 .pf-item img{width:44px;height:44px;object-fit:cover;border-radius:6px;cursor:zoom-in;flex:none}
@@ -1292,6 +1293,9 @@ function renderTargets(){
       :`<div class="apibar live"><span class="ic">TARGETS</span><p><b>Set what the team is aiming for.</b> Progress shows on the Summary,
       under each platform's card (<b>Agreement status ▾</b>). Counts come from posts published in the chosen period — weeks start Monday.
       Leave a field empty for no target.</p></div>`}
+    <div class="apibar wkmail"><span class="ic">✉️ WEEKLY</span><p>Every <b>Monday at 9 AM</b> the ⭐ main accountable and 👥 people below get this space's progress by email
+      (subscribers / followers, month and quarter checkpoints, week by week). Save the people first.</p>
+      ${ro?"":`<button class="btn sm" id="wkSend" style="margin-left:auto;white-space:nowrap">Send it now</button>`}</div>
     <div class="sec">${card("yt","var(--c1)","var(--c1)")}${card("ig","var(--c3)","var(--c3)")}</div>
     ${ro?"":`<div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" id="tReset">Undo changes</button><button class="btn pri" id="tSave">Save targets</button></div>`}`;
 
@@ -1309,6 +1313,11 @@ function renderTargets(){
   });
   if(ro){ P.querySelectorAll("input,select").forEach(e=>e.disabled=true); return; }
   P.oninput=()=>{ TDIRTY=true; }; P.onchange=()=>{ TDIRTY=true; };
+  const ws=$("#wkSend"); if(ws) ws.onclick=async ()=>{
+    if(TDIRTY){ toast("Save targets first, so the email goes to the right people"); return; }
+    if(!OPT.supa){ toast("Sign in first"); return; }
+    ws.disabled=true; const r=await OPT.supa.rpc("social_weekly_send_now", { p_team: OPT.team });
+    ws.disabled=false; toast(r.error ? "Couldn't send: "+r.error.message : "Sending the weekly email to the accountable people…"); };
   P.querySelectorAll("[data-tadd]").forEach(b=>b.onclick=()=>{ readTargets(); const pl=b.dataset.tadd;
     const free=Object.entries(GOAL_METRICS).find(([k,m])=>(!m.only||m.only===pl)&&!FIXED[pl].includes(k)&&!TDRAFT.goals.some(g=>g.platform===pl&&g.metric===k));
     TDRAFT.goals.push({id:uid("g"),platform:pl,metric:free?free[0]:"posts",period:"month",target:null}); renderTargets(); });

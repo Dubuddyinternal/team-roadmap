@@ -73,3 +73,15 @@ Data is saved in `space.sx.rivals`. Code: `renderRivals` in `social-space.js`.
 
 - **Rich text in every multi-line box in the app** (`richtext.js`, loaded first in `index.html`). It adds a toolbar with **B**, *I*, • List, 1. List, 🔗 Link and Clear. When the text is longer than the box, **▾ Show all** opens it up. Text is saved as light markdown (`**bold**`, `*italic*`, `- ` bullets, `[text](link)`), so every existing save keeps working. `RT.plain()` strips the marks before anything goes to Claude, YouTube or Instagram (`pipeline.js`), and `RT.html()` shows the formatting in comments, notes and a few lists. Paste, import and code boxes stay plain: add `data-plain` to any other box that has to.
 - **Your own boxes** on Social Media ideas and cards: **+ Add a box** with any name, such as Thumbnail text or Pinned comment. They're saved in `idea.extra` and `card.extra`, and they're copied to the card when an idea is accepted.
+
+## Weekly progress email (stage 22c)
+
+- Every **Monday at 9:00 AM India time**, each Social Media space emails its accountable people the progress shown on the Summary. The accountable people are the ⭐ Main accountable per platform plus everyone 👥 ticked on a line in its 🤝 Our agreement. The email covers:
+  - subscribers / followers from the "Counting from" day to the target,
+  - the end-of-month and end-of-quarter checkpoints,
+  - the last 6 weeks.
+- **Our agreement → ✉️ Weekly → Send it now** sends it straight away. Owners and people with "Edit social targets" can use it.
+- Setup:
+  1. Run `supabase/stage22c_social_weekly.sql`.
+  2. Create the Edge Function **`social-weekly`** from `supabase/functions/social-weekly/index.ts` with **Verify JWT OFF**. It uses the same Zoho secrets and the same key (`feedback_cron.cron_key`) as `feedback-remind`.
+- The pg_cron job is `social-weekly` (`30 3 * * 1`), which calls `social_weekly_tick()`.
