@@ -38,7 +38,7 @@
 <!-- Monthly feedback (My Team tab + Administration) and the suggestion box to Sumit (monthly-feedback.js) -->
 <script src="monthly-feedback.js"></script>
 <script src="hr.js"></script><!-- HR files: My HR file + Administration → Employees (HR) -->
-<script src="performance.js"></script><!-- 📈 My Performance: OKRs, feedback + manager's review, check-ins, agreements -->
+<script src="performance.js"></script><!-- 📈 My Performance: OKRs, feedback + senior's review, check-ins, agreements -->
 <script src="accounts.js"></script><!-- Accounts: payment requests, payroll, My payments -->
 <script src="wiki-docs.js"></script><!-- Our Wiki: write documents in the app -->
 <script src="my-todo.js"></script><!-- Our To-do: everything assigned to me + my own to-dos, shared with chosen teammates -->
@@ -23788,9 +23788,9 @@ function scReviewsHTML(admin){
   var h='<div class="sc-rvbar"><select class="sc-inp" style="max-width:280px" onchange="scGoCycle(this.value)">'+cs.map(function(x){return '<option value="'+x.id+'"'+(x.id===c.id?" selected":"")+'>'+mtEsc(x.name)+' \u00b7 '+x.status+'</option>';}).join("")+'</select>';
   if(admin){ h+='<div class="sc-rvstatus">'+["open","calibration","published"].map(function(st){return '<button class="sc-btn '+(c.status===st?"":"ghost")+'" onclick="scSetCycleStatus(\''+c.id+'\',\''+st+'\')">'+st.charAt(0).toUpperCase()+st.slice(1)+'</button>';}).join("")+'</div>'; }
   h+='</div>';
-  h+='<div class="sc-rvnote">'+(c.status==="open"?"Open \u2014 people write self-reviews, managers write assessments.":c.status==="calibration"?"Calibration \u2014 compare ratings across the team and set the final rating before publishing.":"Published \u2014 people can now see their final rating.")+'</div>';
+  h+='<div class="sc-rvnote">'+(c.status==="open"?"Open \u2014 people write self-reviews, seniors write assessments.":c.status==="calibration"?"Calibration \u2014 compare ratings across the team and set the final rating before publishing.":"Published \u2014 people can now see their final rating.")+'</div>';
   var members=(SCORECARD.members||[]);
-  h+='<div class="sc-card"><table class="sc-table"><thead><tr><th>Person</th><th>Role</th><th>Self</th><th>Manager</th><th>Final rating</th><th>Promo</th>'+(admin?'<th></th>':'')+'</tr></thead><tbody>';
+  h+='<div class="sc-card"><table class="sc-table"><thead><tr><th>Person</th><th>Role</th><th>Self</th><th>Senior</th><th>Final rating</th><th>Promo</th>'+(admin?'<th></th>':'')+'</tr></thead><tbody>';
   if(!members.length){ h+='<tr><td colspan="'+(admin?7:6)+'" class="sc-empty" style="text-align:left;padding:18px">Add team members under <b>Team members</b> first.</td></tr>'; }
   members.forEach(function(m){
     var p=scGetPacket(c, m.id);
@@ -23810,7 +23810,7 @@ function scMyReviewHTML(){
   var mid=scMyMemberId(); var c=scActiveReviewCycle();
   if(!mid) return '<div class="sc-card"><div class="sc-empty"><b>No scorecard linked to your account</b>Ask an admin to add you under Team members.</div></div>';
   if(!c) return '<div class="sc-card"><div class="sc-empty"><b>No review cycle is running yet</b></div></div>';
-  return '<div class="sc-card"><div class="sc-rvmy"><div><b>'+mtEsc(c.name)+'</b> \u00b7 '+mtEsc(c.status)+'</div><button class="sc-btn" onclick="scOpenPacket(\''+c.id+'\',\''+mid+'\')">Open my review</button></div><div class="sc-msub" style="margin-top:8px">Write your self-assessment here. Your manager\u2019s assessment and final rating appear once the cycle is published.</div></div>';
+  return '<div class="sc-card"><div class="sc-rvmy"><div><b>'+mtEsc(c.name)+'</b> \u00b7 '+mtEsc(c.status)+'</div><button class="sc-btn" onclick="scOpenPacket(\''+c.id+'\',\''+mid+'\')">Open my review</button></div><div class="sc-msub" style="margin-top:8px">Write your self-assessment here. Your senior\u2019s assessment and final rating appear once the cycle is published.</div></div>';
 }
 function scRatingSelHTML(id,val,dis){ var o='<option value="-1">\u2014 Not rated \u2014</option>'; SC_RATINGS.forEach(function(l,i){ o+='<option value="'+i+'"'+(i===parseInt(val,10)?" selected":"")+'>'+mtEsc(l)+'</option>'; }); return '<select id="'+id+'" class="sc-inp"'+(dis?" disabled":"")+'>'+o+'</select>'; }
 function scOpenPacket(cid, mid){
@@ -23825,15 +23825,15 @@ function scOpenPacket(cid, mid){
   body+='<div class="sc-fld"><label>Self-assessment'+(selfEditable?"":" (read-only)")+'</label><textarea id="sc-pk-selftext"'+(selfEditable?"":" disabled")+'>'+mtEsc(p.self.text)+'</textarea></div>';
   body+='<div class="sc-fld"><label>Self rating</label>'+scRatingSelHTML("sc-pk-selfrating",p.self.rating,!selfEditable)+'</div>';
   if(admin){
-    body+='<div class="sc-fld"><label>Manager assessment</label><textarea id="sc-pk-mgrtext">'+mtEsc(p.manager.text)+'</textarea></div>';
-    body+='<div class="sc-two"><div class="sc-fld"><label>Manager rating</label>'+scRatingSelHTML("sc-pk-mgrrating",p.manager.rating,false)+'</div><div class="sc-fld"><label>Final rating</label>'+scRatingSelHTML("sc-pk-final",p.finalRating,false)+'</div></div>';
+    body+='<div class="sc-fld"><label>Senior\u2019s assessment</label><textarea id="sc-pk-mgrtext">'+mtEsc(p.manager.text)+'</textarea></div>';
+    body+='<div class="sc-two"><div class="sc-fld"><label>Senior\u2019s rating</label>'+scRatingSelHTML("sc-pk-mgrrating",p.manager.rating,false)+'</div><div class="sc-fld"><label>Final rating</label>'+scRatingSelHTML("sc-pk-final",p.finalRating,false)+'</div></div>';
     body+='<div class="sc-fld"><label>Promotion</label><label class="sc-pk-promo"><input type="checkbox" id="sc-pk-promoflag"'+(p.promo.flag?" checked":"")+'> Recommend for promotion</label><input class="sc-inp" id="sc-pk-promolevel" placeholder="Target level (e.g. Senior Engineer)" value="'+mtEsc(p.promo.level)+'" style="margin-top:8px"><textarea id="sc-pk-promonote" placeholder="Justification for the promo committee\u2026" style="margin-top:8px">'+mtEsc(p.promo.note)+'</textarea></div>';
   } else if(c.status==="published"){
-    body+='<div class="sc-fld"><label>Manager assessment</label><div class="sc-pk-ro">'+(p.manager.text?mtEsc(p.manager.text):"\u2014")+'</div></div>';
+    body+='<div class="sc-fld"><label>Senior\u2019s assessment</label><div class="sc-pk-ro">'+(p.manager.text?mtEsc(p.manager.text):"\u2014")+'</div></div>';
     body+='<div class="sc-fld"><label>Final rating</label><div class="sc-pk-ro"><b>'+mtEsc(scRatingLabel(p.finalRating))+'</b></div></div>';
     if(p.promo.flag) body+='<div class="sc-pk-promoyes">\u2b50 Recommended for promotion'+(p.promo.level?(" \u2192 "+mtEsc(p.promo.level)):"")+'</div>';
   } else {
-    body+='<div class="sc-muted">Your manager\u2019s assessment and final rating will appear here once this cycle is <b>published</b>.</div>';
+    body+='<div class="sc-muted">Your senior\u2019s assessment and final rating will appear here once this cycle is <b>published</b>.</div>';
   }
   $("sc-dlg-body").innerHTML=body; $("sc-dlg-danger").innerHTML="";
   $("sc-dialog").classList.add("show");
