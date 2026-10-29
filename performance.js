@@ -86,7 +86,9 @@ async function renderPerformance() {
   /* 🎯 OKRs */
   var okrs = perfOkrs(who);
   var okrAvg = okrs.list.length ? Math.round(okrs.list.reduce(function (a, x) { return a + objPct(x.ob); }, 0) / okrs.list.length) : null;
-  tile(okrAvg == null ? "—" : okrAvg + "%", "OKR progress", okrs.list.length ? okrs.list.length + " objective" + (okrs.list.length === 1 ? "" : "s") + (okrs.cyc ? " · " + (okrs.cyc.name || okrs.cyc.key) : "") : "no OKRs this cycle");
+  var okrTile = tile(okrAvg == null ? "—" : okrAvg + "%", "OKR progress", okrs.list.length ? okrs.list.length + " objective" + (okrs.list.length === 1 ? "" : "s") + (okrs.cyc ? " · " + (okrs.cyc.name || okrs.cyc.key) : "") : "no OKRs this cycle");
+  okrTile.classList.add("go"); okrTile.title = "Go to the OKRs below";
+  okrTile.onclick = function () { var e = document.getElementById("perf-okrs"); if (e) e.scrollIntoView({ behavior: "smooth", block: "start" }); };
   var fbTile = tile("…", "Feedback sent");
   var ciTile = tile("…", "OKR check-ins");
   var agTile = tile("…", "Agreements kept");
@@ -94,7 +96,7 @@ async function renderPerformance() {
   var mSec = perfSection("📅 Month by month"); body.appendChild(mSec.el);
   mSec.body.appendChild(perfEl("div", "hint", "Loading…"));
   var pSec = perfSection("🧠 Personality profile"); body.appendChild(pSec.el);
-  body.appendChild(perfOkrSection(okrs, who));
+  var okrEl = perfOkrSection(okrs, who, mine); body.appendChild(okrEl);
   var fbSec = perfSection("📝 Monthly feedback & manager's review"); body.appendChild(fbSec.el);
   var ciSec = perfSection("📈 OKR check-ins"); body.appendChild(ciSec.el);
   var agSec = perfSection("🤝 Agreements"); body.appendChild(agSec.el);
@@ -333,8 +335,22 @@ function perfOkrs(u) {
   });
   return { cyc: cyc, list: list };
 }
-function perfOkrSection(okrs, u) {
+function perfOkrSection(okrs, u, mine) {
   var s = perfSection("🎯 OKRs" + (okrs.cyc ? " · " + (okrs.cyc.name || okrs.cyc.key) : ""));
+  /* go to the OKRs, or update your own numbers (the OKR check-in) */
+  var acts = perfEl("div", "perf-okracts");
+  var see = perfEl("button", "btn", "🎯 See in OKRs →"); see.type = "button";
+  see.title = "Open this cycle on the OKRs page" + (mine ? ", filtered to My OKRs" : "");
+  see.onclick = function () { closePerformance(); if (okrs.cyc) activeCycle = okrs.cyc.key; if (mine && typeof okrBoardMine !== "undefined") okrBoardMine = true; view = "okr"; renderAll(); window.scrollTo(0, 0); };
+  acts.appendChild(see);
+  if (mine && typeof okrOpenCheckin === "function") {
+    var up = perfEl("button", "btn save", "✏️ Update my OKRs"); up.type = "button";
+    up.title = "Type in the current numbers on your key results";
+    up.onclick = function () { closePerformance(); okrOpenCheckin(); };
+    acts.appendChild(up);
+  }
+  s.el.querySelector("h2").after(acts);
+  s.el.id = "perf-okrs";
   if (!okrs.list.length) { s.body.appendChild(perfEl("div", "perf-empty", "No objectives or key results in this cycle.")); return s.el; }
   var em = String(u.email || "").toLowerCase();
   okrs.list.forEach(function (x) {
@@ -606,6 +622,8 @@ function perfAgreementView(box, ag, mine) {
     + ".perf-pbox h4{margin:0 0 6px;font-size:14px}.perf-pbox.pos{background:#EEF4FC}.perf-pbox.neg{background:#FDF1EF}"
     + ".perf-pchange{margin-top:12px;font-size:13.5px;color:var(--ink)}"
     + "@media(max-width:700px){.perf-ptwo{grid-template-columns:1fr}.perf-pbal{text-align:left}}"
+    + ".perf-sec h2+.perf-okracts{display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 12px}"
+    + ".perf-tile.go{cursor:pointer}.perf-tile.go:hover{border-color:var(--indigo)}"
     + ".perf-fill{border:0;border-radius:99px;background:#E8622B;color:#fff;font:700 11.5px var(--sans,system-ui);padding:4px 10px;cursor:pointer;margin-left:4px;white-space:nowrap}"
     + ".perf-mrow .pc{font-family:var(--mono);font-weight:700}"
     + ".perf-mrow .fbs.ok{color:var(--done,#2E9466)}.perf-mrow .fbs.late{color:#B4541A}.perf-mrow .fbs.none{color:#B42318}.perf-mrow .fbs.draft{color:var(--muted)}"
