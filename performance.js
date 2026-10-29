@@ -5,8 +5,7 @@
    · 🎯 OKRs — the objectives they own (alone or jointly) or hold a key
      result in, in the current cycle, with progress
    · 📝 Monthly feedback — their own feedback month by month, and the
-     manager's review (the review-meeting notes) on it
-   · 📈 OKR check-ins — the twice-a-month updates (stage 22b)
+     senior's review (the review-meeting notes) on it
    · 🤝 Agreements — for the Marketing spaces they are part of: each target
      in 🤝 Our agreement, period by period, kept or missed (their own count
      for "each person" targets like LMS drops), and Social Media's weekly
@@ -16,7 +15,7 @@
    same rule as monthly feedback (feedback_overview).
    ===================================================================== */
 
-var PERF = { who: null, people: null, tab: "perf" };   /* tab: "perf" (My performance) | "fb" (Monthly feedback & manager's review) */
+var PERF = { who: null, people: null, tab: "perf" };   /* tab: "perf" (My performance) | "fb" (Monthly feedback & senior's review) */
 /* My Performance starts counting here: earlier months and periods aren't shown or counted */
 var PERF_START = "2026-10-01";
 
@@ -79,10 +78,10 @@ async function renderPerformance() {
   var head = perfEl("div", "mt-head"), hl = perfEl("div");
   hl.append(perfEl("h1", null, mine ? "My performance" : userDisplayName(who) + "’s performance"));
   head.appendChild(hl); shell.appendChild(head);
-  /* two tabs: 📈 My performance · 📝 Monthly feedback & manager's review */
+  /* two tabs: 📈 My performance · 📝 Monthly feedback & senior's review */
   var tabs = perfEl("div", "perf-tabs");
   var perfPane = perfEl("div"), fbPane = perfEl("div");
-  [["perf", "📈 " + (mine ? "My performance" : "Performance")], ["fb", "📝 " + (mine ? "My monthly feedback" : "Monthly feedback") + " & manager's review"]].forEach(function (x) {
+  [["perf", "📈 " + (mine ? "My performance" : "Performance")], ["fb", "📝 " + (mine ? "My monthly feedback" : "Monthly feedback") + " & senior's review"]].forEach(function (x) {
     var b = perfEl("button", "perf-tab" + (PERF.tab === x[0] ? " on" : ""), x[1]); b.type = "button";
     b.onclick = function () { PERF.tab = x[0]; [].forEach.call(tabs.children, function (c) { c.classList.remove("on"); }); b.classList.add("on");
       perfPane.style.display = x[0] === "perf" ? "" : "none"; fbPane.style.display = x[0] === "fb" ? "" : "none"; };
@@ -106,7 +105,6 @@ async function renderPerformance() {
   mSec.body.appendChild(perfEl("div", "hint", "Loading…"));
   /* the OKR list itself isn't shown here: the tile opens the OKRs, and the month table has Update OKRs */
   var fbSec = { body: fbPane };
-  var ciSec = perfSection("📈 OKR check-ins"); body.appendChild(ciSec.el);
 
   /* agreements are worked out in the browser */
   var ag = perfAgreements(who);
@@ -121,13 +119,8 @@ async function renderPerformance() {
   /* 📝 feedback */
   var fbRows = (res[0] && res[0].data) || [];
   perfFeedbackView(fbSec.body, fbRows, mine);
-  /* 📈 check-ins */
-  var ciRows = [];
-  if (res[1].error) { ciSec.body.appendChild(perfEl("div", "hint", "OKR check-ins aren't set up yet.")); }
-  else {
-    ciRows = res[1].data || [];
-    perfCheckinView(ciSec.body, ciRows);
-  }
+  /* 📈 check-ins: only counted in the month table (the list itself isn't shown) */
+  var ciRows = (!res[1].error && res[1].data) || [];
   /* 📅 month by month, with the average */
   mSec.body.innerHTML = "";
   perfMonthly(mSec.body, fbRows, ciRows, ag, okrs, mine);
@@ -270,7 +263,7 @@ function perfMonthly(box, fbRows, ciRows, ag, okrs, mine) {
       mood: mood, support: support, rating: sentFb && sentFb.manager_review && sentFb.manager_review.shared && +sentFb.manager_review.rating ? +sentFb.manager_review.rating : null, ci: cis.length, okr: okr, kept: kept, judged: judged, ag: judged ? Math.round(kept / judged * 100) : null };
   });
   var t = perfEl("div", "perf-mtab");
-  var hdr = ["Month", "Feedback", "Mood", "Manager support", "Manager's rating", "OKR check-ins", "OKR progress"];
+  var hdr = ["Month", "Feedback", "Mood", "Senior's support", "Senior's rating", "OKR check-ins", "OKR progress"];
   var hr = perfEl("div", "perf-mrow head"); hdr.forEach(function (h) { hr.appendChild(perfEl("span", null, h)); }); t.appendChild(hr);
   var MOOD = (typeof FB_Q !== "undefined" ? (FB_Q.find(function (q) { return q.k === "mood"; }) || {}).opts : null) || ["1", "2", "3", "4", "5"];
   var pctCell = function (v) { var e = perfEl("span", "pc", v == null ? "—" : v + "%"); if (v != null) e.style.color = scoreColor(v); return e; };
@@ -381,7 +374,7 @@ function perfOkrSection(okrs, u, mine) {
   return s.el;
 }
 
-/* ---------- 📝 feedback + the manager's review ---------- */
+/* ---------- 📝 feedback + the senior's review ---------- */
 function perfFeedbackView(box, rows, mine) {
   if (!rows.length) { box.appendChild(perfEl("div", "perf-empty", mine ? "You haven't sent any monthly feedback yet." : "No feedback sent yet (drafts stay private).")); return; }
   rows.forEach(function (r, i) {
@@ -397,7 +390,7 @@ function perfFeedbackView(box, rows, mine) {
     var b = perfEl("div", "body");
     if (r.status === "submitted") {
       var mv = typeof fbMeetingView === "function" ? fbMeetingView(r) : null;
-      if (mv) { var mh = perfEl("div", "perf-sub", "Manager's review"); b.append(mh, mv); mv.style.margin = "6px 0 16px"; }
+      if (mv) { var mh = perfEl("div", "perf-sub", "Senior's review"); b.append(mh, mv); mv.style.margin = "6px 0 16px"; }
       else b.appendChild(perfEl("div", "hint", "No review notes yet.")).style.margin = "10px 0";
     }
     b.appendChild(perfTestTabs(r.answers || {}, rows, r));
@@ -431,9 +424,9 @@ function perfTestTabs(a, rows, row) {
   var T = [["1 · Monthly feedback", function () { return qView(typeof FB_Q !== "undefined" ? FB_Q : []); }],
            ["2 · Personality", traits],
            ["3 · Self-awareness", function () { return qView(typeof FB_SA !== "undefined" ? FB_SA : []); }],
-           ["4 · Manager's feedback", function () {
+           ["4 · Senior's feedback", function () {
              var v = row && typeof fbManagerView === "function" ? fbManagerView(row) : null;
-             return v || perfEl("div", "hint", row && row.status !== "submitted" ? "The manager's feedback comes after the month's feedback is sent." : "Your manager hasn't shared their feedback on this month yet.");
+             return v || perfEl("div", "hint", row && row.status !== "submitted" ? "The senior's feedback comes after the month's feedback is sent." : "Your senior hasn't shared their feedback on this month yet.");
            }]];
   T.forEach(function (t, i) {
     var b = perfEl("button", "perf-ttab" + (i === 0 ? " on" : ""), t[0]); b.type = "button";

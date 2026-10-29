@@ -56,7 +56,7 @@ Only **owners** (and Sumit) can change the org chart now, because the chart deci
 3. What didn't go to plan, and why
 4. What slowed you down
 5. Workload
-6. How supported did you feel by your manager? (1 to 5)
+6. How supported did you feel by your senior? (1 to 5)
 7. What you need
 8. What you learned
 9. A shout-out
@@ -68,7 +68,7 @@ Questions 1, 2, 3, 5 and 10 must be answered before the form can be sent. The qu
 The form has **3 steps** (tabs at the top, Back / Next, Send on step 3):
 1. **Monthly feedback**: the questions above (`FB_Q`).
 2. **Personality**: tick the positive and negative traits you have (`FB_TRAITS_POS` / `FB_TRAITS_NEG`). At least one tick is needed. Stored as `answers.traits_pos` / `answers.traits_neg`.
-3. **Self-awareness** (`FB_SA`): what do I think of myself; what do my parents, my seniors or manager, my colleagues and my juniors think of me; where do I see myself in 3 years. All are required except juniors.
+3. **Self-awareness** (`FB_SA`): what do I think of myself; what do my parents, my seniors, my colleagues and my juniors think of me; where do I see myself in 3 years. All are required except juniors.
 
 Everything is saved in the same `monthly_feedback.answers`, so the review reader and My Performance show all three.
 
@@ -85,14 +85,14 @@ Everything is saved in the same `monthly_feedback.answers`, so the review reader
 | Database | `supabase/stage16a_monthly_feedback.sql` (applied). It contains the tables `monthly_feedback`, `feedback_settings` and `suggestion_box`, plus functions `feedback_*`, `fb_reports` and `suggestion_send`. |
 | Reminders | pg_cron job `feedback-reminders` (`0 4 * * *` UTC = 9:30 IST), which calls `feedback_remind()`. |
 
-### Manager's feedback (stage 22d)
+### Senior's feedback (stage 22d)
 
-- When someone's feedback is sent, their **direct manager** sees **📋 Write your Oct feedback →** on their box in My Team → Reporting lines. The direct manager is the nearest linked box above them; super-admins see it too. Others above see **Read**.
+- When someone's feedback is sent, their **direct senior** sees **📋 Write your Oct feedback →** on their box in My Team → Reporting lines. The direct senior is the nearest linked box above them; super-admins see it too. Others above see **Read**.
 - The reader opens with **📋 Your feedback for …**:
   - an overall rating, 1 (Needs improvement) to 5 (Outstanding),
   - What went well, What to improve, Focus for next month, How you'll support them,
-  - the personality traits the manager sees.
+  - the personality traits the senior sees.
 
   **Save draft** keeps it private. **Share** shows it to the person and sends them a 🔔.
-- The person sees it in **📈 My Performance → My monthly feedback → 4 · Manager's feedback**. That includes the rating, the answers, and where the manager's trait ticks match or differ from their own. The **Manager's rating** column in Month by month shows it too.
-- Stored in `monthly_feedback.manager_review` and saved through `feedback_manager_review()`. Run `supabase/stage22d_manager_review.sql`.
+- The person sees it in **📈 My Performance → My monthly feedback → 4 · Senior's feedback**. That includes the rating, the answers, and where the senior's trait ticks match or differ from their own. The **Manager's rating** column in Month by month shows it too.
+- Stored in `monthly_feedback.manager_review` and saved through `feedback_manager_review()`. Run `supabase/stage22d_manager_review.sql`. The app never says "manager" on screen — always "senior" / "your senior" (the `manager_review` names in the database stay as they are).

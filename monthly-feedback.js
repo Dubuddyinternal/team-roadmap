@@ -28,8 +28,8 @@ var FB_Q = [
   { k: "missed", type: "area", req: true, label: "What didn't go to plan — and why?", hint: "Honest is more useful than perfect. Nobody gets marked down for this." },
   { k: "blockers", type: "area", label: "What slowed you down or blocked you?", hint: "People, tools, process, unclear priorities, too many meetings…" },
   { k: "workload", type: "choice", req: true, label: "Your workload this month", opts: ["Too light", "Just right", "A bit much", "Too much"] },
-  { k: "support", type: "scale", label: "How supported did you feel by your manager?", opts: ["1", "2", "3", "4", "5"], names: ["Not at all", "A little", "Somewhat", "Well", "Fully"] },
-  { k: "need", type: "area", label: "What do you need from your manager or the team?", hint: "Decisions, help, training, tools, time…" },
+  { k: "support", type: "scale", label: "How supported did you feel by your senior?", opts: ["1", "2", "3", "4", "5"], names: ["Not at all", "A little", "Somewhat", "Well", "Fully"] },
+  { k: "need", type: "area", label: "What do you need from your senior or the team?", hint: "Decisions, help, training, tools, time…" },
   { k: "learned", type: "area", label: "What did you learn — and what do you want to learn next?" },
   { k: "shoutout", type: "area", label: "Shout-out 🙌 — who helped you this month, and how?" },
   { k: "goals", type: "area", req: true, label: "Your top 3 goals for next month" },
@@ -48,7 +48,7 @@ var FB_TRAITS_NEG = ["Aggressive", "Arrogant", "Critical", "Cynical", "Dishonest
 var FB_SA = [
   { k: "sa_me", type: "area", req: true, label: "What do I think of myself?", hint: "Honestly — your strengths, your weak spots, how you work." },
   { k: "sa_parents", type: "area", req: true, label: "What do my parents think of me?" },
-  { k: "sa_seniors", type: "area", req: true, label: "What do my seniors / manager think of me?" },
+  { k: "sa_seniors", type: "area", req: true, label: "What do my seniors think of me?" },
   { k: "sa_peers", type: "area", req: true, label: "What do my colleagues think of me?" },
   { k: "sa_juniors", type: "area", label: "What do my juniors think of me?", hint: "Skip it if nobody reports to you." },
   { k: "sa_3yrs", type: "area", req: true, label: "Where do I see myself in 3 years?" }
@@ -60,7 +60,7 @@ var FB_TRAIT_INFO = {
   Affectionate: ["Openly warm and caring towards people.", "You check in on a teammate who seems low, or show you're glad when someone joins or does well."],
   Ambitious: ["Wants to grow and achieve big goals.", "You set yourself targets higher than what was asked, or you're working towards a bigger role."],
   Authentic: ["True to yourself; you don't pretend.", "You say \"I don't know\" when you don't, instead of faking it in a meeting."],
-  Brave: ["Does the right thing even when it's scary.", "You told your manager about a mistake you made before anyone found out."],
+  Brave: ["Does the right thing even when it's scary.", "You told your senior about a mistake you made before anyone found out."],
   Calm: ["Stays steady under pressure.", "The site went down or a deadline moved up, and you kept working through it without panicking."],
   Caring: ["Looks out for others' wellbeing.", "You covered for a sick colleague or asked a new joiner if they needed help."],
   Charismatic: ["Draws people in; people like listening to you.", "People naturally gather around your ideas, or your presentations get the room excited."],
@@ -661,7 +661,7 @@ async function fbOpenReader(id) {
   document.body.appendChild(bg);
 }
 
-/* ---------- 📋 the manager's feedback on a month (stage 22d: monthly_feedback.manager_review) ---------- */
+/* ---------- 📋 the senior's feedback on a month (stage 22d: monthly_feedback.manager_review) ---------- */
 var FB_RATING = [["1", "Needs improvement"], ["2", "Below expectations"], ["3", "Meets expectations"], ["4", "Exceeds expectations"], ["5", "Outstanding"]];
 var FB_MR = [
   { k: "well", label: "What went well", ph: "Specific things they did well this month" },
@@ -726,17 +726,17 @@ function fbManagerView(row) {
   var rv = row && row.manager_review;
   if (!rv || !rv.shared) return null;
   var m = fbEl("div", "fb-mr view");
-  m.appendChild(fbEl("h4", "", "📋 Manager's feedback" + (rv.by ? " · " + fbName(rv.by) : "")));
+  m.appendChild(fbEl("h4", "", "📋 Senior's feedback" + (rv.by ? " · " + fbName(rv.by) : "")));
   if (rv.rating) { var rt = FB_RATING[+rv.rating - 1]; var b = fbEl("div", "fb-mrate"); b.append(fbEl("b", "", rv.rating + "/5"), fbEl("span", "", rt ? rt[1] : "")); m.appendChild(b); }
-  FB_MR.forEach(function (q) { if (!rv[q.k]) return; var a = fbEl("div", "fb-ans"); a.append(fbEl("div", "q", q.k === "support" ? "How your manager will support you" : q.label), fbEl("div", "a", rv[q.k])); m.appendChild(a); });
+  FB_MR.forEach(function (q) { if (!rv[q.k]) return; var a = fbEl("div", "fb-ans"); a.append(fbEl("div", "q", q.k === "support" ? "How your senior will support you" : q.label), fbEl("div", "a", rv[q.k])); m.appendChild(a); });
   /* their view of the traits against the person's own */
   var own = (row.answers || {}), oP = own.traits_pos || [], oN = own.traits_neg || [], mP = rv.traits_pos || [], mN = rv.traits_neg || [];
   if (mP.length || mN.length) {
     var tg = function (title, list, cls) { if (!list.length) return; m.appendChild(fbEl("div", "q fb-mrq", title)); var w = fbEl("div", "fb-trview"); list.forEach(function (t) { w.appendChild(fbEl("span", "fb-tr " + (cls === "auto" ? (FB_TRAITS_NEG.indexOf(t) >= 0 ? "neg" : "pos") : cls) + " on", t)); }); m.appendChild(w); };
     tg("You both see", mP.filter(function (t) { return oP.indexOf(t) >= 0; }).concat(mN.filter(function (t) { return oN.indexOf(t) >= 0; })), "auto");
-    tg("Your manager sees — you didn't tick", mP.filter(function (t) { return oP.indexOf(t) < 0; }), "pos");
-    tg("Your manager sees to work on — you didn't tick", mN.filter(function (t) { return oN.indexOf(t) < 0; }), "neg");
-    tg("You ticked — your manager didn't", oP.filter(function (t) { return mP.indexOf(t) < 0; }).concat(oN.filter(function (t) { return mN.indexOf(t) < 0; })), "mute");
+    tg("Your senior sees — you didn't tick", mP.filter(function (t) { return oP.indexOf(t) < 0; }), "pos");
+    tg("Your senior sees to work on — you didn't tick", mN.filter(function (t) { return oN.indexOf(t) < 0; }), "neg");
+    tg("You ticked — your senior didn't", oP.filter(function (t) { return mP.indexOf(t) < 0; }).concat(oN.filter(function (t) { return mN.indexOf(t) < 0; })), "mute");
   }
   if (rv.shared_at) m.appendChild(fbEl("div", "w", "Shared " + fbDate(rv.shared_at)));
   return m;
@@ -1124,7 +1124,7 @@ async function fbOrgChips(canvas) {
   if (r.error || !r.data) return;
   var me = currentUser().id, by = {}, shared = {};
   r.data.forEach(function (x) { by[x.user_id] = x; });
-  /* has the manager's feedback been shared yet? (you can read the sent feedback of the people below you) */
+  /* has the senior's feedback been shared yet? (you can read the sent feedback of the people below you) */
   try {
     var mr = await SUPA.from("monthly_feedback").select("user_id,manager_review").eq("team_slug", TEAM).eq("month", month).eq("status", "submitted");
     (mr.data || []).forEach(function (x) { shared[x.user_id] = !!(x.manager_review && x.manager_review.shared); });
@@ -1136,7 +1136,7 @@ async function fbOrgChips(canvas) {
     if (!x || x.user_id === me || node.querySelector(".mt-fb")) return;
     var c = fbEl("span", "mt-fb");
     if (x.status === "submitted" && x.feedback_id) {
-      /* their direct manager (the nearest linked box above them) writes the feedback; others above can read it */
+      /* their direct senior (the nearest linked box above them) writes the feedback; others above can read it */
       var dm = (fbLineAbove(x.user_id) || []).find(function (n) { return n.uid; }), direct = isSuper || (dm && dm.uid === me);
       if (shared[x.user_id]) { c.classList.add("done"); c.textContent = "✓ " + mon + " feedback given" + (x.discussed_at ? " · met" : ""); }
       else if (direct) { c.classList.add("todo"); c.textContent = "📋 Write your " + mon + " feedback →"; }
