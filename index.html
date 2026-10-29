@@ -637,6 +637,31 @@ tr.in-mvp .an-rowhead{border-left:3px solid var(--indigo)}
 .disc-prodf{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:4px 11px;font:inherit;font-size:12px;color:var(--muted);cursor:pointer}
 .disc-prodf.on{background:#1D4ED8;border-color:#1D4ED8;color:#fff}
 .disc-prodf.disc-prodedit{border-style:dashed}
+.dtl-mode{display:flex;align-items:center;gap:8px;margin:0 0 10px}
+.dfg .rmg-corner,.dfg-dueh{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--muted);display:flex;align-items:center;padding:9px 12px}
+.dfg-dueh{grid-column:2;border-left:1px solid var(--line);position:sticky;left:300px;background:var(--card);z-index:3;justify-content:flex-start}
+.dfg-group{background:var(--paper)}
+.dfg-name{grid-column:1;display:flex;align-items:center;gap:6px;padding:8px 12px;font-size:13.5px;font-weight:600;border-bottom:1px solid var(--line);position:sticky;left:0;background:var(--card);z-index:2;min-width:0}
+.dfg-name.sub{font-weight:500;font-size:12.5px;color:var(--muted);padding-left:30px}
+.dfg-name.done .dfg-title{color:var(--muted)}
+.dfg-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.dfg-due{grid-column:2;display:flex;align-items:center;padding:8px 12px;font-family:var(--mono);font-size:12px;font-weight:700;border-bottom:1px solid var(--line);border-left:1px solid var(--line);position:sticky;left:300px;background:var(--card);z-index:2}
+.dfg-due.late{color:#C8473B}
+.dfg-due.done{color:#2E9466}
+.dfg-due.none{color:var(--muted);font-weight:500;font-style:italic}
+.dfg-due.sub{font-weight:500;color:var(--muted)}
+.dfg .rmg-cell{border-bottom:1px solid var(--line)}
+.dfg-bar{align-self:center;height:16px;border-radius:99px;margin:0 2px;z-index:1;position:relative;overflow:hidden}
+.dfg-track{background:color-mix(in srgb,var(--muted) 18%,transparent);height:18px}
+.dfg-track.late{box-shadow:0 0 0 2px #C8473B}
+.dfg-track.done{opacity:.55}
+.dfg-seg{position:absolute;top:0;bottom:0}
+.dfg-subbar{height:10px}
+.dfg-dot{width:10px;height:10px;border-radius:3px;flex:none;display:inline-block}
+.dfg-today{border-left:2px dashed #C8473B;z-index:1;pointer-events:none;justify-self:start}
+.dfg-empty{padding:18px;color:var(--muted);font-size:14px}
+.dfg-legend{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:0 0 12px;font-size:12.5px}
+.dfg-key{display:inline-flex;align-items:center;gap:6px}
 .prodmgr-row{padding:8px 0;border-bottom:1px solid var(--line)}
 .prodmgr-top{display:flex;align-items:center;gap:8px}
 .prodmgr-top input{flex:1;min-width:0;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:14px;background:var(--card);color:inherit}
@@ -19173,8 +19198,193 @@ function discGanttPane(cs){
     const n = (cs.ideas||[]).filter(i=> !ideaOnTl(i)).length;
     if(n){ const h = document.createElement("div"); h.className = "hint"; h.style.margin = "0 0 8px";
       h.textContent = "Only ideas marked ✅ Will do show here — " + n + " more are waiting or marked Won’t do in ✅ Idea approval."; $("content").appendChild(h); }
+    /* two ways to read it: 🪜 By stage (the phases, editable) · 🧩 By feature (one line per idea: when it'll be done) */
+    const mode = discTlMode(cs);
+    const sw = document.createElement("div"); sw.className = "dtl-mode";
+    const lab = document.createElement("span"); lab.className = "dv-flab"; lab.textContent = "View"; sw.appendChild(lab);
+    const seg = document.createElement("span"); seg.className = "rmg-seg";
+    [["stage", "\uD83E\uDE9C By stage", "Phases down the side \u2014 what's in Problem Briefing, PRD, Development\u2026"],
+     ["feature", "\uD83E\uDDE9 By feature", "One line per feature \u2014 when each one starts and by when it'll be done"]].forEach(([k, t, tip])=>{
+      const b = document.createElement("button"); b.textContent = t; b.title = tip; b.className = mode===k ? "on" : "";
+      b.onclick = ()=>{ if(mode===k) return; discTlModeSet(cs, k); renderAll(); };
+      seg.appendChild(b);
+    });
+    sw.appendChild(seg); $("content").appendChild(sw);
+    if(mode==="feature") return discFeatureGantt(cs, ideaTlView(cs, m), $("content"), byTid);
   }
   renderRmapGantt(ideaTlView(cs, m), $("content"), byTid);
+}
+/* Timeline view per viewer and space: "stage" (default) or "feature" */
+let discTlModes = {};
+try{ discTlModes = JSON.parse(localStorage.getItem("discTlModes")||"{}") || {}; }catch(_){ }
+function discTlMode(cs){ return discTlModes[cs.id]==="feature" ? "feature" : "stage"; }
+function discTlModeSet(cs, k){ discTlModes[cs.id] = k; try{ localStorage.setItem("discTlModes", JSON.stringify(discTlModes)); }catch(_){ } }
+let discFeatOpen = {};   /* idea rid -> its phases shown under it */
+/* 🧩 By feature: each idea is one line from its first start to its last end (its own row and its sub-tasks,
+   whichever phase they sit in), coloured by phase, with "done by <date>" — grouped by product. Read only:
+   dates are changed in 🪜 By stage. */
+function discFeatureGantt(cs, m, wrap, byTid){
+  const live = m.items.filter(it=> byTid[it.tid]);
+  const today = dNum(todayISO());
+  const ideaBy = {}; (cs.ideas||[]).forEach(i=> ideaBy[i.id] = i);
+  /* a feature = a top-level row and its sub-rows */
+  const feats = live.filter(it=> !rmgParentOf(m, it)).map(top=>{
+    const parts = [top].concat(live.filter(x=> x!==top && rmgParentOf(m, x)===top)).filter(x=> x.start || x.end);
+    const ss = parts.map(x=> dNum(x.start || x.end)), es = parts.map(x=> dNum(x.end || x.start));
+    const t = byTid[top.tid].task, idea = ideaBy[top.tid];
+    const done = idea ? idea.stage==="done" : effStatus(t)==="done";
+    return { top, parts, idea, title: t.title || "Untitled", done,
+      s: ss.length ? Math.min(...ss) : null, e: es.length ? Math.max(...es) : null };
+  });
+  /* weeks: same 1 / 2 / 3 months / All window as By stage */
+  const win = Number(m.gWin)||0;
+  let w0, nW, winLabel = "";
+  if(win===4){
+    const f = rmgFrom[m.id] || todayISO().slice(0,7)+"-01";
+    const ms = dNum(f.slice(0,7)+"-01"), me = dNum(monthEndISO(f.slice(0,7)));
+    w0 = rmgWeekStart(ms); nW = Math.floor((rmgWeekStart(me) - w0)/7) + 1; winLabel = ymShort(f.slice(0,7));
+  } else if(win){
+    w0 = rmgWeekStart(rmgFrom[m.id] ? dNum(rmgFrom[m.id]) : today); nW = win;
+    winLabel = rmlFmt(dISO(w0)) + " \u2013 " + rmlFmt(dISO(w0 + nW*7 - 1));
+  } else {
+    const ns = feats.flatMap(f=> [f.s, f.e]).filter(x=> x!==null);
+    const a = ns.length ? Math.min(...ns) : today, b = Math.max(ns.length ? Math.max(...ns) : today, a + 55);
+    w0 = rmgWeekStart(a); nW = Math.min(104, Math.floor((rmgWeekStart(b) - w0)/7) + 1);
+  }
+  const nD = nW*7, dayOf = n=> n - w0;
+
+  const head = document.createElement("section"); head.className = "module-block rm-bar";
+  const row = document.createElement("div"); row.className = "module-head";
+  const h2 = document.createElement("h2"); h2.textContent = "Timeline \u00b7 by feature"; row.appendChild(h2);
+  const ctl = document.createElement("span"); ctl.className = "rmg-win";
+  const seg = document.createElement("span"); seg.className = "rmg-seg";
+  RMG_WINDOWS.forEach(([wv, lbl])=>{
+    const bt = document.createElement("button"); bt.textContent = lbl; bt.className = win===wv ? "on" : "";
+    bt.onclick = ()=>{ if(win===wv) return; m.gWin = wv; delete rmgFrom[m.id]; saveRmaps(); };
+    seg.appendChild(bt);
+  });
+  ctl.appendChild(seg);
+  if(win){
+    const step = dir=>{
+      if(win===4){ const f = rmgFrom[m.id] || todayISO().slice(0,7)+"-01"; rmgFrom[m.id] = idxYm(ymIdx(f.slice(0,7)) + dir) + "-01"; }
+      else rmgFrom[m.id] = dISO(w0 + dir*win*7);
+      renderAll();
+    };
+    const nb = (t, title, fn)=>{ const x = document.createElement("button"); x.className = "rmg-nav"; x.textContent = t; x.title = title; x.onclick = fn; return x; };
+    ctl.appendChild(nb("\u2039", "Previous", ()=> step(-1)));
+    ctl.appendChild(nb("Today", "Jump back to now", ()=>{ delete rmgFrom[m.id]; renderAll(); }));
+    ctl.appendChild(nb("\u203A", "Next", ()=> step(1)));
+    const wl = document.createElement("span"); wl.className = "rmg-wl"; wl.textContent = winLabel; ctl.appendChild(wl);
+  }
+  row.appendChild(ctl);
+  head.appendChild(row); wrap.appendChild(head);
+
+  /* phase colours, in the Timeline's phase order */
+  const laneIdx = {}; m.lanes.forEach((l, i)=> laneIdx[l.id] = i);
+  const laneColor = ln=> ln && ln.id==="ln-unplanned" ? "#8C95A3" : RMG_COLORS[(laneIdx[ln && ln.id]||0) % RMG_COLORS.length];
+
+  const scroll = document.createElement("div"); scroll.className = "rmg-scroll";
+  const grid = document.createElement("div"); grid.className = "rmg-grid rmg-days dfg";
+  const nameW = 300, dueW = 120;
+  grid.style.gridTemplateColumns = nameW + "px " + dueW + "px repeat(" + nD + ", minmax(0, 1fr))";
+  grid.style.minWidth = (nameW + dueW + nW*(nW<=5 ? 0 : 84)) + "px";
+  const corner = document.createElement("div"); corner.className = "rmg-corner"; corner.textContent = "Feature"; grid.appendChild(corner);
+  const dueH = document.createElement("div"); dueH.className = "rmg-wk dfg-dueh"; dueH.textContent = "Done by"; grid.appendChild(dueH);
+  const tw = Math.floor((today - w0)/7), inRange = today >= w0 && today < w0 + nD;
+  for(let w=0; w<nW; w++){
+    const c = document.createElement("div"); c.className = "rmg-wk" + (inRange && w===tw ? " now" : "");
+    c.style.gridColumn = (3 + w*7) + " / span 7";
+    c.innerHTML = "Week " + (w+1) + "<small>" + rmlFmt(dISO(w0 + w*7)) + (nW<=9 ? " \u2013 " + rmlFmt(dISO(w0 + w*7 + 6)) : "") + "</small>";
+    grid.appendChild(c);
+  }
+  let r = 2;
+  const cells = cls=>{ for(let w=0; w<nW; w++){ const bg = document.createElement("div"); bg.className = "rmg-cell" + (cls ? " " + cls : "") + (inRange && w===tw ? " now" : ""); bg.style.gridRow = String(r); bg.style.gridColumn = (3 + w*7) + " / span 7"; grid.appendChild(bg); } };
+  const bar = (s, e, color, cls, tip, text)=>{
+    const s0 = dayOf(s), e0 = dayOf(e);
+    if(e0 < 0 || s0 > nD-1) return null;
+    const b = document.createElement("div"); b.className = "dfg-bar " + (cls||"");
+    b.style.gridRow = String(r); b.style.gridColumn = (Math.max(0, s0) + 3) + " / " + (Math.min(nD-1, e0) + 4);
+    if(color) b.style.background = color;
+    b.title = tip; if(text) b.textContent = text;
+    grid.appendChild(b); return b;
+  };
+  /* groups: one per product (an idea under each product it's tagged with), then "No product" */
+  const prods = discProductList(cs);
+  const groups = prods.map(p=> ({ label: discProdIcon(p) + " " + p.label, list: feats.filter(f=> f.idea && (f.idea.products||[]).includes(p.key)) }));
+  groups.push({ label: "No product", list: feats.filter(f=> !f.idea || !(f.idea.products||[]).some(k=> prods.some(p=> p.key===k))) });
+  const byDate = (a, b)=> (a.e===null) - (b.e===null) || (a.e||0) - (b.e||0) || a.title.localeCompare(b.title);
+  let shown = 0;
+  groups.filter(g=> g.list.length).forEach(g=>{
+    const gh = document.createElement("div"); gh.className = "rmg-phase dfg-group"; gh.style.gridRow = String(r); gh.style.gridColumn = "1 / 3";
+    const gn = document.createElement("span"); gn.className = "rmg-pname"; gn.textContent = g.label;
+    const gc = document.createElement("span"); gc.className = "rmg-pct"; gc.textContent = g.list.length;
+    gh.append(gn, gc); grid.appendChild(gh); cells("phase"); r++;
+    g.list.slice().sort(byDate).forEach(f=>{
+      shown++;
+      const open = !!discFeatOpen[f.top.rid] && f.parts.length > 0;
+      const nm = document.createElement("div"); nm.className = "dfg-name" + (f.done ? " done" : ""); nm.style.gridRow = String(r);
+      const fb = document.createElement("button"); fb.className = "rmg-lfold"; fb.textContent = f.parts.length ? (open ? "\u25BE" : "\u25B8") : "";
+      fb.title = open ? "Hide its phases" : "Show its phases";
+      const tt = document.createElement("span"); tt.className = "dfg-title"; tt.textContent = (f.done ? "\u2713 " : "") + f.title;
+      nm.append(fb, tt);
+      if(f.parts.length){ nm.style.cursor = "pointer"; nm.onclick = ()=>{ discFeatOpen[f.top.rid] = !open; renderAll(); }; }
+      const ln = rmgRowLane(m, f.top);
+      nm.title = f.title + (ln ? " \u2014 now in " + ln.name : "");
+      grid.appendChild(nm);
+      const due = document.createElement("div"); due.style.gridRow = String(r);
+      const late = !f.done && f.e!==null && f.e < today;
+      due.className = "dfg-due" + (f.done ? " done" : late ? " late" : f.e===null ? " none" : "");
+      due.textContent = f.e===null ? "No dates yet" : (f.done ? "\u2713 " : late ? "\u26A0 " : "") + rmlFmt(dISO(f.e));
+      due.title = f.e===null ? "Give it dates in \uD83E\uDE9C By stage" : f.done ? "Done" : late ? "Past its end date and not done" : "Planned to be done by " + rmlFmt(dISO(f.e));
+      grid.appendChild(due);
+      cells();
+      if(f.s!==null){
+        /* the whole feature as one track, with each phase's own stretch coloured on it */
+        const tip = f.title + ": " + rmlFmt(dISO(f.s)) + " \u2192 " + rmlFmt(dISO(f.e));
+        const track = bar(f.s, f.e, null, "dfg-track" + (f.done ? " done" : late ? " late" : ""), tip);
+        if(track){
+          const vs = Math.max(f.s, w0), ve = Math.min(f.e, w0 + nD - 1), vspan = Math.max(1, ve - vs + 1);
+          f.parts.forEach(pt=>{
+            const ps = dNum(pt.start || pt.end), pe = dNum(pt.end || pt.start);
+            const a = Math.max(ps, vs), b = Math.min(pe, ve); if(b < a) return;
+            const seg = document.createElement("span"); seg.className = "dfg-seg";
+            const pl = rmgRowLane(m, pt);
+            seg.style.left = ((a - vs) / vspan * 100) + "%"; seg.style.width = ((b - a + 1) / vspan * 100) + "%";
+            seg.style.background = laneColor(pl);
+            seg.title = (pl ? pl.name : "") + " \u00b7 " + rmlFmt(dISO(ps)) + " \u2192 " + rmlFmt(dISO(pe));
+            track.appendChild(seg);
+          });
+        }
+      }
+      r++;
+      if(open){
+        f.parts.slice().sort((a, b)=> dNum(a.start||a.end) - dNum(b.start||b.end)).forEach(pt=>{
+          const pl = rmgRowLane(m, pt), t = byTid[pt.tid].task;
+          const sn = document.createElement("div"); sn.className = "dfg-name sub"; sn.style.gridRow = String(r);
+          const dot = document.createElement("span"); dot.className = "dfg-dot"; dot.style.background = laneColor(pl);
+          const st = document.createElement("span"); st.className = "dfg-title"; st.textContent = (pl ? pl.name : "") + (pt===f.top ? "" : " \u00b7 " + (t.title || ""));
+          sn.append(dot, st); sn.title = st.textContent; grid.appendChild(sn);
+          const sd = document.createElement("div"); sd.className = "dfg-due sub"; sd.style.gridRow = String(r); sd.textContent = rmlFmt(dISO(dNum(pt.end || pt.start))); grid.appendChild(sd);
+          cells("sub");
+          const ps = dNum(pt.start || pt.end), pe = dNum(pt.end || pt.start);
+          bar(ps, pe, laneColor(pl), "dfg-subbar", (pl ? pl.name : "") + " \u00b7 " + rmlFmt(dISO(ps)) + " \u2192 " + rmlFmt(dISO(pe)));
+          r++;
+        });
+      }
+    });
+  });
+  if(!shown){ const e = document.createElement("div"); e.className = "dfg-empty"; e.style.gridRow = "2"; e.style.gridColumn = "1 / -1"; e.textContent = "No features on the Timeline yet \u2014 mark ideas \u2705 Will do in Idea approval."; grid.appendChild(e); }
+  /* today line */
+  if(inRange){ const tl = document.createElement("div"); tl.className = "dfg-today"; tl.style.gridRow = "1 / " + Math.max(3, r); tl.style.gridColumn = (dayOf(today) + 3) + " / span 1"; grid.appendChild(tl); }
+  scroll.appendChild(grid); wrap.appendChild(scroll);
+  /* legend: phase colours */
+  const used = new Set(); feats.forEach(f=> f.parts.forEach(pt=>{ const l = rmgRowLane(m, pt); if(l) used.add(l.id); }));
+  if(used.size){
+    const lg = document.createElement("div"); lg.className = "dfg-legend";
+    const lt = document.createElement("span"); lt.className = "dv-flab"; lt.textContent = "Phase colours"; lg.appendChild(lt);
+    m.lanes.filter(l=> used.has(l.id)).forEach(l=>{ const k = document.createElement("span"); k.className = "dfg-key"; const d = document.createElement("span"); d.className = "dfg-dot"; d.style.background = laneColor(l); k.append(d, document.createTextNode(l.name)); lg.appendChild(k); });
+    wrap.appendChild(lg);
+  }
 }
 /* Product Roadmap: an idea's call — "will" (Will do and every stage after it), "wont", or "" (still to decide) */
 const IDEA_WILL = ["now","implres","ready","building","done"];
