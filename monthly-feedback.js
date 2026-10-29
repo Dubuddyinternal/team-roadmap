@@ -534,6 +534,7 @@ async function fbOpenReader(id) {
       if (q.error) { toast("Couldn't save: " + q.error.message); return; }
       toast(cb.checked ? "Saved — " + fbName(f.user_id).split(" ")[0] + " can see the notes" : "Notes saved");
       close(); if (typeof mtView !== "undefined" && mtView === "feedback") fbRenderTeamView();
+      else if (typeof mtView !== "undefined" && mtView === "org" && typeof renderTeamPage === "function") { var tp = document.getElementById("team-page"); if (tp && tp.style.display !== "none") renderTeamPage(); }
     };
     meet.append(ta, lab, sv);
     if (f.discussed_at) meet.appendChild(fbEl("div", "w", "Discussed " + fbDate(f.discussed_at) + (f.discussed_by ? " · " + fbName(f.discussed_by) : "")));
@@ -911,5 +912,45 @@ function renderAdminOkrCheckin(wrap) {
     + ".okr-ci-of{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap;min-width:64px}"
     + ".okr-ci-pct{font-family:var(--mono);font-size:12px;font-weight:700;width:42px;text-align:right}"
     + "@media(max-width:640px){.okr-ci-row{flex-direction:column;align-items:stretch}}";
+  var st = document.createElement("style"); st.textContent = css; (document.head || document.documentElement).appendChild(st);
+})();
+
+/* =====================================================================
+   My Team → Reporting lines: each box below you shows that person's
+   monthly feedback for the month being filled now (or last month once the
+   window has closed): sent → "Review →" opens it to read and write the
+   review; reviewed; or not sent yet. Same visibility as the Monthly
+   feedback tab (feedback_overview): you see the people below you.
+   ===================================================================== */
+async function fbOrgChips(canvas) {
+  if (!SUPA || !currentUser()) return;
+  await fbLoadSettings();
+  var month = fbTargetMonth() || fbPrev();
+  var r = await SUPA.rpc("feedback_overview", { p_team: TEAM, p_month: month });
+  if (r.error || !r.data) return;
+  var me = currentUser().id, by = {};
+  r.data.forEach(function (x) { by[x.user_id] = x; });
+  var mon = fbLabel(month, true).slice(0, 3);
+  canvas.querySelectorAll(".mt-node[data-uid]").forEach(function (node) {
+    var x = by[node.getAttribute("data-uid")];
+    if (!x || x.user_id === me || node.querySelector(".mt-fb")) return;
+    var c = fbEl("span", "mt-fb");
+    if (x.status === "submitted" && x.feedback_id) {
+      if (x.discussed_at) { c.classList.add("done"); c.textContent = "🤝 " + mon + " feedback reviewed"; }
+      else { c.classList.add("todo"); c.textContent = "📝 " + mon + " feedback sent · Review →"; }
+      c.title = "Read " + fbName(x.user_id) + "’s " + fbLabel(month, true) + " feedback" + (x.discussed_at ? "" : " and write your review");
+      c.onclick = function (e) { e.stopPropagation(); fbOpenReader(x.feedback_id); };
+    } else {
+      c.classList.add("wait"); c.textContent = "📝 " + mon + " feedback not sent yet";
+      c.title = "Nothing to review until they send it";
+    }
+    node.appendChild(c);
+  });
+}
+(function () {
+  var css = ".mt-fb{margin-top:7px;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:650;border-radius:99px;padding:4px 10px;white-space:nowrap}"
+    + ".mt-fb.todo{background:#E8622B;color:#fff;cursor:pointer}.mt-fb.todo:hover{background:#C94F1C}"
+    + ".mt-fb.done{background:var(--done-bg,#E3F4EA);color:var(--done,#2E9466);cursor:pointer}"
+    + ".mt-fb.wait{background:#EEF1F5;color:#64748B}";
   var st = document.createElement("style"); st.textContent = css; (document.head || document.documentElement).appendChild(st);
 })();
