@@ -104,10 +104,11 @@ async function renderPerformance() {
   agTile.querySelector(".n").textContent = ag.total ? Math.round(ag.kept / ag.total * 100) + "%" : "—";
   agTile.appendChild(perfEl("div", "s", ag.total ? ag.kept + " of " + ag.total + " periods kept" : "not part of any agreement yet"));
 
-  if (!SUPA) { mSec.body.innerHTML = ""; perfMonthly(mSec.body, [], [], ag, okrs); return; }
+  if (!SUPA) { mSec.body.innerHTML = ""; perfMonthly(mSec.body, [], [], ag, okrs, mine); return; }
   var res = await Promise.all([
     SUPA.from("monthly_feedback").select("*").eq("team_slug", TEAM).eq("user_id", who.id).order("month", { ascending: false }),   /* RLS: yours, or sent ones of people below you */
-    SUPA.from("okr_checkins").select("period,done_at,note,updates").eq("team_slug", TEAM).eq("user_id", who.id).order("done_at", { ascending: false }).limit(48)
+    SUPA.from("okr_checkins").select("period,done_at,note,updates").eq("team_slug", TEAM).eq("user_id", who.id).order("done_at", { ascending: false }).limit(48),
+    typeof fbLoadSettings === "function" ? fbLoadSettings() : null   /* the open day decides which month can be filled now */
   ]);
   /* 📝 feedback */
   var fbRows = (res[0] && res[0].data) || [];
@@ -126,7 +127,7 @@ async function renderPerformance() {
   }
   /* 📅 month by month, with the average */
   mSec.body.innerHTML = "";
-  perfMonthly(mSec.body, fbRows, ciRows, ag, okrs);
+  perfMonthly(mSec.body, fbRows, ciRows, ag, okrs, mine);
 }
 /* ---------- 📅 month by month: the last 6 months and their average ---------- */
 function perfMonthKeys(n) {
@@ -143,12 +144,11 @@ function perfCheckinPct(ci, okrs) {
   }).filter(function (x) { return x != null; });
   return ps.length ? Math.round(ps.reduce(function (a, b) { return a + b; }, 0) / ps.length) : null;
 }
-function perfMonthly(box, fbRows, ciRows, ag, okrs) {
+function perfMonthly(box, fbRows, ciRows, ag, okrs, mine) {
   var cur = perfMonthKeys(1)[0];
   var liveOkr = okrs.list.length ? Math.round(okrs.list.reduce(function (a, x) { return a + objPct(x.ob); }, 0) / okrs.list.length) : null;
   /* months before their first feedback / first check-in don't count (it didn't exist for them yet) */
-  var prev = perfMonthKeys(2)[1];
-  var fbStart = fbRows.map(function (r) { return r.month; }).sort()[0] || prev;
+  var fbStart = fbRows.map(function (r) { return r.month; }).sort()[0] || cur;
   var ciStart = ciRows.map(function (c) { return String(c.period).slice(0, 7); }).sort()[0] || cur;
   var months = perfMonthKeys(6).map(function (k) {
     var fb = fbRows.find(function (r) { return r.month === k; }), sentFb = fb && fb.status === "submitted" ? fb : null;
@@ -174,7 +174,13 @@ function perfMonthly(box, fbRows, ciRows, ag, okrs) {
     var r = perfEl("div", "perf-mrow" + (m.now ? " now" : ""));
     var a = m.k.split("-");
     r.appendChild(perfEl("b", null, new Date(+a[0], +a[1] - 1, 1).toLocaleDateString("en-GB", { month: "short", year: "numeric" }) + (m.now ? " · now" : "")));
-    r.appendChild(perfEl("span", "fbs " + (m.sent ? (m.late ? "late" : "ok") : m.fb ? "draft" : m.fbOn ? "none" : "draft"), m.sent ? (m.late ? "✓ late" : "✓ sent") : m.fb ? "draft" : m.now ? "not yet" : m.fbOn ? "✕ not sent" : "—"));
+    var fbc = perfEl("span", "fbs " + (m.sent ? (m.late ? "late" : "ok") : m.fb ? "draft" : m.fbOn ? "none" : "draft"), m.sent ? (m.late ? "✓ late" : "✓ sent") : m.fb ? "draft" : m.now ? "not yet" : m.fbOn ? "✕ not sent" : "—");
+    /* your own month that's open to fill (or still in the late window): a way straight to the form */
+    if (mine && !m.sent && typeof fbTargetMonth === "function" && fbTargetMonth() === m.k && typeof fbOpenForm === "function") {
+      var go = perfEl("button", "perf-fill", m.fb ? "Finish it →" : "Fill it now →"); go.type = "button"; go.onclick = fbOpenForm;
+      fbc.append(document.createTextNode(" "), go);
+    }
+    r.appendChild(fbc);
     r.appendChild(perfEl("span", "mood", m.mood ? MOOD[m.mood - 1] + " " + m.mood + "/5" : "—"));
     r.appendChild(perfEl("span", null, m.support ? m.support + "/5" : "—"));
     r.appendChild(perfEl("span", null, m.sent ? (m.reviewed ? "✓" : "waiting") : "—"));
@@ -455,6 +461,7 @@ function perfAgreementView(box, ag, mine) {
     + ".perf-mrow.head{border-top:0;font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}"
     + ".perf-mrow.now{background:color-mix(in srgb,var(--indigo) 5%,transparent)}"
     + ".perf-mrow.avg{background:var(--paper);font-weight:700;border-top:2px solid var(--line-strong)}"
+    + ".perf-fill{border:0;border-radius:99px;background:#E8622B;color:#fff;font:700 11.5px var(--sans,system-ui);padding:4px 10px;cursor:pointer;margin-left:4px;white-space:nowrap}"
     + ".perf-mrow .pc{font-family:var(--mono);font-weight:700}"
     + ".perf-mrow .fbs.ok{color:var(--done,#2E9466)}.perf-mrow .fbs.late{color:#B4541A}.perf-mrow .fbs.none{color:#B42318}.perf-mrow .fbs.draft{color:var(--muted)}"
     + "#nav-perf.on{background:var(--indigo);color:#fff}"
