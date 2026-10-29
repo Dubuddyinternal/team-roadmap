@@ -11155,9 +11155,38 @@ function krOwnerName(kr){ return krOwners(kr).map(okrOwnerName).filter(Boolean).
 function okrOwnerName(email){ if(!email) return ""; var m=assigneeMembers().find(function(u){return u.email===email;}); return m?userDisplayName(m):email; }
 function okrOwners(ob){ if(ob&&Array.isArray(ob.owners)&&ob.owners.length) return ob.owners.slice(); if(ob&&ob.assignee) return [ob.assignee]; return []; }
 function okrInList(list){ return !!(SESSION && Array.isArray(list) && list.indexOf(SESSION.email)>=0); }
-function okrCanEdit(ob){ if(editMode) return true; if(!SESSION||!ob) return false; return okrInList(okrOwners(ob)) || okrInList(ob.editors); }
-function okrCanAdd(ob){ if(editMode) return true; if(!SESSION||!ob) return false; return okrInList(okrOwners(ob)) || okrInList(ob.adders); }
-function okrCanDelete(ob){ if(editMode) return true; if(!SESSION||!ob) return false; return okrInList(okrOwners(ob)) || okrInList(ob.deleters); }
+function okrCanEdit(ob){ if(editMode) return true; if(!SESSION||!ob) return false; return okrInList(okrOwners(ob)) || okrInList(ob.editors) || okrIsAbove(ob); }
+function okrCanAdd(ob){ if(editMode) return true; if(!SESSION||!ob) return false; return okrInList(okrOwners(ob)) || okrInList(ob.adders) || okrIsAbove(ob); }
+function okrCanDelete(ob){ if(editMode) return true; if(!SESSION||!ob) return false; return okrInList(okrOwners(ob)) || okrInList(ob.deleters) || okrIsAbove(ob); }
+/* the people above an objective may manage it too:
+   · an owner of any objective it rolls up to (alignsTo chain), and
+   · anyone above one of its owners in My Team → Reporting lines (boxes linked to logins) */
+function okrIsAbove(ob){
+  if(!SESSION || !ob) return false;
+  var me=SESSION.email;
+  var cyc=((typeof OKRS!=="undefined" && OKRS && OKRS.cycles)||[]).find(function(c){ return (c.objectives||[]).indexOf(ob)>=0; });
+  if(cyc){
+    var cur=ob, g=0;
+    while(cur && cur.alignsTo && g++<20){
+      var pa=cyc.objectives.find(function(o){ return o.id===cur.alignsTo; });
+      if(!pa) break;
+      if(okrOwners(pa).indexOf(me)>=0) return true;
+      cur=pa;
+    }
+  }
+  var users=(typeof USERS!=="undefined" && USERS) || [], meU=users.find(function(u){ return u.email===me; });
+  if(!meU || typeof TEAMORG==="undefined" || !TEAMORG) return false;
+  var ownerIds=okrOwners(ob).map(function(e){ var u=users.find(function(x){ return x.email===e; }); return u ? u.id : null; }).filter(Boolean);
+  if(!ownerIds.length) return false;
+  var hit=false;
+  (function walk(n, aboveMe){
+    if(!n || hit) return;
+    if(aboveMe && n.uid && ownerIds.indexOf(n.uid)>=0 && n.uid!==meU.id){ hit=true; return; }
+    var a=aboveMe || n.uid===meU.id;
+    (n.children||[]).forEach(function(c){ walk(c, a); });
+  })(TEAMORG, false);
+  return hit;
+}
 function okrTreeKrToggle(id){ okrTreeExpanded[id]=!okrTreeExpanded[id]; renderAll(); }
 function okrMini(txt,title,fn){ var b=document.createElement("button"); b.className="okrtree-mini"; b.textContent=txt; b.title=title; b.onclick=function(e){ e.stopPropagation(); fn(); }; return b; }
 
