@@ -258,6 +258,12 @@ function fbErr(e) { return (e && (e.message || e.error_description)) || String(e
     + ".fb-q.miss .fb-traits{box-shadow:0 0 0 2px #F3B3AE;border-radius:12px}"
     + ".fb-trview{display:flex;flex-wrap:wrap;gap:6px}.fb-trview .fb-tr{cursor:default;padding:3px 10px;border-radius:99px;font-size:12.5px}"
     + "@media(max-width:700px){.fb-traits{grid-template-columns:1fr}}"
+    + ".fb-mr{background:#FFF8F2;border:1px solid #F5CDB6;border-radius:12px;padding:14px 16px;margin:16px 0}"
+    + ".fb-mr h4{margin:0 0 4px;font-size:15px}.fb-mr .fb-q{margin:12px 0}.fb-mr textarea{min-height:64px}"
+    + ".fb-mr.view{background:#F7F5FF;border-color:#D9D2F5}"
+    + ".fb-mrate{display:flex;align-items:baseline;gap:8px;margin:6px 0 10px}.fb-mrate b{font-size:22px;color:var(--indigo)}.fb-mrate span{font-weight:600}"
+    + ".fb-mrq{font-size:12px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.03em;color:var(--muted);margin:10px 0 4px}"
+    + ".fb-tr.mute.on{background:#EEF1F5;color:#475569}"
     + ".fb-empty{text-align:center;color:var(--muted);padding:28px 16px;border:1.5px dashed var(--line-strong);border-radius:14px}"
     + "@media(max-width:760px){.fb-stats{grid-template-columns:repeat(2,1fr)}.fb-row{grid-template-columns:1fr auto}.fb-row .hide-s{display:none}.fb-row.head{display:none}}";
   var st = document.createElement("style"); st.textContent = css;
@@ -353,6 +359,7 @@ function renderAdminMyFeedback(wrap) {
         s.appendChild(fbEl("span", "hint", "sent " + fbDate(r.submitted_at)));
         d.appendChild(s);
         var b = fbEl("div", "body");
+        var mrv = fbManagerView(r); if (mrv) { b.appendChild(mrv); mrv.style.margin = "12px 0 16px"; }
         var mv = fbMeetingView(r); if (mv) { b.appendChild(mv); mv.style.margin = "12px 0 16px"; }
         b.appendChild(fbAnswersView(r.answers));
         d.appendChild(b);
@@ -645,11 +652,94 @@ async function fbOpenReader(id) {
   } else {
     var mv = fbMeetingView(f); meet = mv || fbEl("div", "hint", "Not discussed yet.");
   }
+  if (f.user_id !== me.id) p.appendChild(fbManagerForm(f, close));
+  else { var mrv = fbManagerView(f); if (mrv) p.appendChild(mrv); }
   p.appendChild(meet);
   p.appendChild(fbAnswersView(f.answers));
   bg.appendChild(p);
   bg.onclick = function (e) { if (e.target === bg) close(); };
   document.body.appendChild(bg);
+}
+
+/* ---------- 📋 the manager's feedback on a month (stage 22d: monthly_feedback.manager_review) ---------- */
+var FB_RATING = [["1", "Needs improvement"], ["2", "Below expectations"], ["3", "Meets expectations"], ["4", "Exceeds expectations"], ["5", "Outstanding"]];
+var FB_MR = [
+  { k: "well", label: "What went well", ph: "Specific things they did well this month" },
+  { k: "improve", label: "What to improve", ph: "One or two things to work on, with an example" },
+  { k: "focus", label: "Focus for next month", ph: "What matters most for them next month" },
+  { k: "support", label: "How you'll support them", ph: "What you'll do to help — time, decisions, training…" }
+];
+function fbManagerForm(f, onDone) {
+  var rv = Object.assign({ traits_pos: [], traits_neg: [] }, f.manager_review || {});
+  var first = fbName(f.user_id).split(" ")[0];
+  var box = fbEl("div", "fb-mr");
+  box.appendChild(fbEl("h4", "", "📋 Your feedback for " + first + (rv.shared ? " · shared " + fbDate(rv.shared_at) : "")));
+  box.appendChild(fbEl("div", "hint", "Based on their feedback below. It stays a draft until you share it; then " + first + " sees it and gets a 🔔."));
+  var q = fbEl("div", "fb-q"); q.appendChild(fbEl("label", "fb-l", "Overall, this month"));
+  var opts = fbEl("div", "fb-opts");
+  FB_RATING.forEach(function (o) {
+    var b = fbEl("button", "fb-opt" + (String(rv.rating) === o[0] ? " on" : "")); b.type = "button";
+    b.append(fbEl("span", "e", o[0]), fbEl("span", "n", o[1]));
+    b.onclick = function () { rv.rating = o[0]; [].forEach.call(opts.children, function (x) { x.classList.remove("on"); }); b.classList.add("on"); };
+    opts.appendChild(b);
+  });
+  q.appendChild(opts); box.appendChild(q);
+  FB_MR.forEach(function (m) {
+    var qq = fbEl("div", "fb-q"); qq.appendChild(fbEl("label", "fb-l", m.label));
+    var t = fbEl("textarea"); t.value = rv[m.k] || ""; t.placeholder = m.ph; t.maxLength = 3000; t.oninput = function () { rv[m.k] = t.value; };
+    qq.appendChild(t); box.appendChild(qq);
+  });
+  /* how you see them: tick the traits — compared with what they ticked themselves */
+  var tq = fbEl("div", "fb-q"); tq.appendChild(fbEl("label", "fb-l", "How you see " + first + " — tick the traits"));
+  tq.appendChild(fbEl("div", "fb-h", "They'll see where you agree with their own ticks and where you differ."));
+  var cols = fbEl("div", "fb-traits");
+  [["pos", "Positive", FB_TRAITS_POS], ["neg", "Negative", FB_TRAITS_NEG]].forEach(function (g) {
+    var key = "traits_" + g[0], col = fbEl("div", "fb-tcol " + g[0]);
+    col.appendChild(fbEl("div", "fb-thead", g[1] + " traits"));
+    var list = fbEl("div", "fb-tlist");
+    g[2].forEach(function (t) {
+      var lb = fbEl("label", "fb-tr " + g[0] + (rv[key].indexOf(t) >= 0 ? " on" : "")), cb = fbEl("input"); cb.type = "checkbox"; cb.checked = rv[key].indexOf(t) >= 0;
+      cb.onchange = function () { var i = rv[key].indexOf(t); if (cb.checked && i < 0) rv[key].push(t); else if (!cb.checked && i >= 0) rv[key].splice(i, 1); lb.classList.toggle("on", cb.checked); };
+      lb.append(cb, document.createTextNode(" " + t)); list.appendChild(lb);
+    });
+    col.appendChild(list); cols.appendChild(col);
+  });
+  tq.appendChild(cols); box.appendChild(tq);
+  var bar = fbEl("div"); bar.style.cssText = "display:flex;gap:8px;justify-content:flex-end;margin-top:8px";
+  var save = async function (share) {
+    if (share && !rv.rating) { toast("Pick an overall rating first"); return; }
+    var out = { rating: rv.rating || null, traits_pos: rv.traits_pos, traits_neg: rv.traits_neg };
+    FB_MR.forEach(function (m) { out[m.k] = (rv[m.k] || "").trim(); });
+    var r = await SUPA.rpc("feedback_manager_review", { p_id: f.id, p_review: out, p_share: !!share });
+    if (r.error) { toast("Couldn't save: " + r.error.message); return; }
+    f.manager_review = r.data && r.data.manager_review;
+    toast(share ? "Shared — " + first + " can see it now" : "Draft saved");
+    if (share && onDone) onDone();
+  };
+  var d = fbEl("button", "btn", "Save draft"); d.onclick = function () { save(false); };
+  var sh = fbEl("button", "btn save", rv.shared ? "Update ✓" : "Share with " + first + " ✓"); sh.onclick = function () { save(true); };
+  bar.append(d, sh); box.appendChild(bar);
+  return box;
+}
+/* what the person sees, once it's shared */
+function fbManagerView(row) {
+  var rv = row && row.manager_review;
+  if (!rv || !rv.shared) return null;
+  var m = fbEl("div", "fb-mr view");
+  m.appendChild(fbEl("h4", "", "📋 Manager's feedback" + (rv.by ? " · " + fbName(rv.by) : "")));
+  if (rv.rating) { var rt = FB_RATING[+rv.rating - 1]; var b = fbEl("div", "fb-mrate"); b.append(fbEl("b", "", rv.rating + "/5"), fbEl("span", "", rt ? rt[1] : "")); m.appendChild(b); }
+  FB_MR.forEach(function (q) { if (!rv[q.k]) return; var a = fbEl("div", "fb-ans"); a.append(fbEl("div", "q", q.k === "support" ? "How your manager will support you" : q.label), fbEl("div", "a", rv[q.k])); m.appendChild(a); });
+  /* their view of the traits against the person's own */
+  var own = (row.answers || {}), oP = own.traits_pos || [], oN = own.traits_neg || [], mP = rv.traits_pos || [], mN = rv.traits_neg || [];
+  if (mP.length || mN.length) {
+    var tg = function (title, list, cls) { if (!list.length) return; m.appendChild(fbEl("div", "q fb-mrq", title)); var w = fbEl("div", "fb-trview"); list.forEach(function (t) { w.appendChild(fbEl("span", "fb-tr " + (cls === "auto" ? (FB_TRAITS_NEG.indexOf(t) >= 0 ? "neg" : "pos") : cls) + " on", t)); }); m.appendChild(w); };
+    tg("You both see", mP.filter(function (t) { return oP.indexOf(t) >= 0; }).concat(mN.filter(function (t) { return oN.indexOf(t) >= 0; })), "auto");
+    tg("Your manager sees — you didn't tick", mP.filter(function (t) { return oP.indexOf(t) < 0; }), "pos");
+    tg("Your manager sees to work on — you didn't tick", mN.filter(function (t) { return oN.indexOf(t) < 0; }), "neg");
+    tg("You ticked — your manager didn't", oP.filter(function (t) { return mP.indexOf(t) < 0; }).concat(oN.filter(function (t) { return mN.indexOf(t) < 0; })), "mute");
+  }
+  if (rv.shared_at) m.appendChild(fbEl("div", "w", "Shared " + fbDate(rv.shared_at)));
+  return m;
 }
 
 function fbSettingsDialog() {
@@ -1032,17 +1122,26 @@ async function fbOrgChips(canvas) {
   var month = fbTargetMonth() || fbPrev();
   var r = await SUPA.rpc("feedback_overview", { p_team: TEAM, p_month: month });
   if (r.error || !r.data) return;
-  var me = currentUser().id, by = {};
+  var me = currentUser().id, by = {}, shared = {};
   r.data.forEach(function (x) { by[x.user_id] = x; });
+  /* has the manager's feedback been shared yet? (you can read the sent feedback of the people below you) */
+  try {
+    var mr = await SUPA.from("monthly_feedback").select("user_id,manager_review").eq("team_slug", TEAM).eq("month", month).eq("status", "submitted");
+    (mr.data || []).forEach(function (x) { shared[x.user_id] = !!(x.manager_review && x.manager_review.shared); });
+  } catch (_) { }
   var mon = fbLabel(month, true).slice(0, 3);
+  var isSuper = !!(currentUser() && currentUser().super);
   canvas.querySelectorAll(".mt-node[data-uid]").forEach(function (node) {
     var x = by[node.getAttribute("data-uid")];
     if (!x || x.user_id === me || node.querySelector(".mt-fb")) return;
     var c = fbEl("span", "mt-fb");
     if (x.status === "submitted" && x.feedback_id) {
-      if (x.discussed_at) { c.classList.add("done"); c.textContent = "🤝 " + mon + " feedback reviewed"; }
-      else { c.classList.add("todo"); c.textContent = "📝 " + mon + " feedback sent · Review →"; }
-      c.title = "Read " + fbName(x.user_id) + "’s " + fbLabel(month, true) + " feedback" + (x.discussed_at ? "" : " and write your review");
+      /* their direct manager (the nearest linked box above them) writes the feedback; others above can read it */
+      var dm = (fbLineAbove(x.user_id) || []).find(function (n) { return n.uid; }), direct = isSuper || (dm && dm.uid === me);
+      if (shared[x.user_id]) { c.classList.add("done"); c.textContent = "✓ " + mon + " feedback given" + (x.discussed_at ? " · met" : ""); }
+      else if (direct) { c.classList.add("todo"); c.textContent = "📋 Write your " + mon + " feedback →"; }
+      else { c.classList.add("done"); c.textContent = "📝 " + mon + " feedback sent · Read"; }
+      c.title = direct && !shared[x.user_id] ? "Read " + fbName(x.user_id) + "’s " + fbLabel(month, true) + " feedback and write yours for them" : "Read " + fbName(x.user_id) + "’s " + fbLabel(month, true) + " feedback";
       c.onclick = function (e) { e.stopPropagation(); fbOpenReader(x.feedback_id); };
     } else {
       c.classList.add("wait"); c.textContent = "📝 " + mon + " feedback not sent yet";

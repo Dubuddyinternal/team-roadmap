@@ -274,10 +274,10 @@ function perfMonthly(box, fbRows, ciRows, ag, okrs, mine) {
     var mood = sentFb && sentFb.answers && +sentFb.answers.mood ? +sentFb.answers.mood : null;
     var support = sentFb && sentFb.answers && +sentFb.answers.support ? +sentFb.answers.support : null;
     return { k: k, now: k === cur, fb: fb, fbOn: k >= fbStart, ciOn: k >= ciStart, sent: !!sentFb, late: !!(sentFb && sentFb.late), reviewed: !!(sentFb && sentFb.discussed_at),
-      mood: mood, support: support, ci: cis.length, okr: okr, kept: kept, judged: judged, ag: judged ? Math.round(kept / judged * 100) : null };
+      mood: mood, support: support, rating: sentFb && sentFb.manager_review && sentFb.manager_review.shared && +sentFb.manager_review.rating ? +sentFb.manager_review.rating : null, ci: cis.length, okr: okr, kept: kept, judged: judged, ag: judged ? Math.round(kept / judged * 100) : null };
   });
   var t = perfEl("div", "perf-mtab");
-  var hdr = ["Month", "Feedback", "Mood", "Manager support", "Reviewed", "OKR check-ins", "OKR progress"];
+  var hdr = ["Month", "Feedback", "Mood", "Manager support", "Manager's rating", "OKR check-ins", "OKR progress"];
   var hr = perfEl("div", "perf-mrow head"); hdr.forEach(function (h) { hr.appendChild(perfEl("span", null, h)); }); t.appendChild(hr);
   var MOOD = (typeof FB_Q !== "undefined" ? (FB_Q.find(function (q) { return q.k === "mood"; }) || {}).opts : null) || ["1", "2", "3", "4", "5"];
   var pctCell = function (v) { var e = perfEl("span", "pc", v == null ? "—" : v + "%"); if (v != null) e.style.color = scoreColor(v); return e; };
@@ -294,7 +294,7 @@ function perfMonthly(box, fbRows, ciRows, ag, okrs, mine) {
     r.appendChild(fbc);
     r.appendChild(perfEl("span", "mood", m.mood ? MOOD[m.mood - 1] + " " + m.mood + "/5" : "—"));
     r.appendChild(perfEl("span", null, m.support ? m.support + "/5" : "—"));
-    r.appendChild(perfEl("span", null, m.sent ? (m.reviewed ? "✓" : "waiting") : "—"));
+    r.appendChild(perfEl("span", "mr", m.rating ? m.rating + "/5" : m.sent ? "waiting" : "—"));
     var cic = perfEl("span", null, m.ciOn ? m.ci + " of 2" : "—");
     /* your own running month: straight to the OKR check-in to update the numbers */
     if (mine && m.now && typeof okrOpenCheckin === "function") {
@@ -313,7 +313,6 @@ function perfMonthly(box, fbRows, ciRows, ag, okrs, mine) {
   var sentRate = fbPast.length ? Math.round(fbPast.filter(function (m) { return m.sent; }).length / fbPast.length * 100) : null;
   var onTime = months.filter(function (m) { return m.sent; });
   var moodA = avg(months.map(function (m) { return m.mood; })), supA = avg(months.map(function (m) { return m.support; }));
-  var revRate = onTime.length ? Math.round(onTime.filter(function (m) { return m.reviewed; }).length / onTime.length * 100) : null;
   var ciA = avg(past.filter(function (m) { return m.ciOn; }).map(function (m) { return m.ci; }));
   var okrA = avg(months.map(function (m) { return m.okr; }));
   var ar = perfEl("div", "perf-mrow avg");
@@ -321,7 +320,8 @@ function perfMonthly(box, fbRows, ciRows, ag, okrs, mine) {
   ar.appendChild(perfEl("span", null, sentRate == null ? "—" : sentRate + "% sent" + (onTime.length ? " · " + onTime.filter(function (m) { return !m.late; }).length + " on time" : "")));
   ar.appendChild(perfEl("span", "mood", moodA == null ? "—" : MOOD[Math.round(moodA) - 1] + " " + moodA.toFixed(1) + "/5"));
   ar.appendChild(perfEl("span", null, supA == null ? "—" : supA.toFixed(1) + "/5"));
-  ar.appendChild(perfEl("span", null, revRate == null ? "—" : revRate + "%"));
+  var rtA = avg(months.map(function (m) { return m.rating; }));
+  ar.appendChild(perfEl("span", "mr", rtA == null ? "—" : rtA.toFixed(1) + "/5"));
   ar.appendChild(perfEl("span", null, ciA == null ? "—" : ciA.toFixed(1) + " of 2"));
   ar.appendChild(pctCell(okrA == null ? null : Math.round(okrA)));
   t.appendChild(ar);
@@ -437,7 +437,11 @@ function perfTestTabs(a, rows, row) {
   };
   var T = [["1 · Monthly feedback", function () { return qView(typeof FB_Q !== "undefined" ? FB_Q : []); }],
            ["2 · Personality", traits],
-           ["3 · Self-awareness", function () { return qView(typeof FB_SA !== "undefined" ? FB_SA : []); }]];
+           ["3 · Self-awareness", function () { return qView(typeof FB_SA !== "undefined" ? FB_SA : []); }],
+           ["4 · Manager's feedback", function () {
+             var v = row && typeof fbManagerView === "function" ? fbManagerView(row) : null;
+             return v || perfEl("div", "hint", row && row.status !== "submitted" ? "The manager's feedback comes after the month's feedback is sent." : "Your manager hasn't shared their feedback on this month yet.");
+           }]];
   T.forEach(function (t, i) {
     var b = perfEl("button", "perf-ttab" + (i === 0 ? " on" : ""), t[0]); b.type = "button";
     b.onclick = function () { [].forEach.call(bar.children, function (c) { c.classList.remove("on"); }); b.classList.add("on"); pane.innerHTML = ""; pane.appendChild(t[1]()); };
