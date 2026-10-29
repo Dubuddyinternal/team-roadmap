@@ -13761,7 +13761,7 @@ function mktAgreementPane(mk){
   const SO = JSON.parse(JSON.stringify(A.socialOwners || {}));
   if(socs.length){
     const sh = document.createElement("div"); sh.className = "hint"; sh.style.margin = "16px 0 6px";
-    sh.textContent = "Social Media's weekly content agreement — who's responsible in each space (it counts in their 📈 My Performance):";
+    sh.textContent = "Social Media's weekly content agreement — who's responsible in each space. Better: set ⭐ the main accountable and 👥 people per line in that space's own 🤝 Our agreement; this list is only used when nobody is set there.";
     block.appendChild(sh);
     const sl = document.createElement("div"); sl.className = "mag-edit mag-soc"; sl.style.marginTop = "0";
     socs.forEach(x=>{

@@ -478,8 +478,33 @@ function perfAgreements(u) {
       rows.push({ name: g.name + (g.source === "lms" ? " (their own)" : ""), target: g, cells: cells });
     });
     /* Social Media's weekly content agreement, for the social spaces they're in */
-    kids.filter(function (x) { return x.type === "social" && (SO[x.id] && SO[x.id].length ? SO[x.id].indexOf(email) >= 0 : perfInSpace(x, email)); }).forEach(function (x) {
+    kids.filter(function (x) { return x.type === "social"; }).forEach(function (x) {
       if (typeof mktSlaGaps !== "function") return;
+      /* the space's own 🤝 Our agreement says who's on each platform: ⭐ main accountable (judged on every line of
+         that platform) or 👥 ticked on some lines (judged on those) */
+      var T = (typeof SOCIAL_TARGETS !== "undefined" && SOCIAL_TARGETS[x.id]) || {}, lead = T.lead || {}, who = T.who || {};
+      var setUp = ["yt", "ig"].some(function (pl) { return lead[pl] || Object.keys(who).some(function (k) { return k.indexOf(pl + ":") === 0 && (who[k] || []).length; }); });
+      if (setUp) {
+        [["yt", "YouTube", "subscribers"], ["ig", "Instagram", "followers"]].forEach(function (P) {
+          var pl = P[0], main = lead[pl] === email;
+          var mine = Object.keys(who).filter(function (k) { return k.indexOf(pl + ":") === 0 && (who[k] || []).indexOf(email) >= 0; }).map(function (k) { return k.slice(pl.length + 1); });
+          if (!main && !mine.length) return;
+          var labels = mine.map(function (m) { return m === "total" ? P[2] : m === "time" ? "posting time" : ((typeof MKT_SLA_MATCH !== "undefined" && MKT_SLA_MATCH[m]) ? MKT_SLA_MATCH[m].label : m); });
+          var mineGap = function (gp) {
+            if (gp.indexOf(P[1] + ":") !== 0) return false;
+            if (main) return true;
+            return labels.some(function (lb) { return lb !== "posting time" && gp.indexOf(" " + lb) >= 0; });
+          };
+          var cells = perfPeriods("week", 26).map(function (p) {
+            var gaps = mktSlaGaps(x, p.from).filter(mineGap), ok = p.now ? (gaps.length ? null : true) : !gaps.length;
+            if (!p.now) { total++; if (ok) kept++; }
+            return { p: p, gaps: gaps, ok: ok };
+          });
+          rows.push({ name: x.name + " · " + P[1] + " — " + (main ? "⭐ main accountable" : "👥 " + labels.join(", ")), social: true, cells: cells });
+        });
+        return;
+      }
+      if (!(SO[x.id] && SO[x.id].length ? SO[x.id].indexOf(email) >= 0 : perfInSpace(x, email))) return;
       var cells = perfPeriods("week", 26).map(function (p) {
         var gaps = mktSlaGaps(x, p.from), ok = p.now ? (gaps.length ? null : true) : !gaps.length;
         if (!p.now) { total++; if (ok) kept++; }

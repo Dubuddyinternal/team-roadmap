@@ -167,7 +167,13 @@ th.sortable:hover,th.sorted{color:var(--accent)}
 .sdot{width:10px;height:10px;border-radius:3px;display:block}
 .slab{padding:18px}
 .tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:18px 16px}
-.tf label{display:block;font-size:12.5px;color:var(--ink-2);margin-bottom:6px;font-weight:500}
+.tf label{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2);margin-bottom:6px;font-weight:500}
+.twho{margin-left:auto;display:inline-flex;min-width:0;max-width:60%}
+.twho .mag-ppl{font-size:11.5px;padding:3px 8px;max-width:100%}
+.trow .twho{max-width:none;margin:0}.trow .twho .mag-ppl{width:100%;padding:6px 8px}
+.slalead{display:inline-flex;align-items:center;gap:8px;margin-left:14px;font-size:12.5px;color:var(--ink-2)}
+.slalead label{font-weight:600;white-space:nowrap}
+.slalead select{padding:5px 8px;border:1px solid var(--line-2);border-radius:7px;font:inherit;font-size:12.5px;background:var(--surface,#fff);max-width:200px}
 .tf .req{color:var(--crit);margin-left:2px}
 .tin{display:flex;border:1px solid var(--line-2);border-radius:var(--r-s);background:var(--surface);overflow:hidden}
 .tin:focus-within{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
@@ -182,7 +188,7 @@ th.sortable:hover,th.sorted{color:var(--accent)}
 .tchips{display:flex;gap:7px;flex-wrap:wrap}
 .tchip{font-size:12px;border:1px solid var(--line);background:var(--surface-4);border-radius:999px;padding:4px 11px;color:var(--ink-2);white-space:nowrap}
 .tchip b{color:var(--ink);font-variant-numeric:tabular-nums}
-.trow{max-width:720px;display:grid;grid-template-columns:minmax(160px,1.4fr) 140px 140px 30px;gap:8px;align-items:center;margin-bottom:8px}
+.trow{max-width:860px;display:grid;grid-template-columns:minmax(160px,1.4fr) 140px 140px 130px 30px;gap:8px;align-items:center;margin-bottom:8px}
 .trow select,.trow input{width:100%;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-s);padding:7px 9px;font-size:12.5px}
 .trow .x{border:1px solid var(--line-2);border-radius:var(--r-s);padding:6px 0;text-align:center;color:var(--ink-3)}
 .trow.head span{font-family:var(--mono);font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3)}
@@ -1062,7 +1068,11 @@ function normTargets(o){
   const t = { targets:Object.assign({yt:80000, ig:20000}, o.targets||{}),
     goals:(Array.isArray(o.goals)?o.goals:[]).filter(g=>g && GOAL_METRICS[g.metric] && GOAL_PERIODS[g.period] && (g.platform==="yt"||g.platform==="ig")),
     plan:{ yt:Object.assign({time:"",days:"all"}, (o.plan||{}).yt||{}), ig:Object.assign({time:"",days:"all"}, (o.plan||{}).ig||{}) },
-    by:{ yt:((o.by||{}).yt)||"", ig:((o.by||{}).ig)||"" } };   // the date the total should be reached by ("" = the old 12-week pace)
+    by:{ yt:((o.by||{}).yt)||"", ig:((o.by||{}).ig)||"" },   // the date the total should be reached by ("" = the old 12-week pace)
+    /* who's accountable: ⭐ one manager-level person per platform, and 👥 people ticked on each line
+       (keys "yt:total", "yt:time", "yt:<metric>"), counted in their 📈 My Performance */
+    lead:{ yt:((o.lead||{}).yt)||"", ig:((o.lead||{}).ig)||"" },
+    who:(o.who && typeof o.who==="object") ? o.who : {} };
   t.goals.forEach(g=>{ if(!g.id) g.id=uid("g"); });
   return t;
 }
@@ -1111,17 +1121,18 @@ function renderTargets(){
   const D=TDRAFT;
   const unitSel=(attrs,val)=>`<select ${attrs}>${Object.entries(GOAL_PERIODS).map(([k,l])=>`<option value="${k}" ${val===k?"selected":""}>${l.replace("per ","Per ")}</option>`).join("")}</select>`;
   const field=(pl,metric)=>{ const g=D.goals.find(x=>x.platform===pl&&x.metric===metric)||{}; const m=GOAL_METRICS[metric];
-    return `<div class="tf"><label>${esc(m.label)}${m.untracked?` <span class="hint" title="Not available from the ${PLAT_NAME[pl]} API — the team types in how many were done, on the Summary">· filled in by hand</span>`:""}</label>
+    return `<div class="tf"><label>${esc(m.label)}${m.untracked?` <span class="hint" title="Not available from the ${PLAT_NAME[pl]} API — the team types in how many were done, on the Summary">· filled in by hand</span>`:""}<span class="twho" data-who="${pl}:${metric}"></span></label>
       <div class="tin"><input type="number" min="0" step="any" data-fx="${pl}:${metric}" value="${g.target??""}" placeholder="—">
       ${unitSel(`data-fxp="${pl}:${metric}"`, g.period||"week")}</div></div>`; };
   const card=(pl,col,dot)=>{ const extra=D.goals.map((g,i)=>({g,i})).filter(x=>x.g.platform===pl && !FIXED[pl].includes(x.g.metric));
     const set=D.goals.filter(g=>g.platform===pl&&g.target>0).length+(D.plan[pl].time?1:0)+1;
     return `<div class="slacard">
       <div class="slah"><span class="sdot" style="background:${dot}"></span><h4>${PLAT_NAME[pl]}</h4>
+        <span class="slalead" data-lead-slot="${pl}"></span>
         <span class="hint" style="margin-left:auto">${set} target${set===1?"":"s"} set</span></div>
       <div class="slab">
         <div class="tgrid">
-          <div class="tf"><label>${pl==="yt"?"Subscribers":"Followers"} (total)<span class="req">*</span></label>
+          <div class="tf"><label>${pl==="yt"?"Subscribers":"Followers"} (total)<span class="req">*</span><span class="twho" data-who="${pl}:total"></span></label>
             <div class="tin"><input type="number" min="1" data-fol="${pl}" value="${D.targets[pl]}">
             <select data-by="${pl}">${(()=>{ const cur=D.by[pl]||""; const ch=BY_CHOICES();
               const known=ch.find(x=>x[2]===cur);
@@ -1129,7 +1140,7 @@ function renderTargets(){
                 + `<option value="" ${!cur?"selected":""}>In total (12-week pace)</option>`
                 + ch.map(([k,l,d])=>`<option value="d:${d}" ${cur===d?"selected":""}>${esc(l)}</option>`).join(""); })()}</select></div>
             <div class="hint tpace" data-pace="${pl}">${paceText(pl, D)}</div></div>
-          <div class="tf"><label>Posting time</label>
+          <div class="tf"><label>Posting time<span class="twho" data-who="${pl}:time"></span></label>
             <div class="tin"><input type="time" data-pt="${pl}" value="${esc(D.plan[pl].time)}">
             <select data-pd="${pl}">${Object.entries(POST_DAYS).map(([k,l])=>`<option value="${k}" ${D.plan[pl].days===k?"selected":""}>${l}</option>`).join("")}</select></div></div>
           ${FIXED[pl].map(m=>field(pl,m)).join("")}
@@ -1138,6 +1149,7 @@ function renderTargets(){
           <select data-gk="metric">${Object.entries(GOAL_METRICS).filter(([k,m])=>(!m.only||m.only===pl)&&!FIXED[pl].includes(k)).map(([k,m])=>`<option value="${k}" ${k===g.metric?"selected":""}>${esc(m.label)}</option>`).join("")}</select>
           <input data-gk="target" type="number" min="0" step="any" value="${g.target??""}" placeholder="target">
           ${unitSel('data-gk="period"', g.period)}
+          <span class="twho" data-who="${pl}:${esc(g.metric)}"></span>
           <button class="x" data-gdel="${i}" title="Remove">×</button></div>`).join(""):""}
         ${ro?"":`<button class="btn sm" data-tadd="${pl}" style="margin-top:12px">+ Add another target</button>`}
       </div></div>`; };
@@ -1152,6 +1164,17 @@ function renderTargets(){
     ${ro?"":`<div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" id="tReset">Undo changes</button><button class="btn pri" id="tSave">Save targets</button></div>`}`;
 
   const P=$("#pane-targets");
+  /* ⭐ main accountable per platform, 👥 people on each line (the pickers come from the app: magPeopleBtn) */
+  const team = (typeof assigneeMembers==="function") ? assigneeMembers().slice().sort((a,b)=> userDisplayName(a).localeCompare(userDisplayName(b))) : [];
+  P.querySelectorAll("[data-lead-slot]").forEach(slot=>{
+    const pl=slot.dataset.leadSlot; if(!team.length) return;
+    slot.innerHTML=`<label>⭐ Main accountable</label><select data-lead="${pl}"><option value="">— nobody yet —</option>${team.map(u=>`<option value="${esc(u.email)}" ${D.lead[pl]===u.email?"selected":""}>${esc(userDisplayName(u))}</option>`).join("")}</select>`;
+    const sel=slot.querySelector("select"); sel.disabled=ro; sel.onchange=()=>{ TDRAFT.lead[pl]=sel.value; };
+  });
+  if(typeof magPeopleBtn==="function") P.querySelectorAll("[data-who]").forEach(slot=>{
+    const k=slot.dataset.who;
+    slot.appendChild(magPeopleBtn(D.who[k]||[], ro, v=>{ TDRAFT.who[k]=v; }));
+  });
   if(ro){ P.querySelectorAll("input,select").forEach(e=>e.disabled=true); return; }
   P.querySelectorAll("[data-tadd]").forEach(b=>b.onclick=()=>{ readTargets(); const pl=b.dataset.tadd;
     const free=Object.entries(GOAL_METRICS).find(([k,m])=>(!m.only||m.only===pl)&&!FIXED[pl].includes(k)&&!TDRAFT.goals.some(g=>g.platform===pl&&g.metric===k));
