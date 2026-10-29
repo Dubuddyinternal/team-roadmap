@@ -18163,6 +18163,7 @@ function renderContentCampaign(){
     canEdit: ()=> campAdmin(cs),
     canPlan: ()=> campPlanner(cs),
     canDelete: ()=> campAdmin(cs) && hasPerm("delete_spaces"),
+    me: ()=> (currentUser() || {}).id || "",
     people: ()=> USERS.filter(u=>isMember(u, TEAM)).map(u=>({ id:u.id, name:userDisplayName(u), role:(u.profile&&u.profile.title)||roleLabel(roleOf(u,TEAM)) })),
     save: ()=> pushAll(),
     saveQuiet: ()=> saveQuiet(),
@@ -19763,7 +19764,7 @@ function renderContentBugs(cs){
 function renderAll(){
   if(!DATA || !OKRS || !CONTENT) return;
   renderHeader();
-  // a campaign's Fill in Details opens on its own hero (campaign-space.js), so the page title steps aside
+  // a campaign's Campaign Details opens on its own hero (campaign-space.js), so the page title steps aside
   document.body.classList.toggle("cx-hero", view==="campaign" && campView==="details");
   // per-space enforcement: if the viewer can't edit THIS space, editMode is suppressed here
   editMode = canEditHere();   // Jira-style: always editable where you have permission (no toggle)
@@ -20097,7 +20098,7 @@ function renderAll(){
           });
         }
         if(cs.type==="campaign" && view==="campaign" && activeCspace===cs.id && window.CX){
-          [["details","\uD83D\uDCDD Fill in Details"],["assign","\uD83D\uDC65 Assignment"],["calendar","\uD83D\uDDD3 Calendar"],["dash","\uD83D\uDCCA Dashboard"]].filter(([k])=> tabAllowed(cs, k)).forEach(([k,lbl])=>{
+          [["details","\uD83D\uDCDD Campaign Details"],["assign","\uD83D\uDC65 Assignment"],["calendar","\uD83D\uDDD3 Calendar"],["dash","\uD83D\uDCCA Dashboard"]].filter(([k])=> tabAllowed(cs, k)).forEach(([k,lbl])=>{
             const sub=document.createElement("button");
             sub.className="ws-sub"+(_nested?" ws-sub-nested":"")+(campView===k?" active":"");
             sub.textContent=lbl;
