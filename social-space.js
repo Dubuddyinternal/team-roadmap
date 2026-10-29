@@ -1244,7 +1244,8 @@ function postingTimeHTML(pl,col){
     <div class="gf"><span>${Math.round(ok/rows.length*100)}%</span><span>within an hour of ${esc(label)}, this week</span></div>`:""}</div>`;
 }
 
-let OKR_OPEN={}, TDRAFT=null, TG_KEY="";
+let OKR_OPEN={}, TDRAFT=null, TG_KEY="", TDIRTY=false, TD_SPACE=null;
+function canonJSON(v){ return JSON.stringify(v, (k, x)=> x && typeof x==="object" && !Array.isArray(x) ? Object.keys(x).sort().reduce((o, kk)=>{ o[kk]=x[kk]; return o; }, {}) : x); }
 function renderTargets(){
   const ro=!canEditTargets();
   if(!TDRAFT) TDRAFT=normTargets(TG);
@@ -1300,23 +1301,24 @@ function renderTargets(){
   P.querySelectorAll("[data-lead-slot]").forEach(slot=>{
     const pl=slot.dataset.leadSlot; if(!team.length) return;
     slot.innerHTML=`<label>⭐ Main accountable</label><select data-lead="${pl}"><option value="">— nobody yet —</option>${team.map(u=>`<option value="${esc(u.email)}" ${D.lead[pl]===u.email?"selected":""}>${esc(userDisplayName(u))}</option>`).join("")}</select>`;
-    const sel=slot.querySelector("select"); sel.disabled=ro; sel.onchange=()=>{ TDRAFT.lead[pl]=sel.value; };
+    const sel=slot.querySelector("select"); sel.disabled=ro; sel.onchange=()=>{ TDRAFT.lead[pl]=sel.value; TDIRTY=true; };
   });
   if(typeof magPeopleBtn==="function") P.querySelectorAll("[data-who]").forEach(slot=>{
     const k=slot.dataset.who;
-    slot.appendChild(magPeopleBtn(D.who[k]||[], ro, v=>{ TDRAFT.who[k]=v; }));
+    slot.appendChild(magPeopleBtn(D.who[k]||[], ro, v=>{ TDRAFT.who[k]=v; TDIRTY=true; }));
   });
   if(ro){ P.querySelectorAll("input,select").forEach(e=>e.disabled=true); return; }
+  P.oninput=()=>{ TDIRTY=true; }; P.onchange=()=>{ TDIRTY=true; };
   P.querySelectorAll("[data-tadd]").forEach(b=>b.onclick=()=>{ readTargets(); const pl=b.dataset.tadd;
     const free=Object.entries(GOAL_METRICS).find(([k,m])=>(!m.only||m.only===pl)&&!FIXED[pl].includes(k)&&!TDRAFT.goals.some(g=>g.platform===pl&&g.metric===k));
     TDRAFT.goals.push({id:uid("g"),platform:pl,metric:free?free[0]:"posts",period:"month",target:null}); renderTargets(); });
   P.querySelectorAll("[data-gdel]").forEach(b=>b.onclick=()=>{ readTargets(); TDRAFT.goals.splice(Number(b.dataset.gdel),1); renderTargets(); });
   P.querySelectorAll("[data-fol],[data-by]").forEach(e=>{ const up=()=>{ readTargets(); const pl=e.dataset.fol||e.dataset.by; const h=P.querySelector(`[data-pace="${pl}"]`); if(h) h.innerHTML=paceText(pl, TDRAFT); }; e.oninput=up; e.onchange=up; });
-  $("#tReset").onclick=()=>{ TDRAFT=null; renderTargets(); toast("Changes undone"); };
+  $("#tReset").onclick=()=>{ TDRAFT=null; TDIRTY=false; renderTargets(); toast("Changes undone"); };
   $("#tSave").onclick=()=>{ readTargets();
     if(!(TDRAFT.targets.yt>0)||!(TDRAFT.targets.ig>0)){ toast("Subscriber and follower targets must be numbers above zero"); return; }
     TDRAFT.goals=TDRAFT.goals.filter(g=>g.target>0);
-    TG=normTargets(TDRAFT); TDRAFT=null;
+    TG=normTargets(TDRAFT); TDRAFT=null; TDIRTY=false;
     if(OPT.saveTargets){ OPT.saveTargets(SPACE, normTargets(TG)); toast("Targets saved"); } };
 }
 /* "Needs +284 a week — 76,600 now, 12 weeks to 31 Dec" under the total, worked out as you type */
@@ -3714,8 +3716,11 @@ window.SX = {
     if(HIST.src!==S) histBase();   // fresh data (opened, or teammates' changes): the starting point for 🕘 History
     // targets: their own saved copy, or (before anyone has saved one) what the space held
     const tRaw = (OPT.targets && OPT.targets(space)) || { targets:S.targets, goals:S.goals };
-    const tKey = JSON.stringify(tRaw);
-    if(tKey!==TG_KEY){ TG_KEY=tKey; TG=normTargets(tRaw); TDRAFT=null; }
+    /* compared regardless of key order (the database hands keys back in its own order), and unsaved edits in
+       Our agreement are never thrown away by a refresh */
+    if(TD_SPACE!==(space && space.id)){ TD_SPACE=space && space.id; TDRAFT=null; TDIRTY=false; TG_KEY=""; }   // another space: start fresh
+    const tKey = canonJSON(tRaw);
+    if(tKey!==TG_KEY){ TG_KEY=tKey; TG=normTargets(tRaw); if(!TDIRTY) TDRAFT=null; }
     if(!FILTERS.vtypes){ FILTERS.vtypes=Object.keys(REG.vtype); FILTERS.platforms=Object.keys(REG.platform); }
     if(!SCHED.vtypes){ SCHED.vtypes=Object.keys(REG.vtype); SCHED.platforms=Object.keys(REG.platform); SCHED.cursor=today(); }
     Object.keys(REG.vtype).forEach(k=>{ if(!FILTERS.vtypes.includes(k)) FILTERS.vtypes.push(k); if(!SCHED.vtypes.includes(k)) SCHED.vtypes.push(k); });
