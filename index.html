@@ -13355,7 +13355,8 @@ function mktSlaGaps(x, mon){
     [["yt","YouTube","subscribers"],["ig","Instagram","followers"]].forEach(([pl, nm, word])=>{
       const a = mktFollowersAt(S, pl, dISO(monN - 1)), b = mktFollowersAt(S, pl, dISO(monN + 6)), tgt = Number(tg[pl]) || 0;
       if(a==null || b==null || !tgt || a >= tgt) return;
-      const wks = by[pl] ? Math.max(1, Math.ceil((dNum(by[pl]) - monN) / 7)) : 12;
+      const _qe = (()=>{ const q=new Date(monN*86400000); return dISO(dNum(new Date(Date.UTC(q.getUTCFullYear(), Math.floor(q.getUTCMonth()/3)*3+3, 0)).toISOString().slice(0,10))); })();
+      const wks = Math.max(1, Math.ceil((dNum(by[pl] || _qe) - monN) / 7));   /* no deadline = by the end of that quarter */
       const need = Math.ceil((tgt - a) / wks), got = b - a;
       if(got < need) out.push(nm + ": " + (got >= 0 ? "+" : "−") + Math.abs(got).toLocaleString() + " " + word + " of +" + need.toLocaleString() + " needed (target " + tgt.toLocaleString() + (by[pl] ? " by " + rmlFmt(by[pl]) : "") + ")");
     });

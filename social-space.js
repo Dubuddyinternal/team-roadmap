@@ -189,6 +189,10 @@ th.sortable:hover,th.sorted{color:var(--accent)}
 .tchip{font-size:12px;border:1px solid var(--line);background:var(--surface-4);border-radius:999px;padding:4px 11px;color:var(--ink-2);white-space:nowrap}
 .tchip b{color:var(--ink);font-variant-numeric:tabular-nums}
 details.fdrop{margin-bottom:14px}
+.cp{display:grid;gap:4px;margin:10px 0 0;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface,#fff)}
+.cp-r{display:grid;grid-template-columns:1fr 90px 120px;gap:8px;align-items:center;font-size:12.5px}
+.cp-r small{color:var(--ink-3);margin-left:4px}.cp-r b{font-family:var(--mono,monospace);text-align:right}
+.cp-r>span:last-child{text-align:right;font-weight:600}.cp-bad{color:var(--crit)}.cp-ok{color:var(--good)}
 .okr .fdrop{margin:12px 0 0}
 .okr-from{display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:var(--ink-3);margin:2px 0 8px}.okr-from b{color:var(--ink-2)}
 .wl{border:1px solid var(--line);border-radius:10px;overflow:auto;max-height:320px}
@@ -1106,17 +1110,30 @@ function normTargets(o){
     /* where the subscriber / follower target started: {v, d} — set when the target is saved, so progress
        counts from there (not from zero) */
     start:{ yt:((o.start||{}).yt)||null, ig:((o.start||{}).ig)||null },
+    /* "counting from" date per platform ("" = the first day of this quarter) */
+    from:{ yt:((o.from||{}).yt)||"", ig:((o.from||{}).ig)||"" },
     who:(o.who && typeof o.who==="object") ? o.who : {} };
   t.goals.forEach(g=>{ if(!g.id) g.id=uid("g"); });
   return t;
 }
 /* the subscriber / follower deadline: "End of this quarter" or N months from today, stored as a date */
+function quarterStart(){ const d=new Date(); return iso(new Date(d.getFullYear(), Math.floor(d.getMonth()/3)*3, 1)); }
+/* where a platform's total target counts from: the count on the "counting from" day (default: 1st of this quarter),
+   or the first count after it */
+function startOf(k, series){
+  const d=(TG.from && TG.from[k]) || quarterStart();
+  let v=valueAt(series, d), at=d;
+  if(v==null){ const f=series.find(p=>p.d>=d); if(!f) return series[0]; v=f.v; at=f.d; }
+  return { v, d:at };
+}
+/* the date the total should be reached by: the chosen deadline, else the end of this quarter */
+function deadlineOf(k){ return (TG.by && TG.by[k]) || quarterEnd(); }
 function quarterEnd(){ const d=new Date(); const m=Math.floor(d.getMonth()/3)*3+3; return iso(new Date(d.getFullYear(), m, 0)); }
 function monthsOn(n){ const d=new Date(); d.setMonth(d.getMonth()+n); return iso(d); }
 const BY_CHOICES = ()=>[["q","By end of this quarter ("+dmy(quarterEnd())+")",quarterEnd()],["1","In 1 month",monthsOn(1)],["2","In 2 months",monthsOn(2)],["3","In 3 months",monthsOn(3)],["6","In 6 months",monthsOn(6)],["12","In 12 months",monthsOn(12)]];
 function weeksTo(by, from){ return by ? Math.max(1, Math.ceil((new Date(by+"T00:00:00") - new Date((from||today())+"T00:00:00")) / (7*864e5))) : 12; }
 /* the pace the total needs from the latest count: +n a week until the deadline (or over 12 weeks without one) */
-function paceNeeded(pl, cur, tgt){ const w=weeksTo(TG.by && TG.by[pl]); return { w, need: Math.max(0, Math.ceil((tgt-cur)/w)) }; }
+function paceNeeded(pl, cur, tgt){ const w=weeksTo(deadlineOf(pl)); return { w, need: Math.max(0, Math.ceil((tgt-cur)/w)) }; }
 function canDeleteCards(){ return canEdit() && !!(OPT.canDeleteCards && OPT.canDeleteCards()); }
 function canEditTargets(){ return !!(OPT.canEditTargets && OPT.canEditTargets()); }
 
@@ -1133,20 +1150,31 @@ function goalHTML(g,col){
     ${m.untracked?proofHTML(g):""}
     <div class="gf"><span>${Math.round(pc)}%</span><span>${cur>=tgt&&tgt?"reached 🎉":m.noRate?`${left} day${left===1?"":"s"} left`:`${fmt(Math.max(0,tgt-cur))} to go · ${left} day${left===1?"":"s"} left`}</span></div></div>`;
 }
+/* 🗓 the end-of-month and end-of-quarter checkpoints: where the count should be by then, on a straight line from
+   the starting count to the target on its deadline */
+function checkpoints(k, st, cur, tgt){
+  const dl=deadlineOf(k), span=Math.max(1, days(st.d, dl));
+  const at=d=>Math.round(st.v + (tgt-st.v)*Math.min(1, Math.max(0, days(st.d, d))/span));
+  const me=(()=>{ const x=new Date(); return iso(new Date(x.getFullYear(), x.getMonth()+1, 0)); })(), qe=quarterEnd();
+  const row=(lbl, d, v)=>{ const short=v-cur; return `<div class="cp-r"><span>${lbl} <small>${dmy(d)}</small></span>
+      <b>${fmt(v)}</b><span class="${short>0?"cp-bad":"cp-ok"}">${short>0?fmt(short)+" to go":"on track ✓"}</span></div>`; };
+  return `<div class="cp">${row("By end of month", me, at(me))}${row("By end of quarter", qe, qe>=dl?tgt:at(qe))}${dl!==qe&&dl<qe?"":""}</div>`;
+}
 /* 📅 week by week since the target started: each week's gain against the gain needed per week */
 function weekLog(k, series, st, tgt){
   const mon=d=>{ const x=new Date(d+"T00:00:00"); x.setDate(x.getDate()-((x.getDay()+6)%7)); return iso(x); };
-  const need=Math.max(0, Math.ceil((tgt-st.v)/weeksTo(TG.by&&TG.by[k], st.d)));
+  const need=Math.max(0, Math.ceil((tgt-st.v)/weeksTo(deadlineOf(k), st.d)));
   const rows=[]; let w=mon(st.d); const end=today();
   while(w<=end && rows.length<60){ const we=addDays(w,6);
     const a=valueAt(series, addDays(w,-1)) ?? (w<=st.d?st.v:null), b=valueAt(series, we<end?we:end);
-    if(a!=null && b!=null) rows.push({ w, gain:b-a, now: we>=end, at:b, i:rows.length+1 });
+    if(a!=null && b!=null) rows.push({ w, we, gain:b-a, now: we>=end, at:b, i:rows.length+1 });
     w=addDays(w,7); }
   if(!rows.length) return "";
   const met=rows.filter(r=>!r.now && r.gain>=need).length, done=rows.filter(r=>!r.now).length;
   /* "should be at": where the count had to be by the end of that week to stay on pace from the start */
   const head=`<div class="wl-r wl-h"><span>Week</span><span>Change</span><span>Needed</span><span title="Where the count had to be by the end of that week to stay on pace">Should be</span><span title="The actual count at the end of that week">Reached</span><span></span></div>`;
-  const body=rows.slice().reverse().map(r=>{ const should=Math.min(tgt, st.v+need*r.i), behind=r.at<should;
+  const dl=deadlineOf(k), span=Math.max(1, days(st.d, dl));
+  const body=rows.slice().reverse().map(r=>{ const should=Math.round(st.v+(tgt-st.v)*Math.min(1, Math.max(0, days(st.d, r.we))/span)), behind=r.at<should;
     return `<div class="wl-r ${r.now?"now":r.gain>=need?"ok":"miss"}">
       <span>${r.now?"This week":"Week of "+dmy(r.w)}</span>
       <b>${r.gain>=0?"+":"−"}${fmt(Math.abs(r.gain))}</b>
@@ -1239,9 +1267,10 @@ function renderTargets(){
             <select data-by="${pl}">${(()=>{ const cur=D.by[pl]||""; const ch=BY_CHOICES();
               const known=ch.find(x=>x[2]===cur);
               return (cur&&!known?`<option value="d:${cur}" selected>By ${dmy(cur)}</option>`:"")
-                + `<option value="" ${!cur?"selected":""}>In total (12-week pace)</option>`
+                + `<option value="" ${!cur?"selected":""}>By end of this quarter (default)</option>`
                 + ch.map(([k,l,d])=>`<option value="d:${d}" ${cur===d?"selected":""}>${esc(l)}</option>`).join(""); })()}</select></div>
-            <div class="hint tpace" data-pace="${pl}">${paceText(pl, D)}</div></div>
+            <div class="hint tpace" data-pace="${pl}">${paceText(pl, D)}</div>
+            <div class="tin" style="margin-top:8px"><span class="hint" style="white-space:nowrap">Counting from</span><input type="date" data-from="${pl}" value="${esc(D.from[pl]||quarterStart())}" title="Progress, the week-by-week log and the month / quarter checkpoints count from the count on this day"></div></div>
           <div class="tf"><label>Posting time<span class="twho" data-who="${pl}:time"></span></label>
             <div class="tin"><input type="time" data-pt="${pl}" value="${esc(D.plan[pl].time)}">
             <select data-pd="${pl}">${Object.entries(POST_DAYS).map(([k,l])=>`<option value="${k}" ${D.plan[pl].days===k?"selected":""}>${l}</option>`).join("")}</select></div></div>
@@ -1287,9 +1316,6 @@ function renderTargets(){
   $("#tSave").onclick=()=>{ readTargets();
     if(!(TDRAFT.targets.yt>0)||!(TDRAFT.targets.ig>0)){ toast("Subscriber and follower targets must be numbers above zero"); return; }
     TDRAFT.goals=TDRAFT.goals.filter(g=>g.target>0);
-    /* a new total target (or none recorded yet) starts counting from today's count */
-    ["yt","ig"].forEach(pl=>{ const ser=pl==="yt"?ytSeries():igSeries(), last=ser.length?ser[ser.length-1]:null;
-      if(last && (!TDRAFT.start[pl] || Number(TDRAFT.targets[pl])!==Number(TG.targets[pl]) || (TDRAFT.by[pl]||"")!==(TG.by[pl]||""))) TDRAFT.start[pl]={ v:last.v, d:last.d }; });
     TG=normTargets(TDRAFT); TDRAFT=null;
     if(OPT.saveTargets){ OPT.saveTargets(SPACE, normTargets(TG)); toast("Targets saved"); } };
 }
@@ -1298,12 +1324,13 @@ function paceText(pl, D){
   const ser = pl==="yt" ? ytSeries() : igSeries(), last = ser.length ? ser[ser.length-1].v : null, tgt = Number(D.targets[pl])||0;
   if(last==null || !tgt) return tgt ? "The pace shows once there's a first count." : "";
   if(last>=tgt) return "Already reached 🎉";
-  const w = weeksTo(D.by[pl]), need = Math.ceil((tgt-last)/w);
-  return `Needs <b>+${fmt(need)} a week</b> — ${fmt(last)} now, ${w} week${w===1?"":"s"}${D.by[pl]?" to "+dmy(D.by[pl]):""}`;
+  const dl = D.by[pl] || quarterEnd(), w = weeksTo(dl), need = Math.ceil((tgt-last)/w);
+  return `Needs <b>+${fmt(need)} a week</b> — ${fmt(last)} now, ${w} week${w===1?"":"s"} to ${dmy(dl)}`;
 }
 function readTargets(){ const P=$("#pane-targets"); if(!TDRAFT||!P) return;
   P.querySelectorAll("[data-fol]").forEach(e=>TDRAFT.targets[e.dataset.fol]=Number(e.value));
   P.querySelectorAll("[data-by]").forEach(e=>TDRAFT.by[e.dataset.by]=e.value.startsWith("d:") ? e.value.slice(2) : "");
+  P.querySelectorAll("[data-from]").forEach(e=>TDRAFT.from[e.dataset.from]=e.value===quarterStart() ? "" : e.value);
   P.querySelectorAll("[data-pt]").forEach(e=>TDRAFT.plan[e.dataset.pt].time=e.value);
   P.querySelectorAll("[data-pd]").forEach(e=>TDRAFT.plan[e.dataset.pd].days=e.value);
   P.querySelectorAll("[data-fx]").forEach(e=>{ const [pl,metric]=e.dataset.fx.split(":"), per=P.querySelector(`[data-fxp="${pl}:${metric}"]`).value;
@@ -1836,7 +1863,7 @@ function renderSummary(){
         ${isLive?"":`<button class="btn sm" data-updf="1">Add the first count</button>`}</div>${more(k,col)}</div>`;
     const last=series[series.length-1], wk=valueAt(series, addDays(last.d,-7));
     /* progress counts from where the target started, not from zero */
-    const st=(TG.start&&TG.start[k]&&TG.start[k].v!=null) ? TG.start[k] : series[0];
+    const st=startOf(k, series);
     const cur=last.v, gap=Math.max(1, tgt-st.v), gained=cur-st.v, pct=Math.max(0,Math.min(100,gained/gap*100)), delta=wk!=null?cur-wk:null;
     return `<div class="okr"><div class="okr-top">
       <div><div class="lbl" style="margin-bottom:4px">${n} ${AUD(k)} ${isLive?`<span class="badge good" style="margin-left:4px">live</span>`:`<span class="badge mute" style="margin-left:4px">manual</span>`}</div><div class="okr-v">${fmt(cur)} <small>/ ${fmt(tgt)}</small></div></div>
@@ -1846,6 +1873,7 @@ function renderSummary(){
       <div class="meter"><i style="width:${pct}%;background:${col}"></i></div>
       <div class="okr-foot"><span><b style="color:${gained>0?"var(--good)":"var(--crit)"}">${gained>=0?"+":"−"}${fmt(Math.abs(gained))}</b> of +${fmt(tgt-st.v)} gained · ${pct.toFixed(1)}%</span>
         <span class="num">${cur>=tgt?"target reached 🎉":(()=>{ const p=paceNeeded(k, cur, tgt); return `${fmt(tgt-cur)} to go · needs +${fmt(p.need)}/wk for ${p.w} week${p.w===1?"":"s"}${TG.by&&TG.by[k]?" (by "+dmy(TG.by[k])+")":""}`; })()}</span></div>
+      ${checkpoints(k, st, cur, tgt)}
       ${weekLog(k, series, st, tgt)}${more(k,col)}</div>`; };
   $("#pane-summary").innerHTML=`
    <div class="platsw">${[["all","Both platforms"],["yt","YouTube only"],["ig","Instagram only"]].map(([k,l])=>
