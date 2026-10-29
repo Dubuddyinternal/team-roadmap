@@ -1286,7 +1286,7 @@ function renderTargets(){
     return `<div class="slacard">
       <div class="slah"><span class="sdot" style="background:${dot}"></span><h4>${PLAT_NAME[pl]}</h4>
         <span class="slalead" data-lead-slot="${pl}"></span>
-        <span class="hint" style="margin-left:auto">${set} target${set===1?"":"s"} set</span></div>
+        <span class="hint" style="margin-left:auto">${set} agreement${set===1?"":"s"} set</span></div>
       <div class="slab">
         <div class="tgrid">
           <div class="tf"><label>${pl==="yt"?"Subscribers":"Followers"} (total)<span class="req">*</span><span class="twho" data-who="${pl}:total"></span></label>
@@ -1303,13 +1303,13 @@ function renderTargets(){
             <select data-pd="${pl}">${Object.entries(POST_DAYS).map(([k,l])=>`<option value="${k}" ${D.plan[pl].days===k?"selected":""}>${l}</option>`).join("")}</select></div></div>
           ${FIXED[pl].map(m=>field(pl,m)).join("")}
         </div>
-        ${extra.length?`<div class="lbl" style="margin:16px 0 8px">More targets</div>`+extra.map(({g,i})=>`<div class="trow" data-gi="${i}">
+        ${extra.length?`<div class="lbl" style="margin:16px 0 8px">More agreements</div>`+extra.map(({g,i})=>`<div class="trow" data-gi="${i}">
           <select data-gk="metric">${Object.entries(GOAL_METRICS).filter(([k,m])=>(!m.only||m.only===pl)&&!FIXED[pl].includes(k)).map(([k,m])=>`<option value="${k}" ${k===g.metric?"selected":""}>${esc(m.label)}</option>`).join("")}</select>
           <input data-gk="target" type="number" min="0" step="any" value="${g.target??""}" placeholder="target">
           ${unitSel('data-gk="period"', g.period)}
           <span class="twho" data-who="${pl}:${esc(g.metric)}"></span>
           <button class="x" data-gdel="${i}" title="Remove">×</button></div>`).join(""):""}
-        ${ro?"":`<button class="btn sm" data-tadd="${pl}" style="margin-top:12px">+ Add another target</button>`}
+        ${ro?"":`<button class="btn sm" data-tadd="${pl}" style="margin-top:12px">+ Add another agreement</button>`}
       </div></div>`; };
 
   $("#pane-targets").innerHTML=`
@@ -1322,7 +1322,7 @@ function renderTargets(){
       (subscribers / followers, month and quarter checkpoints, week by week). Save the people first.</p>
       ${ro?"":`<button class="btn sm" id="wkSend" style="margin-left:auto;white-space:nowrap">Send it now</button>`}</div>
     <div class="sec">${card("yt","var(--c1)","var(--c1)")}${card("ig","var(--c3)","var(--c3)")}</div>
-    ${ro?"":`<div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" id="tReset">Undo changes</button><button class="btn pri" id="tSave">Save targets</button></div>`}`;
+    ${ro?"":`<div class="row" style="justify-content:flex-end;gap:8px"><button class="btn" id="tReset">Undo changes</button><button class="btn pri" id="tSave">Save agreements</button></div>`}`;
 
   const P=$("#pane-targets");
   /* ⭐ main accountable per platform, 👥 people on each line (the pickers come from the app: magPeopleBtn) */
@@ -1339,7 +1339,7 @@ function renderTargets(){
   if(ro){ P.querySelectorAll("input,select").forEach(e=>e.disabled=true); return; }
   P.oninput=()=>{ TDIRTY=true; }; P.onchange=()=>{ TDIRTY=true; };
   const ws=$("#wkSend"); if(ws) ws.onclick=async ()=>{
-    if(TDIRTY){ toast("Save targets first, so the email goes to the right people"); return; }
+    if(TDIRTY){ toast("Save agreements first, so the email goes to the right people"); return; }
     if(!OPT.supa){ toast("Sign in first"); return; }
     ws.disabled=true; const r=await OPT.supa.rpc("social_weekly_send_now", { p_team: OPT.team });
     ws.disabled=false; toast(r.error ? "Couldn't send: "+r.error.message : "Sending the weekly email to the accountable people…"); };
@@ -1353,7 +1353,7 @@ function renderTargets(){
     if(!(TDRAFT.targets.yt>0)||!(TDRAFT.targets.ig>0)){ toast("Subscriber and follower targets must be numbers above zero"); return; }
     TDRAFT.goals=TDRAFT.goals.filter(g=>g.target>0);
     TG=normTargets(TDRAFT); TDRAFT=null; TDIRTY=false;
-    if(OPT.saveTargets){ OPT.saveTargets(SPACE, normTargets(TG)); toast("Targets saved"); } };
+    if(OPT.saveTargets){ OPT.saveTargets(SPACE, normTargets(TG)); toast("Agreements saved"); } };
 }
 /* "Needs +284 a week — 76,600 now, 12 weeks to 31 Dec" under the total, worked out as you type */
 function paceText(pl, D){
