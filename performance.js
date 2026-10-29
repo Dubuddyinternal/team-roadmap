@@ -93,6 +93,7 @@ async function renderPerformance() {
 
   var mSec = perfSection("📅 Month by month"); body.appendChild(mSec.el);
   mSec.body.appendChild(perfEl("div", "hint", "Loading…"));
+  var pSec = perfSection("🧠 Personality profile"); body.appendChild(pSec.el);
   body.appendChild(perfOkrSection(okrs, who));
   var fbSec = perfSection("📝 Monthly feedback & manager's review"); body.appendChild(fbSec.el);
   var ciSec = perfSection("📈 OKR check-ins"); body.appendChild(ciSec.el);
@@ -116,6 +117,7 @@ async function renderPerformance() {
   fbTile.querySelector(".n").textContent = String(sent.length);
   fbTile.appendChild(perfEl("div", "s", sent.length ? sent.filter(function (x) { return !x.late; }).length + " on time · " + sent.filter(function (x) { return x.discussed_at; }).length + " reviewed" : "nothing sent yet"));
   perfFeedbackView(fbSec.body, fbRows, mine);
+  perfPersonality(pSec.body, fbRows, mine);
   /* 📈 check-ins */
   var ciRows = [];
   if (res[1].error) { ciTile.querySelector(".n").textContent = "—"; ciSec.body.appendChild(perfEl("div", "hint", "OKR check-ins aren't set up yet.")); }
@@ -129,6 +131,107 @@ async function renderPerformance() {
   mSec.body.innerHTML = "";
   perfMonthly(mSec.body, fbRows, ciRows, ag, okrs, mine);
 }
+/* ---------- 🧠 personality profile, from the traits they ticked in their monthly feedback ---------- */
+var PERF_THEMES = [
+  { k: "rel", name: "Reliability", type: "The Steady Achiever", line: "gets things done properly and can be counted on",
+    pos: ["Dependable", "Diligent", "Disciplined", "Efficient", "Determined"], neg: ["Flaky", "Irresponsible", "Lazy", "Thoughtless"] },
+  { k: "warm", name: "Warmth", type: "The Supportive Team-player", line: "looks after people and makes the team feel good",
+    pos: ["Affectionate", "Caring", "Empathetic", "Friendly", "Considerate", "Generous", "Forgiving", "Gracious", "Encouraging", "Cheerful"],
+    neg: ["Insensitive", "Inconsiderate", "Rude", "Hostile", "Harsh", "Selfish", "Self-centered", "Envious"] },
+  { k: "drive", name: "Drive & energy", type: "The Go-getter", line: "brings energy and pushes for big results",
+    pos: ["Ambitious", "Energetic", "Enthusiastic", "Adventurous"], neg: ["Negative", "Pessimistic", "Cynical", "Needy"] },
+  { k: "calm", name: "Composure", type: "The Calm Anchor", line: "stays steady and easy to work with under pressure",
+    pos: ["Calm", "Easygoing", "Flexible"], neg: ["Moody", "Nervous", "Impatient", "Irrational", "Aggressive", "Suspicious"] },
+  { k: "open", name: "Openness", type: "The Explorer", line: "is curious, creative and open to new ways",
+    pos: ["Curious", "Creative", "Clever"], neg: ["Inflexible", "Stubborn", "Intolerant", "Judgmental", "Critical"] },
+  { k: "int", name: "Integrity", type: "The Principled One", line: "is honest, fair and true to their word",
+    pos: ["Authentic", "Genuine", "Fair", "Faithful"], neg: ["Dishonest", "Manipulative", "Greedy", "Superficial"] },
+  { k: "lead", name: "Leadership & influence", type: "The Natural Leader", line: "speaks up, decides and brings people along",
+    pos: ["Charismatic", "Confident", "Decisive", "Diplomatic", "Expressive", "Brave", "Courageous"],
+    neg: ["Overbearing", "Arrogant", "Possessive", "Obnoxious", "Disrespectful"] }
+];
+function perfTraitsOf(r) { var a = (r && r.answers) || {}; return { pos: Array.isArray(a.traits_pos) ? a.traits_pos : [], neg: Array.isArray(a.traits_neg) ? a.traits_neg : [] }; }
+function perfPersonality(box, rows, mine) {
+  box.innerHTML = "";
+  var withT = rows.filter(function (r) { var t = perfTraitsOf(r); return t.pos.length || t.neg.length; });
+  if (!withT.length) {
+    box.appendChild(perfEl("div", "perf-empty", (mine ? "Tick your traits in step 2 of your monthly feedback" : "Once they tick their traits in step 2 of their monthly feedback") + " and a personality profile shows here."));
+    return;
+  }
+  var r = withT[0], t = perfTraitsOf(r), prev = withT[1] ? perfTraitsOf(withT[1]) : null;
+  var scores = PERF_THEMES.map(function (th) {
+    var p = th.pos.filter(function (x) { return t.pos.indexOf(x) >= 0; }), n = th.neg.filter(function (x) { return t.neg.indexOf(x) >= 0; });
+    return { th: th, p: p, n: n, score: p.length / th.pos.length - n.length / th.neg.length * 0.8 };
+  });
+  var ranked = scores.slice().sort(function (a, b) { return b.score - a.score || b.p.length - a.p.length; });
+  var top = ranked[0], second = ranked[1];
+  var card = perfEl("div", "perf-pcard");
+  var head = perfEl("div", "perf-ptop");
+  var left = perfEl("div");
+  left.appendChild(perfEl("div", "perf-plabel", (mine ? "You see yourself as" : "They see themselves as")));
+  left.appendChild(perfEl("div", "perf-ptype", top.p.length ? top.th.type : "Still finding their style"));
+  left.appendChild(perfEl("div", "perf-pline", top.p.length
+    ? "Someone who " + top.th.line + (second && second.p.length && second.score > 0 ? ", and " + second.th.line + "." : ".")
+    : "Few positive traits ticked so far — worth a conversation in the review meeting."));
+  var src = (typeof fbLabel === "function" ? fbLabel(r.month) : r.month) + (r.status !== "submitted" ? " (draft)" : "");
+  left.appendChild(perfEl("div", "hint", "From the traits ticked in " + src + "."));
+  head.appendChild(left);
+  /* positive vs negative balance */
+  var bal = perfEl("div", "perf-pbal");
+  var tot = t.pos.length + t.neg.length, pp = tot ? Math.round(t.pos.length / tot * 100) : 0;
+  bal.appendChild(perfEl("div", "n", t.pos.length + " : " + t.neg.length));
+  bal.appendChild(perfEl("div", "l", "positive : negative"));
+  var bar = perfEl("div", "perf-pbar"), bp = perfEl("i", "p"), bn = perfEl("i", "n");
+  bp.style.width = pp + "%"; bn.style.width = (100 - pp) + "%"; bar.append(bp, bn); bal.appendChild(bar);
+  head.appendChild(bal);
+  card.appendChild(head);
+  /* the seven areas */
+  var grid = perfEl("div", "perf-pgrid");
+  scores.forEach(function (x) {
+    var c = perfEl("div", "perf-parea");
+    var pct = Math.max(0, Math.min(100, Math.round(50 + x.score * 50)));
+    var hd = perfEl("div", "hd"); hd.append(perfEl("b", null, x.th.name), perfEl("span", "sc", x.p.length + "+ / " + x.n.length + "−"));
+    var br = perfEl("div", "perf-bar"), fi = perfEl("i"); fi.style.width = (x.p.length || x.n.length ? pct : 0) + "%"; fi.style.background = pct >= 60 ? "#2E9466" : pct >= 40 ? "#D9A030" : "#D9443A"; br.appendChild(fi);
+    c.append(hd, br);
+    var tags = perfEl("div", "tags");
+    x.p.forEach(function (n) { tags.appendChild(perfEl("span", "fb-tr pos on", n)); });
+    x.n.forEach(function (n) { tags.appendChild(perfEl("span", "fb-tr neg on", n)); });
+    if (!tags.children.length) tags.appendChild(perfEl("span", "hint", "nothing ticked here"));
+    c.appendChild(tags);
+    grid.appendChild(c);
+  });
+  card.appendChild(grid);
+  /* strengths and things to work on */
+  var two = perfEl("div", "perf-ptwo");
+  var st = perfEl("div", "perf-pbox pos"); st.appendChild(perfEl("h4", null, "💪 Strengths"));
+  var stList = ranked.filter(function (x) { return x.p.length; }).slice(0, 3);
+  if (stList.length) stList.forEach(function (x) { st.appendChild(perfEl("div", null, "• " + x.th.name + ": " + x.p.join(", "))); });
+  else st.appendChild(perfEl("div", "hint", "None ticked yet."));
+  var wk = perfEl("div", "perf-pbox neg"); wk.appendChild(perfEl("h4", null, "🌱 To work on"));
+  if (t.neg.length) t.neg.forEach(function (n) {
+    var info = typeof FB_TRAIT_INFO !== "undefined" && FB_TRAIT_INFO[n];
+    wk.appendChild(perfEl("div", null, "• " + n + (info ? " — " + info[0].charAt(0).toLowerCase() + info[0].slice(1) : "")));
+  });
+  else wk.appendChild(perfEl("div", "hint", "No negative traits ticked."));
+  two.append(st, wk); card.appendChild(two);
+  /* what changed since the month before */
+  if (prev) {
+    var add = t.pos.filter(function (x) { return prev.pos.indexOf(x) < 0; }), lost = prev.pos.filter(function (x) { return t.pos.indexOf(x) < 0; });
+    var newNeg = t.neg.filter(function (x) { return prev.neg.indexOf(x) < 0; }), goneNeg = prev.neg.filter(function (x) { return t.neg.indexOf(x) < 0; });
+    var ch = perfEl("div", "perf-pchange");
+    ch.appendChild(perfEl("b", null, "Since " + (typeof fbLabel === "function" ? fbLabel(withT[1].month, true) : withT[1].month) + ": "));
+    var bits = [];
+    if (add.length) bits.push("➕ " + add.join(", "));
+    if (goneNeg.length) bits.push("✅ no longer " + goneNeg.join(", "));
+    if (newNeg.length) bits.push("⚠️ new: " + newNeg.join(", "));
+    if (lost.length) bits.push("➖ dropped " + lost.join(", "));
+    ch.appendChild(document.createTextNode(bits.length ? bits.join(" · ") : "the same traits as before."));
+    card.appendChild(ch);
+  }
+  box.appendChild(card);
+  box.appendChild(perfEl("div", "hint", "A simple self-view, not a psychological test: each area counts the positive traits ticked against the negative ones in it.")).style.marginTop = "8px";
+}
+
 /* ---------- 📅 month by month: the last 6 months and their average ---------- */
 function perfMonthKeys(n) {
   var d = new Date(), out = [];
@@ -461,6 +564,21 @@ function perfAgreementView(box, ag, mine) {
     + ".perf-mrow.head{border-top:0;font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}"
     + ".perf-mrow.now{background:color-mix(in srgb,var(--indigo) 5%,transparent)}"
     + ".perf-mrow.avg{background:var(--paper);font-weight:700;border-top:2px solid var(--line-strong)}"
+    + ".perf-pcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px}"
+    + ".perf-ptop{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;justify-content:space-between}"
+    + ".perf-plabel{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}"
+    + ".perf-ptype{font-family:var(--disp);font-size:26px;font-weight:750;margin:2px 0 4px;color:var(--indigo)}"
+    + ".perf-pline{font-size:15px;max-width:640px;margin-bottom:4px}"
+    + ".perf-pbal{min-width:190px;text-align:right}.perf-pbal .n{font-size:24px;font-weight:750;font-family:var(--disp)}.perf-pbal .l{font-size:12px;color:var(--muted);margin-bottom:6px}"
+    + ".perf-pbar{display:flex;height:8px;border-radius:99px;overflow:hidden;background:var(--line)}.perf-pbar .p{background:#2F6DB5}.perf-pbar .n{background:#D9443A}"
+    + ".perf-pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin:16px 0}"
+    + ".perf-parea{border:1px solid var(--line);border-radius:12px;padding:10px 12px}.perf-parea .hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:13.5px}"
+    + ".perf-parea .sc{font-family:var(--mono);font-size:11.5px;color:var(--muted)}.perf-parea .tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}"
+    + ".perf-parea .fb-tr{padding:2px 8px;border-radius:99px;font-size:11.5px;cursor:default}"
+    + ".perf-ptwo{display:grid;grid-template-columns:1fr 1fr;gap:12px}.perf-pbox{border-radius:12px;padding:12px 14px;font-size:13.5px;line-height:1.6}"
+    + ".perf-pbox h4{margin:0 0 6px;font-size:14px}.perf-pbox.pos{background:#EEF4FC}.perf-pbox.neg{background:#FDF1EF}"
+    + ".perf-pchange{margin-top:12px;font-size:13.5px;color:var(--ink)}"
+    + "@media(max-width:700px){.perf-ptwo{grid-template-columns:1fr}.perf-pbal{text-align:left}}"
     + ".perf-fill{border:0;border-radius:99px;background:#E8622B;color:#fff;font:700 11.5px var(--sans,system-ui);padding:4px 10px;cursor:pointer;margin-left:4px;white-space:nowrap}"
     + ".perf-mrow .pc{font-family:var(--mono);font-weight:700}"
     + ".perf-mrow .fbs.ok{color:var(--done,#2E9466)}.perf-mrow .fbs.late{color:#B4541A}.perf-mrow .fbs.none{color:#B42318}.perf-mrow .fbs.draft{color:var(--muted)}"
