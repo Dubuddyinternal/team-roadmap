@@ -17,6 +17,8 @@
    ===================================================================== */
 
 var PERF = { who: null, people: null };
+/* My Performance starts counting here: earlier months and periods aren't shown or counted */
+var PERF_START = "2026-10-01";
 
 function perfEl(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 function perfUser(id) { return (typeof USERS !== "undefined" ? USERS : []).find(function (u) { return u.id === id; }) || null; }
@@ -255,7 +257,7 @@ function perfMonthly(box, fbRows, ciRows, ag, okrs, mine) {
   /* months before their first feedback / first check-in don't count (it didn't exist for them yet) */
   var fbStart = fbRows.map(function (r) { return r.month; }).sort()[0] || cur;
   var ciStart = ciRows.map(function (c) { return String(c.period).slice(0, 7); }).sort()[0] || cur;
-  var months = perfMonthKeys(6).map(function (k) {
+  var months = perfMonthKeys(6).filter(function (k) { return k >= PERF_START.slice(0, 7); }).map(function (k) {
     var fb = fbRows.find(function (r) { return r.month === k; }), sentFb = fb && fb.status === "submitted" ? fb : null;
     var cis = ciRows.filter(function (c) { return String(c.period).slice(0, 7) === k; });
     var last = cis.slice().sort(function (a, b) { return String(b.done_at).localeCompare(String(a.done_at)); })[0];
@@ -316,7 +318,7 @@ function perfMonthly(box, fbRows, ciRows, ag, okrs, mine) {
   var aa = pctCell(jTot ? Math.round(kTot / jTot * 100) : null); if (jTot) aa.title = kTot + " of " + jTot + " periods kept"; ar.appendChild(aa);
   t.appendChild(ar);
   var wrap = perfEl("div", "perf-mscroll"); wrap.appendChild(t); box.appendChild(wrap);
-  box.appendChild(perfEl("div", "hint", "OKR progress is taken from the last check-in that month (this month: live). Agreements: the share of that month's weeks / months that were kept. The average leaves out months with nothing to count; feedback and check-ins average the finished months since the first one, so months before them show —.")).style.marginTop = "8px";
+  box.appendChild(perfEl("div", "hint", "Counting starts from " + (typeof perfShort === "function" ? perfShort(PERF_START) : PERF_START) + " " + PERF_START.slice(0, 4) + ". OKR progress is taken from the last check-in that month (this month: live). Agreements: the share of that month's weeks / months that were kept. The average leaves out months with nothing to count; feedback and check-ins average the finished months since the first one, so months before them show —.")).style.marginTop = "8px";
 }
 function perfSection(title) {
   var el = perfEl("section", "perf-sec"), h = perfEl("h2", null, title), body = perfEl("div");
@@ -447,6 +449,7 @@ function perfPeriods(period, n) {
     else { a.setMonth(a.getMonth() - 3 * i); b = new Date(a); b.setMonth(b.getMonth() + 3); b.setDate(0); }
     out.unshift({ from: perfISO(a), to: perfISO(b), now: i === 0 });
   }
+  out = out.filter(function (p) { return p.now || p.from >= PERF_START; });   /* nothing before the start */
   return out;
 }
 /* a target's value for one period (null = not known, e.g. Cashfree sales nobody has looked at for that period) */
