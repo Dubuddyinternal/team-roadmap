@@ -42,6 +42,95 @@ const LABEL: Record<string, string> = { total: "", time: "posting time", longs: 
   community: "community posts", views: "views", reels: "reels", carousels: "carousels", images: "single-image posts", stories: "stories",
   iglives: "live sessions", posts: "posts", likes: "likes", comments: "comments", shares: "shares" };
 
+/* ---------- the agreement lines (long videos, shorts, reels…), counted like the Summary does ---------- */
+const METRIC: Record<string, { label: string; only?: string; untracked?: boolean; calc?: (r: any[]) => number; pct?: boolean }> = {
+  posts: { label: "Posts published", calc: (r) => r.length },
+  longs: { label: "Long videos", only: "yt", calc: (r) => r.filter((x) => x.vtype === "long").length },
+  shorts: { label: "Shorts", only: "yt", calc: (r) => r.filter((x) => x.vtype === "short").length },
+  lives: { label: "Live sessions", only: "yt", calc: (r) => r.filter((x) => x.vtype === "live").length },
+  webinars: { label: "Webinars", only: "yt", untracked: true },
+  community: { label: "Community posts", only: "yt", untracked: true },
+  reels: { label: "Reels", only: "ig", calc: (r) => r.filter((x) => x.vtype === "reel").length },
+  carousels: { label: "Carousels", only: "ig", calc: (r) => r.filter((x) => x.vtype === "carousel").length },
+  images: { label: "Single-image posts", only: "ig", calc: (r) => r.filter((x) => x.vtype === "image").length },
+  stories: { label: "Stories", only: "ig", untracked: true },
+  iglives: { label: "Live sessions", only: "ig", untracked: true },
+  views: { label: "Views", calc: (r) => r.reduce((a, x) => a + (Number(x.views) || 0), 0) },
+  likes: { label: "Likes", calc: (r) => r.reduce((a, x) => a + (Number(x.likes) || 0), 0) },
+  comments: { label: "Comments", calc: (r) => r.reduce((a, x) => a + (Number(x.comments) || 0), 0) },
+  shares: { label: "Shares", calc: (r) => r.reduce((a, x) => a + (Number(x.shares) || 0), 0) },
+  watchh: { label: "Watch hours", only: "yt", calc: (r) => Math.round(r.reduce((a, x) => a + (Number(x.watchMin) || 0), 0) / 60) },
+  avgviews: { label: "Average views per post", calc: (r) => r.length ? Math.round(r.reduce((a, x) => a + (Number(x.views) || 0), 0) / r.length) : 0 },
+  viewedpct: { label: "Average % viewed", only: "yt", pct: true, calc: (r) => { const v = r.filter((x) => x.viewed != null); return v.length ? Math.round(v.reduce((a, x) => a + Number(x.viewed), 0) / v.length) : 0; } },
+  engage: { label: "Engagement rate", pct: true, calc: (r) => { const v = r.reduce((a, x) => a + (Number(x.views) || 0), 0); return v ? Math.round(r.reduce((a, x) => a + (Number(x.likes) || 0) + (Number(x.comments) || 0) + (Number(x.shares) || 0), 0) / v * 1000) / 10 : 0; } },
+};
+const PER: Record<string, string> = { day: "per day", week: "per week", month: "per month", quarter: "per quarter" };
+const ytId = (u: string) => (/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|shorts\/|live\/|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/.exec(String(u || "")) || [])[1] || null;
+const igCode = (u: string) => (/instagram\.com\/(?:[^/]+\/)?(?:p|reels?|tv)\/([A-Za-z0-9_-]+)/.exec(String(u || "")) || [])[1] || null;
+/* every published post: the synced ones, plus published cards the sync doesn't have */
+function postRows(posts: any[], sx: any) {
+  const rows: any[] = [];
+  const VT: Record<string, string> = { "Short": "short", "Long video": "long", "Live": "live", "Reel": "reel", "Carousel": "carousel", "Image": "image" };
+  const ytIds = new Set<string>(), igCodes = new Set<string>();
+  posts.forEach((p) => {
+    const pl = p.platform === "youtube" ? "yt" : p.platform === "instagram" ? "ig" : p.platform;
+    if (pl === "yt") ytIds.add(p.external_id); else { const c = igCode(p.url); if (c) igCodes.add(c); }
+    const d = p.published_at ? new Date(Date.parse(p.published_at) + 5.5 * 3600e3).toISOString().slice(0, 10) : null;
+    rows.push({ platform: pl, vtype: VT[p.post_type] || "long", date: d, views: p.views, likes: p.likes, comments: p.comments, shares: p.shares, watchMin: p.watch_minutes, viewed: p.avg_view_pct });
+  });
+  ((sx && sx.cards) || []).filter((c: any) => c && c.stage === "published").forEach((c: any) => {
+    const links = (c.post && c.post.links) || {}, url = links[c.platform] || (c.post && c.post.postUrl) || "";
+    if (c.platform === "yt" && ytIds.has(ytId(url) || "")) return;
+    if (c.platform === "ig" && igCodes.has(igCode(url) || "")) return;
+    const m = c.metrics || {};
+    rows.push({ platform: c.platform, vtype: c.vtype, date: c.published || null, views: m.views, likes: m.likes, comments: m.comments, shares: m.shares });
+  });
+  return rows;
+}
+function periodsOf(period: string, today: string) {
+  const out: { from: string; to: string; now: boolean }[] = [];
+  const mk = (i: number) => {
+    const t = new Date(today + "T00:00:00Z");
+    if (period === "week" || period === "day") { const f = addDays(monday(today), -7 * i); return { from: f, to: addDays(f, 6) }; }
+    if (period === "month") { const a = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() - i, 1)); const b = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() - i + 1, 0)); return { from: a.toISOString().slice(0, 10), to: b.toISOString().slice(0, 10) }; }
+    const q = Math.floor(t.getUTCMonth() / 3) * 3 - 3 * i; const a = new Date(Date.UTC(t.getUTCFullYear(), q, 1)); const b = new Date(Date.UTC(t.getUTCFullYear(), q + 3, 0));
+    return { from: a.toISOString().slice(0, 10), to: b.toISOString().slice(0, 10) };
+  };
+  const n = period === "month" ? 2 : period === "quarter" ? 1 : 4;
+  for (let i = n; i >= 0; i--) { const p = mk(i); out.push({ ...p, now: i === 0 }); }
+  return out;
+}
+function goalsBlock(pl: "yt" | "ig", T: any, rows: any[], manual: Record<string, number>, today: string, link: string, mine: Set<string>) {
+  const P = pl === "yt" ? "YouTube" : "Instagram", grey = "#8C7F75", red = "#C0392B", green = "#2E9466";
+  const goals = (T.goals || []).filter((g: any) => g && g.platform === pl && Number(g.target) > 0 && METRIC[g.metric]);
+  if (!goals.length) {
+    return { kept: 0, total: 0, html: `<div style="border:1px dashed #E0D3C7;border-radius:12px;padding:12px 16px;margin:0 0 14px;color:${grey}">
+      <b style="color:#1A1614">${P} agreement</b> — no lines set yet (long videos, shorts, reels…). <a href="${esc(link)}" style="color:#E8622B;font-weight:700">Set up your ${P} agreement now →</a></div>`,
+      text: `${P} agreement: nothing set up yet — set it up now: ${link}` };
+  }
+  let kept = 0, total = 0; const lines: string[] = [], texts: string[] = [];
+  goals.forEach((g: any) => {
+    const m = METRIC[g.metric], per = g.period || "week", tgt = Number(g.target) * (per === "day" ? 7 : 1);
+    const cells = periodsOf(per, today).map((p) => {
+      const v = m.untracked ? Number(manual[`${pl}:${g.metric}:${p.from}`] || 0)
+        : m.calc!(rows.filter((r) => r.platform === pl && r.date && r.date >= p.from && r.date <= p.to));
+      const ok = v >= tgt; if (!p.now) { total++; if (ok) kept++; }
+      return { p, v, ok };
+    });
+    const cur = cells[cells.length - 1], past = cells.filter((c) => !c.p.now), pk = past.filter((c) => c.ok).length;
+    const unit = m.pct ? "%" : "", isMine = mine.has(pl + ":" + g.metric);
+    lines.push(`<tr><td style="padding:5px 0">${esc(m.label)} <span style="color:${grey}">· ${fmt(Number(g.target))}${unit} ${PER[per] || ""}</span>${isMine ? ` <span style="color:#E8622B;font-size:11px">← you</span>` : ""}${m.untracked ? ` <span style="color:${grey};font-size:11px">(from proof)</span>` : ""}</td>
+      <td style="text-align:right;font-family:monospace;color:${cur.ok ? green : red}">${fmt(cur.v)}${unit} / ${fmt(tgt)}${unit}</td>
+      <td style="text-align:right;letter-spacing:2px">${past.map((c) => `<span title="${c.p.from}" style="color:${c.ok ? green : red}">${c.ok ? "✓" : "✕"}</span>`).join("")}</td>
+      <td style="text-align:right;color:${grey};font-size:12px;white-space:nowrap">${past.length ? pk + " of " + past.length + " kept" : ""}</td></tr>`);
+    texts.push(`${m.label} (${fmt(Number(g.target))}${unit} ${PER[per] || ""}): ${fmt(cur.v)}${unit} now · ${pk} of ${past.length} kept`);
+  });
+  const html = `<div style="border:1px solid #E5DDD5;border-radius:12px;padding:12px 16px;margin:0 0 14px">
+    <div style="font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:${grey};margin-bottom:6px">${P} agreement · ${total ? kept + " of " + total + " kept recently" : "first period running"}</div>
+    <table style="width:100%;font-size:13px;border-collapse:collapse"><tr style="color:${grey};font-size:11px;text-transform:uppercase"><td>Line</td><td style="text-align:right">This period</td><td style="text-align:right">Before</td><td></td></tr>${lines.join("")}</table></div>`;
+  return { kept, total, html, text: `${P} agreement — ` + texts.join("; ") };
+}
+
 /* one platform's block, as the Summary works it out */
 function platformBlock(name: string, word: string, series: Pt[], T: any, pl: "yt" | "ig", today: string) {
   if (!series.length) return null;
@@ -101,6 +190,8 @@ Deno.serve(async (req) => {
     const spaces: any[] = (csRow && csRow.data && csRow.data.list) || [];
     const { data: snaps } = await admin.from("social_snapshots").select("platform,day,followers").eq("team_slug", team)
       .gte("day", addDays(today, -200)).order("day", { ascending: true }).limit(3000);
+    const { data: posts } = await admin.from("social_posts").select("platform,external_id,url,post_type,published_at,views,likes,comments,shares,watch_minutes,avg_view_pct")
+      .eq("team_slug", team).gte("published_at", addDays(today, -200)).limit(3000);
     const ser = (p: string) => (snaps || []).filter((r: any) => r.platform === p && r.followers != null).map((r: any) => ({ d: r.day, v: Number(r.followers) }));
     for (const spaceId of Object.keys(ST)) {
       const T = ST[spaceId] || {}, sp = spaces.find((x) => x.id === spaceId);
@@ -114,8 +205,8 @@ Deno.serve(async (req) => {
       if (!ig.length && sp.sx && Array.isArray(sp.sx.igFollowers)) ig = sp.sx.igFollowers.filter((f: any) => f && f.d && f.v != null).map((f: any) => ({ d: f.d, v: Number(f.v) })).sort((a: Pt, b: Pt) => a.d.localeCompare(b.d));
       const yb = platformBlock("YouTube", "subscribers", ser("youtube"), T, "yt", today);
       const ib = platformBlock("Instagram", "followers", ig, T, "ig", today);
-      if (!yb && !ib) continue;
       const link = APP_URL.replace(/\/?$/, "/") + "?team=" + encodeURIComponent(team);
+      const rows = postRows(posts || [], sp.sx), manual = (sp.sx && sp.sx.manual) || {};
       for (const email of people) {
         const { data: prof } = await admin.from("profiles").select("email,name,profile").ilike("email", email).maybeSingle();
         if (!prof?.email) continue;
@@ -129,13 +220,16 @@ Deno.serve(async (req) => {
             .map((k) => { const m = k.slice(pl.length + 1); return m === "total" ? (pl === "yt" ? "subscribers" : "followers") : (LABEL[m] || m); });
           if (lines.length) roles.push("👥 " + P + ": " + lines.join(", "));
         });
+        const mineKeys = new Set<string>(Object.keys(who).filter((k) => (who[k] || []).some((e: string) => String(e).toLowerCase() === email)));
+        (["yt", "ig"] as const).forEach((pl) => { if (String(lead[pl] || "").toLowerCase() === email) Object.keys(METRIC).forEach((m) => mineKeys.add(pl + ":" + m)); });
+        const yg = goalsBlock("yt", T, rows, manual, today, link, mineKeys), ig2 = goalsBlock("ig", T, rows, manual, today, link, mineKeys);
         const html = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1A1614;max-width:640px">'
           + '<div style="font-weight:800;font-size:18px;margin-bottom:12px">DU <span style="color:#E8622B">Buddy</span></div>'
           + `<p>Hi ${esc(name)},</p><p>Here's this week's progress for <b>${esc(sp.name || "Social Media")}</b>.${roles.length ? " You're on it as: " + esc(roles.join(" · ")) + "." : ""}</p>`
-          + (yb ? yb.html : "") + (ib ? ib.html : "")
+          + (yb ? yb.html : "") + yg.html + (ib ? ib.html : "") + ig2.html
           + `<p style="margin:16px 0"><a href="${esc(link)}" style="background:#E8622B;color:#fff;text-decoration:none;font-weight:700;padding:10px 16px;border-radius:10px;display:inline-block">Open the Summary</a></p>`
           + '<p style="color:#8C7F75;font-size:12px">Sent every Monday to the people accountable in this space\'s 🤝 Our agreement.</p></div>';
-        const text = `Hi ${name},\n\nThis week's progress for ${sp.name || "Social Media"}.${roles.length ? " You're on it as: " + roles.join(" · ") + "." : ""}\n\n` + [yb, ib].filter(Boolean).map((b) => b!.text).join("\n") + `\n\nOpen the Summary: ${link}`;
+        const text = `Hi ${name},\n\nThis week's progress for ${sp.name || "Social Media"}.${roles.length ? " You're on it as: " + roles.join(" · ") + "." : ""}\n\n` + [yb, yg, ib, ig2].filter(Boolean).map((b) => b!.text).join("\n") + `\n\nOpen the Summary: ${link}`;
         try {
           await mailer.sendMail({ from, to: prof.email, subject: `Weekly progress — ${sp.name || "Social Media"}: ${[yb ? "YouTube" : "", ib ? "Instagram" : ""].filter(Boolean).join(" & ")}`, text, html });
           sent++;
