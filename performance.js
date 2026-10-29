@@ -1,0 +1,368 @@
+/* =====================================================================
+   📈 My Performance — a page next to Workspace (top bar)
+
+   One place for how someone is doing:
+   · 🎯 OKRs — the objectives they own (alone or jointly) or hold a key
+     result in, in the current cycle, with progress
+   · 📝 Monthly feedback — their own feedback month by month, and the
+     manager's review (the review-meeting notes) on it
+   · 📈 OKR check-ins — the twice-a-month updates (stage 22b)
+   · 🤝 Agreements — for the Marketing spaces they are part of: each target
+     in 🤝 Our agreement, period by period, kept or missed (their own count
+     for "each person" targets like LMS drops), and Social Media's weekly
+     content agreement, week by week
+   Everyone sees their own. Seniors (above someone in My Team → Reporting
+   lines) and super-admins can switch to the people they can see, using the
+   same rule as monthly feedback (feedback_overview).
+   ===================================================================== */
+
+var PERF = { who: null, people: null };
+
+function perfEl(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+function perfUser(id) { return (typeof USERS !== "undefined" ? USERS : []).find(function (u) { return u.id === id; }) || null; }
+function perfISO(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+function perfShort(iso) { var a = String(iso).split("-"); return new Date(+a[0], +a[1] - 1, +a[2]).toLocaleDateString("en-GB", { day: "numeric", month: "short" }); }
+
+function openPerformance() {
+  var pg = document.getElementById("perf-page");
+  if (!pg) {
+    pg = perfEl("div", "team-page"); pg.id = "perf-page"; pg.style.display = "none";
+    document.body.appendChild(pg);
+  }
+  if (typeof closeTeam === "function") closeTeam();
+  var me = currentUser(); if (!me) return;
+  if (!PERF.who) PERF.who = me.id;
+  pg.style.display = "block"; window.scrollTo(0, 0);
+  renderPerformance();
+}
+function closePerformance() { var pg = document.getElementById("perf-page"); if (pg) pg.style.display = "none"; }
+
+/* the people I may look at: me, the people below me in the reporting lines; super-admins: everyone */
+async function perfLoadPeople() {
+  var me = currentUser();
+  if (PERF.people) return PERF.people;
+  var ids = [me.id];
+  try {
+    var k = typeof fbCur === "function" ? fbCur() : new Date().toISOString().slice(0, 7);
+    var r = await SUPA.rpc("feedback_overview", { p_team: TEAM, p_month: k });
+    if (!r.error && r.data) r.data.forEach(function (x) { if (ids.indexOf(x.user_id) < 0) ids.push(x.user_id); });
+  } catch (_) { }
+  PERF.people = ids.map(perfUser).filter(Boolean);
+  return PERF.people;
+}
+
+async function renderPerformance() {
+  var pg = document.getElementById("perf-page"); if (!pg) return;
+  var me = currentUser(); if (!me) return;
+  pg.innerHTML = "";
+  var shell = perfEl("div", "mt-shell"); pg.appendChild(shell);
+  var top = perfEl("div", "mt-top");
+  var brand = perfEl("div", "mt-brand"); brand.append(perfEl("span", "mt-bi", "📈"), document.createTextNode(" My Performance"));
+  top.appendChild(brand);
+  var pickBox = perfEl("span"); top.appendChild(pickBox);
+  var back = perfEl("button", "mt-back", "← Back to workspace"); back.onclick = closePerformance; back.style.marginLeft = "auto";
+  top.appendChild(back);
+  shell.appendChild(top);
+
+  var people = SUPA ? await perfLoadPeople() : [me];
+  if (people.length > 1) {
+    var sel = perfEl("select", "perf-pick");
+    people.slice().sort(function (a, b) { return (a.id === me.id ? -1 : b.id === me.id ? 1 : userDisplayName(a).localeCompare(userDisplayName(b))); })
+      .forEach(function (u) { var o = perfEl("option", null, u.id === me.id ? userDisplayName(u) + " (me)" : userDisplayName(u)); o.value = u.id; sel.appendChild(o); });
+    sel.value = PERF.who;
+    sel.onchange = function () { PERF.who = sel.value; renderPerformance(); };
+    pickBox.appendChild(sel);
+  }
+  var who = perfUser(PERF.who) || me, mine = who.id === me.id;
+  var head = perfEl("div", "mt-head"), hl = perfEl("div");
+  hl.append(perfEl("h1", null, mine ? "My performance" : userDisplayName(who) + "’s performance"),
+    perfEl("div", "mt-sub", "OKRs, monthly feedback and the manager's review, OKR check-ins, and how often the agreements " + (mine ? "you're" : "they're") + " part of were kept."));
+  head.appendChild(hl); shell.appendChild(head);
+
+  var tiles = perfEl("div", "perf-tiles"); shell.appendChild(tiles);
+  var body = perfEl("div", "perf-body"); shell.appendChild(body);
+  var tile = function (n, l, sub) { var t = perfEl("div", "perf-tile"); t.append(perfEl("div", "n", n), perfEl("div", "l", l)); if (sub) t.appendChild(perfEl("div", "s", sub)); tiles.appendChild(t); return t; };
+
+  /* 🎯 OKRs */
+  var okrs = perfOkrs(who);
+  var okrAvg = okrs.list.length ? Math.round(okrs.list.reduce(function (a, x) { return a + objPct(x.ob); }, 0) / okrs.list.length) : null;
+  tile(okrAvg == null ? "—" : okrAvg + "%", "OKR progress", okrs.list.length ? okrs.list.length + " objective" + (okrs.list.length === 1 ? "" : "s") + (okrs.cyc ? " · " + (okrs.cyc.name || okrs.cyc.key) : "") : "no OKRs this cycle");
+  var fbTile = tile("…", "Feedback sent");
+  var ciTile = tile("…", "OKR check-ins");
+  var agTile = tile("…", "Agreements kept");
+
+  body.appendChild(perfOkrSection(okrs, who));
+  var fbSec = perfSection("📝 Monthly feedback & manager's review"); body.appendChild(fbSec.el);
+  var ciSec = perfSection("📈 OKR check-ins"); body.appendChild(ciSec.el);
+  var agSec = perfSection("🤝 Agreements"); body.appendChild(agSec.el);
+
+  /* agreements are worked out in the browser */
+  var ag = perfAgreements(who);
+  perfAgreementView(agSec.body, ag, mine);
+  agTile.querySelector(".n").textContent = ag.total ? Math.round(ag.kept / ag.total * 100) + "%" : "—";
+  agTile.appendChild(perfEl("div", "s", ag.total ? ag.kept + " of " + ag.total + " periods kept" : "not part of any agreement yet"));
+
+  if (!SUPA) return;
+  /* 📝 feedback (RLS: yours, or sent ones of people below you) */
+  SUPA.from("monthly_feedback").select("*").eq("team_slug", TEAM).eq("user_id", who.id).order("month", { ascending: false }).then(function (r) {
+    var rows = (r && r.data) || [];
+    var sent = rows.filter(function (x) { return x.status === "submitted"; });
+    fbTile.querySelector(".n").textContent = String(sent.length);
+    fbTile.appendChild(perfEl("div", "s", sent.length ? sent.filter(function (x) { return !x.late; }).length + " on time · " + sent.filter(function (x) { return x.discussed_at; }).length + " reviewed" : "nothing sent yet"));
+    perfFeedbackView(fbSec.body, rows, mine);
+  });
+  /* 📈 check-ins */
+  SUPA.from("okr_checkins").select("period,done_at,note,updates").eq("team_slug", TEAM).eq("user_id", who.id).order("done_at", { ascending: false }).limit(24).then(function (r) {
+    if (r.error) { ciTile.querySelector(".n").textContent = "—"; ciSec.body.appendChild(perfEl("div", "hint", "OKR check-ins aren't set up yet.")); return; }
+    var rows = r.data || [];
+    ciTile.querySelector(".n").textContent = String(rows.length);
+    ciTile.appendChild(perfEl("div", "s", rows.length ? "last " + perfShort(rows[0].done_at.slice(0, 10)) : "none yet"));
+    perfCheckinView(ciSec.body, rows);
+  });
+}
+function perfSection(title) {
+  var el = perfEl("section", "perf-sec"), h = perfEl("h2", null, title), body = perfEl("div");
+  el.append(h, body); return { el: el, body: body };
+}
+
+/* ---------- 🎯 OKRs (current cycle) ---------- */
+function perfOkrs(u) {
+  var cs = (typeof OKRS !== "undefined" && OKRS && OKRS.cycles) || [];
+  var cyc = cs.find(function (c) { return c.key === activeCycle; }) || cs[cs.length - 1] || null;
+  var em = String(u.email || "").toLowerCase(), list = [];
+  var has = function (arr) { return (arr || []).some(function (e) { return String(e || "").toLowerCase() === em; }); };
+  if (cyc) (cyc.objectives || []).forEach(function (ob) {
+    var own = has(okrOwners(ob)), krs = (ob.krs || []).filter(function (k) { return has(krOwners(k)); });
+    if (own || krs.length) list.push({ ob: ob, own: own, krs: krs });
+  });
+  return { cyc: cyc, list: list };
+}
+function perfOkrSection(okrs, u) {
+  var s = perfSection("🎯 OKRs" + (okrs.cyc ? " · " + (okrs.cyc.name || okrs.cyc.key) : ""));
+  if (!okrs.list.length) { s.body.appendChild(perfEl("div", "perf-empty", "No objectives or key results in this cycle.")); return s.el; }
+  var em = String(u.email || "").toLowerCase();
+  okrs.list.forEach(function (x) {
+    var ob = x.ob, pct = objPct(ob);
+    var c = perfEl("div", "perf-card");
+    var t = perfEl("div", "perf-row");
+    if ((ob.level || "").trim()) t.appendChild(perfEl("span", "perf-lv", ob.level));
+    var others = okrOwners(ob).filter(function (e) { return String(e).toLowerCase() !== em; });
+    t.appendChild(perfEl("span", "perf-how", x.own ? (others.length ? "Joint owner with " + others.map(okrOwnerName).join(", ") : "Owner") : "Key result owner"));
+    var p = perfEl("span", "perf-pct", pct + "%"); p.style.color = scoreColor(pct); t.appendChild(p);
+    c.appendChild(t);
+    c.appendChild(perfEl("div", "perf-title", ob.title || "Untitled objective"));
+    var bar = perfEl("div", "perf-bar"), fi = perfEl("i"); fi.style.width = pct + "%"; fi.style.background = scoreColor(pct); bar.appendChild(fi); c.appendChild(bar);
+    var krs = x.own ? (ob.krs || []) : x.krs;
+    if (krs.length) {
+      var ul = perfEl("ul", "perf-krs");
+      krs.forEach(function (k) {
+        var kp = krPct(k), li = perfEl("li");
+        var v = perfEl("span", "v", fmt(k.current) + " / " + fmt(k.target) + (k.unit ? " " + k.unit : "") + " · " + kp + "%"); v.style.color = scoreColor(kp);
+        li.append(perfEl("span", "t", k.title || "Key result"), v); ul.appendChild(li);
+      });
+      c.appendChild(ul);
+    }
+    s.body.appendChild(c);
+  });
+  return s.el;
+}
+
+/* ---------- 📝 feedback + the manager's review ---------- */
+function perfFeedbackView(box, rows, mine) {
+  if (!rows.length) { box.appendChild(perfEl("div", "perf-empty", mine ? "You haven't sent any monthly feedback yet." : "No feedback sent yet (drafts stay private).")); return; }
+  rows.forEach(function (r, i) {
+    var d = perfEl("details", "fb-hist"), s = perfEl("summary");
+    s.appendChild(perfEl("b", null, typeof fbLabel === "function" ? fbLabel(r.month) : r.month));
+    if (r.status !== "submitted") s.appendChild(perfEl("span", "fb-chip draft", "draft — not sent"));
+    else {
+      if (r.late) s.appendChild(perfEl("span", "fb-chip late", "late"));
+      s.appendChild(perfEl("span", "fb-chip " + (r.discussed_at ? "submitted" : "talk"), r.discussed_at ? "🤝 reviewed" : "waiting for the review"));
+      s.appendChild(perfEl("span", "hint", "sent " + (typeof fbDate === "function" ? fbDate(r.submitted_at) : r.submitted_at)));
+    }
+    d.appendChild(s);
+    var b = perfEl("div", "body");
+    if (r.status === "submitted") {
+      var mv = typeof fbMeetingView === "function" ? fbMeetingView(r) : null;
+      if (mv) { var mh = perfEl("div", "perf-sub", "Manager's review"); b.append(mh, mv); mv.style.margin = "6px 0 16px"; }
+      else b.appendChild(perfEl("div", "hint", "No review notes yet.")).style.margin = "10px 0";
+    }
+    b.appendChild(perfEl("div", "perf-sub", mine ? "Your feedback" : "Their feedback"));
+    if (typeof fbAnswersView === "function") b.appendChild(fbAnswersView(r.answers || {}));
+    d.appendChild(b);
+    if (i === 0) d.open = true;
+    box.appendChild(d);
+  });
+}
+
+/* ---------- 📈 OKR check-ins ---------- */
+function perfCheckinView(box, rows) {
+  if (!rows.length) { box.appendChild(perfEl("div", "perf-empty", "No check-ins yet. They happen mid-month and at month end.")); return; }
+  var t = perfEl("div", "perf-table");
+  rows.forEach(function (r) {
+    var a = String(r.period).split("-"), mon = new Date(+a[0], +a[1] - 1, 1).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+    var row = perfEl("div", "perf-trow");
+    row.append(perfEl("b", null, (a[2] === "mid" ? "Mid-" : "End of ") + mon),
+      perfEl("span", "hint", "done " + perfShort(r.done_at.slice(0, 10)) + " · " + ((r.updates || []).length) + " key result" + ((r.updates || []).length === 1 ? "" : "s")),
+      perfEl("span", "perf-note", r.note || ""));
+    t.appendChild(row);
+  });
+  box.appendChild(t);
+}
+
+/* ---------- 🤝 agreements ---------- */
+/* is this person part of a space: a member (not just a viewer) or one of its 👑 heads */
+function perfInSpace(cs, email) {
+  if (!cs || !email) return false;
+  var m = cs.members || {};
+  if (m[email] && m[email] !== "viewer") return true;
+  return (typeof spaceHeadsOf === "function" ? spaceHeadsOf(cs) : []).indexOf(email) >= 0;
+}
+/* the last N periods that have ended, plus the one running now: [{from, to, now}] (oldest first) */
+function perfPeriods(period, n) {
+  var out = [], d = new Date(); d.setHours(0, 0, 0, 0);
+  var start = function (x) {
+    var s = new Date(x);
+    if (period === "week") s.setDate(s.getDate() - ((s.getDay() + 6) % 7));
+    else if (period === "month") s.setDate(1);
+    else { s.setDate(1); s.setMonth(Math.floor(s.getMonth() / 3) * 3); }
+    return s;
+  };
+  var cur = start(d);
+  for (var i = 0; i <= n; i++) {
+    var a = new Date(cur), b = new Date(cur);
+    if (period === "week") { a.setDate(a.getDate() - 7 * i); b = new Date(a); b.setDate(b.getDate() + 6); }
+    else if (period === "month") { a.setMonth(a.getMonth() - i); b = new Date(a); b.setMonth(b.getMonth() + 1); b.setDate(0); }
+    else { a.setMonth(a.getMonth() - 3 * i); b = new Date(a); b.setMonth(b.getMonth() + 3); b.setDate(0); }
+    out.unshift({ from: perfISO(a), to: perfISO(b), now: i === 0 });
+  }
+  return out;
+}
+/* a target's value for one period (null = not known, e.g. Cashfree sales nobody has looked at for that period) */
+function perfGoalValue(mk, g, from, to, email) {
+  var inP = function (x) { return !!x && x >= from && x <= to; };
+  var kids = (CSPACES.list || []).filter(function (x) { return x.parent === mk.id; });
+  if (g.source === "hand") { var v = mktAgreement(mk).manual[g.id + ":" + from]; return v == null ? null : Number(v); }
+  if (g.source === "cashfree") { var c = mktAgreement(mk).cache["cf:" + from + ":" + to]; return c ? Number(c.v) : null; }
+  if (g.source === "proc_out" || g.source === "proc_sent") {
+    return kids.filter(function (x) { return x.type === "procdept"; }).flatMap(procEntries)
+      .filter(function (i) { return g.source === "proc_sent" ? inP(i.created) : inP(i.stageAt && i.stageAt.rolledout); }).length;
+  }
+  if (g.source === "posts") {
+    return kids.filter(function (x) { return x.type === "social"; }).reduce(function (n, x) {
+      var S = (window.SX && SX.normalize) ? SX.normalize(x) : x.sx;
+      return n + ((S && S.cards) || []).filter(function (c) { return inP(c.published) || (c.stage === "published" && !c.published && inP(c.scheduled)); }).length;
+    }, 0);
+  }
+  if (g.source === "campaigns") return kids.filter(function (x) { return x.type === "campaign" && x.details && inP(x.details.start); }).length;
+  if (g.source === "lms") {   /* "each person": this person's own approved drops */
+    return (CSPACES.list || []).reduce(function (n, cs) {
+      return n + (cs.lmsSubs || []).filter(function (x) { var d = (x.finalAt || x.at || "").slice(0, 10); return x.status === "approved" && x.by && x.by.email === email && inP(d); }).length;
+    }, 0);
+  }
+  if (g.source === "games") return typeof gameSubsApproved === "function" ? gameSubsApproved(from, to) : null;
+  return null;
+}
+function perfAgreements(u) {
+  var email = u.email, groups = [], kept = 0, total = 0;
+  var N = { week: 8, month: 3, quarter: 2 };
+  if (typeof mktLoadSnaps === "function") mktLoadSnaps();
+  (CSPACES.list || []).filter(function (x) { return x.type === "marketing"; }).forEach(function (mk) {
+    var kids = (CSPACES.list || []).filter(function (x) { return x.parent === mk.id; });
+    var inMk = perfInSpace(mk, email) || kids.some(function (k) { return perfInSpace(k, email); });
+    if (!inMk) return;
+    var A = mktAgreement(mk), rows = [];
+    A.goals.filter(function (g) { return Number(g.target) > 0; }).forEach(function (g) {
+      var cells = perfPeriods(g.period || "month", N[g.period] || 3).map(function (p) {
+        var v = perfGoalValue(mk, g, p.from, p.to, email), ok = v == null ? null : v >= Number(g.target);
+        if (!p.now && ok != null) { total++; if (ok) kept++; }
+        return { p: p, v: v, ok: ok };
+      });
+      rows.push({ name: g.name + (g.source === "lms" ? " (their own)" : ""), target: g, cells: cells });
+    });
+    /* Social Media's weekly content agreement, for the social spaces they're in */
+    kids.filter(function (x) { return x.type === "social" && perfInSpace(x, email); }).forEach(function (x) {
+      if (typeof mktSlaGaps !== "function") return;
+      var cells = perfPeriods("week", 8).map(function (p) {
+        var gaps = mktSlaGaps(x, p.from), ok = p.now ? (gaps.length ? null : true) : !gaps.length;
+        if (!p.now) { total++; if (ok) kept++; }
+        return { p: p, gaps: gaps, ok: ok };
+      });
+      rows.push({ name: x.name + " — weekly content agreement", social: true, cells: cells });
+    });
+    if (rows.length) groups.push({ mk: mk, rows: rows });
+  });
+  return { groups: groups, kept: kept, total: total };
+}
+function perfAgreementView(box, ag, mine) {
+  if (!ag.groups.length) { box.appendChild(perfEl("div", "perf-empty", (mine ? "You're" : "They're") + " not part of a Marketing space with an agreement yet.")); return; }
+  ag.groups.forEach(function (g) {
+    box.appendChild(perfEl("div", "perf-sub", g.mk.name + " → 🤝 Our agreement"));
+    var t = perfEl("div", "perf-ag");
+    g.rows.forEach(function (row) {
+      var r = perfEl("div", "perf-agrow");
+      var nm = perfEl("div", "nm", row.name);
+      var keptN = row.cells.filter(function (c) { return !c.p.now && c.ok === true; }).length, doneN = row.cells.filter(function (c) { return !c.p.now && c.ok != null; }).length;
+      nm.appendChild(perfEl("small", null, doneN ? keptN + " of " + doneN + " kept" + (row.target ? " · target " + fmt(row.target.target) + " a " + (row.target.period || "month") : "") : "no past periods to judge yet"));
+      var cs = perfEl("div", "cells");
+      row.cells.forEach(function (c) {
+        var dot = perfEl("span", "perf-dot " + (c.p.now ? "now" : c.ok === true ? "ok" : c.ok === false ? "miss" : "unk"));
+        dot.textContent = c.p.now ? "…" : c.ok === true ? "✓" : c.ok === false ? "✕" : "?";
+        var tip = perfShort(c.p.from) + " – " + perfShort(c.p.to) + (c.p.now ? " (running now)" : "") + ": ";
+        if (row.social) tip += c.gaps.length ? c.gaps.join(" · ") : (c.p.now ? "on track so far" : "kept");
+        else tip += c.v == null ? "not known" : fmt(c.v) + " of " + fmt(row.target.target) + (c.ok ? " — kept" : c.p.now ? "" : " — missed");
+        dot.title = tip;
+        cs.appendChild(dot);
+      });
+      r.append(nm, cs); t.appendChild(r);
+    });
+    box.appendChild(t);
+  });
+  box.appendChild(perfEl("div", "hint", "✓ kept · ✕ missed · ? not known · … running now. Hover a mark for the numbers.")).style.marginTop = "8px";
+}
+
+/* ---------- top bar button: right of Workspace ---------- */
+(function () {
+  var tries = 0;
+  var t = setInterval(function () {
+    tries++; if (tries > 240) { clearInterval(t); return; }
+    var ws = document.getElementById("nav-a"); if (!ws) return;
+    clearInterval(t);
+    if (document.getElementById("nav-perf")) return;
+    var b = perfEl("button", "corner-nav ghost", "📈 My Performance"); b.id = "nav-perf";
+    b.onclick = openPerformance;
+    ws.parentNode.insertBefore(b, ws.nextSibling);
+    /* show it only once signed in, like the other buttons */
+    setInterval(function () { b.style.display = (typeof currentUser === "function" && currentUser() && ws.style.display !== "none") ? "" : "none"; }, 1000);
+  }, 300);
+})();
+
+(function () {
+  var css = ".perf-pick{border:1px solid var(--line-strong);border-radius:99px;padding:7px 12px;background:var(--card);font:inherit;font-size:13px}"
+    + ".perf-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:18px 0 8px}"
+    + ".perf-tile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}"
+    + ".perf-tile .n{font-size:26px;font-weight:750;font-family:var(--disp)}.perf-tile .l{font-size:13px;font-weight:600}.perf-tile .s{font-size:12px;color:var(--muted);margin-top:2px}"
+    + ".perf-sec{margin:26px 0 0}.perf-sec h2{font-family:var(--disp);font-size:19px;margin:0 0 12px}"
+    + ".perf-sub{font-family:var(--mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:12px 0 6px}"
+    + ".perf-empty{color:var(--muted);padding:18px;border:1.5px dashed var(--line-strong);border-radius:14px;text-align:center}"
+    + ".perf-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:0 0 10px}"
+    + ".perf-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px}"
+    + ".perf-lv{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#B4541A;background:#FFF1E8;border-radius:99px;padding:2px 8px}"
+    + ".perf-how{color:var(--muted)}.perf-pct{margin-left:auto;font-family:var(--mono);font-weight:700}"
+    + ".perf-title{font-weight:700;font-size:14.5px;margin:6px 0 8px}"
+    + ".perf-bar{height:6px;border-radius:99px;background:var(--line);overflow:hidden}.perf-bar i{display:block;height:100%}"
+    + ".perf-krs{list-style:none;margin:10px 0 0;padding:0}.perf-krs li{display:flex;gap:10px;justify-content:space-between;font-size:13px;padding:5px 0;border-top:1px dashed var(--line)}"
+    + ".perf-krs .v{flex:none;font-family:var(--mono);font-size:11.5px;font-weight:600}"
+    + ".perf-table{background:var(--card);border:1px solid var(--line);border-radius:12px}"
+    + ".perf-trow{display:flex;gap:14px;align-items:baseline;flex-wrap:wrap;padding:10px 14px;border-top:1px solid var(--line)}.perf-trow:first-child{border-top:0}"
+    + ".perf-note{color:var(--muted);font-size:13px;flex-basis:100%}.perf-note:empty{display:none}"
+    + ".perf-ag{background:var(--card);border:1px solid var(--line);border-radius:12px}"
+    + ".perf-agrow{display:flex;align-items:center;gap:14px;padding:10px 14px;border-top:1px solid var(--line);flex-wrap:wrap}.perf-agrow:first-child{border-top:0}"
+    + ".perf-agrow .nm{flex:1;min-width:200px;font-weight:600;font-size:13.5px}.perf-agrow .nm small{display:block;font-weight:500;color:var(--muted);font-size:12px}"
+    + ".perf-agrow .cells{display:flex;gap:5px;flex-wrap:wrap}"
+    + ".perf-dot{width:24px;height:24px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;cursor:help}"
+    + ".perf-dot.ok{background:var(--done-bg,#E3F4EA);color:var(--done,#2E9466)}.perf-dot.miss{background:#FDE8E6;color:#B42318}"
+    + ".perf-dot.unk{background:#EEF1F5;color:#64748B}.perf-dot.now{background:var(--indigo-soft);color:var(--indigo);border:1px dashed var(--indigo)}"
+    + "#nav-perf.on{background:var(--indigo);color:#fff}"
+    + "@media(max-width:760px){.perf-tiles{grid-template-columns:repeat(2,1fr)}}";
+  var st = document.createElement("style"); st.textContent = css; (document.head || document.documentElement).appendChild(st);
+})();
