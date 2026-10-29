@@ -189,6 +189,14 @@ th.sortable:hover,th.sorted{color:var(--accent)}
 .tchip{font-size:12px;border:1px solid var(--line);background:var(--surface-4);border-radius:999px;padding:4px 11px;color:var(--ink-2);white-space:nowrap}
 .tchip b{color:var(--ink);font-variant-numeric:tabular-nums}
 details.fdrop{margin-bottom:14px}
+.okr .fdrop{margin:12px 0 0}
+.okr-from{display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:var(--ink-3);margin:2px 0 8px}.okr-from b{color:var(--ink-2)}
+.wl{border:1px solid var(--line);border-radius:10px;overflow:hidden;max-height:320px;overflow-y:auto}
+.wl-r{display:grid;grid-template-columns:1fr 90px 110px 28px;gap:8px;align-items:center;padding:7px 12px;border-bottom:1px solid var(--line);font-size:12.5px}
+.wl-r:last-child{border-bottom:0}.wl-r b{font-family:var(--mono,monospace);text-align:right}
+.wl-r.ok b,.wl-r.ok .wl-m{color:var(--good)}.wl-r.miss b,.wl-r.miss .wl-m{color:var(--crit)}
+.wl-r>span:first-child{color:var(--ink-2);font-family:var(--sans,inherit);font-size:12.5px}
+.wl-r.now{background:var(--surface-4)}.wl-n{color:var(--ink-3);font-size:11.5px;text-align:right}.wl-m{font-weight:700;text-align:center}
 details.fdrop>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border:1px solid var(--line-2);border-radius:99px;background:var(--surface,#fff);font-size:13px;font-weight:600;color:var(--ink-2)}
 details.fdrop>summary::-webkit-details-marker{display:none}
 details.fdrop>summary:hover{border-color:var(--accent-ink)}
@@ -1092,6 +1100,9 @@ function normTargets(o){
     /* who's accountable: ⭐ one manager-level person per platform, and 👥 people ticked on each line
        (keys "yt:total", "yt:time", "yt:<metric>"), counted in their 📈 My Performance */
     lead:{ yt:((o.lead||{}).yt)||"", ig:((o.lead||{}).ig)||"" },
+    /* where the subscriber / follower target started: {v, d} — set when the target is saved, so progress
+       counts from there (not from zero) */
+    start:{ yt:((o.start||{}).yt)||null, ig:((o.start||{}).ig)||null },
     who:(o.who && typeof o.who==="object") ? o.who : {} };
   t.goals.forEach(g=>{ if(!g.id) g.id=uid("g"); });
   return t;
@@ -1118,6 +1129,24 @@ function goalHTML(g,col){
     <div class="meter"><i style="width:${pc}%;background:${cur>=tgt&&tgt?"var(--good)":col}"></i></div>
     ${m.untracked?proofHTML(g):""}
     <div class="gf"><span>${Math.round(pc)}%</span><span>${cur>=tgt&&tgt?"reached 🎉":m.noRate?`${left} day${left===1?"":"s"} left`:`${fmt(Math.max(0,tgt-cur))} to go · ${left} day${left===1?"":"s"} left`}</span></div></div>`;
+}
+/* 📅 week by week since the target started: each week's gain against the gain needed per week */
+function weekLog(k, series, st, tgt){
+  const mon=d=>{ const x=new Date(d+"T00:00:00"); x.setDate(x.getDate()-((x.getDay()+6)%7)); return iso(x); };
+  const need=Math.max(0, Math.ceil((tgt-st.v)/weeksTo(TG.by&&TG.by[k], st.d)));
+  const rows=[]; let w=mon(st.d); const end=today();
+  while(w<=end && rows.length<60){ const we=addDays(w,6);
+    const a=valueAt(series, addDays(w,-1)) ?? (w<=st.d?st.v:null), b=valueAt(series, we<end?we:end);
+    if(a!=null && b!=null) rows.push({ w, gain:b-a, now: we>=end });
+    w=addDays(w,7); }
+  if(!rows.length) return "";
+  const met=rows.filter(r=>!r.now && r.gain>=need).length, done=rows.filter(r=>!r.now).length;
+  const body=rows.slice().reverse().map(r=>`<div class="wl-r ${r.now?"now":r.gain>=need?"ok":"miss"}">
+      <span>${r.now?"This week":"Week of "+dmy(r.w)}</span>
+      <b>${r.gain>=0?"+":"−"}${fmt(Math.abs(r.gain))}</b>
+      <span class="wl-n">needed +${fmt(need)}</span>
+      <span class="wl-m">${r.now?"…":r.gain>=need?"✓":"✕"}</span></div>`).join("");
+  return fdrop("wl-"+k, `📅 Week by week · ${done?met+" of "+done+" weeks on pace":"first week running"}`, `<div class="wl">${body}</div>`);
 }
 /* 📎 hand-counted targets (webinars, community posts…) need proof: each one done is added with a link and/or a
    screenshot, and the count is the proofs added (plus any number typed before proofs existed) */
@@ -1250,6 +1279,9 @@ function renderTargets(){
   $("#tSave").onclick=()=>{ readTargets();
     if(!(TDRAFT.targets.yt>0)||!(TDRAFT.targets.ig>0)){ toast("Subscriber and follower targets must be numbers above zero"); return; }
     TDRAFT.goals=TDRAFT.goals.filter(g=>g.target>0);
+    /* a new total target (or none recorded yet) starts counting from today's count */
+    ["yt","ig"].forEach(pl=>{ const ser=pl==="yt"?ytSeries():igSeries(), last=ser.length?ser[ser.length-1]:null;
+      if(last && (!TDRAFT.start[pl] || Number(TDRAFT.targets[pl])!==Number(TG.targets[pl]) || (TDRAFT.by[pl]||"")!==(TG.by[pl]||""))) TDRAFT.start[pl]={ v:last.v, d:last.d }; });
     TG=normTargets(TDRAFT); TDRAFT=null;
     if(OPT.saveTargets){ OPT.saveTargets(SPACE, normTargets(TG)); toast("Targets saved"); } };
 }
@@ -1795,15 +1827,18 @@ function renderSummary(){
         <div class="okr-foot"><span>${isLive?"Waiting for the first sync":"No count entered yet"}</span>
         ${isLive?"":`<button class="btn sm" data-updf="1">Add the first count</button>`}</div>${more(k,col)}</div>`;
     const last=series[series.length-1], wk=valueAt(series, addDays(last.d,-7));
-    const cur=last.v, pct=Math.min(100,cur/tgt*100), delta=wk!=null?cur-wk:null;
+    /* progress counts from where the target started, not from zero */
+    const st=(TG.start&&TG.start[k]&&TG.start[k].v!=null) ? TG.start[k] : series[0];
+    const cur=last.v, gap=Math.max(1, tgt-st.v), gained=cur-st.v, pct=Math.max(0,Math.min(100,gained/gap*100)), delta=wk!=null?cur-wk:null;
     return `<div class="okr"><div class="okr-top">
       <div><div class="lbl" style="margin-bottom:4px">${n} ${AUD(k)} ${isLive?`<span class="badge good" style="margin-left:4px">live</span>`:`<span class="badge mute" style="margin-left:4px">manual</span>`}</div><div class="okr-v">${fmt(cur)} <small>/ ${fmt(tgt)}</small></div></div>
       <div style="text-align:right">
-        ${delta!=null?`<div class="okr-t" style="color:${delta>=0?"var(--good)":"var(--crit)"}">${delta>=0?"+":"−"}${fmt(Math.abs(delta))} this week</div>`:`<div class="okr-t">as of ${dmy(last.d)}</div>`}</div></div>
+        ${delta!=null?`<div class="okr-t" style="color:${delta>0?"var(--good)":"var(--crit)"}">${delta>=0?"+":"−"}${fmt(Math.abs(delta))} this week</div>`:`<div class="okr-t">as of ${dmy(last.d)}</div>`}</div></div>
+      <div class="okr-from"><span>Started at <b>${fmt(st.v)}</b> on ${dmy(st.d)}</span><span>→</span><span>now <b>${fmt(cur)}</b></span><span>→</span><span>target <b>${fmt(tgt)}</b></span></div>
       <div class="meter"><i style="width:${pct}%;background:${col}"></i></div>
-      <div class="okr-foot"><span>${pct.toFixed(1)}% of target</span>
-        <span class="num">${cur>=tgt?"target reached 🎉":(()=>{ const p=paceNeeded(k, cur, tgt); return `${fmt(tgt-cur)} to go · needs +${fmt(p.need)}/wk for ${p.w} week${p.w===1?"":"s"}${TG.by&&TG.by[k]?" (by "+dmy(TG.by[k])+")":""}`; })()}</span></div>${more(k,col)}</div>`; };
-
+      <div class="okr-foot"><span><b style="color:${gained>0?"var(--good)":"var(--crit)"}">${gained>=0?"+":"−"}${fmt(Math.abs(gained))}</b> of +${fmt(tgt-st.v)} gained · ${pct.toFixed(1)}%</span>
+        <span class="num">${cur>=tgt?"target reached 🎉":(()=>{ const p=paceNeeded(k, cur, tgt); return `${fmt(tgt-cur)} to go · needs +${fmt(p.need)}/wk for ${p.w} week${p.w===1?"":"s"}${TG.by&&TG.by[k]?" (by "+dmy(TG.by[k])+")":""}`; })()}</span></div>
+      ${weekLog(k, series, st, tgt)}${more(k,col)}</div>`; };
   $("#pane-summary").innerHTML=`
    <div class="platsw">${[["all","Both platforms"],["yt","YouTube only"],["ig","Instagram only"]].map(([k,l])=>
      `<button data-pview="${k}" class="${PLATVIEW===k?"on":""}">${k==="yt"?`<span class="sdot" style="background:var(--c1)"></span>`:k==="ig"?`<span class="sdot" style="background:var(--c3)"></span>`:""}${l}</button>`).join("")}
