@@ -100,3 +100,12 @@ Everything is saved in the same `monthly_feedback.answers`, so the review reader
 ### Last date (stage 22e)
 
 Owners pick the last date in My Team → Monthly feedback → ⚙️ Settings → **Last date to send**: any day from the 1st to the 25th of the next month (the default is the 10th). Push it later when people need more time, and it applies straight away. Late sends, reminders and the month-end OKR check-in all follow it. Stored in `feedback_settings.late_day`. Run `supabase/stage22e_feedback_last_day.sql`.
+
+### Account lock (stage 22f)
+
+Owners can tick **🔒 Lock the account of anyone who hasn't sent it by the last date** in ⚙️ Settings. It works like the HR rules' lock:
+- Once a month's last date has passed, anyone who still hasn't sent that month's feedback sees a full-page lock screen (`#fb-lock`) with the feedback form in it. They can still send it, marked late, and everything opens again straight away.
+- Only months whose last date falls after the lock was switched on count (`feedback_settings.lock_since`), so switching it on never locks people for old months.
+- Super-admins are left out.
+- My Team → Monthly feedback marks locked people **🔒 locked**.
+- Server: `feedback_locked_month()`, `feedback_me()` (adds `locked`), `feedback_save()` (a locked month can still be sent), `feedback_set_lock()` and `feedback_locked_people()`. Run `supabase/stage22f_feedback_lock.sql` after 22e.

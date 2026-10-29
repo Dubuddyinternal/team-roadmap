@@ -164,7 +164,7 @@ function fbWindow(k) {
   return "closed";
 }
 /* the month someone should be filling in now, or null */
-function fbTargetMonth() { return fbWindow(fbCur()) === "open" ? fbCur() : fbWindow(fbPrev()) === "late" ? fbPrev() : null; }
+function fbTargetMonth() { if (typeof FBN !== "undefined" && FBN.me && FBN.me.locked && FBN.me.month) return FBN.me.month; return fbWindow(fbCur()) === "open" ? fbCur() : fbWindow(fbPrev()) === "late" ? fbPrev() : null; }
 function fbUser(id) { return (typeof USERS !== "undefined" ? USERS : []).find(function (u) { return u.id === id; }) || null; }
 function fbName(id) { var u = fbUser(id); return u ? userDisplayName(u) : "Someone"; }
 function fbIsOwner() { var u = currentUser(); return !!u && (u.super || roleOf(u, TEAM) === "owner"); }
@@ -194,6 +194,9 @@ function fbErr(e) { return (e && (e.message || e.error_description)) || String(e
 /* ---------- styles ---------- */
 (function () {
   var css = ""
+    + "#fb-lock{position:fixed;inset:0;z-index:596;background:rgba(250,245,240,.98);overflow-y:auto;padding:30px 16px}"
+    + "#fb-lock .box{max-width:760px;margin:0 auto}#fb-lock .top{text-align:center;background:#fff;border:1px solid var(--line,#E5DDD5);border-radius:16px;padding:24px 22px;margin-bottom:16px}"
+    + "#fb-lock .big{font-size:40px}#fb-lock h2{margin:6px 0 8px}#fb-lock .top p{color:var(--muted,#6B5F57);font-size:14px;line-height:1.55;margin:0}"
     + ".fb-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:0 0 14px}"
     + ".fb-hero{background:linear-gradient(135deg,var(--indigo-soft),#FFF8F2);border-color:#F5CDB6}"
     + ".fb-hero h3{font-size:18px;margin:0 0 4px}.fb-hero p{color:var(--muted);font-size:13.5px;margin:0}"
@@ -380,9 +383,12 @@ function fbForm(month, row, onSent) {
   var ans = Object.assign({}, (row && row.answers) || {});
   var card = fbEl("div");
   var hero = fbEl("div", "fb-card fb-hero");
-  var late = fbWindow(month) === "late";
+  var locked = !!(typeof FBN !== "undefined" && FBN.me && FBN.me.locked && FBN.me.month === month);
+  var late = locked || fbWindow(month) === "late";
   hero.appendChild(fbEl("h3", "", (late ? "⏰ " : "✍️ ") + "Your " + fbLabel(month, true) + " feedback"));
-  hero.appendChild(fbEl("p", "", late
+  hero.appendChild(fbEl("p", "", locked
+    ? "The last date for this has passed, so your account is locked. Send it now (it'll be marked late) and everything opens again straight away."
+    : late
     ? "This was due on " + fbLastDay(month) + " " + fbLabel(month, true) + " — you can still send it until the " + fbNth(fbLateDay()) + ". It'll be marked late."
     : "Due by " + fbLastDay(month) + " " + fbLabel(month, true) + ". 3 steps, about 15 minutes. Starred questions are needed to send it; your draft saves itself."));
   card.appendChild(hero);
@@ -564,8 +570,10 @@ function fbRenderTeamView() {
   canvas.innerHTML = "";
   var holder = fbEl("div", "hint", "Loading…"); canvas.appendChild(holder);
   var month = FB.month, me = currentUser();
-  Promise.all([fbLoadSettings(), SUPA.rpc("feedback_overview", { p_team: TEAM, p_month: month })]).then(function (res) {
+  Promise.all([fbLoadSettings(), SUPA.rpc("feedback_overview", { p_team: TEAM, p_month: month }),
+    SUPA.rpc("feedback_locked_people", { p_team: TEAM }).then(function (x) { return x; }, function () { return { data: [] }; })]).then(function (res) {
     if (month !== FB.month) return;
+    var lockedFor = {}; ((res[2] && !res[2].error && res[2].data) || []).forEach(function (x) { lockedFor[x.user_id] = x.month; });   /* stage 22f */
     holder.className = ""; holder.innerHTML = "";
     if (res[1].error) { holder.className = "hint"; holder.textContent = "Couldn't load: " + res[1].error.message; return; }
     var rows = (res[1].data || []).filter(function (r) { return !(me.super && r.user_id === me.id); });
@@ -609,6 +617,7 @@ function fbRenderTeamView() {
       var stc = fbEl("div");
       stc.appendChild(fbEl("span", "fb-chip " + r.status, r.status === "submitted" ? "✓ Sent " + fbDate(r.submitted_at) : r.status === "draft" ? "✎ Draft" : "Not started"));
       if (r.late) { stc.appendChild(document.createTextNode(" ")); stc.appendChild(fbEl("span", "fb-chip late", "late")); }
+      if (lockedFor[r.user_id]) { stc.appendChild(document.createTextNode(" ")); var lc = fbEl("span", "fb-chip late", "🔒 locked"); lc.title = "Account locked until they send their " + fbLabel(lockedFor[r.user_id], true) + " feedback"; stc.appendChild(lc); }
       var mt = fbEl("div", "hide-s");
       mt.appendChild(r.discussed_at ? fbEl("span", "fb-chip submitted", "🤝 " + fbDate(r.discussed_at)) : fbEl("span", "hint", r.status === "submitted" ? "to discuss" : "—"));
       var act = fbEl("div");
@@ -761,6 +770,11 @@ function fbSettingsDialog() {
   var ll = fbEl("label", "", "Last date to send (day of the next month)"); var sl = fbEl("select");
   for (var ld = 1; ld <= 25; ld++) { var ol = fbEl("option", "", fbNth(ld) + " of the next month" + (ld === 10 ? " (usual)" : "")); ol.value = ld; if (ld === fbLateDay()) ol.selected = true; sl.appendChild(ol); }
   fl.append(ll, sl);
+  var lkl = fbEl("label"); lkl.style.cssText = "display:flex;gap:8px;align-items:center;margin-top:12px";
+  var lkc = fbEl("input"); lkc.type = "checkbox"; lkc.checked = !!(FB.settings && FB.settings.lock_on);
+  lkl.append(lkc, document.createTextNode("🔒 Lock the account of anyone who hasn't sent it by the last date"));
+  var lkh = fbEl("div", "hint", "Like the HR rules: they see a lock screen with the form in it until they send it. Only counts from the next last date after you switch it on. Super-admins are left out.");
+  lkh.style.marginTop = "4px";
   var h = fbEl("div", "hint", "From the open day, everyone who hasn't sent theirs gets a 🔔 and a pop-up every morning (9:30) until they do. It's due on the last day of the month; after that it can still be sent, marked late, until the last date. Need to give people more time? Pick a later day here — it applies straight away.");
   h.style.marginTop = "10px";
   var fe = fbEl("div", "field"); fe.style.marginTop = "14px";
@@ -783,7 +797,7 @@ function fbSettingsDialog() {
   fm.append(lm, sm);
   var h3 = fbEl("div", "hint", "Everyone who owns an objective or key result updates their numbers on that day, and again at month end together with their feedback. Same reminders as the feedback until it's done.");
   h3.style.marginTop = "6px";
-  body.append(on, f, fl, h, fe, stl, h2, okl, fm, h3);
+  body.append(on, f, fl, lkl, lkh, h, fe, stl, h2, okl, fm, h3);
   var btns = fbEl("div", "btns");
   var c = fbEl("button", "btn", "Cancel"), sv = fbEl("button", "btn save", "Save");
   c.onclick = function () { bg.remove(); };
@@ -801,6 +815,11 @@ function fbSettingsDialog() {
         var r4 = await SUPA.rpc("feedback_set_late_day", { p_team: TEAM, p_day: +sl.value });
         if (r4.error) { sv.disabled = false; toast(/feedback_set_late_day/.test(r4.error.message) ? "To change the last date, run supabase/stage22e_feedback_last_day.sql in Supabase first." : "Couldn't save the last date: " + r4.error.message); return; }
         r = r4;
+      }
+      if (lkc.checked !== !!(FB.settings && FB.settings.lock_on)) {
+        var r5 = await SUPA.rpc("feedback_set_lock", { p_team: TEAM, p_on: lkc.checked });
+        if (r5.error) { sv.disabled = false; toast(/feedback_set_lock/.test(r5.error.message) ? "To use the lock, run supabase/stage22f_feedback_lock.sql in Supabase first." : "Couldn't save the lock: " + r5.error.message); return; }
+        r = r5;
       }
     }
     sv.disabled = false;
@@ -942,7 +961,8 @@ async function fbNudgeCheck() {
   var s = (!r.error && r.data) || { pending: false };
   var o = (!ro.error && ro.data) || { pending: false };   /* stage 22a / 22b not run yet: stay quiet */
   FBN.me = s; FBN.okr = o;
-  fbNudgeStrip(s.pending && s.strip ? s : null, o.pending && o.strip !== false ? o : null);
+  fbLockScreen(s.pending && s.locked ? s : null);
+  fbNudgeStrip(s.pending && s.strip && !s.locked ? s : null, o.pending && o.strip !== false ? o : null);
   fbNudgeMark(s.pending ? s : null);
   okrNudgeMark(o.pending ? o : null);
   var day = new Date().toISOString().slice(0, 10);
@@ -953,6 +973,27 @@ async function fbNudgeCheck() {
     var key2 = "okr-nudge-" + o.period + "-" + day;
     try { if (!localStorage.getItem(key2)) { localStorage.setItem(key2, "1"); toast("🎯 Your OKR check-in is waiting: Administration → My OKR check-in"); } } catch (_) { }
   }
+}
+/* 🔒 stage 22f: past the last date and still not sent → a lock screen with the form in it */
+function fbLockScreen(s) {
+  var lk = document.getElementById("fb-lock");
+  if (!s) { if (lk) lk.remove(); return; }
+  if (lk && lk.dataset.month === s.month) return;   /* already showing: keep what they've typed */
+  if (lk) lk.remove();
+  lk = fbEl("div"); lk.id = "fb-lock"; lk.dataset.month = s.month;
+  var box = fbEl("div", "box");
+  var top = fbEl("div", "top");
+  top.append(fbEl("div", "big", "🔒"), fbEl("h2", "", "Your account is paused"),
+    fbEl("p", "", "Your " + fbLabel(s.month, true) + " feedback wasn't sent by the last date, so the rest of the tools are locked for now. Fill it in below and press Send — everything opens again straight away."));
+  var out = fbEl("button", "btn", "Sign out"); out.onclick = function () { if (typeof logout === "function") logout(); };
+  out.style.marginTop = "10px"; top.appendChild(out);
+  var formWrap = fbEl("div", "form");
+  box.append(top, formWrap); lk.appendChild(box); document.body.appendChild(lk);
+  fbLoadSettings().then(function () {
+    SUPA.from("monthly_feedback").select("*").eq("team_slug", TEAM).eq("user_id", currentUser().id).eq("month", s.month).maybeSingle().then(function (r) {
+      formWrap.appendChild(fbForm(s.month, r.data || null, function () { fbNudgeCheck(); }));
+    });
+  });
 }
 function fbNudgeStrip(s, o) {
   var bar = document.getElementById("fb-strip");
