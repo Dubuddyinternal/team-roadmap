@@ -1185,6 +1185,31 @@ function weekLog(k, series, st, tgt){
       <span class="wl-m">${r.now?"…":r.gain>=need?"✓":"✕"}</span></div>`; }).join("");
   return fdrop("wl-"+k, `📅 Week by week · ${done?met+" of "+done+" weeks on pace":"first week running"}`, `<div class="wl">${head}${body}</div>`);
 }
+/* 📅 the agreement week by week: for each weekly (or daily ×7) target, how many were posted in each week since
+   the "counting from" date — like the subscriber log above */
+function postLog(k, gs){
+  gs=gs.filter(g=>g.period==="week"||g.period==="day");
+  if(!gs.length) return "";
+  const mon=d=>{ const x=new Date(d+"T00:00:00"); x.setDate(x.getDate()-((x.getDay()+6)%7)); return iso(x); };
+  const end=today(), weeks=[]; let w=mon((TG.from&&TG.from[k])||quarterStart());
+  while(w<=end && weeks.length<60){ weeks.push(w); w=addDays(w,7); }
+  if(!weeks.length) return "";
+  const valIn=(g,ws)=>{ const m=GOAL_METRICS[g.metric], we=addDays(ws,6);
+    if(m.untracked){ if(g.period!=="week") return null; const v=S.manual[`${g.platform}:${g.metric}:${ws}`]; return v==null?0:Number(v); }
+    return m.calc(postRows().filter(r=>r.platform===g.platform && r.date && r.date>=ws && r.date<=we)); };
+  const tgtOf=g=>(Number(g.target)||0)*(g.period==="day"?7:1);
+  const cols=`minmax(92px,1fr) ${gs.map(()=>"minmax(64px,auto)").join(" ")} 54px`;
+  const short=g=>{ const l=GOAL_METRICS[g.metric].label; return l.length>14?l.split(" ")[0]:l; };
+  const head=`<div class="wl-r wl-h" style="grid-template-columns:${cols}"><span>Week</span>${gs.map(g=>`<span title="${esc(GOAL_METRICS[g.metric].label)} · ${fmt(tgtOf(g))} a week">${esc(short(g))}</span>`).join("")}<span>Kept</span></div>`;
+  let kept=0, full=0;
+  const body=weeks.slice().reverse().map(ws=>{ const now=addDays(ws,6)>=end; let ok=0, n=0;
+    const cells=gs.map(g=>{ const v=valIn(g,ws), t=tgtOf(g); if(v==null) return `<span class="wl-n">—</span>`; n++; const hit=v>=t; if(hit) ok++;
+      return `<span class="wl-at ${hit?"ahead":now?"":"behind"}" title="${esc(GOAL_METRICS[g.metric].label)}: ${fmt(v)} of ${fmt(t)}">${fmt(v)}<small style="color:var(--ink-3);font-weight:400">/${fmt(t)}</small></span>`; }).join("");
+    if(!now){ full++; if(n && ok===n) kept++; }
+    return `<div class="wl-r ${now?"now":n&&ok===n?"ok":"miss"}" style="grid-template-columns:${cols}">
+      <span>${now?"This week":"Week of "+dmy(ws)}</span>${cells}<span class="wl-m">${now?"…":n?ok+"/"+n:"—"}</span></div>`; }).join("");
+  return fdrop("pl-"+k, `📅 Posted week by week · ${full?kept+" of "+full+" weeks fully kept":"first week running"}`, `<div class="wl">${head}${body}</div>`);
+}
 /* 📎 hand-counted targets (webinars, community posts…) need proof: each one done is added with a link and/or a
    screenshot, and the count is the proofs added (plus any number typed before proofs existed) */
 function proofHTML(g){
@@ -1863,7 +1888,7 @@ function renderSummary(){
   const yt=ytSeries(), ig=igSeries();
   const more=(k,col)=>{ const gs=TG.goals.filter(g=>g.platform===k&&g.target>0), n=gs.length+(TG.plan[k].time?1:0), open=!!OKR_OPEN[k];
     return `<div class="okr-more ${open?"open":""}"><button data-okrmore="${k}">${open?"▴":"▾"} Agreement status (${n})</button>
-      ${open?(n?postingTimeHTML(k,col)+gs.map(g=>goalHTML(g,col)).join(""):`<p class="hint" style="margin:8px 0 0">No agreement targets for ${PLAT_NAME[k]} yet — set them in the <b>Our agreement</b> tab.</p>`):""}</div>`; };
+      ${open?(n?postingTimeHTML(k,col)+gs.map(g=>goalHTML(g,col)).join("")+postLog(k,gs):`<p class="hint" style="margin:8px 0 0">No agreement targets for ${PLAT_NAME[k]} yet — set them in the <b>Our agreement</b> tab.</p>`):""}</div>`; };
   const okr=(k,n,col,series,isLive)=>{
     const tgt=TG.targets[k];
     if(!series.length) return `<div class="okr"><div class="okr-top"><div><div class="lbl" style="margin-bottom:4px">${n} ${AUD(k)}</div>
