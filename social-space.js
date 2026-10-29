@@ -188,6 +188,12 @@ th.sortable:hover,th.sorted{color:var(--accent)}
 .tchips{display:flex;gap:7px;flex-wrap:wrap}
 .tchip{font-size:12px;border:1px solid var(--line);background:var(--surface-4);border-radius:999px;padding:4px 11px;color:var(--ink-2);white-space:nowrap}
 .tchip b{color:var(--ink);font-variant-numeric:tabular-nums}
+details.fdrop{margin-bottom:14px}
+details.fdrop>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border:1px solid var(--line-2);border-radius:99px;background:var(--surface,#fff);font-size:13px;font-weight:600;color:var(--ink-2)}
+details.fdrop>summary::-webkit-details-marker{display:none}
+details.fdrop>summary:hover{border-color:var(--accent-ink)}
+details.fdrop[open]>summary .fdc{display:inline-block;transform:rotate(180deg)}
+details.fdrop .fdb{margin-top:10px}
 .pf-list{display:flex;flex-direction:column;gap:6px;margin:8px 0 2px}
 .pf-item{display:flex;align-items:center;gap:10px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface,#fff)}
 .pf-item img{width:44px;height:44px;object-fit:cover;border-radius:6px;cursor:zoom-in;flex:none}
@@ -674,6 +680,12 @@ function blankCard(o){ return Object.assign({ id:uid("c"), ideaId:null, idea:"",
 let SPACE=null, S=null, IDEAS=[], CARDS=[], REG=DEFAULT_REG, HOST=null, R=null, OPT={};
 let TAB="summary", CHARTMODE="bar";
 const FILTERS = { period:"month", vtypes:null, platforms:null };
+/* filter chips folded away under one "🔎 Filters · … ▾" line (stays open once opened) */
+const FDROP_OPEN = {};
+function fdrop(key, label, inner){
+  return `<details class="fdrop" data-fdrop="${key}" ${FDROP_OPEN[key]?"open":""}><summary>${esc(label)} <span class="fdc">▾</span></summary><div class="fdb">${inner}</div></details>`;
+}
+function wireFdrop(root){ root.querySelectorAll("details.fdrop").forEach(d=>{ d.ontoggle=()=>{ FDROP_OPEN[d.dataset.fdrop]=d.open; }; }); }
 const SCHED = { view:"month", cursor:null, vtypes:null, platforms:null };
 const LIVE = { team:null, status:"idle", posts:[], snaps:[], geo:[], lastAt:null, err:"", syncing:false };
 
@@ -1799,12 +1811,12 @@ function renderSummary(){
      <button class="btn pri" id="cmpOpen" style="margin-left:auto">⇄ Compare Instagram vs YouTube</button></div>
    ${liveBar()}
 
-   <div class="sec"><div class="row" style="margin-bottom:14px">
+   <div class="sec">${fdrop("sum", `🔎 Filters · ${FILTERS.period==="week"?"Last 7 days":FILTERS.period==="month"?"Last 30 days":"Last 90 days"} · ${(()=>{ const all=Object.keys(REG.vtype).filter(typeVisible), on=all.filter(k=>FILTERS.vtypes.includes(k)); return on.length===all.length?"all types":on.length+" of "+all.length+" types"; })()}`, `<div class="row">
      <span class="lbl">Period</span>
      ${["week","month","quarter"].map(p=>`<button class="chip ${FILTERS.period===p?"on":""}" data-period="${p}">${p==="week"?"Last 7 days":p==="month"?"Last 30 days":"Last 90 days"}</button>`).join("")}
      <span style="width:8px"></span><span class="lbl">Type</span>
      ${Object.keys(REG.vtype).filter(typeVisible).map(k=>`<button class="chip ${FILTERS.vtypes.includes(k)?"on":""}" data-vt="${k}">${esc(vtypeLabel(k))}</button>`).join("")}
-   </div></div>
+   </div>`)}</div>
 
    <div class="sec"><div class="sec-h"><h3>OKR progress</h3>
      <span class="hint">Two separate goals, never a combined audience number</span>
@@ -1865,6 +1877,7 @@ function renderSummary(){
   P.querySelectorAll("[data-updf]").forEach(b=>b.onclick=openFollowers);
   const sn=$("#syncNow"); if(sn) sn.onclick=syncNow;
   P.querySelectorAll("[data-okrmore]").forEach(b=>b.onclick=()=>{ OKR_OPEN[b.dataset.okrmore]=!OKR_OPEN[b.dataset.okrmore]; renderSummary(); });
+  wireFdrop(P);
   P.querySelectorAll("[data-pfadd]").forEach(b=>b.onclick=()=>openProof(b.dataset.pfadd, b.dataset.pfmetric));
   P.querySelectorAll("[data-pfimg]").forEach(i=>i.onclick=()=>{ if(typeof showPhoto==="function") showPhoto(i.dataset.pfimg); else window.open(i.dataset.pfimg,"_blank"); });
   P.querySelectorAll("[data-pfdel]").forEach(b=>b.onclick=()=>{ const [k,id]=b.dataset.pfdel.split("|"), list=S.proofs[k]||[], i=list.findIndex(p=>p.id===id); if(i<0) return;
