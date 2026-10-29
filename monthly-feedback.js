@@ -743,7 +743,7 @@ function fbManagerView(row) {
 }
 
 function fbSettingsDialog() {
-  var bg = fbEl("div", "overlay show"), dlg = fbEl("div", "dialog"); dlg.style.maxWidth = "460px";
+  var bg = fbEl("div", "overlay show"), dlg = fbEl("div", "dialog"); dlg.style.maxWidth = "460px"; bg.style.zIndex = "460";   /* above the My Team page (390) */
   dlg.setAttribute("role", "dialog"); dlg.setAttribute("aria-modal", "true");
   dlg.appendChild(fbEl("h3", "", "Monthly feedback settings"));
   var body = fbEl("div", "dlg-body");
