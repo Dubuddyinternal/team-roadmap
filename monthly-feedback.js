@@ -604,6 +604,7 @@ function renderAdminSuggestionBox(wrap) {
    ===================================================================== */
 var FBN = { me: null, timer: null };
 function fbOpenForm() {
+  if (typeof closePerformance === "function") closePerformance();
   if (typeof hrClosePage === "function") { var hp = document.getElementById("hr-page"); if (hp && hp.style.display !== "none") hrClosePage(); }
   if (typeof closeTeam === "function") closeTeam();
   if (typeof openAdmin === "function") openAdmin("myfeedback");
@@ -647,6 +648,7 @@ function fbNudgeStrip(s, o) {
   bar.classList.toggle("urgent", !!(s && s.late));
 }
 function okrOpenCheckin() {
+  if (typeof closePerformance === "function") closePerformance();
   if (typeof hrClosePage === "function") { var hp = document.getElementById("hr-page"); if (hp && hp.style.display !== "none") hrClosePage(); }
   if (typeof closeTeam === "function") closeTeam();
   if (typeof openAdmin === "function") openAdmin("okrcheckin");
