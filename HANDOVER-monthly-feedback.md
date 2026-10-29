@@ -65,6 +65,13 @@ Only **owners** (and Sumit) can change the org chart now, because the chart deci
 
 Questions 1, 2, 3, 5 and 10 must be answered before the form can be sent. The questions live in `FB_Q` in `monthly-feedback.js`.
 
+The form has **3 steps** (tabs at the top, Back / Next, Send on step 3):
+1. **Monthly feedback**: the questions above (`FB_Q`).
+2. **Personality**: tick the positive and negative traits you have (`FB_TRAITS_POS` / `FB_TRAITS_NEG`). At least one tick is needed. Stored as `answers.traits_pos` / `answers.traits_neg`.
+3. **Self-awareness** (`FB_SA`): what do I think of myself; what do my parents, my seniors or manager, my colleagues and my juniors think of me; where do I see myself in 3 years. All are required except juniors.
+
+Everything is saved in the same `monthly_feedback.answers`, so the review reader and My Performance show all three.
+
 ## Suggestion box
 
 - **Administration → 📮 Send to Sumit** (everyone): send a suggestion, improvement, complaint, appreciation or anything else, **anonymously** or **with your name**. Anonymous messages store no sender and only the day, not the time.

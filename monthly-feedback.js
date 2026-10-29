@@ -35,6 +35,25 @@ var FB_Q = [
   { k: "goals", type: "area", req: true, label: "Your top 3 goals for next month" },
   { k: "discuss", type: "area", label: "Anything you want to talk about in your review meeting?" }
 ];
+/* step 2 — personality: tick the traits you have (positive and negative) */
+var FB_TRAITS_POS = ["Adventurous", "Affectionate", "Ambitious", "Authentic", "Brave", "Calm", "Caring", "Charismatic", "Cheerful", "Clever",
+  "Confident", "Considerate", "Courageous", "Creative", "Curious", "Decisive", "Dependable", "Determined", "Diligent", "Diplomatic",
+  "Disciplined", "Easygoing", "Efficient", "Empathetic", "Encouraging", "Energetic", "Enthusiastic", "Expressive", "Fair", "Faithful",
+  "Flexible", "Forgiving", "Friendly", "Generous", "Genuine", "Gracious"];
+var FB_TRAITS_NEG = ["Aggressive", "Arrogant", "Critical", "Cynical", "Dishonest", "Disrespectful", "Envious", "Flaky", "Greedy", "Harsh",
+  "Hostile", "Impatient", "Inconsiderate", "Inflexible", "Insensitive", "Intolerant", "Irrational", "Irresponsible", "Judgmental", "Lazy",
+  "Manipulative", "Moody", "Needy", "Negative", "Nervous", "Obnoxious", "Overbearing", "Pessimistic", "Possessive", "Rude",
+  "Self-centered", "Selfish", "Stubborn", "Superficial", "Suspicious", "Thoughtless"];
+/* step 3 — self-awareness */
+var FB_SA = [
+  { k: "sa_me", type: "area", req: true, label: "What do I think of myself?", hint: "Honestly — your strengths, your weak spots, how you work." },
+  { k: "sa_parents", type: "area", req: true, label: "What do my parents think of me?" },
+  { k: "sa_seniors", type: "area", req: true, label: "What do my seniors / manager think of me?" },
+  { k: "sa_peers", type: "area", req: true, label: "What do my colleagues think of me?" },
+  { k: "sa_juniors", type: "area", label: "What do my juniors think of me?", hint: "Skip it if nobody reports to you." },
+  { k: "sa_3yrs", type: "area", req: true, label: "Where do I see myself in 3 years?" }
+];
+var FB_STEPS = [["1", "Monthly feedback"], ["2", "Personality"], ["3", "Self-awareness"]];
 var FB_KINDS = [
   ["suggestion", "💡 Suggestion"], ["improvement", "🛠 Improvement"], ["complaint", "😤 Complaint"],
   ["appreciation", "💛 Appreciation"], ["other", "💬 Something else"]
@@ -143,6 +162,23 @@ function fbErr(e) { return (e && (e.message || e.error_description)) || String(e
     + ".fb-box.new{border-color:#F5CDB6;box-shadow:0 0 0 3px var(--indigo-soft)}"
     + ".fb-box .top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;font-size:12.5px;color:var(--muted)}"
     + ".fb-box .msg{white-space:pre-wrap;font-size:14.5px}.fb-box .acts{display:flex;gap:8px;margin-top:10px}"
+    + ".fb-steps{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}"
+    + ".fb-step{display:inline-flex;align-items:center;gap:8px;border:1.5px solid var(--line-strong);background:#fff;border-radius:99px;padding:7px 14px 7px 7px;font-size:13.5px;font-weight:600;cursor:pointer;color:var(--ink)}"
+    + ".fb-step .n{width:24px;height:24px;border-radius:50%;background:var(--paper);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}"
+    + ".fb-step.done .n{background:var(--done-bg,#E3F4EA);color:var(--done,#2E9466)}"
+    + ".fb-step.on{border-color:var(--indigo);color:var(--indigo)}.fb-step.on .n{background:var(--indigo);color:#fff}"
+    + ".fb-stepintro{color:var(--muted);font-size:13.5px;margin:0 0 14px}"
+    + ".fb-traits{display:grid;grid-template-columns:1fr 1fr;gap:14px}"
+    + ".fb-tcol{border:2px solid #2F6DB5;border-radius:12px;overflow:hidden}.fb-tcol.neg{border-color:#D9443A}"
+    + ".fb-thead{background:#2F6DB5;color:#fff;font-weight:750;font-size:13.5px;text-transform:uppercase;letter-spacing:.03em;padding:9px 12px;display:flex;align-items:center;gap:8px}"
+    + ".fb-tcol.neg .fb-thead{background:#D9443A}.fb-tcount{margin-left:auto;font-size:11px;font-weight:600;text-transform:none;opacity:.9}"
+    + ".fb-tlist{display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;padding:8px 10px}"
+    + ".fb-tr{display:flex;align-items:center;gap:6px;font-size:13.5px;padding:5px 6px;border-radius:8px;cursor:pointer;user-select:none}"
+    + ".fb-tr input{width:16px;height:16px;accent-color:#2F6DB5;margin:0}.fb-tr.neg input{accent-color:#D9443A}"
+    + ".fb-tr.on.pos{background:#E8F0FB;color:#1F4E8C;font-weight:600}.fb-tr.on.neg{background:#FDECEA;color:#9B2A22;font-weight:600}"
+    + ".fb-q.miss .fb-traits{box-shadow:0 0 0 2px #F3B3AE;border-radius:12px}"
+    + ".fb-trview{display:flex;flex-wrap:wrap;gap:6px}.fb-trview .fb-tr{cursor:default;padding:3px 10px;border-radius:99px;font-size:12.5px}"
+    + "@media(max-width:700px){.fb-traits{grid-template-columns:1fr}}"
     + ".fb-empty{text-align:center;color:var(--muted);padding:28px 16px;border:1.5px dashed var(--line-strong);border-radius:14px}"
     + "@media(max-width:760px){.fb-stats{grid-template-columns:repeat(2,1fr)}.fb-row{grid-template-columns:1fr auto}.fb-row .hide-s{display:none}.fb-row.head{display:none}}";
   var st = document.createElement("style"); st.textContent = css;
@@ -152,14 +188,29 @@ function fbErr(e) { return (e && (e.message || e.error_description)) || String(e
 /* ---------- reading answers ---------- */
 function fbAnswersView(answers) {
   var w = fbEl("div");
-  FB_Q.forEach(function (q) {
+  var a0 = answers || {};
+  var qs = FB_Q.slice();
+  var hasSa = FB_SA.some(function (q) { return a0[q.k]; }), hasTr = Array.isArray(a0.traits_pos) || Array.isArray(a0.traits_neg);
+  if (hasTr) {
+    var tb = fbEl("div", "fb-ans");
+    tb.appendChild(fbEl("div", "q", "Personality — traits they ticked"));
+    var tw = fbEl("div", "fb-trview");
+    (a0.traits_pos || []).forEach(function (t) { tw.appendChild(fbEl("span", "fb-tr pos on", t)); });
+    (a0.traits_neg || []).forEach(function (t) { tw.appendChild(fbEl("span", "fb-tr neg on", t)); });
+    if (!tw.children.length) tw.appendChild(fbEl("span", "a none", "—"));
+    tb.appendChild(tw);
+  }
+  if (hasSa) qs = qs.concat(FB_SA);
+  qs.forEach(function (q) {
     var v = (answers || {})[q.k];
     var b = fbEl("div", "fb-ans");
     b.appendChild(fbEl("div", "q", q.label));
     var txt = v == null || v === "" ? "—" : q.type === "scale" ? (q.opts[+v - 1] || v) + " " + (q.names ? q.names[+v - 1] : "") : String(v);
     b.appendChild(fbEl("div", "a" + (v == null || v === "" ? " none" : ""), txt));
     w.appendChild(b);
+    if (q.k === FB_Q[FB_Q.length - 1].k && tb) w.appendChild(tb);
   });
+  if (tb && !w.contains(tb)) w.appendChild(tb);
   return w;
 }
 function fbMeetingView(row) {
@@ -243,19 +294,18 @@ function fbForm(month, row, onSent) {
   hero.appendChild(fbEl("h3", "", (late ? "⏰ " : "✍️ ") + "Your " + fbLabel(month, true) + " feedback"));
   hero.appendChild(fbEl("p", "", late
     ? "This was due on " + fbLastDay(month) + " " + fbLabel(month, true) + " — you can still send it until the 10th. It'll be marked late."
-    : "Due by " + fbLastDay(month) + " " + fbLabel(month, true) + ". About 10 minutes. Starred questions are needed to send it; your draft saves itself."));
+    : "Due by " + fbLastDay(month) + " " + fbLabel(month, true) + ". 3 steps, about 15 minutes. Starred questions are needed to send it; your draft saves itself."));
   card.appendChild(hero);
-  var form = fbEl("div", "fb-card");
   var qEls = {};
   var timer = null, dirty = false, st;
   function changed() { dirty = true; st.textContent = "Unsaved changes…"; clearTimeout(timer); timer = setTimeout(function () { save(false, true); }, 3500); }
-  FB_Q.forEach(function (q) {
+  function qBlock(q, parent) {
     var b = fbEl("div", "fb-q"); qEls[q.k] = b;
     var l = fbEl("label", "fb-l", q.label); if (q.req) l.appendChild(fbEl("span", "req", "*"));
     b.appendChild(l);
     if (q.hint) b.appendChild(fbEl("div", "fb-h", q.hint));
     if (q.type === "area") {
-      var t = fbEl("textarea"); t.value = ans[q.k] || ""; t.maxLength = 3000;
+      var t = fbEl("textarea"); t.value = ans[q.k] || ""; t.maxLength = q.k.indexOf("sa_") === 0 ? 1500 : 3000;
       t.oninput = function () { ans[q.k] = t.value; b.classList.remove("miss"); changed(); };
       b.appendChild(t);
     } else {
@@ -273,25 +323,88 @@ function fbForm(month, row, onSent) {
       });
       b.appendChild(opts);
     }
-    form.appendChild(b);
+    parent.appendChild(b);
+  }
+  /* the three steps */
+  var step = 0;
+  var tabs = fbEl("div", "fb-steps");
+  var panes = [fbEl("div", "fb-card"), fbEl("div", "fb-card"), fbEl("div", "fb-card")];
+  FB_Q.forEach(function (q) { qBlock(q, panes[0]); });
+  /* 2 · personality: tick what you have */
+  panes[1].appendChild(fbEl("div", "fb-stepintro", "Tick every trait you have — positive and negative. Leave the ones you don't have. Be honest: nobody is marked down for this."));
+  ans.traits_pos = Array.isArray(ans.traits_pos) ? ans.traits_pos : [];
+  ans.traits_neg = Array.isArray(ans.traits_neg) ? ans.traits_neg : [];
+  var trBox = fbEl("div", "fb-q"); qEls.traits = trBox;
+  var cols = fbEl("div", "fb-traits");
+  [["pos", "Positive personality traits", FB_TRAITS_POS], ["neg", "Negative personality traits", FB_TRAITS_NEG]].forEach(function (g) {
+    var col = fbEl("div", "fb-tcol " + g[0]);
+    var hd = fbEl("div", "fb-thead", g[1]); col.appendChild(hd);
+    var cnt = fbEl("span", "fb-tcount"); hd.appendChild(cnt);
+    var key = "traits_" + g[0];
+    var upd = function () { cnt.textContent = ans[key].length ? ans[key].length + " ticked" : ""; };
+    var list = fbEl("div", "fb-tlist");
+    g[2].forEach(function (t) {
+      var lb = fbEl("label", "fb-tr " + g[0] + (ans[key].indexOf(t) >= 0 ? " on" : ""));
+      var cb = fbEl("input"); cb.type = "checkbox"; cb.checked = ans[key].indexOf(t) >= 0;
+      cb.onchange = function () {
+        var i = ans[key].indexOf(t);
+        if (cb.checked && i < 0) ans[key].push(t); else if (!cb.checked && i >= 0) ans[key].splice(i, 1);
+        lb.classList.toggle("on", cb.checked); trBox.classList.remove("miss"); upd(); changed();
+      };
+      lb.append(cb, document.createTextNode(" " + t));
+      list.appendChild(lb);
+    });
+    upd(); col.appendChild(list); cols.appendChild(col);
   });
-  card.appendChild(form);
+  trBox.appendChild(cols); panes[1].appendChild(trBox);
+  /* 3 · self-awareness */
+  panes[2].appendChild(fbEl("div", "fb-stepintro", "How do you see yourself — and how do the people around you see you? A few honest lines each."));
+  FB_SA.forEach(function (q) { qBlock(q, panes[2]); });
+  var stepOf = function (k) { return FB_Q.some(function (q) { return q.k === k; }) ? 0 : k === "traits" ? 1 : 2; };
+  var missing = function () {
+    var m = FB_Q.concat(FB_SA).filter(function (q) { return q.req && !String(ans[q.k] || "").trim(); }).map(function (q) { return q.k; });
+    if (!ans.traits_pos.length && !ans.traits_neg.length) m.push("traits");
+    return m;
+  };
+  var bodyEl = fbEl("div");
+  var back, next, send;
+  function show(i) {
+    step = i;
+    tabs.innerHTML = "";
+    var miss = missing();
+    FB_STEPS.forEach(function (x, j) {
+      var done = !miss.some(function (k) { return stepOf(k) === j; });
+      var b = fbEl("button", "fb-step" + (j === i ? " on" : "") + (done ? " done" : "")); b.type = "button";
+      b.append(fbEl("span", "n", done && j !== i ? "✓" : x[0]), document.createTextNode(" " + x[1]));
+      b.onclick = function () { show(j); };
+      tabs.appendChild(b);
+    });
+    bodyEl.innerHTML = ""; bodyEl.appendChild(panes[i]);
+    back.style.display = i ? "" : "none";
+    next.style.display = i < 2 ? "" : "none";
+    send.style.display = i === 2 ? "" : "none";
+  }
+  card.append(tabs, bodyEl);
   var bar = fbEl("div", "fb-bar");
   st = fbEl("span", "st", row && row.updated_at ? "Draft saved " + new Date(row.updated_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "Not saved yet");
   var draft = fbEl("button", "btn", "Save draft"); draft.onclick = function () { save(false); };
-  var send = fbEl("button", "btn save", "Send it ✓");
+  back = fbEl("button", "btn", "← Back"); back.onclick = function () { show(step - 1); window.scrollTo(0, 0); };
+  next = fbEl("button", "btn save", "Next →"); next.onclick = function () { if (dirty) save(false, true); show(step + 1); card.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  send = fbEl("button", "btn save", "Send it ✓");
   send.onclick = function () {
-    var miss = FB_Q.filter(function (q) { return q.req && !String(ans[q.k] || "").trim(); });
+    var miss = missing();
     if (miss.length) {
-      miss.forEach(function (q) { qEls[q.k].classList.add("miss"); });
-      qEls[miss[0].k].scrollIntoView({ behavior: "smooth", block: "center" });
-      toast("Please answer the starred questions first"); return;
+      var s0 = stepOf(miss[0]); show(s0);
+      miss.forEach(function (k) { if (qEls[k]) qEls[k].classList.add("miss"); });
+      setTimeout(function () { qEls[miss[0]].scrollIntoView({ behavior: "smooth", block: "center" }); }, 30);
+      toast(miss[0] === "traits" ? "Please tick the traits you have first" : "Please answer the starred questions first (step " + (s0 + 1) + ")"); return;
     }
     if (!confirm("Send your " + fbLabel(month, true) + " feedback? You can't change it after sending.")) return;
     save(true);
   };
-  bar.append(st, draft, send);
+  bar.append(st, draft, back, next, send);
   card.appendChild(bar);
+  show(0);
   var busy = false;
   async function save(submit, quiet) {
     if (busy) { if (submit) setTimeout(function () { save(submit, quiet); }, 400); return; }
