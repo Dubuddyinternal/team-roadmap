@@ -6,7 +6,7 @@
 |---|---|
 | Open day (default the **25th**) | The form opens. Everyone gets a 🔔 at 9:30 am (India time), and a pop-up every day after that until they send it. The pop-up's **✍️ Fill it now** button opens the form. |
 | Up to the last day of the month | People fill it in at **Administration → 📝 My monthly feedback**. Drafts save automatically. **Send it** locks the form, and their nearest linked senior gets a 🔔. |
-| 1st to 10th of the next month | It can still be sent, marked **late**. |
+| 1st of the next month to the **last date** (default the 10th; owners change it in ⚙️ Settings) | It can still be sent, marked **late**. |
 | Review meeting | A senior opens **My Team → Monthly feedback → Read →**, writes notes and action points, and ticks "We've had the meeting". The person gets a 🔔 and sees the notes on their own feedback page. |
 
 **Who can read someone's feedback:**
@@ -18,7 +18,7 @@ Drafts are visible to nobody else. An owner in a different branch of the chart c
 
 ### Reminders until it's sent (stage 22a)
 
-From the open day until it's sent (including the late window, up to the 10th of the next month), each person who hasn't sent theirs gets:
+From the open day until it's sent (including the late window, up to the last date in the next month), each person who hasn't sent theirs gets:
 - the 🔔 and the daily pop-up (as before, from `feedback_remind()`)
 - **emails**: 1 a day by default, spread over 9 am to 9 pm India time. The email's button links to `?fb=1`, which opens the form.
 - a **strip at the top** of every page: "Your October feedback is pending". It turns red once it's late.
@@ -34,7 +34,7 @@ Setup: run `supabase/stage22a_feedback_nudges.sql`, then create the Edge Functio
 
 Everyone who owns an objective or a key result in the newest OKR cycle updates the current numbers on their key results:
 - **mid-month**, from the check-in day (default the **15th**) until the day before the feedback form opens
-- **at month end**, together with monthly feedback (open day to the 10th of the next month). The check-in shows at the top of **📝 My monthly feedback**.
+- **at month end**, together with monthly feedback (open day to the last date in the next month). The check-in shows at the top of **📝 My monthly feedback**.
 
 They do it in **Administration → 🎯 My OKR check-in**. Until it's saved they get the same reminders as feedback: a 🔔 and a daily pop-up (`okr_checkin_remind()`, pg_cron `okr-checkin-reminders`, 9:30 IST), the strip, **🎯 OKR check-in · Pending** in the account menu, and emails. One email covers both feedback and the check-in. Saving goes through `okr_checkin_save()`, which writes the numbers into the team's OKRs (only key results the person owns, or of objectives they own) and records the check-in in `okr_checkins`.
 
@@ -96,3 +96,7 @@ Everything is saved in the same `monthly_feedback.answers`, so the review reader
   **Save draft** keeps it private. **Share** shows it to the person and sends them a 🔔.
 - The person sees it in **📈 My Performance → My monthly feedback → 4 · Senior's feedback**. That includes the rating, the answers, and where the senior's trait ticks match or differ from their own. The **Manager's rating** column in Month by month shows it too.
 - Stored in `monthly_feedback.manager_review` and saved through `feedback_manager_review()`. Run `supabase/stage22d_manager_review.sql`. The app never says "manager" on screen — always "senior" / "your senior" (the `manager_review` names in the database stay as they are).
+
+### Last date (stage 22e)
+
+Owners pick the last date in My Team → Monthly feedback → ⚙️ Settings → **Last date to send**: any day from the 1st to the 25th of the next month (the default is the 10th). Push it later when people need more time, and it applies straight away. Late sends, reminders and the month-end OKR check-in all follow it. Stored in `feedback_settings.late_day`. Run `supabase/stage22e_feedback_last_day.sql`.

@@ -13,7 +13,8 @@
    · Administration → 📮 Suggestion box — super-admins only: what came in.
 
    The form opens on the team's open day (default the 25th, India time), is
-   due on the last day of the month, and can be sent late until the 10th.
+   due on the last day of the month, and can be sent late until the last date (default the 10th,
+   owners change it in ⚙️ Settings — stage 22e).
    Reminders (🔔 + a daily pop-up) come from the database every morning until
    the person sends it — see feedback_remind(). On top of that (stage 22a):
    emails (feedback_mail_tick → feedback-remind), a strip at the top of every
@@ -150,13 +151,16 @@ function fbLabel(k, short) { var a = k.split("-"); return new Date(+a[0], +a[1] 
 function fbLastDay(k) { var a = k.split("-"); return new Date(+a[0], +a[1], 0).getDate(); }
 function fbDate(iso) { return iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : ""; }
 function fbOpenDay() { return (FB.settings && FB.settings.open_day) || 25; }
+function fbLateDay() { return (FB.settings && +FB.settings.late_day) || 10; }
+function fbNth(d) { return d + (d % 10 === 1 && d !== 11 ? "st" : d % 10 === 2 && d !== 12 ? "nd" : d % 10 === 3 && d !== 13 ? "rd" : "th"); }
+function fbNextLabel(k) { var a = k.split("-"); return new Date(+a[0], +a[1], 1).toLocaleDateString("en-GB", { month: "long" }); }
 function fbEnabled() { return !FB.settings || FB.settings.enabled !== false; }
 /* same rule as feedback_window() in the database */
 function fbWindow(k) {
   if (!fbEnabled()) return "closed";
   var n = fbIST();
   if (k === fbCur() && n.d >= fbOpenDay()) return "open";
-  if (k === fbPrev() && n.d <= 10) return "late";
+  if (k === fbPrev() && n.d <= fbLateDay()) return "late";
   return "closed";
 }
 /* the month someone should be filling in now, or null */
@@ -379,7 +383,7 @@ function fbForm(month, row, onSent) {
   var late = fbWindow(month) === "late";
   hero.appendChild(fbEl("h3", "", (late ? "⏰ " : "✍️ ") + "Your " + fbLabel(month, true) + " feedback"));
   hero.appendChild(fbEl("p", "", late
-    ? "This was due on " + fbLastDay(month) + " " + fbLabel(month, true) + " — you can still send it until the 10th. It'll be marked late."
+    ? "This was due on " + fbLastDay(month) + " " + fbLabel(month, true) + " — you can still send it until the " + fbNth(fbLateDay()) + ". It'll be marked late."
     : "Due by " + fbLastDay(month) + " " + fbLabel(month, true) + ". 3 steps, about 15 minutes. Starred questions are needed to send it; your draft saves itself."));
   card.appendChild(hero);
   var qEls = {};
@@ -568,9 +572,9 @@ function fbRenderTeamView() {
     var others = rows.filter(function (r) { return r.user_id !== me.id; });
     /* the window for this month */
     var w = fbWindow(month), info = fbEl("div", "fb-card fb-hero");
-    info.appendChild(fbEl("h3", "", fbLabel(month) + (w === "open" ? " — open now" : w === "late" ? " — overdue, late sends until the 10th" : "")));
+    info.appendChild(fbEl("h3", "", fbLabel(month) + (w === "open" ? " — open now" : w === "late" ? " — overdue, late sends until the " + fbNth(fbLateDay()) : "")));
     info.appendChild(fbEl("p", "", !fbEnabled() ? "Monthly feedback is switched off." :
-      "Opens " + fbOpenDay() + " " + fbLabel(month, true) + ", due " + fbLastDay(month) + " " + fbLabel(month, true) + ". Everyone who hasn't sent theirs gets a 🔔 and a pop-up every morning until they do."));
+      "Opens " + fbOpenDay() + " " + fbLabel(month, true) + ", due " + fbLastDay(month) + " " + fbLabel(month, true) + ", last date " + fbLateDay() + " " + fbNextLabel(month) + ". Everyone who hasn't sent theirs gets a 🔔 and a pop-up every morning until they do."));
     holder.appendChild(info);
     if (!others.length) {
       var e = fbEl("div", "fb-empty");
@@ -752,7 +756,12 @@ function fbSettingsDialog() {
   var f = fbEl("div", "field"); var l = fbEl("label", "", "The form opens on day"); var s = fbEl("select");
   for (var d = 15; d <= 28; d++) { var o = fbEl("option", "", d + " of the month"); o.value = d; if (d === fbOpenDay()) o.selected = true; s.appendChild(o); }
   f.append(l, s);
-  var h = fbEl("div", "hint", "From that day, everyone who hasn't sent theirs gets a 🔔 and a pop-up every morning (9:30) until they do. It's due on the last day of the month; late sends are allowed until the 10th of the next month.");
+  /* 📅 the last date: late sends allowed until this day of the next month (stage 22e) */
+  var fl = fbEl("div", "field"); fl.style.marginTop = "14px";
+  var ll = fbEl("label", "", "Last date to send (day of the next month)"); var sl = fbEl("select");
+  for (var ld = 1; ld <= 25; ld++) { var ol = fbEl("option", "", fbNth(ld) + " of the next month" + (ld === 10 ? " (usual)" : "")); ol.value = ld; if (ld === fbLateDay()) ol.selected = true; sl.appendChild(ol); }
+  fl.append(ll, sl);
+  var h = fbEl("div", "hint", "From the open day, everyone who hasn't sent theirs gets a 🔔 and a pop-up every morning (9:30) until they do. It's due on the last day of the month; after that it can still be sent, marked late, until the last date. Need to give people more time? Pick a later day here — it applies straight away.");
   h.style.marginTop = "10px";
   var fe = fbEl("div", "field"); fe.style.marginTop = "14px";
   var le = fbEl("label", "", "Reminder emails a day"); var se = fbEl("select");
@@ -774,7 +783,7 @@ function fbSettingsDialog() {
   fm.append(lm, sm);
   var h3 = fbEl("div", "hint", "Everyone who owns an objective or key result updates their numbers on that day, and again at month end together with their feedback. Same reminders as the feedback until it's done.");
   h3.style.marginTop = "6px";
-  body.append(on, f, h, fe, stl, h2, okl, fm, h3);
+  body.append(on, f, fl, h, fe, stl, h2, okl, fm, h3);
   var btns = fbEl("div", "btns");
   var c = fbEl("button", "btn", "Cancel"), sv = fbEl("button", "btn save", "Save");
   c.onclick = function () { bg.remove(); };
@@ -788,6 +797,11 @@ function fbSettingsDialog() {
       var r3 = await SUPA.rpc("okr_set_checkin", { p_team: TEAM, p_on: okc.checked, p_mid_day: +sm.value });
       if (r3.error) { sv.disabled = false; toast("Couldn't save the OKR check-in: " + r3.error.message); return; }
       r = r3;
+      if (+sl.value !== fbLateDay()) {
+        var r4 = await SUPA.rpc("feedback_set_late_day", { p_team: TEAM, p_day: +sl.value });
+        if (r4.error) { sv.disabled = false; toast(/feedback_set_late_day/.test(r4.error.message) ? "To change the last date, run supabase/stage22e_feedback_last_day.sql in Supabase first." : "Couldn't save the last date: " + r4.error.message); return; }
+        r = r4;
+      }
     }
     sv.disabled = false;
     if (r.error) { toast("Couldn't save: " + r.error.message); return; }
