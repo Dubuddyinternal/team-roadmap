@@ -19329,6 +19329,8 @@ try{ discTlModes = JSON.parse(localStorage.getItem("discTlModes")||"{}") || {}; 
 function discTlMode(cs){ return discTlModes[cs.id]==="feature" ? "feature" : "stage"; }
 function discTlModeSet(cs, k){ discTlModes[cs.id] = k; try{ localStorage.setItem("discTlModes", JSON.stringify(discTlModes)); }catch(_){ } }
 let discFeatOpen = {};   /* idea rid -> its phases shown under it */
+/* 🧩 By feature: product groups (🎓 Students side…) start folded; click one to show its features. Remembered per browser */
+let discGroupOpen = (()=>{ try{ return JSON.parse(localStorage.getItem("dfg-open")||"{}") || {}; }catch(e){ return {}; } })();
 /* 🧩 By feature: each idea is one line from its first start to its last end (its own row and its sub-tasks,
    whichever phase they sit in), coloured by phase, with "done by <date>" — grouped by product. Read only:
    dates are changed in 🪜 By stage. */
@@ -19424,10 +19426,25 @@ function discFeatureGantt(cs, m, wrap, byTid){
   const byDate = (a, b)=> (a.e===null) - (b.e===null) || (a.e||0) - (b.e||0) || a.title.localeCompare(b.title);
   let shown = 0;
   groups.filter(g=> g.list.length).forEach(g=>{
+    const gk = m.id + "|" + g.label, gOpen = !!discGroupOpen[gk];
     const gh = document.createElement("div"); gh.className = "rmg-phase dfg-group"; gh.style.gridRow = String(r); gh.style.gridColumn = "1 / 3";
+    gh.style.cursor = "pointer"; gh.title = gOpen ? "Fold it up" : "Show its features";
+    const gf = document.createElement("button"); gf.className = "rmg-lfold"; gf.textContent = gOpen ? "\u25BE" : "\u25B8";
     const gn = document.createElement("span"); gn.className = "rmg-pname"; gn.textContent = g.label;
-    const gc = document.createElement("span"); gc.className = "rmg-pct"; gc.textContent = g.list.length;
-    gh.append(gn, gc); grid.appendChild(gh); cells("phase"); r++;
+    const gc = document.createElement("span"); gc.className = "rmg-pct";
+    const gDone = g.list.filter(f=> f.done).length;
+    gc.textContent = gOpen ? g.list.length : g.list.length + " feature" + (g.list.length===1 ? "" : "s") + (gDone ? " \u00b7 " + gDone + " done" : "");
+    gh.append(gf, gn, gc);
+    gh.onclick = ()=>{ discGroupOpen[gk] = !gOpen; try{ localStorage.setItem("dfg-open", JSON.stringify(discGroupOpen)); }catch(e){} renderAll(); };
+    grid.appendChild(gh); cells("phase");
+    if(!gOpen){
+      /* folded: one bar from the group's first start to its last end */
+      const ss = g.list.map(f=> f.s).filter(x=> x!==null), es = g.list.map(f=> f.e).filter(x=> x!==null);
+      if(ss.length && es.length){ const gs = Math.min(...ss), ge = Math.max(...es);
+        bar(gs, ge, null, "dfg-track", g.label + ": " + rmlFmt(dISO(gs)) + " \u2192 " + rmlFmt(dISO(ge))); }
+      shown += g.list.length; r++; return;
+    }
+    r++;
     g.list.slice().sort(byDate).forEach(f=>{
       shown++;
       const open = !!discFeatOpen[f.top.rid] && f.parts.length > 0;
