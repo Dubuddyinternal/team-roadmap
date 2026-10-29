@@ -191,12 +191,15 @@ th.sortable:hover,th.sorted{color:var(--accent)}
 details.fdrop{margin-bottom:14px}
 .okr .fdrop{margin:12px 0 0}
 .okr-from{display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:var(--ink-3);margin:2px 0 8px}.okr-from b{color:var(--ink-2)}
-.wl{border:1px solid var(--line);border-radius:10px;overflow:hidden;max-height:320px;overflow-y:auto}
-.wl-r{display:grid;grid-template-columns:1fr 90px 110px 28px;gap:8px;align-items:center;padding:7px 12px;border-bottom:1px solid var(--line);font-size:12.5px}
+.wl{border:1px solid var(--line);border-radius:10px;overflow:auto;max-height:320px}
+.wl-r{display:grid;grid-template-columns:minmax(92px,1fr) 58px 56px 74px 74px 16px;min-width:420px;gap:6px;align-items:center;padding:7px 12px;border-bottom:1px solid var(--line);font-size:12.5px}
 .wl-r:last-child{border-bottom:0}.wl-r b{font-family:var(--mono,monospace);text-align:right}
 .wl-r.ok b,.wl-r.ok .wl-m{color:var(--good)}.wl-r.miss b,.wl-r.miss .wl-m{color:var(--crit)}
 .wl-r>span:first-child{color:var(--ink-2);font-family:var(--sans,inherit);font-size:12.5px}
-.wl-r.now{background:var(--surface-4)}.wl-n{color:var(--ink-3);font-size:11.5px;text-align:right}.wl-m{font-weight:700;text-align:center}
+.wl-r.now{background:var(--surface-4)}
+.wl-h{background:var(--surface-4);position:sticky;top:0;z-index:1}.wl-h>span{font-family:var(--mono,monospace)!important;font-size:10px!important;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3)!important;text-align:right}
+.wl-h>span:first-child{text-align:left}
+.wl-at{font-family:var(--mono,monospace);text-align:right;font-weight:600}.wl-at.behind{color:var(--crit)}.wl-at.ahead{color:var(--good)}.wl-n{color:var(--ink-3);font-size:11.5px;text-align:right}.wl-m{font-weight:700;text-align:center}
 details.fdrop>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border:1px solid var(--line-2);border-radius:99px;background:var(--surface,#fff);font-size:13px;font-weight:600;color:var(--ink-2)}
 details.fdrop>summary::-webkit-details-marker{display:none}
 details.fdrop>summary:hover{border-color:var(--accent-ink)}
@@ -1137,16 +1140,21 @@ function weekLog(k, series, st, tgt){
   const rows=[]; let w=mon(st.d); const end=today();
   while(w<=end && rows.length<60){ const we=addDays(w,6);
     const a=valueAt(series, addDays(w,-1)) ?? (w<=st.d?st.v:null), b=valueAt(series, we<end?we:end);
-    if(a!=null && b!=null) rows.push({ w, gain:b-a, now: we>=end });
+    if(a!=null && b!=null) rows.push({ w, gain:b-a, now: we>=end, at:b, i:rows.length+1 });
     w=addDays(w,7); }
   if(!rows.length) return "";
   const met=rows.filter(r=>!r.now && r.gain>=need).length, done=rows.filter(r=>!r.now).length;
-  const body=rows.slice().reverse().map(r=>`<div class="wl-r ${r.now?"now":r.gain>=need?"ok":"miss"}">
+  /* "should be at": where the count had to be by the end of that week to stay on pace from the start */
+  const head=`<div class="wl-r wl-h"><span>Week</span><span>Change</span><span>Needed</span><span title="Where the count had to be by the end of that week to stay on pace">Should be</span><span title="The actual count at the end of that week">Reached</span><span></span></div>`;
+  const body=rows.slice().reverse().map(r=>{ const should=Math.min(tgt, st.v+need*r.i), behind=r.at<should;
+    return `<div class="wl-r ${r.now?"now":r.gain>=need?"ok":"miss"}">
       <span>${r.now?"This week":"Week of "+dmy(r.w)}</span>
       <b>${r.gain>=0?"+":"−"}${fmt(Math.abs(r.gain))}</b>
-      <span class="wl-n">needed +${fmt(need)}</span>
-      <span class="wl-m">${r.now?"…":r.gain>=need?"✓":"✕"}</span></div>`).join("");
-  return fdrop("wl-"+k, `📅 Week by week · ${done?met+" of "+done+" weeks on pace":"first week running"}`, `<div class="wl">${body}</div>`);
+      <span class="wl-n">+${fmt(need)}</span>
+      <span class="wl-n">${fmt(should)}</span>
+      <span class="wl-at ${behind?"behind":"ahead"}" title="${behind?fmt(should-r.at)+" behind pace":"on or ahead of pace"}">${fmt(r.at)}</span>
+      <span class="wl-m">${r.now?"…":r.gain>=need?"✓":"✕"}</span></div>`; }).join("");
+  return fdrop("wl-"+k, `📅 Week by week · ${done?met+" of "+done+" weeks on pace":"first week running"}`, `<div class="wl">${head}${body}</div>`);
 }
 /* 📎 hand-counted targets (webinars, community posts…) need proof: each one done is added with a link and/or a
    screenshot, and the count is the proofs added (plus any number typed before proofs existed) */
