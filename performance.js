@@ -101,8 +101,6 @@ async function renderPerformance() {
   var okrTile = tile(okrAvg == null ? "—" : okrAvg + "%", "OKR progress", okrs.list.length ? okrs.list.length + " objective" + (okrs.list.length === 1 ? "" : "s") + (okrs.cyc ? " · " + (okrs.cyc.name || okrs.cyc.key) : "") : "no OKRs this cycle");
   okrTile.classList.add("go"); okrTile.title = "Open the OKRs" + (mine ? " (My OKRs)" : "");
   okrTile.onclick = function () { closePerformance(); if (okrs.cyc) activeCycle = okrs.cyc.key; if (mine && typeof okrBoardMine !== "undefined") okrBoardMine = true; view = "okr"; renderAll(); window.scrollTo(0, 0); };
-  var fbTile = tile("…", "Feedback sent");
-  var ciTile = tile("…", "OKR check-ins");
 
   var mSec = perfSection("📅 Month by month"); body.appendChild(mSec.el);
   mSec.body.appendChild(perfEl("div", "hint", "Loading…"));
@@ -122,17 +120,12 @@ async function renderPerformance() {
   ]);
   /* 📝 feedback */
   var fbRows = (res[0] && res[0].data) || [];
-  var sent = fbRows.filter(function (x) { return x.status === "submitted"; });
-  fbTile.querySelector(".n").textContent = String(sent.length);
-  fbTile.appendChild(perfEl("div", "s", sent.length ? sent.filter(function (x) { return !x.late; }).length + " on time · " + sent.filter(function (x) { return x.discussed_at; }).length + " reviewed" : "nothing sent yet"));
   perfFeedbackView(fbSec.body, fbRows, mine);
   /* 📈 check-ins */
   var ciRows = [];
-  if (res[1].error) { ciTile.querySelector(".n").textContent = "—"; ciSec.body.appendChild(perfEl("div", "hint", "OKR check-ins aren't set up yet.")); }
+  if (res[1].error) { ciSec.body.appendChild(perfEl("div", "hint", "OKR check-ins aren't set up yet.")); }
   else {
     ciRows = res[1].data || [];
-    ciTile.querySelector(".n").textContent = String(ciRows.length);
-    ciTile.appendChild(perfEl("div", "s", ciRows.length ? "last " + perfShort(ciRows[0].done_at.slice(0, 10)) : "none yet"));
     perfCheckinView(ciSec.body, ciRows);
   }
   /* 📅 month by month, with the average */
@@ -664,7 +657,7 @@ function perfAgreementView(box, ag, mine) {
 
 (function () {
   var css = ".perf-pick{border:1px solid var(--line-strong);border-radius:99px;padding:7px 12px;background:var(--card);font:inherit;font-size:13px}"
-    + ".perf-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:18px 0 8px}"
+    + ".perf-tiles{display:grid;grid-template-columns:minmax(0,360px);gap:12px;margin:18px 0 8px}"
     + ".perf-tile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}"
     + ".perf-tile .n{font-size:26px;font-weight:750;font-family:var(--disp)}.perf-tile .l{font-size:13px;font-weight:600}.perf-tile .s{font-size:12px;color:var(--muted);margin-top:2px}"
     + ".perf-sec{margin:26px 0 0}.perf-sec h2{font-family:var(--disp);font-size:19px;margin:0 0 12px}"
@@ -723,6 +716,6 @@ function perfAgreementView(box, ag, mine) {
     + ".perf-mrow .pc{font-family:var(--mono);font-weight:700}"
     + ".perf-mrow .fbs.ok{color:var(--done,#2E9466)}.perf-mrow .fbs.late{color:#B4541A}.perf-mrow .fbs.none{color:#B42318}.perf-mrow .fbs.draft{color:var(--muted)}"
     + "#nav-perf.on{background:var(--indigo);color:#fff}"
-    + "@media(max-width:760px){.perf-tiles{grid-template-columns:repeat(2,1fr)}}";
+    + "@media(max-width:760px){.perf-tiles{grid-template-columns:1fr}}";
   var st = document.createElement("style"); st.textContent = css; (document.head || document.documentElement).appendChild(st);
 })();
