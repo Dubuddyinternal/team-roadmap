@@ -4963,6 +4963,8 @@ body.rmg-busy,body.rmg-busy *{user-select:none!important;cursor:grabbing!importa
       <button class="acct-item" id="acct-profile">👤 My profile</button>
       <button class="acct-item" id="acct-hr">🗂️ My HR file</button>
       <button class="acct-item" id="acct-doclib">📚 Our Wiki</button>
+      <button class="acct-item" id="acct-backup" style="display:none" title="Save a copy of all the team's data into your backup folder on this computer">💾 Backup to my folder</button>
+      <button class="acct-item" id="acct-backup-dir" style="display:none" title="Pick a different folder for the backups">📁 Change backup folder</button>
       <button class="acct-item" id="acct-addspace" style="display:none">＋ Add a space</button>
       <button class="acct-item" id="acct-admin" style="display:none">⚙️ Administration</button>
       <button class="acct-item danger" id="acct-logout">→] Sign out</button>
@@ -25480,7 +25482,8 @@ $("collapse-all").onclick = ()=>{
 $("refresh-btn").onclick = ()=> refresh(true);
 
 /* ---------- backup (export / import) ---------- */
-$("backup-btn").onclick = ()=>{
+/* everything the ⬆ Import restores: the team's data as loaded on this page */
+function backupBlob(){
   const payload = Object.assign({
     app: "team-roadmap-backup",
     version: 2,
@@ -25488,16 +25491,65 @@ $("backup-btn").onclick = ()=>{
     team: TEAM,
     bugs: { tickets: clean(teamBugs()) },
   }, teamPayload());
-  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
+  return new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
+}
+function backupName(){
   const d = new Date(), pad = n=>String(n).padStart(2,"0");
-  a.download = (TEAM||"team")+"-backup-"+d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"_"+pad(d.getHours())+pad(d.getMinutes())+".json";
+  return (TEAM||"team")+"-backup-"+d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"_"+pad(d.getHours())+pad(d.getMinutes())+pad(d.getSeconds())+".json";
+}
+function backupDownload(){
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(backupBlob());
+  a.download = backupName();
   document.body.appendChild(a);
   a.click();
   setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
   toast("Backup downloaded — keep it somewhere safe");
-};
+}
+$("backup-btn").onclick = backupDownload;
+
+/* 💾 Backup to my folder (account menu, owners and super-admins): the first time, pick a folder on this computer
+   (Chrome / Edge ask once to allow saving there); after that each press writes a dated file straight into it, no
+   dialog. The folder is remembered in this browser (IndexedDB). Browsers that can't write to a folder (Safari,
+   Firefox) get the normal download. A page whose data didn't finish loading never backs up. */
+const BK_DB = "dubuddy-backup", BK_KEY = "dir";
+function bkIdb(mode, fn){
+  return new Promise((res, rej)=>{
+    const rq = indexedDB.open(BK_DB, 1);
+    rq.onupgradeneeded = ()=> rq.result.createObjectStore("h");
+    rq.onerror = ()=> rej(rq.error);
+    rq.onsuccess = ()=>{ const tx = rq.result.transaction("h", mode), st = tx.objectStore("h"), r = fn(st); tx.oncomplete = ()=> res(r && r.result); tx.onerror = ()=> rej(tx.error); };
+  });
+}
+let BK_MEM = null;   // the folder picked in this tab (so later presses don't read it back at all)
+async function bkDir(){ if(BK_MEM) return BK_MEM; try{ BK_MEM = await bkIdb("readonly", st=> st.get(BK_KEY + ":" + TEAM)) || null; }catch(_){ BK_MEM = null; } return BK_MEM; }
+async function bkPickDir(){
+  const h = await window.showDirectoryPicker({ id: "dubuddy-backup", mode: "readwrite" });
+  BK_MEM = h;
+  try{ await bkIdb("readwrite", st=> st.put(h, BK_KEY + ":" + TEAM)); }catch(_){ }
+  try{ localStorage.setItem("cf-bk-name-" + TEAM, h.name); }catch(_){ }   // for the menu's label only
+  return h;
+}
+function bkCan(){ const u = currentUser(); return !!u && (u.super || roleOf(u, TEAM) === "owner"); }
+async function backupToFolder(pickNew){
+  if(!db || !lastLoadedTeam){ toast("This page didn't finish loading the team's data — reload it, then back up."); return; }
+  if(typeof window.showDirectoryPicker !== "function"){ backupDownload(); toast("This browser can't save into a folder — the backup was downloaded instead (use Chrome to save into a folder)."); return; }
+  try{
+    let h = pickNew ? null : await bkDir();
+    if(!h) h = await bkPickDir();
+    if(h.queryPermission && await h.queryPermission({ mode: "readwrite" }) !== "granted"){
+      if(await h.requestPermission({ mode: "readwrite" }) !== "granted"){ toast("No permission to save in “" + h.name + "” — press again and allow it."); return; }
+    }
+    const name = backupName(), fh = await h.getFileHandle(name, { create: true }), w = await fh.createWritable();
+    await w.write(backupBlob()); await w.close();
+    toast("💾 Saved “" + name + "” in your “" + h.name + "” folder");
+  }catch(e){
+    if(e && e.name === "AbortError") return;   // closed the folder picker
+    toast("Couldn't save the backup: " + ((e && e.message) || e));
+  }
+}
+$("acct-backup") && ($("acct-backup").onclick = ()=>{ $("account-overlay").classList.remove("show"); backupToFolder(false); });
+$("acct-backup-dir") && ($("acct-backup-dir").onclick = ()=>{ $("account-overlay").classList.remove("show"); backupToFolder(true); });
 
 async function compactStorage(){
   toast("Not needed any more \u2014 team data is now stored in small separate pieces, so there is no size limit to work around.");
@@ -25570,6 +25622,12 @@ function openAccount(){
   else { av.style.backgroundImage = "none"; av.style.background = userAvatarColor(u); av.textContent = (userDisplayName(u)||"?").charAt(0).toUpperCase(); }
   $("acct-admin").style.display = roleOf(currentUser(), TEAM) ? "" : "none";   // everyone in the team; sections follow their role
   if($("acct-addspace")) $("acct-addspace").style.display = hasPerm("add_spaces") ? "" : "none";   // only roles given "Add spaces"
+  if($("acct-backup")){   // 💾 owners and super-admins; "Change backup folder" once one is picked
+    $("acct-backup").style.display = bkCan() ? "" : "none"; $("acct-backup-dir").style.display = "none";
+    let nm = ""; try{ nm = localStorage.getItem("cf-bk-name-" + TEAM) || ""; }catch(_){ }
+    $("acct-backup").textContent = nm ? "💾 Backup to “" + nm + "”" : "💾 Backup to my folder";
+    if(bkCan() && nm) $("acct-backup-dir").style.display = "";
+  }
   $("account-overlay").classList.add("show");
 }
 $("acct-teams") && ($("acct-teams").onclick = ()=>{ $("account-overlay").classList.remove("show"); location.href = location.pathname; });
