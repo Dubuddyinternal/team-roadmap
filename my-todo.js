@@ -363,7 +363,11 @@ function todoAssigned() {
     (cs.gantt.items || []).forEach(function (it) {
       if (!it.tid || !todoOwnerIsMe(me, it.owner)) return;
       var x = reg[it.tid]; if (!x || !x.task) return;
-      if (have["idea:" + it.tid]) return;   // already on the list as my Product Roadmap idea
+      if (have["idea:" + it.tid]) {   // already on the list as my Product Roadmap idea: give it the row's dates
+        var ie = out.find(function (e) { return e.key === "idea:" + it.tid; });
+        if (ie && !ie.due && it.end) { ie.start = todoISO(it.start); ie.due = todoISO(it.end); }
+        return;
+      }
       var key = "tl:" + (cs.id || "eng") + ":" + it.tid; if (have[key]) return; have[key] = 1;
       var st = ""; try { st = effStatus(x.task); } catch (_) { }
       var done = it.done || st === "done" || x.task.stage === "done" || x.task.col === "done";
@@ -977,6 +981,7 @@ function todoGantt(S) {
     grid.appendChild(add); cellsRow(rIdx, g.id, "addrow");
     rIdx++;
   });
+  rIdx = todoAsgRows(grid, rIdx, dayOf, nD, cellsRow, S);   // 📥 mine on the boards, not on my plan yet
   rIdx = todoHeadRows(grid, rIdx, dayOf, nD, cellsRow);   // 👑 the spaces I head, read-only, below my own groups
   if (tn >= d0 && tn <= dEnd) {
     var tl = todoEl("div", "rms-today"); tl.title = "Today";
@@ -1949,6 +1954,57 @@ function todoHeadSpaces() {
     while (p && g++ < 8) { if (mine[p.id]) return false; p = p.parent ? todoCsById(p.parent) : null; }
     return true;
   });
+}
+/* 📥 Assigned to me, drawn inside 🗓 Timeline: everything on the boards that's mine, not done and not on my plan
+   yet, on its own dates (a timeline row's, an idea's phase, a card's due date) — so it shows without placing it.
+   ＋ on a row puts it on my plan (as 📥 Assigned to me → Place does); clicking it opens it where it lives.
+   Only drawn here; the plan itself changes only through ＋. Returns the next grid row. */
+function todoAsgRows(grid, rIdx, dayOf, nD, cellsRow, S) {
+  var on = {}; try { on = todoOnPlan(); } catch (_) { }
+  var list = Object.keys(S.asg || {}).map(function (k) { return S.asg[k]; }).filter(function (e) { return e.col !== "done" && !on[e.key]; });
+  if (!list.length) return rIdx;
+  var inView = function (e) { if (!e.start && !e.due) return true; var a = e.start || e.due, b = e.due || e.start; return !(dayOf(b) < 0 || dayOf(a) > nD - 1); };
+  list = list.filter(inView).sort(function (a, b) { return (a.start || a.due || "9") < (b.start || b.due || "9") ? -1 : 1; });
+  var id = "asg-sec", lab = todoEl("div", "rmg-phase td-head-sec"); lab.style.gridRow = String(rIdx); lab.dataset.lane = id;
+  var fo = todoEl("button", "td-fold", TODO_HFOLD[id] ? "▸" : "▾"); fo.title = TODO_HFOLD[id] ? "Show it" : "Minimise it";
+  fo.onclick = function (ev) { ev.stopPropagation(); if (TODO_HFOLD[id]) delete TODO_HFOLD[id]; else TODO_HFOLD[id] = 1; renderAll(); };
+  lab.appendChild(fo);
+  lab.appendChild(todoEl("span", "rmg-pname", "📥 Assigned to " + (todoPeek ? todoFirstName(todoPeek) : "me")));
+  lab.appendChild(todoEl("span", "rmg-pct", list.length ? String(list.length) : ""));
+  lab.title = "Yours on the team's boards, not on your plan yet — ＋ puts one on your plan";
+  grid.appendChild(lab); cellsRow(rIdx, id, "phase"); rIdx++;
+  if (TODO_HFOLD[id]) return rIdx;
+  if (!list.length) {
+    var em = todoEl("div", "rmg-task td-head-empty", "Nothing assigned " + (todoLevel === "week" ? "this week" : "in this period") + " that isn't on your plan.");
+    em.style.gridRow = String(rIdx); em.style.paddingLeft = "20px"; em.style.color = "var(--muted)"; em.style.fontStyle = "italic";
+    grid.appendChild(em); cellsRow(rIdx, id, ""); return rIdx + 1;
+  }
+  list.forEach(function (e) {
+    var nm = todoEl("div", "rmg-task"); nm.style.gridRow = String(rIdx); nm.dataset.lane = id; nm.style.paddingLeft = "20px";
+    nm.appendChild(todoEl("span", "rmg-tt", (e.icon ? e.icon + " " : "") + (e.title || "(untitled)")));
+    var span = e.start || e.due ? (e.start && e.start !== e.due ? fmtD(e.start) + " → " : e.due ? "due " : "") + (e.due ? fmtD(e.due) : "") : "No date";
+    nm.appendChild(todoEl("span", "rmg-td", span + " · " + (e.board || e.where || e.src)));
+    nm.title = (e.title || "") + "\n" + (e.board || e.where || "") + (e.status ? " · " + e.status : "") + "\nClick to open it where it lives · ＋ to put it on your plan";
+    nm.style.cursor = "pointer";
+    nm.onclick = function () { try { e.open(); } catch (_) { } };
+    var pl = todoEl("button", "td-gadd td-subbtn", "＋"); pl.title = "Put it on my plan, on these dates";
+    pl.onclick = function (ev) {
+      ev.stopPropagation();
+      var a = e.start || (e.due && e.due < todoPlaceStart() ? e.due : todoPlaceStart()), b = e.due && e.due >= a ? e.due : todoAddDays(a, 6);
+      todoNewTask(e.title || "(untitled)", todoGroupFor("Assigned to me"), a, b, { k: "asg", key: e.key });
+      todoSave(); toast("On your plan — “Assigned to me”");
+    };
+    nm.appendChild(pl);
+    grid.appendChild(nm); cellsRow(rIdx, id, "");
+    if (e.start || e.due) {
+      var s = Math.max(0, dayOf(e.start || e.due)), en = Math.min(nD - 1, Math.max(s, dayOf(e.due || e.start)));
+      var bar = todoEl("div", "rmg-blk rmg-line"); bar.style.gridRow = String(rIdx); bar.style.gridColumn = (s + 2) + " / " + (en + 3);
+      bar.style.background = "#8A93A6"; bar.style.cursor = "pointer"; bar.title = nm.title; bar.onclick = nm.onclick;
+      grid.appendChild(bar);
+    }
+    rIdx++;
+  });
+  return rIdx;
 }
 /* the same, drawn inside 🗓 Timeline (the Month / Quarter / Week chart): one ▾ section per space I head, its
    inner spaces and phases as sections under it, its rows with their bars. Read-only — a row opens where it lives.
