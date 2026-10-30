@@ -1861,8 +1861,9 @@ setInterval(function () {
 }, 60000);
 
 /* ---------- 🗺 Our Timeline: a private roadmap for the people in Our To-do ----------
-   The same chart as "Dubuddy Till December Plan" (index.html rmapMergedPane): every space's Timeline merged in
-   (⚙ Merge picks which), and our own phases and rows below for anything else — in or outside Dubuddy. It is an
+   Roadmaps come in as a ▾ section each (Dubuddy Till December Plan to start): open one to see the spaces it merges
+   and its own rows, as on its page. ⚙ Merge picks the roadmaps (m.ourMaps) and any single spaces (m.merge), and
+   our own phases and rows sit below for anything else — in or outside Dubuddy. It is an
    ordinary roadmap in RMAPS (saved with the team's roadmaps), access "private" with the circle's people as its
    admins, marked m.ourTodo = circle id so it sits here and not in the sidebar. Team owners / admins can still open
    it, as they can every space. */
@@ -1870,13 +1871,13 @@ function todoOurMap() { return OUR.circle && typeof RMAPS !== "undefined" ? (RMA
 // while the tab is open, rights on the chart come from that roadmap (index.html currentSpaceRef asks)
 function todoOurMapRef() { var m = typeof view !== "undefined" && view === "todo" && todoTab === "timeline" ? todoOurMap() : null; return m ? rmapRef(m) : null; }
 function todoOurMapCreate() {
-  var plan = (RMAPS.maps || []).find(function (m) { return m.id === "rm-mvc9vjcn"; }) || (RMAPS.maps || []).find(function (m) { return m.merge && !m.ourTodo; });
+  var plan = todoOurPlan();
   var members = {}, me = currentUser();
   OUR.members.filter(function (x) { return x.status === "joined"; }).forEach(function (x) { var u = todoPerson(x.user_id); if (u && u.email) members[String(u.email).toLowerCase()] = "admin"; });
   if (me && me.email) members[String(me.email).toLowerCase()] = "admin";
   var nm = { id: "rm-our" + Date.now().toString(36), name: "Our Timeline — " + todoFirstName(me.id) + " & " + todoCircleNames(), view: "gantt",
     items: [], own: [], markers: [], access: "private", members: members, ourTodo: OUR.circle.id,
-    merge: { from: plan && plan.merge && Array.isArray(plan.merge.from) ? plan.merge.from.slice() : null } };
+    ourMaps: plan ? [plan.id] : [], merge: { from: [] } };
   rmlEnsureLanes(nm, "gantt");
   RMAPS.maps.push(nm);
   saveRmaps();
@@ -1887,7 +1888,7 @@ function todoOurTimeline(wrap) {
   if (!m) {
     var box = todoEl("section", "module-block td-our-setup");
     box.appendChild(todoEl("h2", "", "🗺 Our Timeline"));
-    box.appendChild(todoEl("p", "hint", "One chart for " + todoFirstName((currentUser() || {}).id) + " & " + todoCircleNames() + ": the Dubuddy Till December Plan (every space's Timeline, merged — ⚙ Merge picks which), and your own phases and rows below for anything else, in or outside Dubuddy. Only the two of you see it here (team owners and admins can open it, as they can every space)."));
+    box.appendChild(todoEl("p", "hint", "One chart for " + todoFirstName((currentUser() || {}).id) + " & " + todoCircleNames() + ": the Dubuddy Till December Plan as a section you open to see its spaces and rows (⚙ Merge adds other roadmaps or spaces), and your own phases and rows below for anything else, in or outside Dubuddy. Only the two of you see it here (team owners and admins can open it, as they can every space)."));
     var go = todoEl("button", "btn save", "＋ Set up our timeline");
     go.onclick = function () { go.disabled = true; todoOurMapCreate(); };
     box.appendChild(go);
@@ -1897,7 +1898,100 @@ function todoOurTimeline(wrap) {
   var byTid = {};
   allTasks().forEach(function (x) { byTid[x.tid] = x; });
   m.items = (m.items || []).filter(function (it) { return byTid[it.tid]; });
-  rmapMergedPane(m, wrap, byTid);
+  var hint = todoEl("div", "hint", "Each roadmap is a ▾ section: open it to see its spaces and its own rows (change those where they live). Your own plan is below — ⚙ Merge picks the roadmaps and spaces.");
+  hint.style.margin = "0 0 8px";
+  wrap.appendChild(hint);
+  renderRmapGantt(todoOurChart(m, byTid), wrap, byTid);
+}
+// the roadmaps shown (m.ourMaps; until it's set: Dubuddy Till December Plan) and spaces merged on their own (m.merge;
+// until m.ourMaps is set: none — the plan already brings them)
+function todoOurPlan() { return (RMAPS.maps || []).find(function (x) { return x.id === "rm-mvc9vjcn"; }) || (RMAPS.maps || []).find(function (x) { return x.merge && !x.ourTodo; }) || null; }
+function todoOurMaps(m) {
+  var ids = Array.isArray(m.ourMaps) ? m.ourMaps : (todoOurPlan() ? [todoOurPlan().id] : []);
+  return ids.map(function (id) { return (RMAPS.maps || []).find(function (x) { return x.id === id; }); })
+    .filter(function (x) { return x && !x.ourTodo && canViewSpace(rmapRef(x)); });
+}
+function todoOurSpaces(m) { return Array.isArray(m.ourMaps) ? rmapMergedFrom(m) : []; }
+var TODO_OURC = {};   // the chart object per Our Timeline (kept for the session, so its 1/2/3-month choice sticks)
+function todoOurChart(m, byTid) {
+  var C = TODO_OURC[m.id] || (TODO_OURC[m.id] = { id: "omc-" + m.id, view: "gantt", gWin: m.gWin || 0, spaceOf: "merge" });
+  C.name = m.name;
+  var lanes = [], items = [], label = {};
+  // one space's Timeline under `parent`, its ids prefixed with P (as on a roadmap that merges spaces)
+  var addSpace = function (cs, P, parent) {
+    var got; try { got = spaceTimelineMap(cs); } catch (e) { return; }
+    var sm = got.m, head = { id: P + "mg:" + cs.id, name: csTypeIcon(cs.type) + " " + cs.name, kind: "project", parent: parent || undefined };
+    lanes.push(head);
+    Object.keys(got.byTid).forEach(function (k) { byTid[k] = got.byTid[k]; });
+    var ids = {}; (sm.lanes || []).forEach(function (l) { ids[l.id] = 1; });
+    (sm.lanes || []).forEach(function (ln) {
+      lanes.push({ id: P + cs.id + ":" + ln.id, name: sm.laneLabel ? sm.laneLabel(ln) : ln.name, kind: ln.kind || "project", parent: ln.parent && ids[ln.parent] ? P + cs.id + ":" + ln.parent : head.id });
+    });
+    (sm.items || []).forEach(function (it) {
+      if (!byTid[it.tid]) return;
+      var cp = Object.assign({}, it, { rid: P + cs.id + ":" + it.rid, lane: P + cs.id + ":" + it.lane, parent: it.parent ? P + cs.id + ":" + it.parent : undefined, _from: cs.name });
+      if (!cp.move && byTid[it.tid].kind !== "virtual") rmgWriteBack(cp, it, cs);   // dragging it here changes it in its space
+      if (!cp.open) cp.open = function () { goSpace(cs, "timeline"); };
+      items.push(cp);
+    });
+  };
+  // 🗺 each roadmap: its merged spaces, then its own rows — read-only here, opened on the roadmap
+  todoOurMaps(m).forEach(function (R) {
+    var P = "om:" + R.id + ":", head = { id: "om:" + R.id, name: "🗺 " + R.name, kind: "project" };
+    lanes.push(head);
+    if (R.merge) rmapMergedFrom(R).forEach(function (cs) { addSpace(cs, P, head.id); });
+    var rl = {}; (R.lanes || []).forEach(function (l) { rl[l.id] = 1; });
+    (R.lanes || []).forEach(function (ln) {
+      lanes.push({ id: P + "own:" + ln.id, name: (R.merge && !ln.parent ? "🙋 " : "") + ln.name, kind: ln.kind || "project", parent: ln.parent && rl[ln.parent] ? P + "own:" + ln.parent : head.id });
+    });
+    (R.items || []).forEach(function (it) {
+      if (!byTid[it.tid] || !rl[it.lane]) return;
+      items.push(Object.assign({}, it, { rid: P + "own:" + it.rid, lane: P + "own:" + it.lane, parent: it.parent ? P + "own:" + it.parent : undefined, _from: R.name,
+        open: function () { view = "rmap"; activeRmap = R.id; renderAll(); } }));
+    });
+  });
+  // spaces merged on their own
+  todoOurSpaces(m).forEach(function (cs) { addSpace(cs, "os:", null); });
+  // 🙋 our own plan: editable here
+  m.lanes = m.lanes || []; rmlEnsureLanes(m);
+  ownLanesFix(m);
+  var ownIds = {};
+  m.lanes.forEach(function (ln) { ownIds[ln.id] = 1; lanes.push(ln); if (!ln.parent) label[ln.id] = ln.name === "Planning" ? "🙋 Own plan" : "🙋 " + ln.name; });
+  m.items.forEach(function (it) { items.push(it); });
+  C.lanes = lanes; C.items = items;
+  C.mapOf = function (ln) { return ownIds[ln.id] ? m : null; };
+  C.linkStore = m;
+  C.laneLabel = function (ln) { return label[ln.id] || ln.name; };
+  C.barButtons = function (row) {
+    rmlBarButtons(row, m, "Phase");
+    var mb = todoEl("button", "tool sm", "⚙ Merge"); mb.title = "Choose the roadmaps and spaces that show here";
+    mb.onclick = function () { todoOurMergePicker(m); }; row.appendChild(mb);
+  };
+  return C;
+}
+// ⚙ Merge: roadmaps (each a section with what it holds) and, if wanted, single spaces
+function todoOurMergePicker(m) {
+  var maps = (RMAPS.maps || []).filter(function (x) { return !x.ourTodo && canViewSpace(rmapRef(x)); }), spaces = rmapMergeable();
+  var curMaps = todoOurMaps(m).map(function (x) { return x.id; }), curSp = todoOurSpaces(m).map(function (x) { return x.id; });
+  var put = function () {
+    m.ourMaps = maps.map(function (x) { return x.id; }).filter(function (id) { return curMaps.indexOf(id) >= 0; });
+    m.merge = { from: spaces.map(function (x) { return x.id; }).filter(function (id) { return curSp.indexOf(id) >= 0; }) };
+    saveRmaps();
+  };
+  rmlModal("⚙ Merge into “" + m.name + "”", [], function () { }, { width: 520, noSave: true,
+    sub: "Roadmaps come in as a section each — open it to see its spaces and its own rows. Spaces ticked below come in on their own. Change things where they live." });
+  var dg = [].slice.call(document.querySelectorAll(".overlay .dialog")).pop(), body = dg.querySelector(".dlg-body");
+  var group = function (title, list, cur, name) {
+    body.appendChild(todoEl("div", "td-our-mg", title));
+    list.forEach(function (x) {
+      var r = todoEl("label", "ta-row"), cb = todoEl("input"); cb.type = "checkbox"; cb.checked = cur.indexOf(x.id) >= 0;
+      cb.onchange = function () { var i = cur.indexOf(x.id); if (cb.checked && i < 0) cur.push(x.id); else if (!cb.checked && i >= 0) cur.splice(i, 1); put(); };
+      r.append(cb, todoEl("span", "", name(x))); body.appendChild(r);
+    });
+    if (!list.length) body.appendChild(todoEl("div", "hint", "None yet."));
+  };
+  group("🗺 Roadmaps", maps, curMaps, function (x) { return "🗺 " + x.name; });
+  group("Spaces on their own", spaces, curSp, function (x) { return csTypeIcon(x.type) + " " + x.name; });
 }
 
 /* ---------- counts (sidebar and Summary) ---------- */
