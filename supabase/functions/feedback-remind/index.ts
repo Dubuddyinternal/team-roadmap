@@ -4,7 +4,8 @@
 // Emails people whose monthly feedback isn't sent yet. Called only by the
 // hourly job public.feedback_mail_tick() (stage22a SQL), which picks who
 // gets an email and sends
-//   body: { people: [{ user_id, team, month: "YYYY-MM" | null, late, okr: "YYYY-MM-mid|end" | null }] }
+//   body: { people: [{ user_id, team, month: "YYYY-MM" | null, late, due, last: "YYYY-MM-DD", okr: "YYYY-MM-mid|end" | null }] }
+//   due = the due date people are shown, last = the last date (stage 22g)
 // (stage 22b: one email covers monthly feedback and/or the OKR check-in)
 // with header x-cron-key = feedback_cron.cron_key.
 //
@@ -34,7 +35,7 @@ Deno.serve(async (req) => {
   const key = req.headers.get("x-cron-key") || "";
   if (!cfg || !key || key !== cfg.cron_key) return json({ error: "Not allowed" }, 403);
 
-  let body: { people?: { user_id?: string; team?: string; month?: string | null; late?: boolean; okr?: string | null }[] };
+  let body: { people?: { user_id?: string; team?: string; month?: string | null; late?: boolean; due?: string | null; last?: string | null; okr?: string | null }[] };
   try { body = await req.json(); } catch { return json({ error: "Bad request" }, 400); }
   const people = (body.people || [])
     .filter((p) => /^[0-9a-f-]{36}$/.test(String(p.user_id || "")))
@@ -73,9 +74,15 @@ Deno.serve(async (req) => {
     if (p.month) {
       const [y, m] = p.month.split("-").map(Number);
       const mon = MONTHS[m - 1], last = new Date(Date.UTC(y, m, 0)).getUTCDate(), nextMon = MONTHS[m % 12];
+      // "8 November" from "2026-11-08"; older callers sent no dates: month end, and the 10th
+      const dm = (iso: string | null | undefined, dflt: string) => {
+        const a = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ""));
+        return a ? Number(a[3]) + " " + MONTHS[Number(a[2]) - 1] : dflt;
+      };
+      const due = dm(p.due, last + " " + mon), lastDate = dm(p.last, "10 " + nextMon);
       const when = p.late
-        ? "It was due on " + last + " " + mon + ". You can still send it until 10 " + nextMon + "."
-        : "Please send it by " + last + " " + mon + ".";
+        ? "It was due on " + due + ". Last chance: please send it by " + lastDate + "."
+        : "Please send it by " + due + ".";
       const line = "Your " + mon + " monthly feedback isn't sent yet. " + when + " It takes about 10 minutes, and you can save a draft and finish it later.";
       parts.push(line); partsHtml.push(esc(line));
       subject = p.late ? "Your " + mon + " feedback is overdue" : "Your " + mon + " feedback is pending";
