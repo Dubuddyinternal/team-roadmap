@@ -1983,6 +1983,13 @@ function todoHeadRows(grid, rIdx, dayOf, nD, cellsRow) {
     if (!depth) lab.title = "A space you head — read-only here; open a row to change it where it lives";
     grid.appendChild(lab); cellsRow(rIdx, l.id, "phase"); rIdx++;
     if (TODO_HFOLD[l.id]) return;
+    if (!depth && !n) {   // open but nothing in it yet: say so, and name the spaces it covers
+      var inner = kidsOf(l.id).map(function (k) { return k.name; }).filter(function (x) { return x && x !== "Planning"; });
+      var em = todoEl("div", "rmg-task td-head-empty", "Nothing scheduled here " + (todoLevel === "week" ? "this week" : "in this period") + " yet" + (inner.length ? " — " + inner.join(", ") : "") + ".");
+      em.style.gridRow = String(rIdx); em.style.paddingLeft = "20px"; em.style.color = "var(--muted)"; em.style.fontStyle = "italic";
+      grid.appendChild(em); cellsRow(rIdx, l.id, ""); rIdx++;
+      return;
+    }
     rowsOf(l).forEach(function (it) {
       var en = byTid[it.tid] || {}, t = en.task || {}, title = t.title || t.name || "(untitled)";
       var st = ""; try { st = effStatus(t); } catch (_) { }
