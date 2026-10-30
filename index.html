@@ -25483,8 +25483,20 @@ $("collapse-all").onclick = ()=>{
 $("refresh-btn").onclick = ()=> refresh(true);
 
 /* ---------- backup (export / import) ---------- */
-/* everything the ⬆ Import restores: the team's data as loaded on this page */
-function backupBlob(){
+/* everything the ⬆ Import restores: the team's data as loaded on this page — plus, for a team with a Maverick
+   Admin space, its own tables (creators, submissions, payouts, emails) as this login can read them (they hold
+   creators' phones and UPI IDs). ⬆ Import leaves the Maverick part alone; it's restored by hand if ever needed. */
+async function backupMaverick(){
+  if(!SUPA || window.LOCAL_MODE || !((CSPACES && CSPACES.list) || []).some(x=> x && x.type === "maverick")) return null;
+  const out = { at: new Date().toISOString() }, errs = [];
+  for(const [k, t] of [["creators","maverick_creators"],["submissions","maverick_submissions"],["payouts","maverick_payouts"],["emails","maverick_emails"]]){
+    try{ const r = await SUPA.from(t).select("*").limit(10000); if(r.error) errs.push(k + ": " + r.error.message); else out[k] = r.data || []; }
+    catch(e){ errs.push(k + ": " + ((e && e.message) || e)); }
+  }
+  if(errs.length) out.errors = errs;
+  return out;
+}
+async function backupBlob(){
   const payload = Object.assign({
     app: "team-roadmap-backup",
     version: 2,
@@ -25492,15 +25504,16 @@ function backupBlob(){
     team: TEAM,
     bugs: { tickets: clean(teamBugs()) },
   }, teamPayload());
+  try{ const mv = await backupMaverick(); if(mv) payload.maverick = mv; }catch(_){ }
   return new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
 }
 function backupName(){
   const d = new Date(), pad = n=>String(n).padStart(2,"0");
   return (TEAM||"team")+"-backup-"+d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+"_"+pad(d.getHours())+pad(d.getMinutes())+pad(d.getSeconds())+".json";
 }
-function backupDownload(){
+async function backupDownload(){
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(backupBlob());
+  a.href = URL.createObjectURL(await backupBlob());
   a.download = backupName();
   document.body.appendChild(a);
   a.click();
@@ -25542,7 +25555,7 @@ async function backupToFolder(pickNew){
       if(await h.requestPermission({ mode: "readwrite" }) !== "granted"){ toast("No permission to save in “" + h.name + "” — press again and allow it."); return; }
     }
     const name = backupName(), fh = await h.getFileHandle(name, { create: true }), w = await fh.createWritable();
-    await w.write(backupBlob()); await w.close();
+    await w.write(await backupBlob()); await w.close();
     try{ localStorage.setItem("cf-bk-day-" + TEAM, bkToday()); localStorage.setItem("cf-bk-name-" + TEAM, h.name); }catch(_){ }   // today's is done
     toast("💾 Saved “" + name + "” in your “" + h.name + "” folder");
   }catch(e){
@@ -25565,7 +25578,7 @@ async function backupDaily(){
     const h = await bkDir(); if(!h) return;
     if(h.queryPermission && await h.queryPermission({ mode: "readwrite" }) !== "granted") return;   // would need a click
     const name = backupName(), fh = await h.getFileHandle(name, { create: true }), w = await fh.createWritable();
-    await w.write(backupBlob()); await w.close();
+    await w.write(await backupBlob()); await w.close();
     try{ localStorage.setItem("cf-bk-day-" + TEAM, bkToday()); }catch(_){ }
     toast("💾 Today's backup saved in your “" + h.name + "” folder");
   }catch(_){ }   // quietly try again next time
