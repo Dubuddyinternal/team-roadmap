@@ -429,19 +429,26 @@ function todoDialog(title, build, onSave) {
 function todoField(label, input) { var f = todoEl("div", "field"); f.appendChild(todoEl("label", "", label)); f.appendChild(input); return f; }
 
 /* ---------- why do I exist? ---------- */
+// Sumit's own ladder: what plans got before each person wrote their own — now only used to spot
+// those copies (saved as-is in others' rows) and clear them; everyone starts empty and writes theirs
 var TODO_WHY = {
   goal: "Self-reliant India",
   steps: ["AI", "Semiconductors", "Defence", "Phones", "Missiles", "Rockets & space", "Drones & UAVs", "Fighter planes", "Aeroplanes"],
   from: "Dubuddy + Sumit",
   line: "Every dot will be something my country should do and isn't doing yet.",
 };
+function todoWhyIsCopy(w) {
+  return String(w.goal || "") === TODO_WHY.goal && String(w.from || "") === TODO_WHY.from && String(w.line || "") === TODO_WHY.line
+    && Array.isArray(w.steps) && w.steps.join("\n") === TODO_WHY.steps.join("\n");
+}
 function todoWhyNorm(w) {
   w = w && typeof w === "object" ? w : {};
+  var mine = !todoWhyIsCopy(w);   // an untouched copy of Sumit's ladder → empty, for them to fill in
   return {
-    goal: String(w.goal || TODO_WHY.goal),
-    steps: Array.isArray(w.steps) ? w.steps.map(String).filter(Boolean) : TODO_WHY.steps.slice(),
-    from: String(w.from || TODO_WHY.from),
-    line: w.line != null ? String(w.line) : TODO_WHY.line,
+    goal: mine ? String(w.goal || "") : "",
+    steps: mine && Array.isArray(w.steps) ? w.steps.map(String).filter(Boolean) : [],
+    from: mine ? String(w.from || "") : "",
+    line: mine && w.line != null ? String(w.line) : "",
     seen: String(w.seen || ""),
     // the other points under "Why I do what I do": a question and my answer
     points: Array.isArray(w.points) ? w.points.filter(function (x) { return x && x.id && x.q; }).map(function (x) { return { id: String(x.id), q: String(x.q), a: String(x.a || "") }; }) : [],
@@ -454,11 +461,17 @@ function todoWhyCard(inPop) {
   hd.appendChild(todoEl("b", "", inPop ? "🇮🇳 Why do I exist?" : "1 · 🇮🇳 Why do I exist?"));
   if (!inPop) { var ed = todoEl("button", "td-act", "✏️ Edit"); ed.onclick = todoWhyEdit; hd.appendChild(ed); }
   box.appendChild(hd);
+  if (!W.goal) {   // not written yet: their own answer, not anyone else's
+    var e = todoEl("div", "td-whypt-a none", "Not written yet. Where does your work lead — the big thing you want to help happen? And what are the steps from you to there? ✏️ Edit to write your answer.");
+    e.style.cursor = "pointer"; e.onclick = todoWhyEdit;
+    box.appendChild(e);
+    return box;
+  }
   var lad = todoEl("ol", "td-why-lad");
   var dot = function (txt, cls) { lad.appendChild(todoEl("li", cls || "", txt)); };
   dot(W.goal, "top");
   W.steps.slice().reverse().forEach(function (t) { dot(t); });
-  dot(W.from, "me");
+  dot(W.from || todoFirstName(todoOwnerId()), "me");
   box.appendChild(lad);
   if (W.line) box.appendChild(todoEl("div", "td-why-line", W.line));
   return box;
@@ -466,15 +479,15 @@ function todoWhyCard(inPop) {
 function todoWhyEdit() {
   var W = TODO.why, goal, steps, from, line;
   todoDialog("🇮🇳 Why do I exist?", function (body) {
-    goal = todoEl("input"); goal.value = W.goal;
+    goal = todoEl("input"); goal.value = W.goal; goal.placeholder = "e.g. Self-reliant India";
     steps = todoEl("textarea"); steps.rows = 9; steps.value = W.steps.join("\n"); steps.dataset.plain = "1";   // a plain list, no rich text
-    from = todoEl("input"); from.value = W.from;
+    from = todoEl("input"); from.value = W.from; from.placeholder = "e.g. Dubuddy + " + todoFirstName(todoOwnerId());
     line = todoEl("textarea"); line.rows = 2; line.value = W.line; line.dataset.plain = "1";
     body.append(todoField("Where it leads (top dot)", goal), todoField("The dots on the way — one per line", steps),
       todoField("Where it starts (bottom dot)", from), todoField("In my words", line));
   }, function () {
     if (!goal.value.trim()) return "Write where it leads.";
-    W.goal = goal.value.trim(); W.from = from.value.trim() || TODO_WHY.from; W.line = line.value.trim();
+    W.goal = goal.value.trim(); W.from = from.value.trim(); W.line = line.value.trim();
     W.steps = steps.value.split("\n").map(function (s) { return s.trim(); }).filter(Boolean);
   });
 }
