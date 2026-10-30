@@ -63,7 +63,11 @@
    Stored in data.ideas: [{ id, text, kind, at (ISO time), pin, task, again, solved }].
 
    A task: { id, title, group, start, end, done, note, ref }
-     ref = { k:"asg", key } — an "assigned to me" card (todoAssigned keys)
+     📥 Assigned to me also lists every row on a space's own 🗓 Timeline whose
+   👤 Owner is me (Product Roadmap, process, marketing, Engineering…), with
+   the row's dates — the owner, not the space's admins.
+
+   ref = { k:"asg", key } — an "assigned to me" card (todoAssigned keys)
          | { k:"tid", tid } — any item on a board (allTasks registry)
    A linked task shows its board's title and counts as done when it's done
    there (or ticked here). Ticking here never changes the board.
@@ -349,6 +353,25 @@ function todoAssigned() {
       out.push({ key: "rmap:" + m.id + ":" + it.tid, hat: "product", icon: "🗺", src: "Roadmap", title: x.task.title || x.task.name || "(untitled)", where: rm.where,
         board: rm.where, status: todoCap(st || "planned"),
         col: todoColFromStatus(st), due: todoISO(it.end), write: null, open: rm.open });
+    });
+  });
+  // every space's own Timeline (Product Roadmap, process, marketing, Engineering…) — the row's 👤 Owner, not the space's admins
+  var have = {}; out.forEach(function (e) { have[e.key] = 1; });
+  var tlSpaces = ((typeof DEV !== "undefined" && DEV.tlHost && DEV.tlHost.gantt) ? [DEV.tlHost] : []).concat(spaces);
+  tlSpaces.forEach(function (cs) {
+    if (!cs.gantt || (cs.id && !todoCanSee(cs))) return;
+    (cs.gantt.items || []).forEach(function (it) {
+      if (!it.tid || !todoOwnerIsMe(me, it.owner)) return;
+      var x = reg[it.tid]; if (!x || !x.task) return;
+      if (have["idea:" + it.tid]) return;   // already on the list as my Product Roadmap idea
+      var key = "tl:" + (cs.id || "eng") + ":" + it.tid; if (have[key]) return; have[key] = 1;
+      var st = ""; try { st = effStatus(x.task); } catch (_) { }
+      var done = it.done || st === "done" || x.task.stage === "done" || x.task.col === "done";
+      var name = cs.name || "Engineering";
+      out.push({ key: key, hat: "product", icon: "🗓", src: "Timeline", title: x.task.title || x.task.name || "(untitled)", where: name + " · Timeline",
+        board: name + " · Timeline", status: done ? "Done" : todoCap(st || "planned"),
+        col: done ? "done" : todoColFromStatus(st), start: todoISO(it.start), due: todoISO(it.end), write: null,
+        open: function () { if (cs.id && typeof goSpace === "function") goSpace(cs, "timeline"); else { view = "dev"; renderAll(); } } });
     });
   });
   // Educational Content tasks (owner typed as a name)
@@ -764,7 +787,10 @@ function todoPickAssigned() {
   });
   todoPickDialog("📥 Assigned to me", "Everything on the team's boards that's yours and not done. Tick and place them on your timeline.", rows, function (ps) {
     var gid = todoGroupFor("Assigned to me"), st = todoPlaceStart();
-    ps.forEach(function (p) { var en = p.e.due && p.e.due >= st ? p.e.due : todoAddDays(st, 6); todoNewTask(p.title, gid, st, en, { k: "asg", key: p.id }); });
+    ps.forEach(function (p) {
+      var a = p.e.start || st, en = p.e.due && p.e.due >= a ? p.e.due : todoAddDays(a, 6);   // a timeline row keeps its own dates
+      todoNewTask(p.title, gid, a, en, { k: "asg", key: p.id });
+    });
     todoSave(); toast(ps.length + " placed on your plan — drag them to the right days");
   });
 }
