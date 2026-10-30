@@ -1898,11 +1898,41 @@ function todoOurTimeline(wrap) {
   var byTid = {};
   allTasks().forEach(function (x) { byTid[x.tid] = x; });
   m.items = (m.items || []).filter(function (it) { return byTid[it.tid]; });
-  var hint = todoEl("div", "hint", "Each roadmap is a ▾ section: open it to see its spaces and its own rows (change those where they live). Your own plan is below — ⚙ Merge picks the roadmaps and spaces.");
-  hint.style.margin = "0 0 8px";
-  wrap.appendChild(hint);
-  renderRmapGantt(todoOurChart(m, byTid), wrap, byTid);
+  var C = todoOurChart(m, byTid), only = todoOurOnly(), people = todoOurPeople();
+  // 👥 only our work: the rows with one of our names on them, and the sections they're in (our own plan always stays)
+  var shown = C.items.length;
+  if (only) {
+    var mine = {}; C.lanes.forEach(function (l) { if (C.mapOf(l)) mine[l.id] = 1; });
+    var keep = {}, lane = {}; C.lanes.forEach(function (l) { lane[l.id] = l; });
+    C.items = C.items.filter(function (it) {
+      var txt = rowPeople(it, byTid[it.tid]);
+      return mine[it.lane] || people.some(function (u) { return personMatches(txt, u); });
+    });
+    C.items.forEach(function (it) { var id = it.lane, g = 0; while (id && g++ < 12) { keep[id] = 1; id = lane[id] && lane[id].parent; } });
+    C.lanes = C.lanes.filter(function (l) { return keep[l.id] || mine[l.id]; });
+    shown = C.items.filter(function (it) { return !mine[it.lane]; }).length;
+  }
+  var bar = todoEl("div", "rmm-bar");
+  var tg = todoEl("button", "rmm-who" + (only ? " on" : ""), only ? "👥 Only our work ✓" : "👥 Only our work");
+  tg.title = only ? "Show everything again" : "Show only the rows where " + people.map(function (u) { return userDisplayName(u).split(/\s+/)[0]; }).join(" or ") + " is the owner or assignee";
+  if (only) tg.style.cssText = "background:var(--accent,#E8622B);border-color:var(--accent,#E8622B);color:#fff";
+  tg.onclick = function () { todoOurOnlySet(!only); renderAll(); };
+  bar.appendChild(tg);
+  bar.appendChild(todoEl("span", "hint", only
+    ? shown + " row" + (shown === 1 ? "" : "s") + " with " + people.map(function (u) { return userDisplayName(u).split(/\s+/)[0]; }).join(" or ") + "’s name, and your own plan."
+    : "Each roadmap is a ▾ section: open it to see its spaces and its own rows (change those where they live). Your own plan is below — ⚙ Merge picks the roadmaps and spaces."));
+  wrap.appendChild(bar);
+  renderRmapGantt(C, wrap, byTid);
 }
+// the people in Our To-do (me first), for 👥 Only our work
+function todoOurPeople() {
+  var me = currentUser(), out = me ? [me] : [];
+  todoMates("joined").forEach(function (x) { var u = todoPerson(x.user_id); if (u && !out.some(function (y) { return y.id === u.id; })) out.push(u); });
+  return out;
+}
+// on / off, remembered in this browser (a view setting — nothing is saved to the team)
+function todoOurOnly() { try { return localStorage.getItem("cf-our-only-" + TEAM) === "1"; } catch (_) { return false; } }
+function todoOurOnlySet(on) { try { if (on) localStorage.setItem("cf-our-only-" + TEAM, "1"); else localStorage.removeItem("cf-our-only-" + TEAM); } catch (_) { } }
 // the roadmaps shown (m.ourMaps; until it's set: Dubuddy Till December Plan) and spaces merged on their own (m.merge;
 // until m.ourMaps is set: none — the plan already brings them)
 function todoOurPlan() { return (RMAPS.maps || []).find(function (x) { return x.id === "rm-mvc9vjcn"; }) || (RMAPS.maps || []).find(function (x) { return x.merge && !x.ourTodo; }) || null; }
