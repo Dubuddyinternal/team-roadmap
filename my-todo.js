@@ -1,6 +1,6 @@
 /* =====================================================================
-   OUR TO-DO (was My To-do) — a planner, one per person per team, that a
-   person can share with chosen teammates (👥 Our To-do, further down:
+   MY TO-DO / OUR TO-DO — a planner, one per person per team (everyone in
+   the team has one), that a person can share with chosen teammates (👥 Our To-do, further down:
    a co-founder and I can each open and change the other's plan, one shared ideas
    warehouse). Plan top-down:
 
@@ -52,12 +52,15 @@
    🧭 Why I do what I do has its own tab, next to My plan: point 1 is 🇮🇳 Why do I exist?
    (the ladder), then my own points — a question and the answer (TODO.why.points).
 
-   💡 Ideas warehouse (third tab): one private place for every idea,
-   imagination, question or note — instead of writing them in a WhatsApp
-   group. Type (or speak, with the mic) and press Enter; each is kept with
+   💭 Thoughts warehouse (second tab, was "Ideas warehouse"): one place for
+   every idea, imagination, question, note, ⚖️ contention (a disagreement to
+   settle) or 🔁 recurring issue (a problem that keeps coming back) — instead
+   of writing them in a WhatsApp group. A recurring issue has "🔁 Again" to
+   log each time it comes up (x.again: ISO times); both those kinds can be
+   marked "✔ Solved" (x.solved: ISO time). Type (or speak, with the mic) and press Enter; each is kept with
    its time, newest first, grouped by day, pinned ones on top. Filter by
    kind, search, edit, pin, delete, or "→ Plan it" to put it on My plan.
-   Stored in data.ideas: [{ id, text, kind, at (ISO time), pin, task }].
+   Stored in data.ideas: [{ id, text, kind, at (ISO time), pin, task, again, solved }].
 
    A task: { id, title, group, start, end, done, note, ref }
      ref = { k:"asg", key } — an "assigned to me" card (todoAssigned keys)
@@ -65,7 +68,9 @@
    A linked task shows its board's title and counts as done when it's done
    there (or ticked here). Ticking here never changes the board.
 
-   Who sees it: anyone with the "My To-do" permission (shown as "Our To-do").
+   Who sees it: everyone in the team — "✅ My To-do" (their own plan, with
+   everything assigned to them and every 💬 comment they're @-tagged in), or
+   "✅ Our To-do" for people in a circle (below).
    Data: public.my_todos, one row per person per team, written only by that
    person and read by them and the teammates in their Our To-do circle
    (supabase/stage20a_my_todos.sql, stage20b_our_todos.sql); falls back to
@@ -76,7 +81,8 @@
    dNum, dISO, fmtD, toast …).
    ===================================================================== */
 var TODO = { team: null, loaded: false, loading: false, local: false, why: null, whyMin: false, over: {}, planner: { groups: [], tasks: [] }, ideas: [], clock: { wake: "06:00", sleep: "22:00" }, sleepLog: {}, phase: null, temple: [], prayLog: {}, rest: {} };
-var TODO_IDEA_KINDS = [["idea", "💡", "Idea"], ["imagine", "🌌", "Imagination"], ["question", "❓", "Question"], ["note", "📝", "Note"]];
+var TODO_IDEA_KINDS = [["idea", "💡", "Idea"], ["imagine", "🌌", "Imagination"], ["question", "❓", "Question"], ["note", "📝", "Note"], ["contention", "⚖️", "Contention"], ["recurring", "🔁", "Recurring issue"]];
+var TODO_IDEA_SOLVABLE = ["contention", "recurring"];   // these two can be marked ✔ Solved
 var todoIdeaKind = "idea";     // the kind picked for the next one I write
 var todoIdeaFilter = "";       // "" = all, else a kind
 var todoIdeaQ = "";            // search text
@@ -89,11 +95,12 @@ var todoSubAdd = null;         // id of the task whose "＋ Add subtask…" box 
 var todoAddIn = null;          // id of the group whose "＋ Add task…" box is open (opened by its ＋)
 var TODO_LEVELS = [["quarter", "Quarter"], ["month", "Month"], ["week", "Week"], ["day", "Day"]];   // top-down: quarter first
 
-// the "My To-do" permission, or being in an Our To-do pair (no permission needed for that)
+// everyone in the team has their own My To-do; the "My To-do" permission or an Our To-do circle also opens it
 function todoCan() {
   try {
-    if (!currentUser()) return false;
-    if (hasPerm("my_todo")) return true;
+    var u = currentUser();
+    if (!u) return false;
+    if (u.super || (typeof isMember === "function" && isMember(u, TEAM)) || hasPerm("my_todo")) return true;
     if (OUR.team !== TEAM && !OUR.loading) todoCircleLoad();
     return OUR.team === TEAM && !!OUR.circle;
   } catch (_) { return false; }
@@ -148,6 +155,7 @@ function todoDayNorm(d) {
 async function todoLoad() {
   if (TODO.loading) return;
   TODO.loading = true;
+  TAGS.who = null;   // pick up new @-tags too
   var who = todoOwnerId(), d = null, local = false;
   try {
     if (!SUPA) throw new Error("no database");
@@ -356,6 +364,14 @@ function todoAssigned() {
     };
     (s.tasks || []).forEach(walk);
   });
+  // 💬 comments I'm @-tagged in (last 30 days) — a thing to answer or do; ticking it here only changes my plan
+  if (TAGS.who === me.id && TAGS.team === TEAM) TAGS.rows.forEach(function (c) {
+    var snip = String(c.body || "").replace(/[*_`#>\[\]]/g, "").replace(/\s+/g, " ").trim().slice(0, 90);
+    out.push({ key: "tag:" + c.id, hat: "ceo", icon: "🏷", src: "Tagged", title: (c.author_name || "A teammate") + ": " + (snip || "(a photo or file)"),
+      where: c.place_label || "a comment", board: c.place_label || "Comments", status: "@ tagged you", col: "todo", due: "", write: null,
+      open: function () { try { var b = btoa(unescape(encodeURIComponent(JSON.stringify(c.nav || {})))); if (window.cmtGo && c.nav && c.nav.view) window.cmtGo(b, c.id); else toast("Couldn't open that comment"); } catch (_) { toast("Couldn't open that comment"); } } });
+  });
+  else if (me.id && !TAGS.loading) todoTagsLoad(me.id);
   // where I put each one here (only for items whose board can't take the move); done on the board always wins
   out.forEach(function (e) {
     var o = TODO.over[e.key];
@@ -363,6 +379,22 @@ function todoAssigned() {
     if (o && e.col !== "done" && !e.write) e.col = o;
   });
   return out;
+}
+
+// the 💬 comments that @-tag the person whose To-do is open (team_comments, stage19a); none if it can't be read
+var TAGS = { who: null, team: null, loading: false, rows: [] };
+async function todoTagsLoad(who) {
+  if (TAGS.loading || !SUPA) return;
+  TAGS.loading = true;
+  var rows = [];
+  try {
+    var since = new Date(Date.now() - 30 * 864e5).toISOString();
+    var r = await SUPA.from("team_comments").select("id,place_label,nav,author_id,author_name,body,created_at")
+      .eq("team_slug", TEAM).contains("mentions", [who]).gte("created_at", since).order("created_at", { ascending: false }).limit(100);
+    if (!r.error) rows = (r.data || []).filter(function (c) { return c.author_id !== who; });
+  } catch (_) { }
+  TAGS.who = who; TAGS.team = TEAM; TAGS.rows = rows; TAGS.loading = false;
+  if (rows.length && typeof view !== "undefined" && view === "todo") renderAll();
 }
 
 /* a sprint someone is made owner of lands on their plan by itself (in "Sprints", with the sprint's dates) —
@@ -1307,7 +1339,7 @@ function todoClock(kind, day) {
   return box;
 }
 
-/* ---------- 💡 ideas warehouse ---------- */
+/* ---------- 💭 thoughts warehouse ---------- */
 function todoIdeaKindOf(k) { return TODO_IDEA_KINDS.find(function (x) { return x[0] === k; }) || TODO_IDEA_KINDS[0]; }
 function todoLocalDay(iso) { var d = new Date(iso); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
 function todoIdeaTime(iso) { var d = new Date(iso); return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); }
@@ -1339,7 +1371,7 @@ function todoIdeaStore() {
 }
 function todoIdeaItem(x) {
   var K = todoIdeaKindOf(x.kind), ST = todoIdeaStore();
-  var row = todoEl("div", "td-idea" + (x.pin ? " pin" : ""));
+  var row = todoEl("div", "td-idea" + (x.pin ? " pin" : "") + (x.solved ? " solved" : ""));
   row.appendChild(todoEl("span", "td-idea-k", K[1])).title = K[2];
   var body = todoEl("div", "td-idea-b");
   if (todoIdeaEdit === x.id) {
@@ -1358,12 +1390,17 @@ function todoIdeaItem(x) {
   meta.appendChild(todoEl("span", "", todoIdeaTime(x.at)));
   if (ST.shared) meta.appendChild(todoEl("span", "td-idea-by", "✍ " + todoUserName(x.author)));
   if (x.task && TODO.planner.tasks.some(function (t) { return t.id === x.task; })) meta.appendChild(todoEl("span", "td-idea-on", "🗓 on My plan"));
+  var nAgain = (x.again || []).length;
+  if (nAgain) meta.appendChild(todoEl("span", "td-idea-again", "🔁 came up " + (nAgain + 1) + " times · last " + fmtD(todoLocalDay(x.again[x.again.length - 1]))));
+  if (x.solved) meta.appendChild(todoEl("span", "td-idea-on", "✔ Solved " + fmtD(todoLocalDay(x.solved))));
   body.appendChild(meta);
   var acts = todoEl("div", "td-idea-acts");
   var mk = function (txt, tip, fn, cls) { var b = todoEl("button", "td-act" + (cls ? " " + cls : ""), txt); b.title = tip; b.onclick = function (ev) { ev.stopPropagation(); fn(); }; acts.appendChild(b); };
   mk(x.pin ? "📌 Unpin" : "📌 Pin", x.pin ? "Take it off the top" : "Keep it at the top", function () { if (x.pin) delete x.pin; else x.pin = true; ST.put(x); });
   mk("✎ Edit", "Change the words", function () { todoIdeaEdit = x.id; renderAll(); });
-  mk("Kind…", "Idea, imagination, question or note", function () {
+  if (x.kind === "recurring" && !x.solved) mk("🔁 Again", "It came up once more — log today", function () { x.again = (x.again || []).concat(new Date().toISOString()); ST.put(x); toast("Logged — it's come up " + (x.again.length + 1) + " times"); });
+  if (TODO_IDEA_SOLVABLE.indexOf(x.kind) >= 0) mk(x.solved ? "↺ Reopen" : "✔ Solved", x.solved ? "It's back — not solved after all" : "It's settled now", function () { if (x.solved) { delete x.solved; if (x.kind === "recurring") x.again = (x.again || []).concat(new Date().toISOString()); } else x.solved = new Date().toISOString(); ST.put(x); });
+  mk("Kind…", "Idea, imagination, question, note, contention or recurring issue", function () {
     openChoice("What kind is it?", TODO_IDEA_KINDS.map(function (k) { return { label: k[1] + " " + k[2], value: k[0] }; }), function (k) { x.kind = k; ST.put(x); });
   });
   if (!(x.task && TODO.planner.tasks.some(function (t) { return t.id === x.task; }))) mk("→ Plan it", "Put it on My plan as a task", function () { todoIdeaPlan(x); });
@@ -1383,7 +1420,7 @@ function todoIdeas() {
       seg0.appendChild(b);
     });
     sc.appendChild(seg0);
-    if (ST.shared) sc.appendChild(todoEl("span", "hint", "The same list in both your Ideas warehouses — you both see and add to it."));
+    if (ST.shared) sc.appendChild(todoEl("span", "hint", "The same list in both your Thoughts warehouses — you both see and add to it."));
     box.appendChild(sc);
   }
   // write box: pick a kind, type (or speak), Enter keeps it
@@ -1657,12 +1694,12 @@ function todoPhaseBanner() {
    whole To-do, and everything works there as in my own: add, move, tick,
    delete (their row in my_todos, which the database lets circle members
    read and write). Saves go to whoever's To-do was open. And the
-   Ideas warehouse gets a 👥 Shared list everyone in it writes to.
-   People in a circle see Our To-do even without the "My To-do" permission.
+   Thoughts warehouse gets a 👥 Shared list everyone in it writes to.
+   Everyone else in the team sees the same page as "✅ My To-do" — just their own.
    Without that SQL run, none of this shows and My To-do works as before. */
 var OUR = { team: null, loaded: false, loading: false, off: false, circle: null, members: [], ideas: [], people: {} };
 var todoPeek = null;          // id of the teammate whose To-do is open (null = mine)
-var todoIdeaScope = "shared"; // shared | mine — which ideas warehouse list (shared when there's an Our To-do)
+var todoIdeaScope = "shared"; // shared | mine — which thoughts warehouse list (shared when there's an Our To-do)
 // a person in my Our To-do: from the team's people, or from the circle itself (todo_circle_people) when I
 // can't see their profile — e.g. a super-admin who isn't a member of the team
 function todoPerson(id) {
@@ -1707,9 +1744,17 @@ async function todoCircleLoad() {
 }
 async function todoSharedIdeasLoad(quiet) {
   if (!OUR.circle || !SUPA) return;
-  var r = await SUPA.from("todo_circle_ideas").select("id,text,kind,pin,author_id,created_at").eq("circle_id", OUR.circle.id).order("created_at", { ascending: false }).limit(1000);
+  var q = function (cols) { return SUPA.from("todo_circle_ideas").select(cols).eq("circle_id", OUR.circle.id).order("created_at", { ascending: false }).limit(1000); };
+  var r = OUR.noAgain ? { error: true } : await q("id,text,kind,pin,author_id,created_at,again,solved_at");
+  if (r.error) { r = await q("id,text,kind,pin,author_id,created_at"); if (!r.error) OUR.noAgain = true; }   // stage20c not run yet
   if (r.error) return;
-  OUR.ideas = (r.data || []).map(function (x) { var o = { id: x.id, text: x.text, kind: x.kind, at: x.created_at, author: x.author_id }; if (x.pin) o.pin = true; return o; });
+  OUR.ideas = (r.data || []).map(function (x) {
+    var o = { id: x.id, text: x.text, kind: x.kind, at: x.created_at, author: x.author_id };
+    if (x.pin) o.pin = true;
+    if (Array.isArray(x.again) && x.again.length) o.again = x.again;
+    if (x.solved_at) o.solved = x.solved_at;
+    return o;
+  });
   if (!quiet) renderAll();
 }
 async function todoSharedIdeaAdd(x) {
@@ -1719,7 +1764,10 @@ async function todoSharedIdeaAdd(x) {
 }
 async function todoSharedIdeaPut(x) {
   renderAll();
-  var r = await SUPA.from("todo_circle_ideas").update({ text: x.text, kind: x.kind || "idea", pin: !!x.pin, updated_at: new Date().toISOString() }).eq("id", x.id);
+  var up = { text: x.text, kind: x.kind || "idea", pin: !!x.pin, updated_at: new Date().toISOString() };
+  if (!OUR.noAgain) { up.again = x.again || []; up.solved_at = x.solved || null; }
+  else if ((x.again && x.again.length) || x.solved) toast("Ask an admin to run stage20c_thoughts.sql to keep “Again” / “Solved” on the shared list");
+  var r = await SUPA.from("todo_circle_ideas").update(up).eq("id", x.id);
   if (r.error) { toast("Couldn't save it: " + r.error.message); todoSharedIdeasLoad(); }
 }
 async function todoSharedIdeaDel(x) {
@@ -1789,7 +1837,7 @@ function todoCounts() {
 // the tab strip at the top of the page (index.html renderTabs calls this on My To-do)
 function todoTabs(strip) {
   todoPeopleTop(strip);
-  var tabs = [["plan", "🗓 Plan"], ["ideas", "💡 Ideas warehouse"], ["why", "🧭 Why I do what I do"]];
+  var tabs = [["plan", "🗓 Plan"], ["ideas", "💭 Thoughts warehouse"], ["why", "🧭 Why I do what I do"]];
   if (typeof accSalesGlance === "function" && typeof accCan === "function" && accCan()) tabs.push(["sales", "💳 Sales"]);   // accounts.js: owners + super-admins
   else if (todoTab === "sales") todoTab = "plan";
   tabs.forEach(function (T) {
@@ -1801,7 +1849,7 @@ function todoTabs(strip) {
 function renderContentTodo() {
   var wrap = $("content");
   wrap.innerHTML = "";
-  if (!todoCan()) { wrap.appendChild(todoEl("div", "empty", "Our To-do isn't switched on for you yet.")); return; }
+  if (!todoCan()) { wrap.appendChild(todoEl("div", "empty", "My To-do opens once you're a member of this team.")); return; }
   if (!TODO.loaded || TODO.team !== TEAM) {
     if (TODO.team !== TEAM) { TODO.loaded = false; OUR.loaded = false; todoPeek = null; }
     wrap.appendChild(todoEl("div", "empty", todoPeek ? "Loading " + todoUserName(todoPeek) + "'s To-do…" : "Loading your plan…"));
@@ -1867,11 +1915,13 @@ function todoPlanBody(wrap) {
     wrap.appendChild(todoClock("sleep", dd));
   } else wrap.appendChild(todoGantt(S));
 }
+// "Our To-do" when I share it with teammates, else "My To-do"
+function todoTitle() { return OUR.circle && OUR.team === TEAM ? "Our To-do" : "My To-do"; }
 /* the sidebar entry, at the top of Spaces */
 function todoSideItem() {
   var b = todoEl("button", "ws-item td-side" + (view === "todo" ? " active" : ""));
   var ok = TODO.loaded && TODO.team === TEAM;
-  b.innerHTML = "<span>✅ Our To-do</span>" + (ok ? "<span class=\"td-side-n\"></span>" : "");
+  b.innerHTML = "<span>✅ " + todoTitle() + "</span>" + (ok ? "<span class=\"td-side-n\"></span>" : "");
   if (ok) {
     var c = todoCounts(), n = c.progress;
     b.querySelector(".td-side-n").textContent = n;

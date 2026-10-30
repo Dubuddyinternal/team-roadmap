@@ -41,7 +41,7 @@
 <script src="performance.js"></script><!-- 📈 My Performance: OKRs, feedback + senior's review, check-ins, agreements -->
 <script src="accounts.js"></script><!-- Accounts: payment requests, payroll, My payments -->
 <script src="wiki-docs.js"></script><!-- Our Wiki: write documents in the app -->
-<script src="my-todo.js"></script><!-- Our To-do: everything assigned to me + my own to-dos, shared with chosen teammates -->
+<script src="my-todo.js"></script><!-- My To-do (Our To-do when shared): everything assigned to / tagging me + my own to-dos -->
 <script>
 /* ============================================================
    ONE-TIME SETUP with JSONBin (~3 minutes)
@@ -1497,6 +1497,8 @@ body.cx-hero #rm-title,body.cx-hero #rm-subtitle{display:none}
 .td-idea-t{font-size:14px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
 .td-idea-m{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:3px;font-family:var(--mono);font-size:10.5px;color:var(--muted)}
 .td-idea-on{color:var(--indigo);font-weight:600}
+.td-idea-again{color:var(--blocked);font-weight:600}
+.td-idea.solved .td-idea-t{color:var(--muted)}
 .td-idea-acts{display:flex;flex-wrap:wrap;gap:4px;margin-left:auto;font-family:var(--sans,inherit);opacity:0;transition:opacity .12s}
 .td-idea-b>.td-idea-acts{margin:6px 0 0}
 .td-idea:hover .td-idea-acts,.td-idea:focus-within .td-idea-acts,.td-idea-acts.on{opacity:1}
@@ -5401,7 +5403,7 @@ const PERMS = [
   {key:"manage_hr",        label:"HR: manage employee files", hint:"Everything in “see employee files”, plus approve documents, send files back, answer ✏️ change requests, and send offer letters"},
   {key:"manage_policies",  label:"HR: edit company policies", hint:"Add and edit policies in Administration → HR → Policies, and ask everyone to sign a new version"},
   {key:"accounts",         label:"Accounts: payments & payroll", hint:"See and approve everyone's payment requests, mark them paid, run payroll and download bank files (Administration → Accounts). Includes people's bank details"},
-  {key:"my_todo",          label:"Our To-do",             hint:"See the ✅ Our To-do board at the top of Spaces: everything assigned to you across the boards, your own to-dos, and the plans and ideas of the teammates you share it with"},
+  {key:"my_todo",          label:"My To-do",              hint:"✅ My To-do at the top of Spaces: everything assigned to you or that you're @-tagged in, your own plan and Thoughts warehouse. Every team member has it already; this also opens it for someone who isn't a member"},
   {key:"hr_settings",      label:"HR: company details & offer letter", hint:"Change the company details and the offer letter wording in Administration → HR → Company and offer letter"},
 ];
 // what the 5 old role names meant, for anyone not yet on a custom role
@@ -8784,7 +8786,7 @@ function renderTabs(){
 }
 function renderHeader(){
   const _rm = view==="rmap" ? RMAPS.maps.find(m=>m.id===activeRmap) : null;
-  $("rm-title").textContent = view==="todo" ? "Our To-do" : view==="admin" ? "Administration" : view==="okr" ? "Team OKRs" : view==="content" ? "Educational Content Roadmap" : view==="ideas" ? "Team Ideas" : view==="dev" ? "Development Board" : view==="bugs" ? "Bugs & Issues" : view==="cbugs" ? ((CSPACES.list.find(x=>x.id===activeCspace)||{}).name || "Bugs board") : view==="disc" ? (((currentDisc()||{}).name) || "Product roadmap") : view==="social" ? (((currentSocial()||{}).name) || "Social Media") : view==="campaign" ? (((currentCampaign()||{}).name) || "Campaign") : view==="watch" ? (((currentWatch()||{}).name) || "Keep an Eye") : view==="maverick" ? (((currentMaverick()||{}).name) || "Maverick Admin") : view==="horizon" ? (((currentHorizon()||{}).name) || "Widen our Horizon") : view==="pdt" ? (((currentPdt()||{}).name) || "Product All in One") : view==="rmap" ? ((_rm && _rm.name) || "Roadmap") : (DATA.title || "Product Roadmap");
+  $("rm-title").textContent = view==="todo" ? (typeof todoTitle==="function" ? todoTitle() : "My To-do") : view==="admin" ? "Administration" : view==="okr" ? "Team OKRs" : view==="content" ? "Educational Content Roadmap" : view==="ideas" ? "Team Ideas" : view==="dev" ? "Development Board" : view==="bugs" ? "Bugs & Issues" : view==="cbugs" ? ((CSPACES.list.find(x=>x.id===activeCspace)||{}).name || "Bugs board") : view==="disc" ? (((currentDisc()||{}).name) || "Product roadmap") : view==="social" ? (((currentSocial()||{}).name) || "Social Media") : view==="campaign" ? (((currentCampaign()||{}).name) || "Campaign") : view==="watch" ? (((currentWatch()||{}).name) || "Keep an Eye") : view==="maverick" ? (((currentMaverick()||{}).name) || "Maverick Admin") : view==="horizon" ? (((currentHorizon()||{}).name) || "Widen our Horizon") : view==="pdt" ? (((currentPdt()||{}).name) || "Product All in One") : view==="rmap" ? ((_rm && _rm.name) || "Roadmap") : (DATA.title || "Product Roadmap");
   $("rm-subtitle").textContent = view==="todo"
     ? ""
     : view==="okr"
@@ -19844,7 +19846,7 @@ function renderAll(){
   const ws = $("ws-switch");
   ws.innerHTML = "";
   if(view!=="okr"){
-    /* ---- My To-do (private, for people with the "My To-do" permission) ---- */
+    /* ---- My To-do (everyone in the team; "Our To-do" when shared with teammates) ---- */
     if(typeof todoCan==="function" && todoCan()) ws.appendChild(todoSideItem());
     /* ---- the CEO's pinned strategy sits above everything ---- */
     const _strat = docStrategyChip();
