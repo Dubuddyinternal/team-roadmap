@@ -1860,6 +1860,46 @@ setInterval(function () {
   else if (!todoSaving() && !todoIdeaEdit && TODO.loaded) todoLoad();
 }, 60000);
 
+/* ---------- 🗺 Our Timeline: a private roadmap for the people in Our To-do ----------
+   The same chart as "Dubuddy Till December Plan" (index.html rmapMergedPane): every space's Timeline merged in
+   (⚙ Merge picks which), and our own phases and rows below for anything else — in or outside Dubuddy. It is an
+   ordinary roadmap in RMAPS (saved with the team's roadmaps), access "private" with the circle's people as its
+   admins, marked m.ourTodo = circle id so it sits here and not in the sidebar. Team owners / admins can still open
+   it, as they can every space. */
+function todoOurMap() { return OUR.circle && typeof RMAPS !== "undefined" ? (RMAPS.maps || []).find(function (m) { return m.ourTodo === OUR.circle.id; }) || null : null; }
+// while the tab is open, rights on the chart come from that roadmap (index.html currentSpaceRef asks)
+function todoOurMapRef() { var m = typeof view !== "undefined" && view === "todo" && todoTab === "timeline" ? todoOurMap() : null; return m ? rmapRef(m) : null; }
+function todoOurMapCreate() {
+  var plan = (RMAPS.maps || []).find(function (m) { return m.id === "rm-mvc9vjcn"; }) || (RMAPS.maps || []).find(function (m) { return m.merge && !m.ourTodo; });
+  var members = {}, me = currentUser();
+  OUR.members.filter(function (x) { return x.status === "joined"; }).forEach(function (x) { var u = todoPerson(x.user_id); if (u && u.email) members[String(u.email).toLowerCase()] = "admin"; });
+  if (me && me.email) members[String(me.email).toLowerCase()] = "admin";
+  var nm = { id: "rm-our" + Date.now().toString(36), name: "Our Timeline — " + todoFirstName(me.id) + " & " + todoCircleNames(), view: "gantt",
+    items: [], own: [], markers: [], access: "private", members: members, ourTodo: OUR.circle.id,
+    merge: { from: plan && plan.merge && Array.isArray(plan.merge.from) ? plan.merge.from.slice() : null } };
+  rmlEnsureLanes(nm, "gantt");
+  RMAPS.maps.push(nm);
+  saveRmaps();
+  toast("Our Timeline is ready");
+}
+function todoOurTimeline(wrap) {
+  var m = todoOurMap();
+  if (!m) {
+    var box = todoEl("section", "module-block td-our-setup");
+    box.appendChild(todoEl("h2", "", "🗺 Our Timeline"));
+    box.appendChild(todoEl("p", "hint", "One chart for " + todoFirstName((currentUser() || {}).id) + " & " + todoCircleNames() + ": the Dubuddy Till December Plan (every space's Timeline, merged — ⚙ Merge picks which), and your own phases and rows below for anything else, in or outside Dubuddy. Only the two of you see it here (team owners and admins can open it, as they can every space)."));
+    var go = todoEl("button", "btn save", "＋ Set up our timeline");
+    go.onclick = function () { go.disabled = true; todoOurMapCreate(); };
+    box.appendChild(go);
+    wrap.appendChild(box);
+    return;
+  }
+  var byTid = {};
+  allTasks().forEach(function (x) { byTid[x.tid] = x; });
+  m.items = (m.items || []).filter(function (it) { return byTid[it.tid]; });
+  rmapMergedPane(m, wrap, byTid);
+}
+
 /* ---------- counts (sidebar and Summary) ---------- */
 function todoCounts() {
   var S = todoSources(), t = todoToday(), c = { todo: 0, progress: 0, done: 0 };
@@ -1877,6 +1917,8 @@ function todoCounts() {
 function todoTabs(strip) {
   todoPeopleTop(strip);
   var tabs = [["plan", "🗓 Plan"], ["ideas", "💭 Thoughts warehouse"], ["why", "🧭 Why I do what I do"]];
+  if (OUR.circle && OUR.team === TEAM) tabs.splice(1, 0, ["timeline", "🗺 Our Timeline"]);   // only for the people in Our To-do
+  else if (todoTab === "timeline") todoTab = "plan";
   if (typeof accSalesGlance === "function" && typeof accCan === "function" && accCan()) tabs.push(["sales", "💳 Sales"]);   // accounts.js: owners + super-admins
   else if (todoTab === "sales") todoTab = "plan";
   tabs.forEach(function (T) {
@@ -1898,6 +1940,7 @@ function renderContentTodo() {
   if (todoTab === "why") { wrap.appendChild(todoWhyPage()); return; }
   if (todoTab === "ideas") { wrap.appendChild(todoIdeas()); return; }
   if (todoTab === "sales") { wrap.appendChild(accSalesGlance()); return; }
+  if (todoTab === "timeline") { todoOurTimeline(wrap); return; }
   try { if (todoAutoPlace()) setTimeout(todoSave, 0); } catch (_) { }   // sprints I've been made owner of
   todoPlanBar(wrap);
   wrap.appendChild(todoPhaseBanner());

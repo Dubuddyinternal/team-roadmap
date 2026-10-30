@@ -5844,6 +5844,7 @@ function currentSpaceRef(){
   if(view==="content"){ const cs=(CSPACES.list||[]).find(x=>x.type==="content" && x.sectionKey===activeSection); return cs?{key:"cs:"+cs.id,obj:cs,name:cs.name}:null; }
   if(view==="roadmap"){ const topKey=String(activeModule).split("::")[0]; const cs=(CSPACES.list||[]).find(x=>x.type==="module" && x.moduleKey===topKey); return cs?{key:"cs:"+cs.id,obj:cs,name:cs.name}:null; }
   if(view==="rmap"){ const rm = RMAPS.maps.find(x=>x.id===activeRmap); return rm ? rmapRef(rm) : null; }
+  if(view==="todo" && typeof todoOurMapRef==="function") return todoOurMapRef();   // 🗺 Our Timeline tab (my-todo.js); else null
   return null;   // okrs, ideas, admin => team-level only
 }
 // synthetic host objects for the two built-in spaces so they can hold members[]
@@ -6577,7 +6578,7 @@ const DISC_THEMES = [
 ];
 function normalizeCspaces(c){
   c = c || {};
-  c.list = c.list || [];
+  c.list = (c.list || []).filter(x=> x && typeof x === "object");   // an empty entry is skipped, not a crash
   c.list.forEach(x=>{
     if(!x.id) x.id = "cs-" + Math.random().toString(36).slice(2,8);
     x.type = ["scrum","discovery","content","module","research","competitor","social","pdt","marketing","campaign","watch","horizon","maverick","process","procdept"].includes(x.type) ? x.type : "bugs";
@@ -7732,7 +7733,12 @@ async function refresh(showMsg){
     if(got.count && changed){
       got.team.name = (TEAMS[TEAM] && TEAMS[TEAM].name) || TEAM;
       lastLoadedTeam = got.team;
-      loadTeamData(got.team);
+      try{ loadTeamData(got.team); }
+      catch(e){   // half-loaded: stop saving from this tab, rather than write what's on screen over the team's data
+        db = false;
+        try{ showBanner("⚠️ The latest team data couldn't be loaded (" + e.message + "). Saving is switched off in this tab so nothing gets overwritten — reload the page; if it keeps happening, tell Claude."); }catch(_){ }
+        return;
+      }
       rememberSections(teamPayload());
       lastSnapshot = JSON.stringify(teamPayload());
       renderAll();
@@ -7789,7 +7795,8 @@ async function start(){
     hideBanner();
     got.team.name = TEAMS[TEAM].name;
     lastLoadedTeam = got.team;
-    loadTeamData(got.team);
+    // a load that breaks half-way must never be allowed to save: what's on screen then isn't the team's data
+    try{ loadTeamData(got.team); }catch(e){ db = false; throw e; }
     rememberSections(teamPayload());       // baseline = what's on screen, so only real edits get saved
     lastSnapshot = JSON.stringify(teamPayload());
   } else if(got){
@@ -8637,7 +8644,7 @@ function openAllList(kind){
   closeAllList();
   let items=[];
   if(kind==="roadmaps"){
-    RMAPS.maps.filter(m=>canViewSpace(rmapRef(m))).forEach(m=>{
+    RMAPS.maps.filter(m=>canViewSpace(rmapRef(m)) && !m.ourTodo).forEach(m=>{
       items.push({name:m.name, sub:"Roadmap", dot:"rm", go:()=>{ view="rmap"; activeRmap=m.id; renderAll(); }});
     });
   } else {
@@ -19852,7 +19859,7 @@ function renderAll(){
     const _strat = docStrategyChip();
     if(_strat) ws.appendChild(_strat);
     /* ---- top-level ROADMAPS first (timelines across every space) ---- */
-    const _allRm = RMAPS.maps.filter(m=>canViewSpace(rmapRef(m)) && !hiddenForMe("rm:"+m.id));
+    const _allRm = RMAPS.maps.filter(m=>canViewSpace(rmapRef(m)) && !hiddenForMe("rm:"+m.id) && !m.ourTodo);   // Our Timeline lives in Our To-do
     // the ROADMAPS heading only shows when there's a roadmap to see (new ones are made in Administration → Roadmaps)
     if(_allRm.length){
       const rl = document.createElement("div");
