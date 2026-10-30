@@ -977,6 +977,7 @@ function todoGantt(S) {
     grid.appendChild(add); cellsRow(rIdx, g.id, "addrow");
     rIdx++;
   });
+  rIdx = todoHeadRows(grid, rIdx, dayOf, nD, cellsRow);   // 👑 the spaces I head, read-only, below my own groups
   if (tn >= d0 && tn <= dEnd) {
     var tl = todoEl("div", "rms-today"); tl.title = "Today";
     tl.style.gridRow = "1 / " + rIdx; tl.style.gridColumn = String(tn - d0 + 2);
@@ -1930,8 +1931,8 @@ function todoOurPeople() {
   todoMates("joined").forEach(function (x) { var u = todoPerson(x.user_id); if (u && !out.some(function (y) { return y.id === u.id; })) out.push(u); });
   return out;
 }
-/* ---------- 🗺 My Timeline: everything in the spaces I head ----------
-   A head of a space (cs.heads, set in the space's people) sees its whole Timeline here, and every space
+/* ---------- 👑 the spaces I head, inside 🗓 Timeline ----------
+   A head of a space (cs.heads, set in the space's people) sees its whole Timeline there, and every space
    inside it — e.g. the head of Marketing sees Social Media's schedule, each campaign, and any space added
    under Marketing later, even one with a head of its own (who sees it in theirs too). Read-only: rows are
    changed where they live (dragging a bar here moves it there, as on a merged roadmap). Nothing is saved. */
@@ -1949,25 +1950,66 @@ function todoHeadSpaces() {
     return true;
   });
 }
-var TODO_HEADC = {};
-function todoHeadTimeline(wrap) {
-  var spaces = todoHeadSpaces(), who = todoPeek ? todoFirstName(todoPeek) : "you";
+/* the same, drawn inside 🗓 Timeline (the Month / Quarter / Week chart): one ▾ section per space I head, its
+   inner spaces and phases as sections under it, its rows with their bars. Read-only — a row opens where it lives.
+   Folding is kept for the session (TODO_HFOLD); nothing is saved. Returns the next grid row. */
+var TODO_HFOLD = {};
+function todoHeadRows(grid, rIdx, dayOf, nD, cellsRow) {
+  var spaces; try { spaces = todoHeadSpaces(); } catch (_) { return rIdx; }
+  if (!spaces.length) return rIdx;
   var byTid = {}; allTasks().forEach(function (x) { byTid[x.tid] = x; });
-  var key = todoHeadEmail(), C = TODO_HEADC[key] || (TODO_HEADC[key] = { id: "hdc-" + key, view: "gantt", gWin: 0, spaceOf: "merge" });
   var lanes = [], items = [];
   spaces.forEach(function (cs) {
     var par = cs.parent ? todoCsById(cs.parent) : null;
-    if (MERGE_TYPES.indexOf(cs.type) >= 0) todoTlAddSpace(cs, "hd:", null, lanes, items, byTid);
-    else if (par && par.type === "marketing") todoTlAddSpace(par, "hd:", null, lanes, items, byTid, cs);   // e.g. Social Media under Marketing
+    try {
+      if (MERGE_TYPES.indexOf(cs.type) >= 0) todoTlAddSpace(cs, "hd:", null, lanes, items, byTid);
+      else if (par && par.type === "marketing") todoTlAddSpace(par, "hd:", null, lanes, items, byTid, cs);   // e.g. Social Media under Marketing
+    } catch (_) { }
   });
-  C.name = "🗺 " + (todoPeek ? todoFirstName(todoPeek) + "'s" : "My") + " Timeline";
-  C.lanes = lanes.length ? lanes : [{ id: "hd-none", name: "Nothing planned in these spaces yet", kind: "project" }];
-  C.items = items;
-  C.mapOf = function () { return null; };   // read-only here: change things where they live
-  C.barButtons = function () { };
-  wrap.appendChild(todoEl("div", "hint", "Everything in the space" + (spaces.length === 1 ? "" : "s") + " " + who + " head" + (todoPeek ? "s" : "") + ": " +
-    spaces.map(function (cs) { return cs.name; }).join(", ") + " — and every space inside. ▾ minimizes a section; open a row to change it where it lives.")).style.margin = "0 0 8px";
-  renderRmapGantt(C, wrap, byTid);
+  var inView = function (it) { if (!it.start && !it.end) return true; var a = it.start || it.end, b = it.end || it.start; return !(dayOf(b) < 0 || dayOf(a) > nD - 1); };
+  var kidsOf = function (id) { return lanes.filter(function (l) { return (l.parent || null) === id; }); };
+  var rowsOf = function (l) { return items.filter(function (it) { return it.lane === l.id && inView(it); }); };
+  var count = function (l) { return rowsOf(l).length + kidsOf(l.id).reduce(function (n, k) { return n + count(k); }, 0); };
+  var draw = function (l, depth) {
+    var n = count(l);
+    if (depth && !n) return;   // an empty inner section stays out
+    var lab = todoEl("div", "rmg-phase td-head-sec"); lab.style.gridRow = String(rIdx); lab.dataset.lane = l.id;
+    if (depth) lab.style.paddingLeft = (8 + depth * 16) + "px";
+    var fo = todoEl("button", "td-fold", TODO_HFOLD[l.id] ? "▸" : "▾"); fo.title = TODO_HFOLD[l.id] ? "Show it" : "Minimise it";
+    fo.onclick = function (ev) { ev.stopPropagation(); if (TODO_HFOLD[l.id]) delete TODO_HFOLD[l.id]; else TODO_HFOLD[l.id] = 1; renderAll(); };
+    lab.appendChild(fo);
+    lab.appendChild(todoEl("span", "rmg-pname", (depth ? "" : "👑 ") + l.name));
+    lab.appendChild(todoEl("span", "rmg-pct", n ? String(n) : ""));
+    if (!depth) lab.title = "A space you head — read-only here; open a row to change it where it lives";
+    grid.appendChild(lab); cellsRow(rIdx, l.id, "phase"); rIdx++;
+    if (TODO_HFOLD[l.id]) return;
+    rowsOf(l).forEach(function (it) {
+      var en = byTid[it.tid] || {}, t = en.task || {}, title = t.title || t.name || "(untitled)";
+      var st = ""; try { st = effStatus(t); } catch (_) { }
+      var done = it.done || st === "done";
+      var nm = todoEl("div", "rmg-task" + (done ? " done" : "")); nm.style.gridRow = String(rIdx); nm.dataset.lane = l.id;
+      nm.style.paddingLeft = (20 + depth * 16) + "px";
+      nm.appendChild(todoEl("span", "rmg-tt", (done ? "✓ " : "") + title));
+      var span = it.start || it.end ? fmtD(it.start || it.end) + (it.end && it.end !== it.start ? " → " + fmtD(it.end) : "") : "No date";
+      nm.appendChild(todoEl("span", "rmg-td", span + (it.owner ? " · 👤 " + it.owner : "")));
+      nm.title = title + (it._from ? "\n" + it._from : "") + "\nRead-only here — click to open it where it lives";
+      nm.style.cursor = "pointer";
+      if (typeof it.open === "function") nm.onclick = function () { it.open(); };
+      grid.appendChild(nm); cellsRow(rIdx, l.id, "");
+      if (it.start || it.end) {
+        var s = Math.max(0, dayOf(it.start || it.end)), e = Math.min(nD - 1, Math.max(s, dayOf(it.end || it.start)));
+        var bar = todoEl("div", "rmg-blk rmg-line" + (done ? " done" : ""));
+        bar.style.gridRow = String(rIdx); bar.style.gridColumn = (s + 2) + " / " + (e + 3);
+        bar.style.background = it.color || "#3A9CA8"; bar.title = nm.title;
+        if (typeof it.open === "function") { bar.style.cursor = "pointer"; bar.onclick = function () { it.open(); }; }
+        grid.appendChild(bar);
+      }
+      rIdx++;
+    });
+    kidsOf(l.id).forEach(function (k) { draw(k, depth + 1); });
+  };
+  kidsOf(null).forEach(function (l) { draw(l, 0); });
+  return rIdx;
 }
 // on / off, remembered in this browser (a view setting — nothing is saved to the team)
 function todoOurOnly() { try { return localStorage.getItem("cf-our-only-" + TEAM) === "1"; } catch (_) { return false; } }
@@ -2089,12 +2131,10 @@ function todoCounts() {
 // the tab strip at the top of the page (index.html renderTabs calls this on My To-do)
 function todoTabs(strip) {
   todoPeopleTop(strip);
-  var tabs = [["plan", "🗓 Plan"], ["ideas", "💭 Thoughts warehouse"], ["why", "🧭 Why I do what I do"]];
+  var tabs = [["plan", "🗓 Timeline"], ["ideas", "💭 Thoughts warehouse"], ["why", "🧭 Why I do what I do"]];
   if (OUR.circle && OUR.team === TEAM) tabs.splice(1, 0, ["timeline", "🗺 Our Timeline"]);   // only for the people in Our To-do
   else if (todoTab === "timeline") todoTab = "plan";
-  var heads = false; try { heads = todoHeadSpaces().length > 0; } catch (_) { }
-  if (heads) tabs.splice(1, 0, ["headtl", "🗺 My Timeline"]);   // heads of a space: everything in it
-  else if (todoTab === "headtl") todoTab = "plan";
+  if (todoTab === "headtl") todoTab = "plan";   // the spaces I head now sit inside 🗓 Timeline (todoHeadRows)
   if (typeof accSalesGlance === "function" && typeof accCan === "function" && accCan()) tabs.push(["sales", "💳 Sales"]);   // accounts.js: owners + super-admins
   else if (todoTab === "sales") todoTab = "plan";
   tabs.forEach(function (T) {
@@ -2117,7 +2157,6 @@ function renderContentTodo() {
   if (todoTab === "ideas") { wrap.appendChild(todoIdeas()); return; }
   if (todoTab === "sales") { wrap.appendChild(accSalesGlance()); return; }
   if (todoTab === "timeline") { todoOurTimeline(wrap); return; }
-  if (todoTab === "headtl") { todoHeadTimeline(wrap); return; }
   try { if (todoAutoPlace()) setTimeout(todoSave, 0); } catch (_) { }   // sprints I've been made owner of
   todoPlanBar(wrap);
   wrap.appendChild(todoPhaseBanner());
@@ -2129,7 +2168,7 @@ function todoPlanBar(wrap) {
   var S = todoSources();
   var head = todoEl("section", "module-block rm-bar");
   var row = todoEl("div", "module-head");
-  row.appendChild(todoEl("h2", "", todoPeek ? todoFirstName(todoPeek) + "'s plan" : "My plan"));
+  row.appendChild(todoEl("h2", "", todoPeek ? todoFirstName(todoPeek) + "'s timeline" : "My timeline"));
   var ctl = todoEl("span", "rmg-win"), seg = todoEl("span", "rmg-seg");
   TODO_LEVELS.forEach(function (L) {
     var b = todoEl("button", todoLevel === L[0] ? "on" : "", L[1]);
