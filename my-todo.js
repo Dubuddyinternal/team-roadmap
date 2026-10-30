@@ -1930,6 +1930,45 @@ function todoOurPeople() {
   todoMates("joined").forEach(function (x) { var u = todoPerson(x.user_id); if (u && !out.some(function (y) { return y.id === u.id; })) out.push(u); });
   return out;
 }
+/* ---------- 🗺 My Timeline: everything in the spaces I head ----------
+   A head of a space (cs.heads, set in the space's people) sees its whole Timeline here, and every space
+   inside it — e.g. the head of Marketing sees Social Media's schedule, each campaign, and any space added
+   under Marketing later, even one with a head of its own (who sees it in theirs too). Read-only: rows are
+   changed where they live (dragging a bar here moves it there, as on a merged roadmap). Nothing is saved. */
+function todoHeadEmail() { var u = (todoPeek ? todoPerson(todoPeek) : currentUser()) || {}; return String(u.email || "").toLowerCase(); }
+function todoHeadsCs(cs) { return (Array.isArray(cs.heads) ? cs.heads : []).map(function (e) { return String(e).toLowerCase(); }); }
+function todoCsById(id) { return ((CSPACES && CSPACES.list) || []).find(function (x) { return x.id === id; }) || null; }
+// the spaces I head, highest first; a space inside one I already head isn't listed again (it's shown inside)
+function todoHeadSpaces() {
+  var em = todoHeadEmail(); if (!em) return [];
+  var list = ((CSPACES && CSPACES.list) || []).filter(function (cs) { return todoHeadsCs(cs).indexOf(em) >= 0 && todoCanSee(cs); });
+  var mine = {}; list.forEach(function (cs) { mine[cs.id] = 1; });
+  return list.filter(function (cs) {
+    var p = cs.parent ? todoCsById(cs.parent) : null, g = 0;
+    while (p && g++ < 8) { if (mine[p.id]) return false; p = p.parent ? todoCsById(p.parent) : null; }
+    return true;
+  });
+}
+var TODO_HEADC = {};
+function todoHeadTimeline(wrap) {
+  var spaces = todoHeadSpaces(), who = todoPeek ? todoFirstName(todoPeek) : "you";
+  var byTid = {}; allTasks().forEach(function (x) { byTid[x.tid] = x; });
+  var key = todoHeadEmail(), C = TODO_HEADC[key] || (TODO_HEADC[key] = { id: "hdc-" + key, view: "gantt", gWin: 0, spaceOf: "merge" });
+  var lanes = [], items = [];
+  spaces.forEach(function (cs) {
+    var par = cs.parent ? todoCsById(cs.parent) : null;
+    if (MERGE_TYPES.indexOf(cs.type) >= 0) todoTlAddSpace(cs, "hd:", null, lanes, items, byTid);
+    else if (par && par.type === "marketing") todoTlAddSpace(par, "hd:", null, lanes, items, byTid, cs);   // e.g. Social Media under Marketing
+  });
+  C.name = "🗺 " + (todoPeek ? todoFirstName(todoPeek) + "'s" : "My") + " Timeline";
+  C.lanes = lanes.length ? lanes : [{ id: "hd-none", name: "Nothing planned in these spaces yet", kind: "project" }];
+  C.items = items;
+  C.mapOf = function () { return null; };   // read-only here: change things where they live
+  C.barButtons = function () { };
+  wrap.appendChild(todoEl("div", "hint", "Everything in the space" + (spaces.length === 1 ? "" : "s") + " " + who + " head" + (todoPeek ? "s" : "") + ": " +
+    spaces.map(function (cs) { return cs.name; }).join(", ") + " — and every space inside. ▾ minimizes a section; open a row to change it where it lives.")).style.margin = "0 0 8px";
+  renderRmapGantt(C, wrap, byTid);
+}
 // on / off, remembered in this browser (a view setting — nothing is saved to the team)
 function todoOurOnly() { try { return localStorage.getItem("cf-our-only-" + TEAM) === "1"; } catch (_) { return false; } }
 function todoOurOnlySet(on) { try { if (on) localStorage.setItem("cf-our-only-" + TEAM, "1"); else localStorage.removeItem("cf-our-only-" + TEAM); } catch (_) { } }
@@ -1943,28 +1982,38 @@ function todoOurMaps(m) {
 }
 function todoOurSpaces(m) { return Array.isArray(m.ourMaps) ? rmapMergedFrom(m) : []; }
 var TODO_OURC = {};   // the chart object per Our Timeline (kept for the session, so its 1/2/3-month choice sticks)
+// one space's Timeline into a chart, under `parent`, its ids prefixed with P (as on a roadmap that merges spaces).
+// `only` = a Marketing space's child: just that child's rows of its parent's Timeline (social posts, a campaign…)
+function todoTlAddSpace(cs, P, parent, lanes, items, byTid, only) {
+  var got; try { got = spaceTimelineMap(cs); } catch (e) { return; }
+  var sm = got.m, head = { id: P + "mg:" + (only ? only.id : cs.id), name: csTypeIcon((only || cs).type) + " " + (only || cs).name, kind: "project", parent: parent || undefined };
+  var sl = sm.lanes || [], si = sm.items || [];
+  if (only) {   // the child's own lane ("mv-<id>") and what sits under it
+    var inside = {}; inside["mv-" + only.id] = 1;
+    var grew = true; while (grew) { grew = false; sl.forEach(function (l) { if (!inside[l.id] && l.parent && inside[l.parent]) { inside[l.id] = 1; grew = true; } }); }
+    sl = sl.filter(function (l) { return inside[l.id]; }); si = si.filter(function (it) { return inside[it.lane]; });
+    if (!sl.length) return;
+  }
+  if (!only) lanes.push(head);   // a child's own lane is its heading already
+  var top = only ? (parent || undefined) : head.id;
+  Object.keys(got.byTid).forEach(function (k) { byTid[k] = got.byTid[k]; });
+  var ids = {}; sl.forEach(function (l) { ids[l.id] = 1; });
+  sl.forEach(function (ln) {
+    lanes.push({ id: P + cs.id + ":" + ln.id, name: sm.laneLabel ? sm.laneLabel(ln) : ln.name, kind: ln.kind || "project", parent: ln.parent && ids[ln.parent] ? P + cs.id + ":" + ln.parent : top });
+  });
+  si.forEach(function (it) {
+    if (!byTid[it.tid]) return;
+    var cp = Object.assign({}, it, { rid: P + cs.id + ":" + it.rid, lane: P + cs.id + ":" + it.lane, parent: it.parent ? P + cs.id + ":" + it.parent : undefined, _from: cs.name });
+    if (!cp.move && byTid[it.tid].kind !== "virtual") rmgWriteBack(cp, it, cs);   // dragging it here changes it in its space
+    if (!cp.open) cp.open = function () { goSpace(cs, "timeline"); };
+    items.push(cp);
+  });
+}
 function todoOurChart(m, byTid) {
   var C = TODO_OURC[m.id] || (TODO_OURC[m.id] = { id: "omc-" + m.id, view: "gantt", gWin: m.gWin || 0, spaceOf: "merge" });
   C.name = m.name;
   var lanes = [], items = [], label = {};
-  // one space's Timeline under `parent`, its ids prefixed with P (as on a roadmap that merges spaces)
-  var addSpace = function (cs, P, parent) {
-    var got; try { got = spaceTimelineMap(cs); } catch (e) { return; }
-    var sm = got.m, head = { id: P + "mg:" + cs.id, name: csTypeIcon(cs.type) + " " + cs.name, kind: "project", parent: parent || undefined };
-    lanes.push(head);
-    Object.keys(got.byTid).forEach(function (k) { byTid[k] = got.byTid[k]; });
-    var ids = {}; (sm.lanes || []).forEach(function (l) { ids[l.id] = 1; });
-    (sm.lanes || []).forEach(function (ln) {
-      lanes.push({ id: P + cs.id + ":" + ln.id, name: sm.laneLabel ? sm.laneLabel(ln) : ln.name, kind: ln.kind || "project", parent: ln.parent && ids[ln.parent] ? P + cs.id + ":" + ln.parent : head.id });
-    });
-    (sm.items || []).forEach(function (it) {
-      if (!byTid[it.tid]) return;
-      var cp = Object.assign({}, it, { rid: P + cs.id + ":" + it.rid, lane: P + cs.id + ":" + it.lane, parent: it.parent ? P + cs.id + ":" + it.parent : undefined, _from: cs.name });
-      if (!cp.move && byTid[it.tid].kind !== "virtual") rmgWriteBack(cp, it, cs);   // dragging it here changes it in its space
-      if (!cp.open) cp.open = function () { goSpace(cs, "timeline"); };
-      items.push(cp);
-    });
-  };
+  var addSpace = function (cs, P, parent) { todoTlAddSpace(cs, P, parent, lanes, items, byTid); };
   // 🗺 each roadmap: its merged spaces, then its own rows — read-only here, opened on the roadmap
   todoOurMaps(m).forEach(function (R) {
     var P = "om:" + R.id + ":", head = { id: "om:" + R.id, name: "🗺 " + R.name, kind: "project" };
@@ -2043,6 +2092,9 @@ function todoTabs(strip) {
   var tabs = [["plan", "🗓 Plan"], ["ideas", "💭 Thoughts warehouse"], ["why", "🧭 Why I do what I do"]];
   if (OUR.circle && OUR.team === TEAM) tabs.splice(1, 0, ["timeline", "🗺 Our Timeline"]);   // only for the people in Our To-do
   else if (todoTab === "timeline") todoTab = "plan";
+  var heads = false; try { heads = todoHeadSpaces().length > 0; } catch (_) { }
+  if (heads) tabs.splice(1, 0, ["headtl", "🗺 My Timeline"]);   // heads of a space: everything in it
+  else if (todoTab === "headtl") todoTab = "plan";
   if (typeof accSalesGlance === "function" && typeof accCan === "function" && accCan()) tabs.push(["sales", "💳 Sales"]);   // accounts.js: owners + super-admins
   else if (todoTab === "sales") todoTab = "plan";
   tabs.forEach(function (T) {
@@ -2065,6 +2117,7 @@ function renderContentTodo() {
   if (todoTab === "ideas") { wrap.appendChild(todoIdeas()); return; }
   if (todoTab === "sales") { wrap.appendChild(accSalesGlance()); return; }
   if (todoTab === "timeline") { todoOurTimeline(wrap); return; }
+  if (todoTab === "headtl") { todoHeadTimeline(wrap); return; }
   try { if (todoAutoPlace()) setTimeout(todoSave, 0); } catch (_) { }   // sprints I've been made owner of
   todoPlanBar(wrap);
   wrap.appendChild(todoPhaseBanner());
