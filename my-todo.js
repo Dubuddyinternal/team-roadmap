@@ -363,7 +363,11 @@ function todoAssigned() {
     (cs.gantt.items || []).forEach(function (it) {
       if (!it.tid || !todoOwnerIsMe(me, it.owner)) return;
       var x = reg[it.tid]; if (!x || !x.task) return;
-      if (have["idea:" + it.tid]) return;   // already on the list as my Product Roadmap idea
+      if (have["idea:" + it.tid]) {   // already on the list as my Product Roadmap idea: give it the row's dates
+        var ie = out.find(function (e) { return e.key === "idea:" + it.tid; });
+        if (ie && !ie.due && it.end) { ie.start = todoISO(it.start); ie.due = todoISO(it.end); }
+        return;
+      }
       var key = "tl:" + (cs.id || "eng") + ":" + it.tid; if (have[key]) return; have[key] = 1;
       var st = ""; try { st = effStatus(x.task); } catch (_) { }
       var done = it.done || st === "done" || x.task.stage === "done" || x.task.col === "done";
@@ -786,10 +790,10 @@ function todoPickAssigned() {
     return { id: e.key, title: e.title || "(untitled)", sub: e.icon + " " + (e.board || e.where) + (e.status ? " · " + e.status : "") + (e.due ? " · due " + fmtD(e.due) : ""), on: !!on[e.key], e: e };
   });
   todoPickDialog("📥 Assigned to me", "Everything on the team's boards that's yours and not done. Tick and place them on your timeline.", rows, function (ps) {
-    var gid = todoGroupFor("Assigned to me"), st = todoPlaceStart();
+    var st = todoPlaceStart();
     ps.forEach(function (p) {
       var a = p.e.start || st, en = p.e.due && p.e.due >= a ? p.e.due : todoAddDays(a, 6);   // a timeline row keeps its own dates
-      todoNewTask(p.title, gid, a, en, { k: "asg", key: p.id });
+      todoNewTask(p.title, todoGroupFor(todoAsgSpace(p.e)), a, en, { k: "asg", key: p.id });   // in a group named after its space
     });
     todoSave(); toast(ps.length + " placed on your plan — drag them to the right days");
   });
@@ -977,6 +981,7 @@ function todoGantt(S) {
     grid.appendChild(add); cellsRow(rIdx, g.id, "addrow");
     rIdx++;
   });
+  rIdx = todoAsgRows(grid, rIdx, dayOf, nD, cellsRow, S);   // 📥 mine on the boards, not on my plan yet
   rIdx = todoHeadRows(grid, rIdx, dayOf, nD, cellsRow);   // 👑 the spaces I head, read-only, below my own groups
   if (tn >= d0 && tn <= dEnd) {
     var tl = todoEl("div", "rms-today"); tl.title = "Today";
@@ -1950,6 +1955,69 @@ function todoHeadSpaces() {
     return true;
   });
 }
+/* Assigned work, drawn inside 🗓 Timeline: everything on the boards that's mine, not done and not on my plan
+   yet, on its own dates (a timeline row's, an idea's phase, a card's due date) — under a heading for the space
+   it's from (💡 Product Roadmap, 🏃 Engineering Team, a bugs board…), like a space I head. ＋ on a row puts it on
+   my plan in a group named after that space; clicking it opens it where it lives. Only drawn here; the plan
+   itself changes only through ＋. Returns the next grid row. */
+// the space an assigned thing comes from: "Product Roadmap" from "Product Roadmap · Timeline", the team from
+// "Engineering · Engineering Team", the roadmap from "Roadmap · …"
+function todoAsgSpace(e) {
+  var b = String(e.board || e.where || e.src || "Other");
+  if (b.indexOf("Engineering · ") === 0) return b.slice(14) || "Engineering";
+  return b.split(" · ")[0].split(" › ")[0] || "Other";
+}
+function todoAsgIcon(name, e) {
+  var cs = ((CSPACES && CSPACES.list) || []).find(function (x) { return x.name === name; });
+  return cs && typeof csTypeIcon === "function" ? csTypeIcon(cs.type) : (e.icon || "📁");
+}
+function todoAsgRows(grid, rIdx, dayOf, nD, cellsRow, S) {
+  var on = {}; try { on = todoOnPlan(); } catch (_) { }
+  var inView = function (e) { if (!e.start && !e.due) return true; var a = e.start || e.due, b = e.due || e.start; return !(dayOf(b) < 0 || dayOf(a) > nD - 1); };
+  var list = Object.keys(S.asg || {}).map(function (k) { return S.asg[k]; })
+    .filter(function (e) { return e.col !== "done" && !on[e.key] && inView(e); })
+    .sort(function (a, b) { return (a.start || a.due || "9") < (b.start || b.due || "9") ? -1 : 1; });
+  var groups = [], by = {};
+  list.forEach(function (e) { var g = todoAsgSpace(e); if (!by[g]) { by[g] = []; groups.push(g); } by[g].push(e); });
+  groups.forEach(function (g) {
+    var id = "asg:" + g, items = by[g];
+    var lab = todoEl("div", "rmg-phase td-head-sec"); lab.style.gridRow = String(rIdx); lab.dataset.lane = id;
+    var fo = todoEl("button", "td-fold", TODO_HFOLD[id] ? "▸" : "▾"); fo.title = TODO_HFOLD[id] ? "Show it" : "Minimise it";
+    fo.onclick = function (ev) { ev.stopPropagation(); if (TODO_HFOLD[id]) delete TODO_HFOLD[id]; else TODO_HFOLD[id] = 1; renderAll(); };
+    lab.appendChild(fo);
+    lab.appendChild(todoEl("span", "rmg-pname", todoAsgIcon(g, items[0]) + " " + g));
+    lab.appendChild(todoEl("span", "rmg-pct", String(items.length)));
+    lab.title = "Assigned to " + (todoPeek ? todoFirstName(todoPeek) : "you") + " in " + g + ", not on the plan yet — ＋ puts one on it";
+    grid.appendChild(lab); cellsRow(rIdx, id, "phase"); rIdx++;
+    if (TODO_HFOLD[id]) return;
+    items.forEach(function (e) {
+      var nm = todoEl("div", "rmg-task"); nm.style.gridRow = String(rIdx); nm.dataset.lane = id; nm.style.paddingLeft = "20px";
+      nm.appendChild(todoEl("span", "rmg-tt", (e.icon ? e.icon + " " : "") + (e.title || "(untitled)")));
+      var span = e.start || e.due ? (e.start && e.start !== e.due ? fmtD(e.start) + " → " : e.due ? "due " : "") + (e.due ? fmtD(e.due) : "") : "No date";
+      nm.appendChild(todoEl("span", "rmg-td", span + (e.status ? " · " + e.status : "")));
+      nm.title = (e.title || "") + "\n" + (e.board || e.where || "") + (e.status ? " · " + e.status : "") + "\nClick to open it where it lives · ＋ to put it on your plan";
+      nm.style.cursor = "pointer";
+      nm.onclick = function () { try { e.open(); } catch (_) { } };
+      var pl = todoEl("button", "td-gadd td-subbtn", "＋"); pl.title = "Put it on my plan, on these dates";
+      pl.onclick = function (ev) {
+        ev.stopPropagation();
+        var a = e.start || (e.due && e.due < todoPlaceStart() ? e.due : todoPlaceStart()), b = e.due && e.due >= a ? e.due : todoAddDays(a, 6);
+        todoNewTask(e.title || "(untitled)", todoGroupFor(g), a, b, { k: "asg", key: e.key });
+        todoSave(); toast("On your plan — “" + g + "”");
+      };
+      nm.appendChild(pl);
+      grid.appendChild(nm); cellsRow(rIdx, id, "");
+      if (e.start || e.due) {
+        var s = Math.max(0, dayOf(e.start || e.due)), en = Math.min(nD - 1, Math.max(s, dayOf(e.due || e.start)));
+        var bar = todoEl("div", "rmg-blk rmg-line"); bar.style.gridRow = String(rIdx); bar.style.gridColumn = (s + 2) + " / " + (en + 3);
+        bar.style.background = "#8A93A6"; bar.style.cursor = "pointer"; bar.title = nm.title; bar.onclick = nm.onclick;
+        grid.appendChild(bar);
+      }
+      rIdx++;
+    });
+  });
+  return rIdx;
+}
 /* the same, drawn inside 🗓 Timeline (the Month / Quarter / Week chart): one ▾ section per space I head, its
    inner spaces and phases as sections under it, its rows with their bars. Read-only — a row opens where it lives.
    Folding is kept for the session (TODO_HFOLD); nothing is saved. Returns the next grid row. */
@@ -1983,6 +2051,13 @@ function todoHeadRows(grid, rIdx, dayOf, nD, cellsRow) {
     if (!depth) lab.title = "A space you head — read-only here; open a row to change it where it lives";
     grid.appendChild(lab); cellsRow(rIdx, l.id, "phase"); rIdx++;
     if (TODO_HFOLD[l.id]) return;
+    if (!depth && !n) {   // open but nothing in it yet: say so, and name the spaces it covers
+      var inner = kidsOf(l.id).map(function (k) { return k.name; }).filter(function (x) { return x && x !== "Planning"; });
+      var em = todoEl("div", "rmg-task td-head-empty", "Nothing scheduled here " + (todoLevel === "week" ? "this week" : "in this period") + " yet" + (inner.length ? " — " + inner.join(", ") : "") + ".");
+      em.style.gridRow = String(rIdx); em.style.paddingLeft = "20px"; em.style.color = "var(--muted)"; em.style.fontStyle = "italic";
+      grid.appendChild(em); cellsRow(rIdx, l.id, ""); rIdx++;
+      return;
+    }
     rowsOf(l).forEach(function (it) {
       var en = byTid[it.tid] || {}, t = en.task || {}, title = t.title || t.name || "(untitled)";
       var st = ""; try { st = effStatus(t); } catch (_) { }
