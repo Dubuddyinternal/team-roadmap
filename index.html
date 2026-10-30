@@ -7801,6 +7801,7 @@ async function start(){
     try{ loadTeamData(got.team); }catch(e){ db = false; throw e; }
     rememberSections(teamPayload());       // baseline = what's on screen, so only real edits get saved
     lastSnapshot = JSON.stringify(teamPayload());
+    setTimeout(()=>{ try{ backupDaily(); }catch(_){ } }, 15000);   // 💾 today's copy into the backup folder, once a day
   } else if(got){
     // signed in and a member, but this team's data hasn't been moved to Supabase yet
     db = false;
@@ -25542,11 +25543,32 @@ async function backupToFolder(pickNew){
     }
     const name = backupName(), fh = await h.getFileHandle(name, { create: true }), w = await fh.createWritable();
     await w.write(backupBlob()); await w.close();
+    try{ localStorage.setItem("cf-bk-day-" + TEAM, bkToday()); localStorage.setItem("cf-bk-name-" + TEAM, h.name); }catch(_){ }   // today's is done
     toast("💾 Saved “" + name + "” in your “" + h.name + "” folder");
   }catch(e){
     if(e && e.name === "AbortError") return;   // closed the folder picker
     toast("Couldn't save the backup: " + ((e && e.message) || e));
   }
+}
+/* once a day, by itself: the first time an owner opens DU Buddy that day (India time), today's copy goes into the
+   folder they picked — only if Chrome still allows saving there without asking (after a restart it may not: then it
+   waits for the next press or the next day). Saved data from the database is backed up every morning anyway
+   (supabase/stage22h_daily_backups.sql); this is the copy on your own computer. */
+function bkToday(){ return new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0, 10); }
+async function backupDaily(){
+  if(!bkCan() || !db || !lastLoadedTeam || typeof window.showDirectoryPicker !== "function") return;
+  let last = ""; try{ last = localStorage.getItem("cf-bk-day-" + TEAM) || ""; }catch(_){ }
+  if(last === bkToday()) return;
+  let named = ""; try{ named = localStorage.getItem("cf-bk-name-" + TEAM) || ""; }catch(_){ }
+  if(!named) return;   // no folder picked in this browser yet
+  try{
+    const h = await bkDir(); if(!h) return;
+    if(h.queryPermission && await h.queryPermission({ mode: "readwrite" }) !== "granted") return;   // would need a click
+    const name = backupName(), fh = await h.getFileHandle(name, { create: true }), w = await fh.createWritable();
+    await w.write(backupBlob()); await w.close();
+    try{ localStorage.setItem("cf-bk-day-" + TEAM, bkToday()); }catch(_){ }
+    toast("💾 Today's backup saved in your “" + h.name + "” folder");
+  }catch(_){ }   // quietly try again next time
 }
 $("acct-backup") && ($("acct-backup").onclick = ()=>{ $("account-overlay").classList.remove("show"); backupToFolder(false); });
 $("acct-backup-dir") && ($("acct-backup-dir").onclick = ()=>{ $("account-overlay").classList.remove("show"); backupToFolder(true); });
