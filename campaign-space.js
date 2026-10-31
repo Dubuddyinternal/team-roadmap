@@ -43,7 +43,7 @@ const CSS = `:host{display:block;color-scheme:light;
   --note:#FBF0C4; --note-line:#E8D98A; --note-ink:#4A3A10; --note-lbl:#8A6E1E;
   --sans:"Figtree",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
-  --hand:"Caveat","Bradley Hand",cursive;
+  --hand:var(--sans);   /* was a handwriting font (Caveat); everything uses the normal font now */
   --r:10px; --r-s:7px;
 }
 *{box-sizing:border-box}
@@ -601,7 +601,7 @@ tbody tr:hover{background:var(--surface-4)}
 .av{width:21px;height:21px;border-radius:50%;display:grid;place-items:center;font-size:9.5px;font-weight:700;color:#fff;flex-shrink:0}
 .cbtn{border:1px solid var(--line-2);border-radius:var(--r-s);padding:3px 8px;font-size:11px;font-family:var(--mono);color:var(--ink-3);display:inline-flex;gap:4px;align-items:center}
 .cbtn.has{border-color:var(--accent);color:var(--accent)}
-.hook{font-family:var(--hand);font-size:16.5px;line-height:1.3;color:var(--ink);min-width:150px;max-width:210px;display:block}
+.hook{font-family:var(--sans);font-size:13px;line-height:1.45;color:var(--ink);min-width:150px;max-width:210px;display:block}
 .cta{font-size:12px;color:var(--ink-2);min-width:120px;max-width:170px}
 .stsel{font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.04em;border:1px solid transparent;border-radius:5px;padding:4px 6px;min-width:112px;cursor:pointer;background:var(--surface-2);color:var(--ink-3)}
 .stsel.good{background:var(--good-soft);color:var(--good)} .stsel.warn{background:var(--warn-soft);color:var(--warn)}
@@ -636,7 +636,7 @@ tbody tr:hover{background:var(--surface-4)}
 .fld textarea{resize:vertical;min-height:62px;font-family:inherit}
 .fld.bad input,.fld.bad select,.fld.bad textarea{border-color:var(--crit)}
 .fld .req{color:var(--crit);font-family:var(--mono);font-size:10px;margin-left:4px;letter-spacing:0}
-.fld .hookin{font-family:var(--hand);font-size:17px}
+.fld .hookin{font-family:var(--sans);font-size:13px}
 .otherin{margin-top:6px;border-style:dashed!important}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .block{border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:14px;background:var(--surface-4)}
@@ -677,7 +677,7 @@ tbody tr:hover{background:var(--surface-4)}
 .wevt h6{margin:0 0 5px;font-size:11.5px;font-weight:600;line-height:1.35}
 .wevt .meta{display:flex;gap:4px;flex-wrap:wrap}
 
-.note{background:var(--note);border:1px solid var(--note-line);border-radius:var(--r);padding:16px 18px;font-family:var(--hand);font-size:19px;color:var(--note-ink);line-height:1.42}
+.note{background:var(--note);border:1px solid var(--note-line);border-radius:var(--r);padding:16px 18px;font-family:var(--sans);font-size:14px;color:var(--note-ink);line-height:1.55}
 .note .lbl{color:var(--note-lbl);margin-bottom:7px}
 .note b{font-weight:700}
 .note em{font-style:normal;text-decoration:underline;text-decoration-color:var(--note-lbl);text-underline-offset:3px}

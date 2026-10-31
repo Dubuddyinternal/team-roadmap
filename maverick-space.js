@@ -114,7 +114,7 @@ const CSS = `
 button,input,select,textarea{font:inherit;color:inherit}
 button{background:none;border:0;cursor:pointer}
 a{color:inherit}
-.hand{font-family:Kalam,cursive;font-weight:700}
+.hand{font-family:inherit;font-weight:700}
 .ico{fill:none;stroke:currentColor;stroke-width:6;stroke-linecap:round;stroke-linejoin:round}
 
 /* header: tabs on the left, bell + "waiting on us" sticker on the right */
@@ -969,7 +969,7 @@ function fonts(){
   if(document.getElementById("mx-fonts")) return;
   const l = document.createElement("link");
   l.id = "mx-fonts"; l.rel = "stylesheet";
-  l.href = "https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Kalam:wght@400;700&display=swap";
+  l.href = "https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap";
   document.head.appendChild(l);
 }
 function mount(){
