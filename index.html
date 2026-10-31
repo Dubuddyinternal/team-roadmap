@@ -7960,6 +7960,7 @@ async function start(){
   restorePageAfterRender();
   if(_cmtLink && _cmtLink.cm && window.CMT) setTimeout(()=> CMT.focus(_cmtLink.cm), 400);
   try{ docOpenFromUrl(); }catch(_){ }
+  try{ taskDocOpenFromUrl(); }catch(_){ }   // 🔗 a link to a task's document
   if(db) loadGames().catch(function(){ });
   if(db) notifBoot();   // 🔔 bell + pop-ups (notifications.js)
   if(db && typeof pitchImport === "function") pitchImport();   // file the team's product pitches into the product space
@@ -15058,15 +15059,61 @@ function rmgAddDoc(it, title){
     rmgEditDoc(it, d, title);   /* straight in, to name it and fill it */
   });
 }
+/* 🔗 a link straight to a task's document (…?team=<team>&tdoc=<id>): opens its space, then the document */
+function taskDocLink(d){
+  const u = new URL(location.href); u.search = ""; u.hash = "";
+  u.searchParams.set("team", TEAM); u.searchParams.set("tdoc", d.id);
+  return u.toString();
+}
+function taskDocLinkBtn(d){
+  return ["🔗 Copy link", "Copy a link that opens this document — paste it in another doc, a chat or an email", ()=>{
+    if(!d.id){ d.id = "dc-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); saveRmaps(); }   // older documents had none
+    const url = taskDocLink(d), done = ()=> toast("🔗 Link copied — anyone in the team who can see this space can open it");
+    try{
+      if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, ()=> docCopyFallback(url, done));
+      else docCopyFallback(url, done);
+    }catch(_){ docCopyFallback(url, done); }
+    return false;   // keep the document open
+  }];
+}
+function taskDocFind(id){
+  let found = null;
+  const walk = (o, ctx, depth)=>{
+    if(found || !o || typeof o !== "object" || depth > 14) return;
+    if(Array.isArray(o)){ o.forEach(x=> walk(x, ctx, depth + 1)); return; }
+    const d = (Array.isArray(o.docs) && o.docs.find(x=> x && x.id === id)) || (o.doc && o.doc.id === id ? o.doc : null);
+    if(d){ found = { holder: o, doc: d, ctx }; return; }
+    Object.keys(o).forEach(k=>{ if(k !== "docs" && k !== "doc") walk(o[k], ctx, depth + 1); });
+  };
+  ((CSPACES && CSPACES.list) || []).forEach(cs=> walk(cs, { cs }, 0));
+  ((RMAPS && RMAPS.maps) || []).forEach(m=> walk(m, { map: m }, 0));
+  return found;
+}
+function taskDocOpenFromUrl(){
+  let id = null; try{ id = new URLSearchParams(location.search).get("tdoc"); }catch(_){ }
+  if(!id) return false;
+  try{ const u = new URL(location.href); u.searchParams.delete("tdoc"); history.replaceState(null, "", u.pathname + u.search + u.hash); }catch(_){ }
+  const f = taskDocFind(id);
+  if(!f){ toast("That document no longer exists"); return false; }
+  const ref = f.ctx.cs ? csRef(f.ctx.cs) : rmapRef(f.ctx.map);
+  if(!canViewSpace(ref)){ toast("You don't have access to the space this document is in"); return false; }
+  const reg = {}; try{ allTasks().forEach(x=> reg[x.tid] = x); }catch(_){ }
+  const t = f.holder.tid && reg[f.holder.tid] && reg[f.holder.tid].task;
+  const title = (t && (t.title || t.name)) || f.holder.title || f.holder.name || "Document";
+  const show = ()=>{ if(f.holder.doc === f.doc) rmgOpenDoc(f.holder, title); else rmgEditDoc(f.holder, f.doc, title); };
+  if(f.ctx.cs) goSpace(f.ctx.cs, "timeline", show);
+  else { view = "rmap"; activeRmap = f.ctx.map.id; renderAll(); setTimeout(show, 60); }
+  return true;
+}
 function rmgEditDoc(it, d, title){
   const ttl = "📄 " + (d.name || "Document") + " — " + title + (d.phase ? " · " + d.phase : "");
-  if(!editMode){ rmlModal(ttl, [], ()=>{}, { width: 860, noSave: true, sub: "View only — you don’t have edit access here", html: docHtml(d.text, d.html) }); return; }
+  if(!editMode){ rmlModal(ttl, [], ()=>{}, { width: 860, noSave: true, sub: "View only — you don’t have edit access here", html: docHtml(d.text, d.html), extra: [taskDocLinkBtn(d)] }); return; }
   rmlModal(ttl, [
     { k:"name", label:"Document name", type:"text", value: d.name || "", ph:"e.g. Product brief, PRD, Test plan" },
     { k:"text", label: d.tpl ? "Fill it in — the prompts are from the template" : "Write it", type:"rich", value: docHtml(d.text, d.html) }],
     v=>{ d.name = (v.name || "").trim() || d.name || "Document"; d.text = v.text; d.html = true; d.edited = todayISO(); saveRmaps(); toast("Saved"); }, {
     width: 860,
-    extra: [["Remove document", "Take this document off the task", ()=>{
+    extra: [taskDocLinkBtn(d), ["Remove document", "Take this document off the task", ()=>{
       if(!confirm("Remove “" + (d.name||"document") + "” from this task? What’s written in it is lost.")) return false;
       if(it.doc===d) delete it.doc; else { it.docs = (it.docs||[]).filter(x=> x!==d); if(!it.docs.length) delete it.docs; }
       saveRmaps();
@@ -15076,12 +15123,12 @@ function rmgEditDoc(it, d, title){
 function rmgOpenDoc(holder, name){
   const d = holder.doc, ttl = "📄 " + (d.name || "Document") + " — " + name;
   /* view mode: the formatted document; Edit mode: the rich-text box to fill in */
-  if(!editMode){ rmlModal(ttl, [], ()=>{}, { width: 860, noSave: true, sub: "View only — you don’t have edit access here", html: docHtml(d.text, d.html) }); return; }
+  if(!editMode){ rmlModal(ttl, [], ()=>{}, { width: 860, noSave: true, sub: "View only — you don’t have edit access here", html: docHtml(d.text, d.html), extra: [taskDocLinkBtn(d)] }); return; }
   rmlModal(ttl, [
     { k:"text", label:"Fill it in — the prompts are from the template", type:"rich", value: docHtml(d.text, d.html) },
   ], v=>{ d.text = v.text; d.html = true; saveRmaps(); toast("Saved"); }, {
     width: 860,
-    extra: editMode ? [["Remove document", "Take the document off this phase", ()=>{
+    extra: editMode ? [taskDocLinkBtn(d), ["Remove document", "Take the document off this phase", ()=>{
       if(!confirm("Remove the “" + (d.name||"document") + "” from “" + name + "”? What’s written in it is lost.")) return false;
       delete holder.doc; saveRmaps();
     }, true]] : [],
@@ -16436,7 +16483,7 @@ function rmlModal(title, fields, onSave, o){
   (o.extra||[]).forEach(([txt, tip, fn, danger])=>{
     const b = document.createElement("button"); b.className = "btn rml-xbtn"; b.textContent = txt; b.title = tip;
     if(danger){ b.style.color = "var(--blocked)"; }
-    b.onclick = ()=>{ const keep = fn(); if(danger && keep!==false) close(); else if(!danger) close(); };
+    b.onclick = ()=>{ const keep = fn(); if(keep!==false) close(); };   // an action returning false keeps the window open
     xr.appendChild(b);
   });
   if(xr.childNodes.length) btns.appendChild(xr);
