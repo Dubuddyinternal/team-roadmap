@@ -3026,6 +3026,9 @@ body.rm-chart #pane-work > .controls{display:none}
 .rich-bar{display:flex;flex-wrap:wrap;gap:2px;padding:6px;border-bottom:1px solid var(--line);background:var(--paper);position:sticky;top:0}
 .rich-bar button{border:0;background:none;border-radius:6px;padding:4px 8px;font:inherit;font-size:12.5px;color:var(--ink);cursor:pointer}
 .rich-bar button:hover{background:var(--indigo-soft)}
+.rich-bar .rich-tbl{display:none;align-items:center;gap:2px;margin-left:6px;padding-left:6px;border-left:1px solid var(--line)}
+.rich-bar .rich-tbl.on{display:inline-flex}
+.rich-bar .rich-tbl button.danger{color:var(--blocked)}
 .rich-ed{min-height:260px;max-height:58vh;overflow:auto;padding:14px 16px;font-size:14px;line-height:1.55;outline:none}
 .rich-ed h1,.rml-docview h1{font-size:22px;margin:14px 0 6px}
 .rich-ed h2,.rml-docview h2{font-size:19px;margin:16px 0 6px}
@@ -7041,6 +7044,116 @@ let lastSnapshot = "";
    no longer overwrite each other, and there is no single giant record to outgrow.
    The database's rules decide who may save which section (see supabase/stage4a). */
 let lastSections = {};   // section -> JSON text as last loaded from / saved to Supabase
+/* Two pages open at once each save a whole section, so the one that saves second used to write back its old copy
+   of everything the first had just changed (e.g. a teammate's page loaded earlier wiping your edits to a document
+   in the same section). Now each save first reads the section's updated_at: if someone saved since this page's
+   copy was loaded, their changes and this page's are combined (merge3: what this page didn't touch comes from
+   theirs; what both changed, this page's wins) and the result is written only if nobody saved again meanwhile.
+   lastRemote / lastRemoteAt = the saved copy this page's data is based on, and when it was saved. */
+let lastRemote = {}, lastRemoteAt = {};
+// a frozen copy: loading tidies the team's data in place, so a plain reference would change with every edit
+function jCopy(v){ return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
+function rememberRemote(got){
+  lastRemote = {}; lastRemoteAt = {};
+  Object.keys((got && got.team) || {}).forEach(k=>{ if(k === "name") return; lastRemote[k] = jCopy(got.team[k]); lastRemoteAt[k] = (got.at || {})[k] || null; });
+}
+function jEq(a, b){
+  if(a === b) return true;
+  if(!a || !b || typeof a !== "object" || typeof b !== "object" || Array.isArray(a) !== Array.isArray(b)) return false;
+  if(Array.isArray(a)){ if(a.length !== b.length) return false; for(let i = 0; i < a.length; i++) if(!jEq(a[i], b[i])) return false; return true; }
+  const ka = Object.keys(a).filter(k=> a[k] !== undefined), kb = Object.keys(b).filter(k=> b[k] !== undefined);
+  if(ka.length !== kb.length) return false;
+  for(const k of ka) if(!jEq(a[k], b[k])) return false;
+  return true;
+}
+/* lists of things with an id (spaces, ideas, rows, tasks, documents…) are combined item by item; an id that
+   repeats is matched by its turn (the 1st with the 1st, the 2nd with the 2nd) */
+function mergeIdKey(arrs){
+  for(const k of ["id", "rid", "tid", "key"]){
+    let ok = true, any = false;
+    for(const a of arrs){
+      for(const x of a){
+        const v = x && typeof x === "object" && !Array.isArray(x) ? x[k] : undefined;
+        if(typeof v !== "string" && typeof v !== "number"){ ok = false; break; }
+        any = true;
+      }
+      if(!ok) break;
+    }
+    if(ok && any) return k;
+  }
+  return null;
+}
+function mergeIds(arr, key){ const n = {}; return arr.map(x=>{ const v = String(x[key]); n[v] = (n[v] || 0) + 1; return v + "#" + n[v]; }); }
+function mergeById(b, m, t, key){
+  const bi = mergeIds(b, key), mi = mergeIds(m, key), ti = mergeIds(t, key);
+  const B = new Map(b.map((x, n)=> [bi[n], x])), M = new Map(m.map((x, n)=> [mi[n], x])), T = new Map(t.map((x, n)=> [ti[n], x]));
+  const out = [], outIds = [];
+  const put = (at, i, x)=>{ out.splice(at, 0, x); outIds.splice(at, 0, i); };
+  m.forEach((x, n)=>{
+    const i = mi[n];
+    if(T.has(i)) put(out.length, i, B.has(i) ? merge3(B.get(i), x, T.get(i)) : x);
+    else if(!B.has(i)) put(out.length, i, x);                    // added here
+    else if(!jEq(x, B.get(i))) put(out.length, i, x);             // deleted there but changed here: keep it
+  });
+  t.forEach((x, n)=>{
+    const i = ti[n];
+    if(M.has(i)) return;
+    if(B.has(i) && jEq(x, B.get(i))) return;                      // deleted here, untouched there: stays deleted
+    let at = 0;                                                   // added there: after the one before it in their order
+    for(let j = n - 1; j >= 0; j--){ const p = outIds.indexOf(ti[j]); if(p >= 0){ at = p + 1; break; } }
+    put(at, i, x);
+  });
+  return out;
+}
+function merge3(b, m, t){
+  if(jEq(m, b)) return t;        // not changed here: theirs
+  if(jEq(t, b)) return m;        // not changed there: mine
+  if(jEq(m, t)) return m;
+  const isObj = x=> !!x && typeof x === "object" && !Array.isArray(x);
+  if(isObj(m) && isObj(t)){
+    const bb = isObj(b) ? b : {}, out = {};
+    new Set(Object.keys(m).concat(Object.keys(t))).forEach(k=>{ const v = merge3(bb[k], m[k], t[k]); if(v !== undefined) out[k] = v; });
+    return out;
+  }
+  if(Array.isArray(m) && Array.isArray(t)){
+    const bb = Array.isArray(b) ? b : [], key = mergeIdKey([bb, m, t]);
+    if(key) return mergeById(bb, m, t, key);
+  }
+  return m;                       // both changed the very same thing: this page's change wins
+}
+/* save one section without writing over a teammate's save made since this page loaded it */
+async function saveSectionMerged(slug, section, value){
+  value = value === undefined ? null : value;
+  for(let tries = 0; tries < 4; tries++){
+    const cur = await SUPA.from("team_data").select("data,updated_at").eq("team_slug", slug).eq("section", section).maybeSingle();
+    if(cur.error) throw new Error(cur.error.message);
+    const row = cur.data;
+    if(!row || !row.updated_at){   // new section (or no timestamps): as before
+      await saveSection(slug, section, value);
+      return { value, merged: false, at: null };
+    }
+    let out = value, merged = false;
+    if(lastRemoteAt[section] && row.updated_at !== lastRemoteAt[section]){
+      out = merge3(lastRemote[section], value, row.data); merged = true;
+      // a combined copy far smaller than both sides means something's wrong: don't write it
+      const L = x=> JSON.stringify(x == null ? null : x).length;
+      if(L(out) < 0.6 * Math.min(L(row.data), L(value))) throw new Error("couldn't combine it safely with a teammate's save — reload the page and make the change again");
+    }
+    const up = await SUPA.from("team_data").update({ data: out }).eq("team_slug", slug).eq("section", section).eq("updated_at", row.updated_at).select("updated_at");
+    if(up.error) throw new Error(up.error.message);
+    if(up.data && up.data.length) return { value: out, merged, at: up.data[0].updated_at };
+    // someone saved between reading and writing: read again
+  }
+  throw new Error("teammates kept saving at the same moment — try again");
+}
+let _mergeRefreshT = null;   // after combining, load the combined copy once nothing is open or being typed
+function refreshAfterMerge(){
+  clearTimeout(_mergeRefreshT);
+  _mergeRefreshT = setTimeout(async ()=>{
+    if(document.querySelector(".overlay.show") || (typeof spaceWindowOpen === "function" && spaceWindowOpen()) || _pushDirty || _pushTimer || saving){ refreshAfterMerge(); return; }
+    try{ await refresh(false); }catch(_){ }
+  }, 1500);
+}
 function payloadSections(t){
   const out = {};
   Object.keys(t || {}).forEach(k=>{ if(k !== "name") out[k] = (t[k] === undefined ? null : t[k]); });
@@ -7060,11 +7173,11 @@ async function fetchTeamsList(){
   return out;
 }
 async function fetchTeamSections(slug){
-  const { data, error } = await SUPA.from("team_data").select("section,data").eq("team_slug", slug);
+  const { data, error } = await SUPA.from("team_data").select("section,data,updated_at").eq("team_slug", slug);
   if(error) throw new Error(error.message);
-  const t = {};
-  (data || []).forEach(r=>{ t[r.section] = r.data; });
-  return { team: t, count: (data || []).length };
+  const t = {}, at = {};
+  (data || []).forEach(r=>{ t[r.section] = r.data; at[r.section] = r.updated_at || null; });
+  return { team: t, count: (data || []).length, at };
 }
 async function saveSection(slug, section, value){
   const { error } = await SUPA.from("team_data")
@@ -7092,13 +7205,22 @@ async function pushNow(){
     }catch(_){ }
     const secs = payloadSections(mine);
     const failed = [];
+    let mergedAny = false;
     for(const k of Object.keys(secs)){
       const j = JSON.stringify(secs[k]);
       if(lastSections[k] === j) continue;            // unchanged: don't send
-      try{ await saveSection(TEAM, k, secs[k]); lastSections[k] = j; }
+      try{
+        const sv = await saveSectionMerged(TEAM, k, secs[k]);
+        lastSections[k] = j;
+        // this page now holds what it wrote — unless that was combined with a teammate's save: then its copy stays
+        // based on the old one (so the next save combines again) until the combined copy is loaded
+        if(!sv.merged){ lastRemote[k] = jCopy(sv.value); if(sv.at) lastRemoteAt[k] = sv.at; }
+        else mergedAny = true;
+      }
       catch(e){ failed.push(k + " (" + e.message + ")"); }
     }
     lastSnapshot = JSON.stringify(mine);
+    if(mergedAny){ toast("Saved — combined with a teammate's changes made meanwhile"); refreshAfterMerge(); }
     if(failed.length){
       showBanner("\u26a0\ufe0f Some changes were NOT saved: " + failed.join(", ") + ". Your role may not allow this change. Don't refresh yet \u2014 tell an Owner or Claude.");
     } else hideBanner();
@@ -7735,7 +7857,7 @@ async function refresh(showMsg){
     if(got.count && changed){
       got.team.name = (TEAMS[TEAM] && TEAMS[TEAM].name) || TEAM;
       lastLoadedTeam = got.team;
-      try{ loadTeamData(got.team); }
+      try{ loadTeamData(got.team); rememberRemote(got); }
       catch(e){   // half-loaded: stop saving from this tab, rather than write what's on screen over the team's data
         db = false;
         try{ showBanner("⚠️ The latest team data couldn't be loaded (" + e.message + "). Saving is switched off in this tab so nothing gets overwritten — reload the page; if it keeps happening, tell Claude."); }catch(_){ }
@@ -7798,7 +7920,7 @@ async function start(){
     got.team.name = TEAMS[TEAM].name;
     lastLoadedTeam = got.team;
     // a load that breaks half-way must never be allowed to save: what's on screen then isn't the team's data
-    try{ loadTeamData(got.team); }catch(e){ db = false; throw e; }
+    try{ loadTeamData(got.team); rememberRemote(got); }catch(e){ db = false; throw e; }
     rememberSections(teamPayload());       // baseline = what's on screen, so only real edits get saved
     lastSnapshot = JSON.stringify(teamPayload());
     setTimeout(()=>{ try{ backupDaily(); }catch(_){ } }, 15000);   // 💾 today's copy into the backup folder, once a day
@@ -16145,6 +16267,18 @@ function richClean(html){
         if(/font-style:\s*italic/.test(st)){ const i = document.createElement("i"); h.appendChild(i); h = i; }
         walk(n, h); return;
       }
+      /* a heading wrapped round tables / paragraphs (pasted from another doc): those come out of it — inside a heading
+         everything is big and bold, and un-bolding it can't stick. Text right in the heading stays a heading. */
+      if(/^H[1-4]$/.test(tag) && n.querySelector("table,p,ul,ol,div,h1,h2,h3,h4,h5,h6,blockquote,pre,hr")){
+        let cur = null;
+        n.childNodes.forEach(c=>{
+          if(c.nodeType===1 && /^(TABLE|P|UL|OL|DIV|H[1-6]|BLOCKQUOTE|PRE|HR)$/.test(c.tagName)){ cur = null; walk({ childNodes:[c] }, host); return; }
+          if(c.nodeType===3 && !c.nodeValue.trim()){ if(cur) cur.appendChild(document.createTextNode(c.nodeValue)); return; }
+          if(!cur){ cur = document.createElement(tag); host.appendChild(cur); }
+          walk({ childNodes:[c] }, cur);
+        });
+        return;
+      }
       const el = document.createElement(tag);
       if(tag==="A"){ const href = n.getAttribute("href")||""; if(/^(https?:|mailto:)/i.test(href)){ el.setAttribute("href", href); el.setAttribute("target","_blank"); el.setAttribute("rel","noopener"); } }
       if(tag==="TD" || tag==="TH"){ ["colspan","rowspan"].forEach(a=>{ const v = n.getAttribute(a); if(v && /^\d+$/.test(v)) el.setAttribute(a, v); }); }
@@ -16182,6 +16316,40 @@ function richEditor(html){
     if(t==="B") b.style.fontWeight = "800"; if(t==="I") b.style.fontStyle = "italic"; if(t==="U") b.style.textDecoration = "underline";
     b.onmousedown = e=> e.preventDefault(); b.onclick = fn; bar.appendChild(b);
   });
+  /* table tools, shown while the cursor is in a table: add / remove the row or column it's in, or the whole table */
+  const cellAt = ()=>{
+    const s = window.getSelection(); if(!s || !s.rangeCount) return null;
+    let n = s.anchorNode; if(n && n.nodeType===3) n = n.parentNode;
+    const c = n && n.closest ? n.closest("td,th") : null;
+    return c && ed.contains(c) ? c : null;
+  };
+  const tbl = document.createElement("span"); tbl.className = "rich-tbl";
+  const blankCell = tag=>{ const c = document.createElement(tag); c.appendChild(document.createElement("br")); return c; };
+  const putCaret = el=>{ if(!el) return; const r = document.createRange(); r.selectNodeContents(el); r.collapse(true); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); };
+  const colOf = c=> Array.prototype.indexOf.call(c.parentNode.children, c);
+  const tblOps = {
+    "＋ Row": ["Add a row below this one", c=>{ const tr = c.parentNode, nr = document.createElement("tr");
+      Array.from(tr.children).forEach(()=> nr.appendChild(blankCell("td"))); tr.after(nr); putCaret(nr.children[colOf(c)] || nr.firstChild); }],
+    "− Row": ["Delete this row", c=>{ const tr = c.parentNode, t = tr.closest("table"), next = tr.nextElementSibling || tr.previousElementSibling;
+      tr.remove(); if(!t.querySelector("tr")) t.remove(); else putCaret(next && next.children[0]); }],
+    "＋ Column": ["Add a column to the right", c=>{ const i = colOf(c), t = c.closest("table");
+      t.querySelectorAll("tr").forEach(tr=>{ const ref = tr.children[i], isHead = ref && ref.tagName==="TH"; const n = blankCell(isHead ? "th" : "td"); if(ref) ref.after(n); else tr.appendChild(n); });
+      putCaret(c.nextElementSibling); }],
+    "− Column": ["Delete this column", c=>{ const i = colOf(c), t = c.closest("table");
+      t.querySelectorAll("tr").forEach(tr=>{ if(tr.children[i]) tr.children[i].remove(); if(!tr.children.length) tr.remove(); });
+      if(!t.querySelector("td,th")) t.remove(); }],
+    "✕ Table": ["Delete the whole table", c=>{ if(confirm("Delete this whole table?")) c.closest("table").remove(); }],
+  };
+  Object.keys(tblOps).forEach(k=>{
+    const b = document.createElement("button"); b.type = "button"; b.textContent = k; b.title = tblOps[k][0];
+    if(k.charAt(0)==="−" || k.charAt(0)==="✕") b.className = "danger";
+    b.onmousedown = e=> e.preventDefault();
+    b.onclick = ()=>{ const c = cellAt(); if(!c){ tbl.classList.remove("on"); return; } tblOps[k][1](c); ed.dispatchEvent(new Event("input", { bubbles:true })); tbl.classList.toggle("on", !!cellAt()); };
+    tbl.appendChild(b);
+  });
+  bar.appendChild(tbl);
+  const tblSync = ()=> tbl.classList.toggle("on", !!cellAt());
+  ed.addEventListener("keyup", tblSync); ed.addEventListener("mouseup", tblSync); ed.addEventListener("focus", tblSync);
   /* pasting keeps headings, tables, bold, italic, lists and links — and nothing else */
   ed.addEventListener("paste", e=>{
     const cd = e.clipboardData; if(!cd) return;
