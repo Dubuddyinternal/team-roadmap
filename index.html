@@ -3026,6 +3026,9 @@ body.rm-chart #pane-work > .controls{display:none}
 .rich-bar{display:flex;flex-wrap:wrap;gap:2px;padding:6px;border-bottom:1px solid var(--line);background:var(--paper);position:sticky;top:0}
 .rich-bar button{border:0;background:none;border-radius:6px;padding:4px 8px;font:inherit;font-size:12.5px;color:var(--ink);cursor:pointer}
 .rich-bar button:hover{background:var(--indigo-soft)}
+.rich-bar .rich-tbl{display:none;align-items:center;gap:2px;margin-left:6px;padding-left:6px;border-left:1px solid var(--line)}
+.rich-bar .rich-tbl.on{display:inline-flex}
+.rich-bar .rich-tbl button.danger{color:var(--blocked)}
 .rich-ed{min-height:260px;max-height:58vh;overflow:auto;padding:14px 16px;font-size:14px;line-height:1.55;outline:none}
 .rich-ed h1,.rml-docview h1{font-size:22px;margin:14px 0 6px}
 .rich-ed h2,.rml-docview h2{font-size:19px;margin:16px 0 6px}
@@ -16182,6 +16185,40 @@ function richEditor(html){
     if(t==="B") b.style.fontWeight = "800"; if(t==="I") b.style.fontStyle = "italic"; if(t==="U") b.style.textDecoration = "underline";
     b.onmousedown = e=> e.preventDefault(); b.onclick = fn; bar.appendChild(b);
   });
+  /* table tools, shown while the cursor is in a table: add / remove the row or column it's in, or the whole table */
+  const cellAt = ()=>{
+    const s = window.getSelection(); if(!s || !s.rangeCount) return null;
+    let n = s.anchorNode; if(n && n.nodeType===3) n = n.parentNode;
+    const c = n && n.closest ? n.closest("td,th") : null;
+    return c && ed.contains(c) ? c : null;
+  };
+  const tbl = document.createElement("span"); tbl.className = "rich-tbl";
+  const blankCell = tag=>{ const c = document.createElement(tag); c.appendChild(document.createElement("br")); return c; };
+  const putCaret = el=>{ if(!el) return; const r = document.createRange(); r.selectNodeContents(el); r.collapse(true); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); };
+  const colOf = c=> Array.prototype.indexOf.call(c.parentNode.children, c);
+  const tblOps = {
+    "＋ Row": ["Add a row below this one", c=>{ const tr = c.parentNode, nr = document.createElement("tr");
+      Array.from(tr.children).forEach(()=> nr.appendChild(blankCell("td"))); tr.after(nr); putCaret(nr.children[colOf(c)] || nr.firstChild); }],
+    "− Row": ["Delete this row", c=>{ const tr = c.parentNode, t = tr.closest("table"), next = tr.nextElementSibling || tr.previousElementSibling;
+      tr.remove(); if(!t.querySelector("tr")) t.remove(); else putCaret(next && next.children[0]); }],
+    "＋ Column": ["Add a column to the right", c=>{ const i = colOf(c), t = c.closest("table");
+      t.querySelectorAll("tr").forEach(tr=>{ const ref = tr.children[i], isHead = ref && ref.tagName==="TH"; const n = blankCell(isHead ? "th" : "td"); if(ref) ref.after(n); else tr.appendChild(n); });
+      putCaret(c.nextElementSibling); }],
+    "− Column": ["Delete this column", c=>{ const i = colOf(c), t = c.closest("table");
+      t.querySelectorAll("tr").forEach(tr=>{ if(tr.children[i]) tr.children[i].remove(); if(!tr.children.length) tr.remove(); });
+      if(!t.querySelector("td,th")) t.remove(); }],
+    "✕ Table": ["Delete the whole table", c=>{ if(confirm("Delete this whole table?")) c.closest("table").remove(); }],
+  };
+  Object.keys(tblOps).forEach(k=>{
+    const b = document.createElement("button"); b.type = "button"; b.textContent = k; b.title = tblOps[k][0];
+    if(k.charAt(0)==="−" || k.charAt(0)==="✕") b.className = "danger";
+    b.onmousedown = e=> e.preventDefault();
+    b.onclick = ()=>{ const c = cellAt(); if(!c){ tbl.classList.remove("on"); return; } tblOps[k][1](c); ed.dispatchEvent(new Event("input", { bubbles:true })); tbl.classList.toggle("on", !!cellAt()); };
+    tbl.appendChild(b);
+  });
+  bar.appendChild(tbl);
+  const tblSync = ()=> tbl.classList.toggle("on", !!cellAt());
+  ed.addEventListener("keyup", tblSync); ed.addEventListener("mouseup", tblSync); ed.addEventListener("focus", tblSync);
   /* pasting keeps headings, tables, bold, italic, lists and links — and nothing else */
   ed.addEventListener("paste", e=>{
     const cd = e.clipboardData; if(!cd) return;
