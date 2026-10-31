@@ -3021,7 +3021,12 @@ body.rm-chart #pane-work > .controls{display:none}
 .proc-sech{font-weight:700;font-size:13px;margin:14px 0 6px;color:var(--ink)}
 .proc-fh{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:6px 0 10px}
 .rml-docview{max-height:65vh;overflow:auto;font-size:14px;line-height:1.55;padding:4px 2px}
-.rich-wrap{border:1px solid var(--line-strong);border-radius:10px;background:var(--card);overflow:hidden}
+.rich-wrap{border:1px solid var(--line-strong);border-radius:10px;background:var(--card);overflow:hidden;position:relative}
+.rich-linkpop{position:absolute;z-index:6;display:flex;align-items:center;gap:4px;max-width:min(520px,90%);padding:4px 6px;background:var(--card);border:1px solid var(--line-strong);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.12);font-size:12.5px}
+.rich-linkpop .url{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1;padding:0 4px}
+.rich-linkpop button{border:0;background:none;border-radius:6px;padding:4px 8px;font:inherit;font-weight:600;color:var(--ink);cursor:pointer;white-space:nowrap}
+.rich-linkpop button:hover{background:var(--indigo-soft)}
+.rich-linkpop button.go{color:var(--accent,#E8622B)}
 .rich-wrap:focus-within{border-color:var(--indigo);box-shadow:0 0 0 1px var(--indigo)}
 .rich-bar{display:flex;flex-wrap:wrap;gap:2px;padding:6px;border-bottom:1px solid var(--line);background:var(--paper);position:sticky;top:0}
 .rich-bar button{border:0;background:none;border-radius:6px;padding:4px 8px;font:inherit;font-size:12.5px;color:var(--ink);cursor:pointer}
@@ -16397,6 +16402,29 @@ function richEditor(html){
   bar.appendChild(tbl);
   const tblSync = ()=> tbl.classList.toggle("on", !!cellAt());
   ed.addEventListener("keyup", tblSync); ed.addEventListener("mouseup", tblSync); ed.addEventListener("focus", tblSync);
+  /* links can't be followed from inside text being edited: clicking one shows its address with ↗ Open (a new tab)
+     and Unlink; Cmd / Ctrl + click opens it straight away */
+  const pop = document.createElement("div"); pop.className = "rich-linkpop"; pop.style.display = "none";
+  const hidePop = ()=>{ pop.style.display = "none"; };
+  const openUrl = href=>{ const w = window.open(href, "_blank", "noopener"); if(!w) location.href = href; };
+  ed.addEventListener("click", e=>{
+    const a = e.target && e.target.closest ? e.target.closest("a[href]") : null;
+    if(!a || !ed.contains(a)){ hidePop(); return; }
+    const href = a.getAttribute("href");
+    if(e.metaKey || e.ctrlKey){ e.preventDefault(); hidePop(); openUrl(href); return; }
+    pop.innerHTML = "";
+    const go = document.createElement("button"); go.type = "button"; go.className = "go"; go.textContent = "↗ Open"; go.title = "Open in a new tab (or Cmd / Ctrl + click the link)";
+    go.onmousedown = ev=> ev.preventDefault(); go.onclick = ()=>{ hidePop(); openUrl(href); };
+    const url = document.createElement("span"); url.className = "url"; url.textContent = href; url.title = href;
+    const un = document.createElement("button"); un.type = "button"; un.textContent = "Unlink"; un.title = "Keep the words, remove the link";
+    un.onmousedown = ev=> ev.preventDefault(); un.onclick = ()=>{ a.replaceWith(...a.childNodes); hidePop(); ed.dispatchEvent(new Event("input", { bubbles:true })); };
+    pop.append(go, url, un);
+    const r = a.getBoundingClientRect(), w = wrap.getBoundingClientRect();
+    pop.style.left = Math.max(6, Math.min(r.left - w.left, w.width - 300)) + "px";
+    pop.style.top = (r.bottom - w.top + 4) + "px";
+    pop.style.display = "flex";
+  });
+  ed.addEventListener("scroll", hidePop); ed.addEventListener("keydown", hidePop); ed.addEventListener("blur", ()=> setTimeout(hidePop, 150));
   /* pasting keeps headings, tables, bold, italic, lists and links — and nothing else */
   ed.addEventListener("paste", e=>{
     const cd = e.clipboardData; if(!cd) return;
@@ -16405,7 +16433,7 @@ function richEditor(html){
     if(h) document.execCommand("insertHTML", false, richClean(h));
     else if(t) document.execCommand("insertHTML", false, t.split(/\n{2,}/).map(par=> "<p>" + mtEsc(par).replace(/\n/g, "<br>") + "</p>").join(""));
   });
-  wrap.append(bar, ed);
+  wrap.append(bar, ed, pop);
   Object.defineProperty(wrap, "value", { get: ()=> richClean(ed.innerHTML), set: v=>{ ed.innerHTML = v || ""; } });
   wrap.focusEd = ()=> ed.focus();
   return wrap;
