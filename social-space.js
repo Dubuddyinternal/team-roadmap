@@ -32,7 +32,7 @@ const CSS = `
   --note:#FBF0C4; --note-line:#E8D98A; --note-ink:#4A3A10; --note-lbl:#8A6E1E;
   --sans:"Figtree",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
-  --hand:"Caveat","Bradley Hand",cursive;
+  --hand:var(--sans);   /* was a handwriting font (Caveat); everything uses the normal font now */
   --r:10px; --r-s:7px;
   color-scheme:light;
 }
@@ -522,7 +522,7 @@ details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var
 .rvtab tr.us td{background:var(--good-soft)}
 .rvname{font-weight:600;text-align:left;color:var(--ink)}
 .rvname:hover{color:var(--accent)}
-.note{background:var(--note);border:1px solid var(--note-line);border-radius:var(--r);padding:16px 18px;font-family:var(--hand);font-size:19px;color:var(--note-ink);line-height:1.42}
+.note{background:var(--note);border:1px solid var(--note-line);border-radius:var(--r);padding:16px 18px;font-family:var(--sans);font-size:14px;color:var(--note-ink);line-height:1.55}
 .note .lbl{color:var(--note-lbl);margin-bottom:7px}
 .note b{font-weight:700}
 .note em{font-style:normal;text-decoration:underline;text-decoration-color:var(--note-lbl);text-underline-offset:3px}
@@ -2558,7 +2558,7 @@ function renderSchedule(){
       ${schedSummary()}
       <div class="card"><div class="row" style="justify-content:space-between;margin-bottom:9px"><span class="lbl">Content culture</span>
         ${canEdit()?`<button class="btn sm" id="editCulture">Edit</button>`:""}</div>
-        <p style="margin:0;font-family:var(--hand);font-size:19px;line-height:1.4">${S.culture?esc(S.culture):`<span style="color:var(--ink-3)">Not set yet — e.g. 2 long videos a week, 4 reels, post at 7 PM.</span>`}</p>
+        <p style="margin:0;font-size:14px;line-height:1.55">${S.culture?esc(S.culture):`<span style="color:var(--ink-3)">Not set yet — e.g. 2 long videos a week, 4 reels, post at 7 PM.</span>`}</p>
         <p class="hint" style="margin:10px 0 0">The rhythm the schedule is measured against. Change it here and the summary beside it
         starts telling you when a week falls short.</p></div></div>
 
@@ -3590,7 +3590,7 @@ function openCulture(){
   openDrawer(`<div class="dr-h"><div><div class="lbl">Schedule</div>
       <h3 style="margin-top:4px">Content culture</h3></div><button class="btn sm" id="xClose">Close</button></div>
     <div class="fld"><label for="cu">The rhythm, in one line</label>
-      <textarea id="cu" class="hookin" style="font-family:var(--hand);font-size:19px" placeholder="2 long videos a week, 4 reels, post at 7 PM.">${esc(S.culture)}</textarea></div>
+      <textarea id="cu" class="hookin" placeholder="2 long videos a week, 4 reels, post at 7 PM.">${esc(S.culture)}</textarea></div>
     <div class="row"><button class="btn pri" id="saveCu">Save</button><button class="btn" id="xClose2">Cancel</button></div>`);
   $("#xClose").onclick=$("#xClose2").onclick=closeDrawer;
   $("#saveCu").onclick=()=>{ S.culture=$("#cu").value.trim(); if(save()){ closeDrawer(); toast("Saved"); } };
