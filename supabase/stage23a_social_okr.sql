@@ -25,13 +25,14 @@ end $$;
 create or replace function public.social_okr_tick(p_mode text) returns void
 language sql security definer set search_path = '' as $$ select public.social_okr_post(jsonb_build_object('mode', p_mode)) $$;
 
--- the tab's "Send status now" / "Send summary now" / ✍️ Write a mail: owners, people who may edit social targets, super-admins
+-- the tab's "Send status now" / "Send summary now" / ✍️ Write a mail: only the logins the tab shows it to
+-- (Mannat and Aditya — OKR_MAILERS in social-space.js), plus super-admins
 create or replace function public.social_okr_send_now(p_team text, p_email text, p_mode text, p_from text, p_to text,
   p_subject text, p_message text, p_with_status boolean) returns boolean
 language plpgsql security definer set search_path = '' as $$
 begin
-  if not (public.is_super() or public.my_role(p_team) = 'owner' or public.has_perm(p_team, 'edit_targets')) then
-    raise exception 'Only owners or people who edit social targets can send it.';
+  if not (public.is_super() or lower(coalesce(auth.jwt() ->> 'email', '')) in ('mannat.dubuddy@gmail.com', 'aditya.dubuddy@gmail.com')) then
+    raise exception 'Only Mannat and Aditya can send these emails.';
   end if;
   if p_mode not in ('mid', 'end', 'note') then raise exception 'mode must be mid, end or note'; end if;
   if p_mode = 'note' and coalesce(trim(p_message), '') = '' then raise exception 'Write a message first.'; end if;

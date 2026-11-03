@@ -3975,6 +3975,9 @@ function shivamTemplate(){
       { id:id(), title:post, type:"manual_pct", target:100, period:"month", log:{} }] },
   ];
 }
+// ✉️ Emails to … (schedule, previews, Send now, Write a mail): only these logins see it — not the person it emails
+const OKR_MAILERS = ["mannat.dubuddy@gmail.com", "aditya.dubuddy@gmail.com"];
+const canMailOkrs = () => OKR_MAILERS.includes(myEmail());
 let OKR_WHO = "", OKR_EDIT = false, OKR_R = { mode:"month", month:"", from:"", to:"" };
 const myEmail = () => { try{ const u=typeof currentUser==="function"?currentUser():null; return u&&u.email?String(u.email).toLowerCase():""; }catch(_){ return ""; } };
 function memberList(){ try{ return (typeof assigneeMembers==="function"?assigneeMembers():[]).map(u=>({ email:String(u.email||"").toLowerCase(), name:(typeof userDisplayName==="function"?userDisplayName(u):u.email) })).filter(u=>u.email); }catch(_){ return []; } }
@@ -4050,7 +4053,7 @@ function renderOkrs(){
         <div class="kr2s">${o.krs.map((x,i)=>krRow(x,i,R,ed,oi)).join("")||`<p class="hint">No key results yet.</p>`}</div></div>`).join("")}
       ${ed?`<div class="okr-foot2"><span style="flex:1"></span><button class="btn sm" id="okrEdit">${OKR_EDIT?"Close editing":"✎ Edit objectives & key results"}</button></div>`:""}
       ${ed&&OKR_EDIT?okrEditor(p):""}
-      ${okrMailPanel(p, R, ed)}`:""}</div>`;
+      ${canMailOkrs()?okrMailPanel(p, R, true):""}`:""}</div>`;
   wireOkrs(P, p, R, people);
 }
 function okrEditor(p){
