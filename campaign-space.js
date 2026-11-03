@@ -1,5 +1,6 @@
 /* =====================================================================
-   CAMPAIGN SPACE — Campaign Details · Assignment · Calendar · Dashboard
+   CAMPAIGN SPACE — Campaign Details · Board · Roles & responsibilities · Reminders · Calendar
+   (the Assignment and Dashboard panes below are no longer shown: the Board replaced them)
    (Cyberflow team app, tools.dubuddy.in)
 
    WHAT THIS IS: one sale, one place — the team's "Campaign Creator" design
@@ -32,6 +33,75 @@
 (function(){
 "use strict";
 
+const BCSS = `
+/* ===== Campaign board (Board · Roles & responsibilities · Reminders) — kb- classes, so nothing above is touched */
+.kb-head{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;margin-bottom:16px}
+.kb-prog{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;min-width:300px;display:grid;gap:8px}
+.kb-prog b{font-size:28px;letter-spacing:-.03em}.kb-prog b small{font-size:15px;color:var(--ink-3);font-weight:600}
+.kb-bar{height:10px;background:var(--surface-2);border-radius:99px;overflow:hidden;display:flex}.kb-bar i{display:block;height:100%}
+.kb-leg{display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--ink-2)}.kb-leg span{display:inline-flex;align-items:center;gap:5px}
+.kb-dot{width:8px;height:8px;border-radius:2px;display:inline-block}
+.kb-f{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.kb-sel{border:1px solid var(--line-2);border-radius:999px;padding:5px 10px;background:var(--surface);font-size:12px;font-family:var(--mono);color:var(--ink-2)}
+.kb-sel.on{border-color:var(--ink);color:var(--ink);font-weight:600}
+.kb-sp{flex:1}
+.kb-board{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:12px;overflow-x:auto;padding-bottom:6px}
+.kb-col{background:var(--surface-2);border-radius:var(--r);padding:10px;display:flex;flex-direction:column;gap:8px;min-width:0;overflow:hidden}
+.kb-col-h{display:flex;align-items:center;gap:8px;padding:2px 4px 4px}.kb-col-h h4{font-size:13px;margin:0}.kb-col-h .n{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-left:auto}
+.kb-col.late .kb-col-h h4{color:var(--crit)}.kb-col.live .kb-col-h h4{color:var(--good)}
+.kb-it{min-width:0;max-width:100%;overflow:hidden;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--line-2);border-radius:var(--r-s);padding:10px 11px;text-align:left;display:grid;gap:6px;width:100%;cursor:pointer;font:inherit;color:inherit}
+.kb-it>*{min-width:0}.kb-it:hover{border-color:var(--line-2)}
+.kb-it.live{border-left-color:var(--good);background:var(--good-soft)}.kb-it.late{border-left-color:var(--crit)}.kb-it.prog{border-left-color:var(--saffron)}
+.kb-t{font-weight:600;font-size:13px;line-height:1.35;overflow-wrap:anywhere}
+.kb-m{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.kb-tag{font-family:var(--mono);font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;white-space:nowrap;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line)}
+.kb-tag.yt{background:#FBEAE2;color:#B2451A;border-color:#F1CDBD}.kb-tag.ig{background:#ECE8FB;color:#5034C0;border-color:#D7CFF6}
+.kb-tag.task{background:var(--saffron-soft);color:#8A5A00;border-color:#F1DDB0}.kb-tag.sync{background:#E3F4F6;color:#006C79;border-color:#C2E6EB}
+.kb-tag.late{background:var(--crit-soft);color:var(--crit);border-color:#F2C8C2}
+.kb-who{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-2)}.kb-who .av{width:18px;height:18px;font-size:9.5px}
+.kb-sub{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink-3)}.kb-sub .mb{flex:1;height:4px;background:var(--surface-2);border-radius:99px;overflow:hidden}.kb-sub .mb i{display:block;height:100%;background:var(--saffron)}
+.kb-due{font-family:var(--mono);font-size:10.5px;color:var(--ink-3)}.kb-due.late{color:var(--crit);font-weight:600}
+.kb-by{font-size:11.5px;color:var(--good);font-weight:600}
+.kb-scrim{position:fixed;inset:0;background:rgba(26,24,21,.32);opacity:0;pointer-events:none;transition:opacity .15s;z-index:60}
+.kb-scrim.on{opacity:1;pointer-events:auto}
+.kb-dr{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--bg);border-left:1px solid var(--line);transform:translateX(102%);transition:transform .2s;overflow-y:auto;z-index:61;padding:20px 22px 40px}
+.kb-dr.on{transform:none}
+.kb-dh{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}.kb-dh h3{font-size:19px;margin:4px 0 0}
+.kb-blk{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:12px}
+.kb-blk h4{font-size:13.5px;margin:0 0 8px;display:flex;align-items:center;gap:8px}
+.kb-kv{display:grid;grid-template-columns:120px 1fr;gap:6px 12px;font-size:13px;align-items:center}.kb-kv>span:nth-child(odd){color:var(--ink-3)}
+.kb-kv select,.kb-blk select,.kb-blk input[type=text],.kb-blk input[type=date],.kb-blk input:not([type]){border:1px solid var(--line-2);border-radius:var(--r-s);padding:5px 8px;background:var(--surface);font:inherit;font-size:12.5px}
+.kb-sync{display:grid;grid-template-columns:130px 1fr;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:12.5px}.kb-sync:first-of-type{border-top:none}
+.kb-pills{display:flex;gap:4px;flex-wrap:wrap}
+.kb-pills button{font:inherit;font-size:11.5px;padding:4px 9px;border-radius:99px;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line);cursor:pointer}
+.kb-pills button.done{background:var(--good-soft);color:var(--good);border-color:#BFE0CD}
+.kb-pills button.now{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+.kb-pills button.livenow{background:var(--good);color:#fff;border-color:var(--good);font-weight:600}
+.kb-pills button:disabled{cursor:default}
+.kb-cf{background:var(--crit-soft);border:1px solid #F2C8C2;border-radius:var(--r);padding:12px 14px;margin-bottom:12px}
+.kb-cf.ok{background:var(--good-soft);border-color:#BFE0CD}
+.kb-cf input{width:100%;border:1px solid var(--line-2);border-radius:var(--r-s);padding:7px 9px;margin:8px 0;background:var(--surface);font:inherit}
+.kb-st{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}.kb-st:first-of-type{border-top:none}
+.kb-st input[type=checkbox]{width:16px;height:16px;accent-color:var(--good)}.kb-st .stt{font-size:13px}.kb-st.done .stt{color:var(--ink-3);text-decoration:line-through}
+.kb-st .x{border:none;background:none;color:var(--ink-3);cursor:pointer;font-size:15px}
+.btn.kb-good{background:var(--good);border-color:var(--good);color:#fff}
+.kb-plan{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;margin-bottom:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.kb-plan b{display:block;font-size:13.5px;margin:4px 0 2px}.kb-plan p{font-size:13px;color:var(--ink-2);margin:0}
+.kb-roles{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.kb-role{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:grid;gap:10px;align-content:start}
+.kb-role-h{display:flex;gap:10px;align-items:center}.kb-role-h .av{width:36px;height:36px;font-size:15px}.kb-role-h b{font-size:15px;display:block}
+.kb-rp{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-2)}.kb-rp .kb-bar{flex:1;height:7px}
+.kb-rl{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;text-align:left;background:none;border:none;padding:2px 0;cursor:pointer;color:inherit;font-family:inherit;width:100%}
+.kb-rl span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kb-rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-bottom:16px}
+.kb-rule{background:var(--surface-4);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;font-size:12.5px;color:var(--ink-2)}.kb-rule>b:first-child{display:block;color:var(--ink);font-size:13px;margin-bottom:3px}
+.kb-tbl{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.kb-tr{display:grid;grid-template-columns:minmax(0,1.6fr) 1fr 1fr minmax(0,1.3fr);gap:12px;align-items:center;padding:10px 14px;border-top:1px solid var(--line);font-size:13px}
+.kb-tr:first-child{border-top:none}.kb-tr.h{background:var(--surface-2)}.kb-tr.h span{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.kb-tr button.lnk{background:none;border:none;padding:0;font:inherit;font-weight:600;text-align:left;cursor:pointer;color:inherit}
+.kb-next{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 14px;margin-bottom:8px;font-size:13px}
+@media (max-width:900px){.kb-board{grid-template-columns:repeat(4,minmax(240px,1fr))}.kb-prog{min-width:0;width:100%}.kb-tr{grid-template-columns:minmax(0,1fr) auto}.kb-tr>:nth-child(2),.kb-tr>:nth-child(3){display:none}}
+`;
 const CSS = `:host{display:block;color-scheme:light;
   --bg:#FCFBF8; --surface:#FFFFFF; --surface-2:#F6F4EF; --surface-3:#EEF1F7; --surface-4:#FAF8F3;
   --ink:#1A1815; --ink-2:#56514A; --ink-3:#8C867C;
@@ -1118,8 +1188,9 @@ function mount(){
   if(HOST) return;
   HOST = document.createElement("div"); HOST.className="cx-host";
   R = HOST.attachShadow({mode:"open"});
-  R.innerHTML = `<style>${CSS}</style><div class="cxroot" id="root">
+  R.innerHTML = `<style>${CSS}${BCSS}</style><div class="cxroot" id="root">
     <section id="body"></section>
+    <div class="kb-scrim" id="kbScrim"></div><aside class="kb-dr" id="kbDr" aria-label="Board item"></aside>
     <div class="mscrim" id="dlgScrim">
       <div class="modal sm" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
         <div class="mhead"><h3 id="dlgTitle"></h3><p id="dlgSub"></p></div>
@@ -1128,6 +1199,8 @@ function mount(){
       </div>
     </div>
     <div class="toast" id="toast" role="status"></div></div>`;
+  $("#kbScrim").onclick = kbClose;
+  document.addEventListener("keydown", e=>{ if(e.key==="Escape" && HOST.isConnected && R.querySelector("#kbDr.on") && !R.querySelector("#dlgScrim.on")) kbClose(); });
   $("#dlgCancel").onclick = closeDialog;
   $("#dlgOk").onclick = ()=>{ if(dlgSubmit) dlgSubmit(); };
   $("#dlgScrim").onclick = e => { if(e.target === $("#dlgScrim")) closeDialog(); };
@@ -1137,12 +1210,13 @@ function mount(){
 function draw(){
   const c = SPACE; if(!c) return;
   const B = $("#body");
-  B.innerHTML = viewToggle() + (CTAB==="details" ? detailsPane(c) : CTAB==="assign" ? assignPane(c) : CTAB==="dash" ? dashPane(c) : calendarPane(c));
+  B.innerHTML = viewToggle() + (CTAB==="details" ? detailsPane(c) : CTAB==="board" ? boardPane(c) : CTAB==="roles" ? rolesPane(c) : CTAB==="reminders" ? remindersPane(c) : calendarPane(c));
   B.querySelectorAll("[data-ctab]").forEach(b=>b.onclick=()=>goTab(b.dataset.ctab));
   B.querySelectorAll("[data-mv]").forEach(b=>b.onclick=()=>{ MEMBERVIEW = b.dataset.mv==="1"; draw(); });
   if(CTAB==="details"){ wireDetails(c); tickCountdown(); }
-  else if(CTAB==="assign") wireAssign(c);
   else if(CTAB==="calendar") wireCalendar(c);
+  else if(CTAB==="board"||CTAB==="roles"||CTAB==="reminders") wireBoard(c);
+  if(KBOPEN) kbOpen(c, KBOPEN, true);
 }
 /* admins only: edit the campaign, or see it exactly as a team member does */
 function viewToggle(){
@@ -1474,7 +1548,7 @@ function itemsSection(c, ro){
 function detailsPane(c){
   const ro = !canEdit();
   return `<div class="${ro?"ro":""}">
-    ${!ro ? "" : canPlan() ? `<div class="bar2"><span class="ic2">MANAGER</span><p><b>Only admins change the details.</b> You can assign pieces in <b>Assignment</b> and move them between days on the <b>Calendar</b>.</p></div>` : memberBar()}
+    ${!ro ? "" : canPlan() ? `<div class="bar2"><span class="ic2">MANAGER</span><p><b>Only admins change the details.</b> You can assign pieces on the <b>Board</b> and move them between days on the <b>Calendar</b>.</p></div>` : memberBar()}
     ${heroHTML(c, ro)}
     <div class="sec-h secbig">
       <h3>📝 Campaign details</h3>
@@ -2268,9 +2342,225 @@ function openPiece(c, id){
   });
 }
 
+
+/* ============================================================ CAMPAIGN BOARD
+   One board per campaign: every piece from Campaign Details plus the board's own tasks, in four columns
+   (Not started · In progress · Past deadline · Live). A YouTube / Instagram piece is ONE card shared with the
+   Social Media space's Content Process: index.html makes the card, keeps title / date / assignee the same in
+   both, and the card's column is the piece's status here (Live there = Live here). Everything else (banners,
+   notifications, webinars…) has sub tasks and goes Live when its owner presses ✓ Published.
+   The morning after a deadline, anything not live sends its owner a 🔔 + email (Edge Function campaign-remind),
+   whose ✓ Published turns it green and tells the campaign lead.
+     c.tasks = [{id, title, kind, ownerId, owner, due, subs:[{t, ownerId, done}], live, liveBy, liveAt, link}]
+     piece.subs / .live / .liveBy / .liveAt / .link — the same for pieces that aren't YouTube / Instagram
+     c.lead — the person told when something is published */
+const CP_STAGES = [["todo","Ideas"],["draft","To shoot"],["inprogress","Editing"],["inreview","Your check"],["approved","Scheduled"],["published","Live"]];
+const KB_COLS = [["todo","Not started"],["prog","In progress"],["late","Past deadline · waiting"],["live","Live ✓"]];
+const TASK_KINDS = ["Webinar","App banner","Notification","WhatsApp","Email","Offer setup","Website","Event","Report","Other"];
+const WEBINAR_SUBS = ["Speaker found and spoken to","Platform decided (YouTube Live, Zoom…)","Poster and content made","Registration link created","WhatsApp group made and shared","Reminder notification sent"];
+let KBF = { who:"", date:"", cat:"" }, KBOPEN = null, KBREM = null, KBREMFOR = "";
+const isContentPiece = it => platsOf(it).some(p=>PROCESS_PLATFORMS.includes(p));
+const kbPeople = () => people();
+const kbName = id => { const p=kbPeople().find(x=>x.id===id); return p ? p.name : ""; };
+function kbRows(c){
+  if(!Array.isArray(c.tasks)) c.tasks = [];
+  const rows = c.items.map(it=>{
+    const content = isContentPiece(it), card = content && OPT.cardOf ? OPT.cardOf(c, it) : null;
+    const si = card ? Math.max(0, CP_STAGES.findIndex(s=>s[0]===card.stage)) : 0;
+    const live = content ? !!(card && card.stage==="published") : !!it.live;
+    return { src:"piece", ref:it, id:it.id, title:it.name||"(untitled)", due:it.date||"", ownerId:it.ownerId||"", owner:ownerName(it), content, card, si, live,
+      liveBy: content ? (card && card.liveBy) || "Content Process" : it.liveBy||"", link: content ? ((card&&card.post&&(Object.values(card.post.links||{}).find(Boolean)||card.post.postUrl))||"") : it.link||"",
+      cat: content ? "c:"+kindName(it) : "k:"+kindName(it), catLabel: kindName(it), subs: content ? null : (it.subs||(it.subs=[])), plats: platsOf(it) };
+  });
+  c.tasks.forEach(t=>{ if(!Array.isArray(t.subs)) t.subs=[];
+    rows.push({ src:"task", ref:t, id:t.id, title:t.title||"(untitled)", due:t.due||"", ownerId:t.ownerId||"", owner:t.ownerId?kbName(t.ownerId)||t.owner:t.owner||"", content:false, card:null, si:0,
+      live:!!t.live, liveBy:t.liveBy||"", link:t.link||"", cat:"k:"+(t.kind||"Other"), catLabel:t.kind||"Other", subs:t.subs, plats:[] }); });
+  return rows;
+}
+const kbLate = x => !x.live && !!x.due && x.due < TODAY;
+const kbState = x => x.live ? "live" : kbLate(x) ? "late" : (x.content ? x.si>0 : x.subs.some(s=>s.done)) ? "prog" : "todo";
+const kbPct = x => x.content ? Math.round(x.si/5*100) : x.subs.length ? Math.round(x.subs.filter(s=>s.done).length/x.subs.length*100) : 0;
+function kbTags(x){
+  if(x.content){ const out=[]; const k=x.ref.kind;
+    if(x.plats.includes("YouTube")) out.push(`<span class="kb-tag yt">YT ${esc(k==="longvideo"?"Long video":k==="reel"||k==="influencer"?"Short":kindName(x.ref))}</span>`);
+    if(x.plats.includes("Instagram")) out.push(`<span class="kb-tag ig">Insta ${esc(k==="reel"||k==="influencer"?"Reel":k==="banner"?"Post":kindName(x.ref))}</span>`);
+    return out.join("") + `<span class="kb-tag sync" title="The same card is on Content Process">↔ Content Process</span>`; }
+  return `<span class="kb-tag task">${esc(x.catLabel)}</span>` + (x.plats.length?x.plats.map(p=>`<span class="kb-tag">${esc(p)}</span>`).join(""):"");
+}
+const kbWho = (id, name) => name ? `<span class="kb-who">${avatar(name)}${esc(name)}</span>` : `<span class="kb-who hint">No one yet</span>`;
+const kbByLine = x => x.liveBy==="Content Process" ? "Live in Content Process" : "Confirmed by " + x.liveBy;
+function kbPass(x){
+  if(KBF.who && x.ownerId!==KBF.who && !(x.subs||[]).some(s=>s.ownerId===KBF.who)) return false;
+  if(KBF.cat){ if(KBF.cat==="content"&&!x.content) return false; if(KBF.cat==="tasks"&&x.content) return false; if(KBF.cat.includes(":")&&x.cat!==KBF.cat) return false; }
+  if(KBF.date){ const wk=addDays(TODAY,7);
+    if(KBF.date==="today"&&x.due!==TODAY) return false; if(KBF.date==="week"&&!(x.due>=TODAY&&x.due<=wk)) return false;
+    if(KBF.date==="late"&&!kbLate(x)) return false; if(KBF.date==="nodate"&&x.due) return false;
+    if(/^\d{4}-/.test(KBF.date)&&x.due!==KBF.date) return false; }
+  return true;
+}
+function kbHead(c, rows){
+  const n=rows.length, l=rows.filter(x=>x.live).length, late=rows.filter(kbLate).length, prog=rows.filter(x=>kbState(x)==="prog").length, w=v=>n?v/n*100:0;
+  return `<div class="kb-head"><div><span class="lbl">Campaign board</span><h3 style="font-size:20px;margin:4px 0 2px">${esc(c.details.name||c.name)}</h3>
+      <p class="hint" style="max-width:60ch">Every piece from Campaign Details and every task, in one place. YouTube and Instagram pieces are the same cards as in Content Process.</p></div>
+    <div class="kb-prog"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px"><span class="lbl">Went live</span><b class="num">${l}<small> of ${n} live</small></b></div>
+      <div class="kb-bar"><i style="width:${w(l)}%;background:var(--good)"></i><i style="width:${w(prog)}%;background:var(--saffron)"></i><i style="width:${w(late)}%;background:var(--crit)"></i></div>
+      <div class="kb-leg"><span><i class="kb-dot" style="background:var(--good)"></i>${l} live</span><span><i class="kb-dot" style="background:var(--saffron)"></i>${prog} in progress</span>
+        <span><i class="kb-dot" style="background:var(--crit)"></i>${late} past deadline</span><span><i class="kb-dot" style="background:var(--line-2)"></i>${n-l-prog-late} not started</span></div></div></div>`;
+}
+function kbFilters(c, rows){
+  const ids=[...new Set(rows.flatMap(x=>[x.ownerId,...(x.subs||[]).map(s=>s.ownerId)]).filter(Boolean))];
+  const days=[...new Set(rows.map(x=>x.due).filter(Boolean))].sort();
+  const cats=[...new Set(rows.map(x=>x.cat))].sort();
+  return `<div class="kb-f">
+    <select class="kb-sel ${KBF.who?"on":""}" id="kbWho" aria-label="By person"><option value="">Everyone</option>${ids.map(id=>`<option value="${esc(id)}" ${KBF.who===id?"selected":""}>${esc(kbName(id)||"Someone")}</option>`).join("")}</select>
+    <select class="kb-sel ${KBF.date?"on":""}" id="kbDate" aria-label="By date"><option value="">Any date</option><option value="today" ${KBF.date==="today"?"selected":""}>Due today</option>
+      <option value="week" ${KBF.date==="week"?"selected":""}>Next 7 days</option><option value="late" ${KBF.date==="late"?"selected":""}>Past deadline, not live</option><option value="nodate" ${KBF.date==="nodate"?"selected":""}>No date yet</option>
+      <optgroup label="On a day">${days.map(d=>`<option value="${d}" ${KBF.date===d?"selected":""}>${dmy(d)}</option>`).join("")}</optgroup></select>
+    <select class="kb-sel ${KBF.cat?"on":""}" id="kbCat" aria-label="By category"><option value="">Every category</option><option value="content" ${KBF.cat==="content"?"selected":""}>All YouTube / Instagram content</option><option value="tasks" ${KBF.cat==="tasks"?"selected":""}>Everything else</option>
+      <optgroup label="Content">${cats.filter(k=>k.startsWith("c:")).map(k=>`<option value="${esc(k)}" ${KBF.cat===k?"selected":""}>${esc(k.slice(2))}</option>`).join("")}</optgroup>
+      <optgroup label="Other">${cats.filter(k=>k.startsWith("k:")).map(k=>`<option value="${esc(k)}" ${KBF.cat===k?"selected":""}>${esc(k.slice(2))}</option>`).join("")}</optgroup></select>
+    ${KBF.who||KBF.date||KBF.cat?`<button class="btn sm" id="kbClear">Clear filters</button>`:""}
+    <span class="kb-sp"></span>${canPlan()?`<button class="btn pri" id="kbAdd">＋ Add task</button>`:""}</div>`;
+}
+function kbCard(x){
+  const st=kbState(x);
+  const sub = x.content ? `<div class="kb-sub"><span>Content Process: <b>${esc(x.card?CP_STAGES[x.si][1]:"not there yet")}</b></span><span class="mb"><i style="width:${kbPct(x)}%"></i></span></div>`
+    : `<div class="kb-sub"><span>${x.subs.filter(s=>s.done).length}/${x.subs.length} sub tasks</span><span class="mb"><i style="width:${kbPct(x)}%"></i></span></div>`;
+  return `<button type="button" class="kb-it ${st}" data-kb="${esc(x.id)}"><span class="kb-t">${esc(x.title)}</span><span class="kb-m">${kbTags(x)}</span>${x.live?"":sub}
+    <span class="kb-m">${kbWho(x.ownerId,x.owner)}<span class="kb-sp"></span>${x.live?`<span class="kb-by">✓ ${esc(kbByLine(x))}</span>`
+      :x.due?`<span class="kb-due ${st==="late"?"late":""}">${st==="late"?"⏰ was due "+dmy(x.due):"due "+dmy(x.due)}</span>`:`<span class="kb-due">no date</span>`}</span></button>`;
+}
+function boardPane(c){
+  const rows=kbRows(c), list=rows.filter(kbPass);
+  return kbHead(c, rows) + kbFilters(c, rows) + (rows.length ? `<div class="kb-board">${KB_COLS.map(([k,l])=>{ const xs=list.filter(x=>kbState(x)===k);
+      return `<div class="kb-col ${k}"><div class="kb-col-h"><h4>${l}</h4><span class="n">${xs.length}</span></div>${xs.map(kbCard).join("")||`<p class="hint" style="padding:6px;margin:0">Nothing here.</p>`}</div>`; }).join("")}</div>`
+    : `<div class="dashed" style="padding:30px;text-align:center"><b>Nothing on the board yet.</b><p class="hint">Add content pieces in Campaign Details, or press ＋ Add task for a webinar, banner or notification.</p></div>`);
+}
+function rolesPane(c){
+  const rows=kbRows(c), ids=[...new Set(rows.flatMap(x=>[x.ownerId,...(x.subs||[]).map(s=>s.ownerId)]).filter(Boolean))];
+  const lead=OPT.leadOf?OPT.leadOf(c):"", d=c.details;
+  return kbHead(c, rows) + `<div class="kb-plan"><div><span class="lbl">What we're doing</span><b>${esc(d.name||c.name)}</b><p>${esc(d.tagline||offerLine(c)||"Set the offer in Campaign Details.")}</p></div>
+      <div><span class="lbl">What I expect</span><b>${esc(d.goal||"Every piece live by its deadline")}</b><p>Every piece live by its date, with the link on the card. If one slips, its owner confirms or gives a new date the next day.</p></div>
+      <div><span class="lbl">Who does what</span><b>YouTube / Instagram pieces go to Aditya first</b><p>Whoever a card is given to shows under their name below, here and in Content Process.</p>
+        <p style="margin-top:8px">Told when something is published: ${canEdit()?`<select id="kbLead" class="kb-sel">${kbPeople().map(p=>`<option value="${esc(p.id)}" ${lead===p.id?"selected":""}>${esc(p.name)}</option>`).join("")}</select>`:`<b>${esc(kbName(lead)||"—")}</b>`}</p></div></div>
+    <div class="kb-roles">${ids.map(id=>{ const name=kbName(id)||"Someone", role=(kbPeople().find(p=>p.id===id)||{}).role||"", mine=rows.filter(x=>x.ownerId===id), subs=rows.flatMap(x=>(x.subs||[]).filter(s=>s.ownerId===id).map(s=>({s,x}))), l=mine.filter(x=>x.live).length, late=mine.filter(kbLate).length;
+      return `<div class="kb-role"><div class="kb-role-h">${avatar(name)}<div><b>${esc(name)}</b><span class="hint">${esc(role)}</span></div></div>
+        <div class="kb-rp"><span class="num">${l}/${mine.length} live</span><span class="kb-bar"><i style="width:${mine.length?l/mine.length*100:0}%;background:var(--good)"></i></span>${late?`<span class="kb-tag late">${late} past deadline</span>`:""}</div>
+        <div style="display:grid;gap:3px">${mine.map(x=>`<button type="button" class="kb-rl" data-kb="${esc(x.id)}"><span>${x.live?"✅":kbLate(x)?"⏰":"▫️"} ${esc(x.title)}</span><span class="kb-due">${x.due?dmy(x.due):""}</span></button>`).join("")||`<span class="hint">No cards of their own.</span>`}</div>
+        ${subs.length?`<div><span class="lbl">Sub tasks</span>${subs.map(({s,x})=>`<button type="button" class="kb-rl" data-kb="${esc(x.id)}"><span>${s.done?"✅":"▫️"} ${esc(s.t)}</span><span class="kb-due">${esc(x.title.slice(0,24))}</span></button>`).join("")}</div>`:""}</div>`; }).join("")
+      || `<p class="hint">Nobody has a piece or task yet.</p>`}</div>`;
+}
+function remindersPane(c){
+  const rows=kbRows(c), next=rows.filter(x=>!x.live&&x.due&&x.due>=TODAY).sort((a,b)=>a.due.localeCompare(b.due)).slice(0,6);
+  if(KBREMFOR!==c.id && OPT.reminders){ KBREMFOR=c.id; KBREM=null; OPT.reminders(c).then(r=>{ KBREM=r||[]; if(CTAB==="reminders") draw(); }).catch(()=>{ KBREM=[]; if(CTAB==="reminders") draw(); }); }
+  const rs=(KBREM||[]).map(r=>({ r, x:rows.find(y=>y.id===r.item_id) }));
+  return kbHead(c, rows) + `<div class="kb-rules">
+      <div class="kb-rule"><b>⏰ The morning after a deadline</b>If a card hasn't moved to Live, its owner gets a 🔔 “This card's status isn't updated” and an email, with a <b>✓ Published</b> button.</div>
+      <div class="kb-rule"><b>✓ When they press Published</b>The card turns green here (and Live in Content Process), shows who confirmed it, and ${esc(kbName(OPT.leadOf?OPT.leadOf(c):"")||"the campaign lead")} gets a 🔔 and an email.</div>
+      <div class="kb-rule"><b>↔ If Content Process moves it to Live</b>Nobody has to confirm; the reminder closes by itself the next morning.</div></div>
+    <div class="kb-tbl"><div class="kb-tr h"><span>Card</span><span>Reminder went to</span><span>Sent</span><span>Status</span></div>
+      ${KBREM==null?`<div class="kb-tr"><span class="hint" style="grid-column:1/-1">Loading reminders…</span></div>`:rs.map(({r,x})=>{ const live=x&&x.live;
+        return `<div class="kb-tr"><span style="min-width:0">${x?`<button type="button" class="lnk" data-kb="${esc(x.id)}">${esc(x.title)}</button>`:`<b>${esc(r.title)}</b>`}<div class="kb-m" style="margin-top:3px">${x?kbTags(x):""}<span class="kb-due">due ${dmy(r.due)}</span></div></span>
+          <span>${kbWho(r.to_user, kbName(r.to_user)||r.to_name||"")}</span><span class="kb-due">${dmy(String(r.sent_at||"").slice(0,10))} · 🔔 + email</span>
+          <span>${r.status==="done"||live?`<span class="kb-by">✓ ${esc(r.how||(x?kbByLine(x):"Done"))}</span>`:`<span class="kb-tag late">Waiting for ${esc(kbName(r.to_user)||"them")}</span>`}</span></div>`; }).join("")
+        || `<div class="kb-tr"><span class="hint" style="grid-column:1/-1">No reminders yet: nothing has passed its deadline without going live.</span></div>`}</div>
+    <h3 style="font-size:16px;margin:18px 0 10px">Next deadlines</h3>
+    ${next.map(x=>`<div class="kb-next"><span>🗓</span><div><b>${esc(x.title)}</b><p class="hint" style="margin:0">Due ${dmy(x.due)} · ${esc(x.owner||"nobody yet")} gets a reminder on ${dmy(addDays(x.due,1))} if it isn't live by then</p></div></div>`).join("")||`<p class="hint">No upcoming deadlines.</p>`}`;
+}
+function wireBoard(c){
+  const B=$("#body");
+  B.querySelectorAll("[data-kb]").forEach(b=>b.onclick=()=>kbOpen(c, b.dataset.kb));
+  [["#kbWho","who"],["#kbDate","date"],["#kbCat","cat"]].forEach(([id,k])=>{ const e=B.querySelector(id); if(e) e.onchange=()=>{ KBF[k]=e.value; draw(); }; });
+  const cl=B.querySelector("#kbClear"); if(cl) cl.onclick=()=>{ KBF={who:"",date:"",cat:""}; draw(); };
+  const ad=B.querySelector("#kbAdd"); if(ad) ad.onclick=()=>kbAddTask(c);
+  const ld=B.querySelector("#kbLead"); if(ld) ld.onchange=()=>{ c.lead=ld.value; save(); toast(kbName(ld.value)+" is told when something is published"); };
+}
+function kbClose(){ KBOPEN=null; const d=R&&R.querySelector("#kbDr"); if(d) d.classList.remove("on"); const s=R&&R.querySelector("#kbScrim"); if(s) s.classList.remove("on"); }
+const kbCanTouch = x => canPlan() || (!!x.ownerId && x.ownerId===me());
+function kbOpen(c, id, keep){
+  const x=kbRows(c).find(y=>y.id===id); if(!x){ kbClose(); return; } KBOPEN=id;
+  const st=kbState(x), d=$("#kbDr"), ed=kbCanTouch(x), pl=canPlan();
+  const col = x.live ? "live" : x.content ? (x.si>0?"prog":"todo") : st;
+  d.innerHTML=`<div class="kb-dh"><div><span class="lbl">${x.content?"Content piece":"Task · "+esc(x.catLabel)} · ${esc(c.details.name||c.name)}</span><h3>${esc(x.title)}</h3><div class="kb-m" style="margin-top:8px">${kbTags(x)}</div></div><button class="btn sm" id="kbX">Close</button></div>
+    ${x.live?`<div class="kb-cf ok"><b>✓ Live</b><p class="hint" style="margin:2px 0 0">${esc(kbByLine(x))}${x.link?` · ${esc(x.link)}`:""}${x.content?" · live here and in Content Process":""}</p></div>`
+      :st==="late"?`<div class="kb-cf"><b>⏰ The deadline (${dmy(x.due)}) has passed and it isn't marked live.</b>
+        <p class="hint" style="margin:2px 0 0">${esc(x.owner||"Its owner")} gets a 🔔 and an email asking to confirm.</p>${ed?`<input id="kbLink" placeholder="Link or proof (the post URL, Firebase campaign number…)">
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn kb-good" id="kbPub">✓ Published</button>${pl||x.ownerId===me()?`<button class="btn" id="kbLater">Not yet: new date</button>`:""}</div>`:""}</div>`:""}
+    <div class="kb-blk"><div class="kb-kv"><span>Assignee</span><span>${pl?`<select id="kbOwner"><option value="">— nobody yet —</option>${kbPeople().map(p=>`<option value="${esc(p.id)}" ${x.ownerId===p.id?"selected":""}>${esc(p.name)}${p.role?" · "+esc(p.role):""}</option>`).join("")}</select>`:kbWho(x.ownerId,x.owner)}</span>
+      <span>Deadline</span><span>${pl&&x.src==="task"?`<input type="date" id="kbDue" value="${esc(x.due)}">`:x.due?dmy(x.due):"No date"}</span><span>Category</span><span>${esc(x.catLabel)}</span></div>
+      ${x.src==="piece"?`<p class="hint" style="margin:8px 0 0">${x.content?"Title, date and assignee are the same in Content Process. ":""}The title and date come from Campaign Details${x.content?" (or the card in Content Process)":""}.</p>`:""}</div>
+    ${x.content?`<div class="kb-blk"><h4>Status, in both places</h4>${x.card?`
+      <div class="kb-sync"><span class="lbl">Campaign board</span><span class="kb-pills">${KB_COLS.filter(([k])=>k!=="late").map(([k,l])=>`<button type="button" data-kbcol="${k}" ${ed?"":"disabled"} class="${col===k?(k==="live"?"livenow":"now"):""}">${l}</button>`).join("")}</span></div>
+      <div class="kb-sync"><span class="lbl">Content Process</span><span class="kb-pills">${CP_STAGES.map(([sid,l],i)=>`<button type="button" data-kbcp="${sid}" ${ed?"":"disabled"} class="${i===x.si?(i===5?"livenow":"now"):i<x.si?"done":""}">${l}</button>`).join("")}</span></div>
+      <p class="hint" style="margin:6px 0 0">The two boards name their columns differently; <b>Live</b> is the same in both. Moving it here moves it there.</p>
+      ${OPT.goProcess?`<button class="btn sm" id="kbGo" style="margin-top:8px">Open Content Process →</button>`:""}`
+      :`<p class="hint" style="margin:0">The card is being made in Content Process — it appears there the next time someone who plans this campaign opens it.</p>`}</div>`
+    :`<div class="kb-blk"><h4>Sub tasks <span class="hint">${x.subs.filter(s=>s.done).length} of ${x.subs.length} done</span></h4>
+      ${x.subs.map((s,i)=>`<div class="kb-st ${s.done?"done":""}"><input type="checkbox" data-kbsub="${i}" ${s.done?"checked":""} ${x.live||!(pl||s.ownerId===me()||x.ownerId===me())?"disabled":""} aria-label="${esc(s.t)}"><span class="stt">${esc(s.t)}</span>
+        ${pl&&!x.live?`<select data-kbsubo="${i}"><option value="">— who —</option>${kbPeople().map(p=>`<option value="${esc(p.id)}" ${s.ownerId===p.id?"selected":""}>${esc(p.name)}</option>`).join("")}</select><button class="x" data-kbsubx="${i}" title="Remove">×</button>`:`<span class="hint">${esc(kbName(s.ownerId))}</span><span></span>`}</div>`).join("")||`<p class="hint" style="margin:0">No sub tasks yet.</p>`}
+      ${pl&&!x.live?`<div style="display:flex;gap:6px;margin-top:8px"><input id="kbNewSub" placeholder="Add a sub task" style="flex:1"><button class="btn sm" id="kbAddSub">Add</button></div>`:""}
+      ${!x.live&&st!=="late"&&ed?`<input id="kbLink" placeholder="Link or proof, once it's out" style="width:100%;margin-top:10px"><button class="btn kb-good" id="kbPub" style="margin-top:8px">✓ Published</button>`:""}
+      ${pl&&x.src==="task"?`<div style="margin-top:12px"><button class="btn sm danger" id="kbDel">Delete this task</button></div>`:""}</div>`}`;
+  d.classList.add("on"); $("#kbScrim").classList.add("on");
+  d.querySelector("#kbX").onclick=kbClose;
+  const pub=d.querySelector("#kbPub"); if(pub) pub.onclick=()=>kbPublish(c, x, (d.querySelector("#kbLink")||{}).value||"");
+  const later=d.querySelector("#kbLater"); if(later) later.onclick=()=>kbNewDate(c, x);
+  const ow=d.querySelector("#kbOwner"); if(ow) ow.onchange=()=>kbReassign(c, x, ow.value);
+  const du=d.querySelector("#kbDue"); if(du) du.onchange=()=>{ x.ref.due=du.value; save(); };
+  const go=d.querySelector("#kbGo"); if(go) go.onclick=()=>{ kbClose(); OPT.goProcess(c); };
+  d.querySelectorAll("[data-kbcp]").forEach(b=>b.onclick=()=>{ const sid=b.dataset.kbcp; if(sid==="published"){ kbPublish(c,x,""); return; }
+    if(OPT.setCardStage && OPT.setCardStage(c, x.ref, sid)){ save(); toast(`Content Process → ${CP_STAGES.find(s=>s[0]===sid)[1]}`); } });
+  d.querySelectorAll("[data-kbcol]").forEach(b=>b.onclick=()=>{ const k=b.dataset.kbcol; if(k==="live"){ kbPublish(c,x,""); return; }
+    const sid = k==="todo" ? "todo" : (x.si>0 && x.si<5 ? CP_STAGES[x.si][0] : "draft");
+    if(OPT.setCardStage && OPT.setCardStage(c, x.ref, sid)){ save(); toast(`Board → ${k==="todo"?"Not started":"In progress"} · Content Process → ${CP_STAGES.find(s=>s[0]===sid)[1]}`); } });
+  d.querySelectorAll("[data-kbsub]").forEach(b=>b.onchange=()=>{ x.subs[+b.dataset.kbsub].done=b.checked; save(); });
+  d.querySelectorAll("[data-kbsubo]").forEach(b=>b.onchange=()=>{ const s=x.subs[+b.dataset.kbsubo]; s.ownerId=b.value; save();
+    if(b.value && OPT.notify) OPT.notify(c, { ownerId:b.value, owner:kbName(b.value), name:s.t+" — "+x.title, kind:"other", kindOther:x.catLabel, date:x.due, platform:"", details:"A sub task of “"+x.title+"” on the campaign board." }); });
+  d.querySelectorAll("[data-kbsubx]").forEach(b=>b.onclick=()=>{ x.subs.splice(+b.dataset.kbsubx,1); save(); });
+  const as=d.querySelector("#kbAddSub"); if(as) as.onclick=()=>{ const v=d.querySelector("#kbNewSub").value.trim(); if(!v) return; x.subs.push({ t:v, ownerId:x.ownerId||"", done:false }); save(); };
+  const del=d.querySelector("#kbDel"); if(del) del.onclick=()=>{ const i=c.tasks.indexOf(x.ref); if(i<0) return; const gone=c.tasks.splice(i,1)[0]; kbClose(); save(); toastUndo(`“${x.title}” deleted`, ()=>{ c.tasks.splice(i,0,gone); save(); }); };
+}
+function kbPublish(c, x, link){
+  if(x.live) return;
+  const who = kbName(me()) || "the team";
+  if(x.content){ if(!(OPT.setCardStage && OPT.setCardStage(c, x.ref, "published", { by:who, link }))){ toast("Couldn't reach the card in Content Process"); return; } }
+  else { Object.assign(x.ref, { live:true, liveBy:who, liveAt:TODAY, link:link||x.ref.link||"" }); (x.subs||[]).forEach(s=>s.done=true); }
+  save();
+  if(OPT.confirmLive) OPT.confirmLive(c, { id:x.id, title:x.title, by:who, link });
+  toast(`Green on the board${x.content?" and Live in Content Process":""} · ${kbName(OPT.leadOf?OPT.leadOf(c):"")||"the campaign lead"} is told`);
+}
+function kbNewDate(c, x){
+  openDialog({ title:"A new date", sub:`When will “${x.title}” go out?`, okLabel:"Save",
+    fields:[{ k:"date", label:"New date", type:"date", value:addDays(TODAY,2) }],
+    onSave:(v)=>{ if(!v.date){ toast("Pick a date"); return false; }
+      if(x.src==="task") x.ref.due=v.date; else x.ref.date=v.date;
+      save(); if(OPT.confirmLive) OPT.confirmLive(c, { id:x.id, title:x.title, by:kbName(me())||"", newDate:v.date }); toast("New date: "+dmy(v.date)); } });
+}
+function kbReassign(c, x, id){
+  const name=kbName(id);
+  x.ref.ownerId=id; x.ref.owner=name;
+  save();
+  if(id && OPT.notify) OPT.notify(c, x.src==="piece" ? x.ref : { ownerId:id, owner:name, name:x.title, kind:"other", kindOther:x.catLabel, date:x.due, platform:"", details:"A task on the campaign board." });
+  toast(id ? `Now with ${name} — under ${name.split(" ")[0]} in Roles${x.content?" and on the card in Content Process":""}` : "No one has it now");
+}
+function kbAddTask(c){
+  const ppl=kbPeople(), mine=me();
+  openDialog({ title:"Add a task", sub:"Anything for this campaign that isn't a YouTube / Instagram post: a webinar, a banner, a notification…", okLabel:"Add to the board",
+    fields:[ { k:"title", label:"What", ph:"Webinar with a CUET topper", value:"" },
+      { k:"kind", label:"Kind", type:"select", value:"Webinar", opts:TASK_KINDS.map(k=>[k,k]) },
+      { k:"ownerId", label:"Owner", type:"select", value:mine, opts:[["","— nobody yet —"]].concat(ppl.map(p=>[p.id, p.name+(p.role?" · "+p.role:"")])) },
+      { k:"due", label:"Deadline", type:"date", value:addDays(TODAY,3) } ],
+    onSave:(v)=>{ if(!v.title){ toast("Say what the task is"); return false; }
+      const t={ id:uid("kt"), title:v.title, kind:v.kind, ownerId:v.ownerId, owner:kbName(v.ownerId), due:v.due,
+        subs:(v.kind==="Webinar"?WEBINAR_SUBS:[]).map(s=>({ t:s, ownerId:v.ownerId, done:false })), live:false };
+      if(!Array.isArray(c.tasks)) c.tasks=[]; c.tasks.push(t); KBOPEN=t.id; save();
+      if(v.ownerId && v.ownerId!==mine && OPT.notify) OPT.notify(c, { ownerId:v.ownerId, owner:t.owner, name:t.title, kind:"other", kindOther:t.kind, date:t.due, platform:"", details:"A task on the campaign board." });
+      toast(`“${v.title}” added${v.kind==="Webinar"?" with the usual webinar sub tasks":""}`); } });
+}
+
 /* ============================================================ API */
 window.CX = {
-  tabs: [["details","Campaign Details"],["assign","Assignment & distribution of work"],["calendar","Calendar"],["dash","Dashboard"]],
+  tabs: [["details","Campaign Details"],["board","Board"],["roles","Roles & responsibilities"],["reminders","Reminders"],["calendar","Calendar"]],
   normalize: normalize,
   kinds: ITEM_KINDS,
   typeKey: typeKey,
@@ -2281,9 +2571,10 @@ window.CX = {
   render: function(space, wrap, opt){
     mount();
     OPT = opt || {};
+    if(!SPACE || SPACE.id!==space.id){ KBF={who:"",date:"",cat:""}; KBOPEN=null; KBREM=null; KBREMFOR=""; if(R) kbClose(); }
     if(SPACE!==space){ SPACE=space; ASSIGNFILTER="All"; CALMONTH=""; DAYSEL=null; CALFILTER={range:"all",anchor:"",type:"all",platform:"all",owner:"all"}; if(R) closeDialog(); }
     normalize(space);
-    CTAB = ["details","assign","calendar","dash"].includes(OPT.tab) ? OPT.tab : "details";
+    CTAB = ["details","board","roles","reminders","calendar"].includes(OPT.tab) ? OPT.tab : OPT.tab==="assign"||OPT.tab==="dash" ? "board" : "details";
     if(HOST.parentNode!==wrap) wrap.appendChild(HOST);
     draw();
   }

@@ -258,6 +258,18 @@ function ntfShowBox(n, asPopup) {
     acts.appendChild(op);
     ok.className = "ntf-btn"; if (asPopup && !ack) ok.textContent = "Later";
   }
+  /* campaign board reminder (campaign-remind): "This card's status isn't updated" → ✓ Published right here */
+  var camp = mine && !n.stopped && n.ref && /^camp:[^:]+:[^:]+$/.test(n.ref) && typeof window.campPublishFromBell === "function";
+  if (camp) {
+    var cp = n.ref.split(":");
+    if (route) { route = null; acts.removeChild(acts.lastChild); }
+    var see = ntfEl("button", "ntf-btn", "Open the board");
+    see.onclick = function () { ntfMark(n, "read").then(ntfRenderBell); close(); if (typeof closeTeam === "function") closeTeam(); window.campOpenBoard(cp[1]); };
+    var pub = ntfEl("button", "ntf-btn primary", "✓ Published");
+    pub.onclick = function () { ntfMark(n, "ack").then(ntfRenderBell); close(); if (!window.campPublishFromBell(cp[1], cp[2])) alert("That card isn't on the board any more."); };
+    acts.appendChild(see); acts.appendChild(pub);
+    ok.className = "ntf-btn"; ok.textContent = "Not yet";
+  }
   if (fill) {
     var okrci = /^okrci:/.test(n.ref);
     var go = ntfEl("button", "ntf-btn primary", okrci ? "🎯 Update my OKRs" : "✍️ Fill it now");
@@ -289,6 +301,7 @@ function ntfRoute(n) {
   if (/^place:/.test(ref) && has("cmtGo")) { var pp = ref.split(":"); return function () { leave(); cmtGo(pp[1], pp[2]); }; }   // 💬 tagged in a comment
   if (/^feedback:/.test(ref)) return admin("myfeedback");
   if (/^okrci:/.test(ref)) return admin("okrcheckin");
+  if (/^camp(board)?:/.test(ref) && typeof window.campOpenBoard === "function") { var cc = ref.split(":"); return function () { leave(); window.campOpenBoard(cc[1]); }; }
   if (/^hr:/.test(ref)) { var st = ref.split(":")[1] || ""; return myhr(has("hrStepIx") && hrStepIx(st) >= 0 ? st : null); }
   if (/^admin:/.test(ref)) return admin(ref.slice(6));
   // HR

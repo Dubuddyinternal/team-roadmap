@@ -2708,7 +2708,7 @@ function renderProcess(){
     return `<div class="col" data-stage="${s.id}">
       <div class="col-h"><h4>${s.label}</h4><span class="count">${items.length}</span></div>
       ${items.map(c=>{ const lp=livePost(c); return `<div class="kcard ${ro?"ro":""} ${c.priority==="high"?"hot":""}" draggable="${ro?"false":"true"}" data-card="${c.id}">
-        ${c.priority==="high"?`<div class="hotbar">🔔 High priority${c.fromCampaign?` · from ${esc(c.fromCampaign)}`:""}</div>`:""}
+        ${c.priority==="high"?`<div class="hotbar">🔔 High priority${c.fromCampaign?` · from ${esc(c.fromCampaign)}`:""}</div>`:""}${c.fromCampaign&&c.owner?`<div class="hotbar" style="background:var(--surface-2);color:var(--ink-2)">👤 ${esc(c.owner)}</div>`:""}
         <h5>${fmtIcon(c)} ${esc(c.pre.title||c.idea)}</h5>
         <div class="meta">${ktags(c)}
           ${c.override?`<span class="badge crit">override</span>`:""}
