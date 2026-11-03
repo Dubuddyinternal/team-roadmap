@@ -18,7 +18,8 @@
 //   pages_show_list, pages_read_engagement, business_management.
 //   IG_USER_ID (optional) — the Instagram business account id, if the token
 //   can see more than one.
-//   YT_CHANNEL_ID — the DU Buddy channel id (UC…). Any other channel is refused.
+//   YT_CHANNEL_ID — the DU Buddy channel id (UC…). The sync reads that channel by id, so the
+//   token only has to belong to its owner (dubuddy77@gmail.com); no channel picking needed.
 //
 // HOW TO DEPLOY: name it exactly  sync-social , "Verify JWT" OFF (this code
 // checks the caller itself, like manage-people).
@@ -75,9 +76,17 @@ async function gget(token, url, params) {
   return body;
 }
 
+// The channel to sync. With YT_CHANNEL_ID set, the sync asks for that channel by its id instead of
+// "the token's own channel": a Google sign-in with dubuddy77@gmail.com always lands on that email's
+// own channel (Dubuddy Internal), while DU Buddy is a brand account Google doesn't offer to pick.
+// Videos and counts are public, so any valid token reads them; Analytics needs the token's account
+// to own the channel (dubuddy77 is DU Buddy's owner).
+const PINNED = Deno.env.get("YT_CHANNEL_ID") || "";
+const YT_IDS = PINNED ? "channel==" + PINNED : "channel==MINE";
+
 // one Analytics report as [{column: value}]
 async function report(token, params) {
-  const r = await gget(token, "https://youtubeanalytics.googleapis.com/v2/reports", { ids: "channel==MINE", ...params });
+  const r = await gget(token, "https://youtubeanalytics.googleapis.com/v2/reports", { ids: YT_IDS, ...params });
   const cols = (r.columnHeaders || []).map((h) => h.name);
   return (r.rows || []).map((row) => Object.fromEntries(cols.map((c, i) => [c, row[i]])));
 }
@@ -87,16 +96,15 @@ async function syncYouTube(admin, team, cfg) {
   const DATA = "https://www.googleapis.com/youtube/v3";
   const notes = [];
 
-  const ch = await gget(token, DATA + "/channels", { part: "snippet,statistics,contentDetails", mine: "true" });
+  const ch = await gget(token, DATA + "/channels", { part: "snippet,statistics,contentDetails", ...(PINNED ? { id: PINNED } : { mine: "true" }) });
   const channel = ch.items && ch.items[0];
-  if (!channel) throw new Error("This Google account has no YouTube channel. Sign in to the Playground as the channel owner.");
+  if (!channel) throw new Error(PINNED ? "YouTube found no channel with the id in YT_CHANNEL_ID (" + PINNED + ")." : "This Google account has no YouTube channel. Sign in to the Playground as the channel owner.");
   const stats = channel.statistics;
   const today = new Date();
 
-  // Only ever sync the DU Buddy channel. YT_CHANNEL_ID (Secrets) pins it: a token made with any other
-  // channel stops here and deletes nothing. (On 3 Nov a token made with "Dubuddy Internal" wiped the
-  // main channel's posts and history through the branch below.)
-  const pinned = Deno.env.get("YT_CHANNEL_ID");
+  // Only ever sync the DU Buddy channel (YT_CHANNEL_ID). On 3 Nov a token for "Dubuddy Internal"
+  // wiped the main channel's posts and history through the branch below.
+  const pinned = PINNED;
   if (pinned && channel.id !== pinned) {
     throw new Error(`Signed in to the wrong YouTube channel ("${channel.snippet.title}", ${num(stats.subscriberCount)} subscribers). Make the token again and pick the DU Buddy channel. Nothing was changed.`);
   }
