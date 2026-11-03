@@ -158,6 +158,17 @@ table.mini th{padding:8px 10px}
 .mt.big b{font-size:28px}
 .mt small{display:block;font-size:11px;color:var(--ink-3);margin-top:3px;line-height:1.35}
 .secband{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;border-top:2px solid var(--ink);padding-top:12px;margin:6px 0 14px}.secband b{font-size:16px}
+.okr2-h{display:flex;align-items:center;gap:8px}
+.okr2-row{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin:12px 0 12px}
+.okr2-row>div{min-width:0}.okr2-row .lbl{display:block;margin-bottom:3px}
+.okr2-row b{font-size:26px;letter-spacing:-.025em;font-variant-numeric:tabular-nums;line-height:1.1}
+.okr2-arrow{color:var(--ink-3);font-size:20px;padding-bottom:3px}
+.okr2-ch{margin-left:auto;text-align:right}.okr2-ch.up b{color:var(--good)}.okr2-ch.dn b{color:var(--crit)}
+.okr2-m{position:relative}.okr2-m u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink-2);border-radius:2px}
+.fmtnums>.na{opacity:.6}
+.pquick{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.hbar .hl .tag{font-size:9.5px;padding:1.5px 6px;margin-right:2px}
+.dblock.tagged .hbar{grid-template-columns:minmax(120px,260px) 1fr auto}
 .okr-lite .okr-v{margin:4px 0 10px}.okr-lite .okr-foot{margin-top:8px}.stalec{color:var(--crit)}
 @media (max-width:900px){.mgrid{grid-template-columns:1fr}}
 .syncbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
@@ -167,10 +178,10 @@ table.mini th{padding:8px 10px}
 .spill.ok .sd{background:var(--good)} .spill.bad{border-color:color-mix(in srgb,var(--crit) 35%,var(--line));background:var(--crit-soft)} .spill.bad .sd{background:var(--crit)}
 .syncbar+.apibar{margin-bottom:10px}
 .apibar code{font-family:var(--mono);font-size:11.5px;background:var(--surface);padding:1px 5px;border-radius:4px}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;margin-bottom:26px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:10px;margin-bottom:26px}
 .kpi{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px 11px;min-width:0;overflow:hidden}
 .kpi>i{position:absolute;left:0;top:0;bottom:0;width:3px}
-.kpi b{display:block;font-size:24px;letter-spacing:-.025em;font-variant-numeric:tabular-nums;line-height:1.15;margin:3px 0 2px}
+.kpi b{display:block;font-size:22px;letter-spacing:-.025em;font-variant-numeric:tabular-nums;line-height:1.15;margin:3px 0 2px}
 .kpi small{display:block;font-size:11px;color:var(--ink-3);margin-top:3px;line-height:1.35}
 .dlt{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);font-weight:600}.dlt.up{color:var(--good)}.dlt.dn{color:var(--crit)}
 .charts.two{grid-template-columns:repeat(auto-fit,minmax(380px,1fr))}
@@ -1611,7 +1622,10 @@ const POPS = {
 const ruleActive=r=>{ const F=FD(r.f); if(!F) return false; if(r.op==="empty"||r.op==="nempty") return true;
   return Array.isArray(r.v) ? r.v.length>0 : (r.v!=null && String(r.v).trim()!==""); };
 let SEL = new Set(), TAGBY = "";
-let PF = { scope:"period", match:"all", rules:[], sort:{k:"date",dir:-1}, limit:50, open:false, saved:"" };
+let PF = { scope:"period", match:"all", rules:[], sort:{k:"date",dir:-1}, limit:50, open:false, saved:"", quick:"" };
+// Content list quick filters: one tap for a kind of post
+const PQUICK = [["","All posts",()=>true],["igreel","Instagram Reels",r=>r.platform==="ig"&&r.vtype==="reel"],["igimg","Instagram images",r=>r.platform==="ig"&&(r.vtype==="image"||r.vtype==="carousel")],
+  ["ytshort","YouTube Shorts",r=>r.platform==="yt"&&r.vtype==="short"],["ytlong","YouTube long videos",r=>r.platform==="yt"&&r.vtype==="long"],["ytlive","YouTube lives",r=>r.platform==="yt"&&r.vtype==="live"]];
 function ruleTest(rule, r){
   const F=FD(rule.f); if(!F) return true; const op=rule.op, raw=F.get(r);
   if(op==="empty") return raw==null||raw==="";
@@ -1628,10 +1642,13 @@ function ruleTest(rule, r){
   const a=conv(rule.v), b=conv(rule.v2); if(a==null||isNaN(a)) return true; if(raw==null) return false; const x=Number(raw);
   return op==="eq"?x===a:op==="neq"?x!==a:op==="lt"?x<a:op==="lte"?x<=a:op==="gt"?x>a:op==="gte"?x>=a:op==="between"?x>=a&&(b==null||isNaN(b)||x<=b):true;
 }
+// how many posts a quick filter would show, with everything else as it is
+function filteredPostsQ(k){ const keep=PF.quick; PF.quick=k; const n=filteredPosts(); PF.quick=keep; return n; }
 function filteredPosts(){
   const base = PF.scope==="all" ? postRows().filter(r=>r.date && platOK(r)).sort((a,b)=>b.date.localeCompare(a.date)) : publishedInPeriod();
   const act=PF.rules.filter(ruleActive);
   let out = act.length ? base.filter(r=> PF.match==="any" ? act.some(x=>ruleTest(x,r)) : act.every(x=>ruleTest(x,r))) : base;
+  const q=PQUICK.find(x=>x[0]===PF.quick); if(q && PF.quick) out=out.filter(q[2]);
   const k=PF.sort.k, dir=PF.sort.dir, F=FD(k);
   if(F) out=[...out].sort((a,b)=>{ let x=F.get(a), y=F.get(b);
     if(x==null&&y==null) return 0; if(x==null) return 1; if(y==null) return -1;
@@ -1686,11 +1703,13 @@ function postsSection(){
       <button class="x" data-fdel="${i}" title="Remove">×</button></div>`; }).join("")||`<p class="hint" style="margin:0 0 8px">No conditions yet — every post shows.</p>`}
     <div class="row" style="gap:8px"><button class="btn sm" id="pfAdd">+ Add condition</button>${act?`<button class="btn sm" id="pfClear">Clear all</button>`:""}</div>
     <div class="fpresets"><span class="lbl" style="align-self:center">Quick filters</span>${PRESETS.map((p,i)=>`<button class="chip" data-preset="${i}">${esc(p.name)}</button>`).join("")}</div></div>`;
-  return `<div class="sec-h"><h3>Published posts</h3><span class="badge good">YouTube live</span>${igLive()?`<span class="badge good">Instagram live</span>`:`<span class="badge mute">Instagram manual</span>`}
+  return `<div class="sec-h"><h3>Content list</h3><span class="badge good">YouTube live</span>${igLive()?`<span class="badge good">Instagram live</span>`:`<span class="badge mute">Instagram manual</span>`}
       <span class="hint">${rows.length} post${rows.length===1?"":"s"} ${act?"match":PF.scope==="all"?"in total":"in this period"} · click a column to sort, a row to open its card</span>
       <span style="flex:1"></span>
       <button class="btn sm" id="pfToggle">${PF.open?"Hide filters":"Filters"} ${act?`<span class="fcount">${act}</span>`:""}</button>
       <button class="btn sm" id="pfCsv">Download CSV</button></div>
+    <div class="pquick">${PQUICK.filter(([k])=>!k || (PLATVIEW==="all" || k.startsWith(PLATVIEW))).map(([k,l,f])=>{ const n=(PF.quick===k?rows:filteredPostsQ(k)).length;
+      return `<button class="chip ${PF.quick===k?"on":""}" data-pq="${k}">${l} · ${n}</button>`; }).join("")}</div>
     ${panel}
     ${bulk}
     <div class="tw"><table style="min-width:1400px">
@@ -1748,6 +1767,7 @@ function readRules(box){
 }
 function wirePosts(box){
   const on=(id,f)=>{ const e=box.querySelector("#"+id); if(e) e.onclick=f; };
+  box.querySelectorAll("[data-pq]").forEach(b=>b.onclick=()=>{ PF.quick=b.dataset.pq; PF.limit=50; SEL.clear(); rerenderPosts(); });
   on("pfToggle",()=>{ PF.open=!PF.open; if(PF.open&&!PF.rules.length) PF.rules.push({f:"views",op:"gt",v:""}); rerenderPosts(); });
   on("pfAdd",()=>{ readRules(box); PF.rules.push({f:"title",op:"contains",v:""}); PF.saved=""; rerenderPosts(); });
   on("pfClear",()=>{ PF.rules=[]; PF.saved=""; PF.limit=50; rerenderPosts(); });
@@ -1890,14 +1910,14 @@ function driversSection(){
         x.net==null?`no ${AUD(x.pl)} history yet`:`whole account, ${periodName()} · ${fmt(x.posts)} credited to these posts`]),
       [`Best ${PLATVIEW==="yt"?"subscriber":PLATVIEW==="ig"?"follower":"follower / subscriber"} driver`,esc((top[0].title||"").slice(0,24))+((top[0].title||"").length>24?"…":""),`+${fmt(top[0].gained)} · ${regLabel("platform",top[0].platform)} ${vtypeLabel(top[0].vtype).toLowerCase()}`]])}
     <div class="dgrid">
-      ${hbars("Top posts by new "+AUDV(),top.map(r=>({label:r.title,v:r.gained,color:platColor(r.platform),
-        text:`+${fmt(r.gained)} · ${total?Math.round(r.gained/total*100):0}%`,tip:`${r.title}\n+${fmt(r.gained)} ${AUD(r.platform)} · ${fmt(r.views)} views · ${dmy(r.date)}`})))}
-      ${hbars(cap(AUDV())+" per 1,000 views, by type",types.map(x=>({label:(PLATVIEW==="all"?platShort(TYPE_PLAT[x.k]||"")+" ":"")+vtypeLabel(x.k),v:x.v?x.g/x.v*1000:0,color:vtypeColor(x.k),
-        text:`${x.v?r1(x.g/x.v*1000):"—"} · +${fmt(x.g)} from ${x.rs.length}`})))}
+      ${hbars("Top posts by new "+AUDV(),top.map(r=>({label:r.title,v:r.gained,color:vtypeColor(r.vtype),tag:`<span class="tag" style="background:color-mix(in srgb,${vtypeColor(r.vtype)} 15%,transparent);color:${vtypeColor(r.vtype)}">${esc(vtypeLabel(r.vtype).split(" ")[0].toLowerCase())}</span>`,
+        text:`+${fmt(r.gained)} · ${total?Math.round(r.gained/total*100):0}%`,tip:`${vtypeLabel(r.vtype)} · ${r.title}\n+${fmt(r.gained)} ${AUD(r.platform)} · ${fmt(r.views)} views · ${dmy(r.date)}`})))}
+      ${hbars("Which type works better: new "+AUDV()+" per video",types.map(x=>({label:(PLATVIEW==="all"?platShort(TYPE_PLAT[x.k]||"")+" ":"")+vtypeLabel(x.k),v:x.rs.length?x.g/x.rs.length:0,color:vtypeColor(x.k),
+        text:`${x.rs.length?r1(x.g/x.rs.length):"—"} each · +${fmt(x.g)} from ${x.rs.length} · ${x.v?r1(x.g/x.v*1000):"—"}/1k views`})))}
     </div>
     <p class="hint" style="margin:0">"Change" is the whole account's ${AUDV()} count over the period (it includes people who found you any other way, minus ${PLATVIEW==="yt"?"unsubscribes":"unfollows"}).
-      Per-post numbers are what each platform credits to that post. Sort the Published posts table by <b>New ${PLATVIEW==="yt"?"subscribers":PLATVIEW==="ig"?"followers":"followers / subs"}</b> for the full list.
-      ${PLATVIEW!=="yt"?"<br>Meta doesn't share Reels' follows with other apps (only images and carousels), so for Reels type the number from Instagram Insights → <b>Follows</b> in the <b>New followers</b> column of Published posts — typed numbers show ✎.":""}</p></div>`;
+      Per-post numbers are what each platform credits to that post. Sort the Content list by <b>New ${PLATVIEW==="yt"?"subscribers":PLATVIEW==="ig"?"followers":"followers / subs"}</b> for the full list.
+      ${PLATVIEW!=="yt"?"<br>Meta doesn't share Reels' follows with other apps (only images and carousels), so for Reels type the number from Instagram Insights → <b>Follows</b> in the <b>New followers</b> column of the Content list — typed numbers show ✎.":""}</p></div>`;
 }
 
 /* ------------------------------------------------------------ COMPARE
@@ -1979,18 +1999,27 @@ function dltHTML(now, before, unit){
   return `<span class="dlt ${d>0?"up":"dn"}">${d>0?"▲":"▼"} ${fmt(Math.abs(d))}${unit||""}${p!=null&&p<1000?` · ${p}%`:""}</span>`;
 }
 function kpiRow(vI){
-  const r=periodRange(), pr=prevRange(), now=rowsIn(r), was=rowsIn(pr);
-  const n=(list,k)=>list.filter(x=>x.platform==="yt"&&x.vtype===k).length;
+  const r=periodRange(), pr=prevRange(), now=rowsIn(r), was=rowsIn(pr), yt=PLATVIEW!=="ig", ig=PLATVIEW!=="yt";
+  const c=(list,pl,ks)=>list.filter(x=>x.platform===pl&&ks.includes(x.vtype)).length;
   const ideasNow=vI.filter(i=>i.created>=r.from&&i.created<=r.to).length, ideasWas=vI.filter(i=>i.created>=pr.from&&i.created<=pr.to).length;
   const k=(label,val,d,sub,col)=>`<div class="kpi">${col?`<i style="background:${col}"></i>`:""}<span class="lbl">${label}</span><b>${val}</b>${d}${sub?`<small>${sub}</small>`:""}</div>`;
+  const t=(label,pl,ks,col,sub)=>k(label,fmt(c(now,pl,ks)),dltHTML(c(now,pl,ks),c(was,pl,ks)),sub,col);
   const net=pl=>{ const a=netIn(pl,r), b=netIn(pl,pr), st=pl==="yt"?isStale("yt"):(igLive()&&isStale("ig"));
     return k(pl==="yt"?"New subscribers":"New followers", a==null?"—":(a>0?"+":a<0?"−":"")+fmt(Math.abs(a)), dltHTML(a,b),
-      st?`<span style="color:var(--crit)">⚠ data stops ${dmy((LIVE.lastBy[pl]||{}).day)}</span>`:"net, whole account", pl==="yt"?"var(--c1)":"var(--c3)"); };
+      st?`<span style="color:var(--crit)">⚠ data stops ${dmy((LIVE.lastBy[pl]||{}).day)}</span>`:(pl==="yt"?"YouTube":"Instagram")+", net (can be 0 or negative)", pl==="yt"?"var(--c1)":"var(--c3)"); };
+  const v=sum(now,x=>x.views), vw=sum(was,x=>x.views);
+  const vsub=[yt&&"YouTube "+kfmt(sum(now.filter(x=>x.platform==="yt"),x=>x.views)), ig&&"Instagram "+kfmt(sum(now.filter(x=>x.platform==="ig"),x=>x.views))].filter(Boolean).join(" · ")
+    +(ig&&r.from<addDays(today(),-180)?" · Instagram only has views for posts from the last 180 days":"");
   return `<div class="kpis">
     ${k("Posts published",fmt(now.length),dltHTML(now.length,was.length),`${r1(now.length/periodDays()*7)} a week`)}
-    ${k("Views",kfmt(sum(now,x=>x.views)),dltHTML(sum(now,x=>x.views),sum(was,x=>x.views)),PLATVIEW!=="yt"&&r.from<addDays(today(),-180)?"Instagram only counts views for posts from the last 180 days":"on posts published in range")}
-    ${PLATVIEW!=="ig"?net("yt"):""}${PLATVIEW!=="yt"?net("ig"):""}
-    ${k("Ideas submitted",fmt(ideasNow),dltHTML(ideasNow,ideasWas),"logged in Ideation","var(--c4)")}
+    ${yt?t("Long videos","yt",["long"],vtypeColor("long"),"YouTube"):""}
+    ${yt?t("Shorts","yt",["short"],vtypeColor("short"),"YouTube"):""}
+    ${yt&&c(now,"yt",["live"])?t("Lives","yt",["live"],vtypeColor("live"),"YouTube"):""}
+    ${ig?t("Reels","ig",["reel"],vtypeColor("reel"),"Instagram"):""}
+    ${ig?t("Images","ig",["image","carousel"],vtypeColor("image"),"Instagram images & carousels"):""}
+    ${k("Views",kfmt(v),dltHTML(v,vw),vsub)}
+    ${yt?net("yt"):""}${ig?net("ig"):""}
+    ${k("Video ideas",fmt(ideasNow),dltHTML(ideasNow,ideasWas),"submitted in Ideation","var(--c4)")}
   </div>`;
 }
 // time buckets for a range: days up to a month, weeks up to ~6 months, months beyond
@@ -2019,18 +2048,21 @@ function stackChart(bk, ser, w=520, h=190){
       ${i%every===0?`<text x="${x+(bw-gap)/2}" y="${h-8}" text-anchor="middle" font-size="9.5" font-family="var(--mono)" fill="var(--ink-3)">${esc(b.label)}</text>`:""}</g>`; }).join("");
   return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" role="img" aria-label="Posts over time">${grid}${cols}</svg>`;
 }
-function formatSection(){
-  const r=periodRange(), yt=postRows().filter(x=>x.platform==="yt" && inPeriod(x.date));
-  const T=[["short","Shorts"],["long","Long videos"],["live","Lives"]].map(([k,l])=>{ const rs=yt.filter(x=>x.vtype===k); return { k, l, rs, n:rs.length, v:sum(rs,x=>x.views), g:sum(rs.filter(x=>x.gained!=null),x=>x.gained), color:vtypeColor(k) }; })
+function typeSection(){
+  const r=periodRange(), rows=postRows().filter(x=>inPeriod(x.date) && platOK(x)), yt=PLATVIEW!=="ig", ig=PLATVIEW!=="yt";
+  const T=[yt&&["long","Long videos",["long"],"yt"], yt&&["short","Shorts",["short"],"yt"], yt&&["live","Lives",["live"],"yt"],
+    ig&&["reel","Reels",["reel"],"ig"], ig&&["image","Images",["image","carousel"],"ig"]].filter(Boolean)
+    .map(([k,l,ks,pl])=>{ const rs=rows.filter(x=>x.platform===pl&&ks.includes(x.vtype)); return { k, l, rs, n:rs.length, v:sum(rs,x=>x.views), color:vtypeColor(k) }; })
     .filter(t=>t.k!=="live" || t.n);
   const tot=T.reduce((a,t)=>a+t.n,0), bk=buckets(r);
-  const share=tot?T.map(t=>`<i style="width:${t.n/tot*100}%;background:${t.color}" data-tip="${esc(t.l)}: ${t.n} of ${tot} (${pct(t.n,tot)}%)"></i>`).join(""):"";
-  return `<div class="chart-card"><div class="chart-head"><h4>Shorts vs long videos</h4><span class="hint">YouTube · ${esc(rangeText())}</span></div>
+  return `<div class="chart-card"><div class="chart-head"><h4>Content type</h4><span class="hint">${esc(rangeText())}</span></div>
     <div class="fmtnums">${T.map(t=>`<div><span class="lbl"><i class="sq" style="background:${t.color}"></i>${t.l}</span><b>${fmt(t.n)}</b>
-      <small>${t.n?`${kfmt(Math.round(t.v/t.n))} views each · +${fmt(t.g)} subs`:"none published"}</small></div>`).join("")}</div>
-    ${tot?`<div class="sharebar">${share}</div><p class="chart-sub" style="margin:6px 0 10px">${T.map(t=>`${pct(t.n,tot)}% ${t.l.toLowerCase()}`).join(" · ")} · ${bk.length&&bk[0].from===bk[0].to?"per day":bk.length>8&&days(r.from,r.to)>190?"per month":"per week"}</p>`:""}
+      <small>${t.n?`${kfmt(Math.round(t.v/t.n))} views each`:"none"}</small></div>`).join("")}
+</div>
+    ${tot?`<div class="sharebar">${T.map(t=>`<i style="width:${t.n/tot*100}%;background:${t.color}" data-tip="${esc(t.l)}: ${t.n} of ${tot} (${pct(t.n,tot)}%)"></i>`).join("")}</div>
+      <p class="chart-sub" style="margin:6px 0 10px">${T.filter(t=>t.n).map(t=>`${pct(t.n,tot)}% ${t.l.toLowerCase()}`).join(" · ")} · ${bk.length&&bk[0].from===bk[0].to?"per day":days(r.from,r.to)>190?"per month":"per week"}</p>`:""}
     ${stackChart(bk, T.map(t=>({ label:t.l, color:t.color, count:b=>t.rs.filter(x=>x.date>=b.from&&x.date<=b.to).length })))}
-    <p class="hint" style="margin:6px 0 0">A Short is a vertical video up to 3 minutes; anything longer is a long video. Views are lifetime, so newer posts have had less time.</p></div>`;
+    <p class="hint" style="margin:6px 0 0">A Short is a YouTube video up to 3 minutes; anything longer is a long video.${ig?" Stories aren't counted: Instagram doesn't share them once they expire after 24 hours.":""}</p></div>`;
 }
 const PERSON_COLORS=["var(--c3)","var(--c1)","var(--c2)","var(--c4)","var(--good)","#B3417A","#3D6FB6","#7A6A55"];
 function ideasSection(vI){
@@ -2065,46 +2097,6 @@ function saveRange(){ try{ sessionStorage.setItem("sx-range", JSON.stringify({ p
 function loadRange(){ try{ const o=JSON.parse(sessionStorage.getItem("sx-range")||"null"); if(!o) return;
   if(PERIODS.some(x=>x[0]===o.p)) FILTERS.period=o.p; FILTERS.from=o.f||""; FILTERS.to=o.t||""; MONTH=o.m||""; }catch(_){ } }
 loadRange();
-function monthStats(r){
-  const rows=postRows().filter(x=>x.date && x.date>=r.from && x.date<=r.to && platOK(x));
-  const n=f=>rows.filter(f).length;
-  return { rows,
-    subs: PLATVIEW!=="ig" ? netIn("yt", r) : null, fol: PLATVIEW!=="yt" ? netIn("ig", r) : null,
-    long: n(x=>x.platform==="yt"&&x.vtype==="long"), short: n(x=>x.platform==="yt"&&x.vtype==="short"), live: n(x=>x.platform==="yt"&&x.vtype==="live"),
-    reel: n(x=>x.platform==="ig"&&x.vtype==="reel"), post: n(x=>x.platform==="ig"&&(x.vtype==="image"||x.vtype==="carousel")),
-    views: sum(rows,x=>x.views) };
-}
-function monthSection(){
-  const k=monthKey(), r=monthRange(k), [y,m]=k.split("-").map(Number), pk=iso(new Date(y,m-2,1)).slice(0,7), pr=monthRange(pk);
-  const A=monthStats(r), B=monthStats(pr), yt=PLATVIEW!=="ig", ig=PLATVIEW!=="yt";
-  const signed=v=>v==null?"—":(v>0?"+":v<0?"−":"")+fmt(Math.abs(v));
-  const why=pl=>{ const ser=pl==="yt"?ytSeries():igSeries(); if(!ser.length) return "no history yet";
-    if(valueAt(ser, addDays(r.from,-1))==null) return "history starts "+dmy(ser[0].d);
-    return (pl==="yt"?isStale("yt"):igLive()&&isStale("ig")) && (LIVE.lastBy[pl]||{}).day<r.to ? "⚠ data stops "+dmy(LIVE.lastBy[pl].day) : ""; };
-  const tile=(label,val,was,col,sub,big)=>`<div class="mt ${big?"big":""}">${col?`<i style="background:${col}"></i>`:""}<span class="lbl">${label}</span><b>${val}</b>
-    ${was!==undefined?dltHTML(typeof was==="object"?was[0]:null, typeof was==="object"?was[1]:null).replace("no earlier data","—"):""}${sub?`<small>${sub}</small>`:""}</div>`;
-  const mix=[yt&&{label:"Long videos",v:A.long,color:vtypeColor("long")},yt&&{label:"Shorts",v:A.short,color:vtypeColor("short")},yt&&A.live&&{label:"Lives",v:A.live,color:vtypeColor("live")},
-    ig&&{label:"Reels",v:A.reel,color:vtypeColor("reel")},ig&&{label:"Posts",v:A.post,color:vtypeColor("image")}].filter(Boolean);
-  const total=mix.reduce((a,x)=>a+x.v,0), totalWas=(yt?B.long+B.short+B.live:0)+(ig?B.reel+B.post:0);
-  return `<div class="sec month"><div class="sec-h"><h3>Monthly overview</h3>
-      <select id="monSel" aria-label="Month">${monthChoices().map(c=>`<option value="${c}" ${c===k?"selected":""}>${monthName(c)}${monthRange(c).full?"":" (so far)"}</option>`).join("")}</select>
-      <span class="hint">${esc(rangeText(r))}${r.full?"":" · month still running"} · ▲▼ vs ${esc(monthName(pk))} · ${PLATVIEW==="all"?"YouTube and Instagram":PLAT_NAME[PLATVIEW]+" only"}</span></div>
-    <div class="mgrid">
-      <div class="mtiles">
-        ${yt?tile("Subscribers gained",signed(A.subs),[A.subs,B.subs],"var(--c1)",why("yt")||"YouTube, net (can be 0 or negative)",1):""}
-        ${ig?tile("Followers gained",signed(A.fol),[A.fol,B.fol],"var(--c3)",why("ig")||"Instagram, net (can be 0 or negative)",1):""}
-        ${tile("Total published",fmt(total),[total,totalWas],"",`${kfmt(A.views)} views on them so far`,1)}
-        ${yt?tile("Long videos",fmt(A.long),[A.long,B.long],vtypeColor("long"),"YouTube"):""}
-        ${yt?tile("Shorts",fmt(A.short),[A.short,B.short],vtypeColor("short"),"YouTube"):""}
-        ${ig?tile("Reels",fmt(A.reel),[A.reel,B.reel],vtypeColor("reel"),"Instagram"):""}
-        ${ig?tile("Posts",fmt(A.post),[A.post,B.post],vtypeColor("image"),"Instagram images & carousels"):""}
-        ${yt&&A.live?tile("Lives",fmt(A.live),[A.live,B.live],vtypeColor("live"),"YouTube"):""}
-      </div>
-      <div class="chart-card mpie"><div class="chart-head"><h4>Content mix</h4><span class="hint">${esc(monthName(k))}</span></div>
-        ${total?donutChart(mix,330,180,"PUBLISHED"):`<p class="hint" style="padding:46px 0;text-align:center">Nothing published in ${esc(monthName(k))}.</p>`}</div>
-    </div></div>`;
-}
-
 function renderSummary(){
   const vI=IDEAS.filter(platOK), vC=CARDS.filter(platOK);   // Summary platform switch
   const pub=publishedInPeriod();
@@ -2129,14 +2121,22 @@ function renderSummary(){
     return `<div class="okr-more ${open?"open":""}"><button data-okrmore="${k}">${open?"▴":"▾"} Agreement status (${n})</button>
       ${open?(n?postingTimeHTML(k,col)+gs.map(g=>goalHTML(g,col)).join("")+postLog(k,gs):`<p class="hint" style="margin:8px 0 0">No agreement targets for ${PLAT_NAME[k]} yet — set them in the <b>Our agreement</b> tab.</p>`):""}</div>`; };
   const okr=(k,n,col,series,isLive)=>{
-    const tgt=TG.targets[k], last=series.length?series[series.length-1]:null, cur=last?last.v:null;
-    const stale=isLive && last && last.d<addDays(today(),-1), pct=cur!=null&&tgt?Math.max(0,Math.min(100,cur/tgt*100)):0;
-    return `<div class="okr okr-lite"><div class="lbl">${n} ${AUD(k)} ${isLive?`<span class="badge good" style="margin-left:4px">live</span>`:`<span class="badge mute" style="margin-left:4px">manual</span>`}</div>
-      <div class="okr-v">${cur==null?"—":fmt(cur)} <small>/ ${fmt(tgt)}</small></div>
-      <div class="meter"><i style="width:${pct}%;background:${col}"></i></div>
-      <div class="okr-foot"><span>${cur==null?(isLive?"Waiting for the first sync":"No count entered yet"):cur>=tgt?"Target reached 🎉":`${fmt(tgt-cur)} to go · ${pct.toFixed(1)}% of target`}</span>
-        <span class="${stale?"stalec":""}">${last?(stale?"⚠ last reading ":"as of ")+dmy(last.d):""}</span>
-        ${!isLive&&cur==null?`<button class="btn sm" data-updf="1">Add the first count</button>`:""}</div></div>`; };
+    const tgt=TG.targets[k], last=series.length?series[series.length-1]:null;
+    if(!last) return `<div class="okr okr2"><div class="lbl">${n} ${AUD(k)}</div><p class="hint" style="margin:10px 0">${isLive?"Waiting for the first sync":"No count entered yet"}</p>
+      ${isLive?"":`<button class="btn sm" data-updf="1">Add the first count</button>`}${more(k,col)}</div>`;
+    const st=startOf(k, series), cur=last.v, ch=cur-st.v, stale=isLive && last.d<addDays(today(),-1);
+    const pct=tgt?Math.max(0,Math.min(100,cur/tgt*100)):0, startPct=tgt?Math.max(0,Math.min(100,st.v/tgt*100)):0;
+    return `<div class="okr okr2"><div class="okr2-h"><span class="lbl">${n} ${AUD(k)}</span>${isLive?`<span class="badge good">live</span>`:`<span class="badge mute">manual</span>`}
+        <span class="hint" style="margin-left:auto">target <b>${fmt(tgt)}</b></span></div>
+      <div class="okr2-row">
+        <div><span class="lbl">On ${dmy(st.d)} (start)</span><b>${fmt(st.v)}</b></div>
+        <div class="okr2-arrow">→</div>
+        <div><span class="lbl">${stale?"Last reading "+dmy(last.d):"Today, "+dmy(last.d)}</span><b>${fmt(cur)}</b></div>
+        <div class="okr2-ch ${ch>0?"up":ch<0?"dn":""}"><span class="lbl">Change</span><b>${ch>0?"+":ch<0?"−":"±"}${fmt(Math.abs(ch))}</b></div>
+      </div>
+      <div class="meter okr2-m" title="Start ${fmt(st.v)} · now ${fmt(cur)} · target ${fmt(tgt)}"><i style="width:${pct}%;background:${col}"></i><u style="left:${startPct}%"></u></div>
+      <div class="okr-foot"><span>${cur>=tgt?"Target reached 🎉":`${fmt(tgt-cur)} to go · ${pct.toFixed(1)}% of ${fmt(tgt)}`}</span>${stale?`<span class="stalec">⚠ not synced since ${dmy(last.d)}</span>`:""}</div>
+      ${weekLog(k, series, st, tgt)}${more(k,col)}</div>`; };
   $("#pane-summary").innerHTML=`
    <div class="sumbar">
      <div class="platsw">${[["all","Both platforms"],["yt","YouTube"],["ig","Instagram"]].map(([k,l])=>
@@ -2158,41 +2158,18 @@ function renderSummary(){
      ${Object.keys(REG.vtype).filter(typeVisible).map(k=>`<button class="chip ${FILTERS.vtypes.includes(k)?"on":""}" data-vt="${k}">${esc(vtypeLabel(k))}</button>`).join("")}
    </div>`)}</div>
 
-   ${monthSection()}
+   ${kpiRow(vI)}
 
    <div class="sec"><div class="sec-h"><h3>OKR progress</h3>
-     <span class="hint">Total ${PLATVIEW==="yt"?"subscribers":PLATVIEW==="ig"?"followers":"followers and subscribers"} today, against the target</span>
+     <span class="hint">${PLATVIEW==="yt"?"Subscribers":PLATVIEW==="ig"?"Followers":"Followers and subscribers"} at the start and today, against the target</span>
      ${igLive()?"":`<button class="btn sm" data-updf="1" style="margin-left:auto">Update Instagram count</button>`}</div>
      <div class="okrs">${PLATVIEW!=="ig"?okr("yt","YouTube","var(--c1)",yt,true):""}${PLATVIEW!=="yt"?okr("ig","Instagram","var(--c3)",ig,igLive()):""}</div></div>
 
-   <div class="secband"><span class="lbl">Selected range</span><b>${esc(rangeText())}</b><span class="hint">Everything below follows the dates at the top</span></div>
-   ${kpiRow(vI)}
-
-   <div class="sec"><div class="charts two">${PLATVIEW==="ig"?"":formatSection()}${ideasSection(vI)}</div></div>
+   <div class="sec"><div class="charts two">${ideasSection(vI)}${typeSection()}</div></div>
 
    ${driversSection()}
 
-   <div class="sec"><div class="sec-h"><h3>Output and pipeline</h3></div><div class="charts">
-     <div class="chart-card"><div class="chart-head"><h4>Posts by video type</h4>
-       <div class="seg"><button data-cm="bar" class="${CHARTMODE==="bar"?"on":""}">Bar</button><button data-cm="donut" class="${CHARTMODE==="donut"?"on":""}">Donut</button></div></div>
-       <p class="chart-sub">Published in the selected period</p>${CHARTMODE==="bar"?barChart(counts):donutChart(counts)}</div>
-     <div class="chart-card"><div class="chart-head"><h4>Idea funnel</h4></div>
-       <p class="chart-sub">Every idea ever logged, and where it got to</p>
-       ${vI.length?funnelChart([{label:"Logged",v:vI.length,color:"var(--c3)"},
-         {label:"Reviewed",v:decided.length+vI.filter(i=>i.status==="under_review").length,color:"var(--c2)"},
-         {label:"Accepted",v:accepted.length,color:"var(--c1)"},
-         {label:"Published",v:allPub.filter(c=>c.ideaId).length,color:"var(--good)"}])
-         :`<p class="hint">No ideas logged yet — start in Ideation.</p>`}</div></div></div>
-
    ${keywordSection()}
-
-   <div class="sec"><div class="sec-h"><h3>${PLATVIEW==="yt"?"Subscriber growth":PLATVIEW==="ig"?"Follower growth":"Subscriber & follower growth"}</h3>
-     <span class="hint">${PLATVIEW==="all"?"Two charts, two scales. A combined number would be meaningless.":"Weekly, last 12 weeks"}</span></div>
-     <div class="charts">
-       ${PLATVIEW==="ig"?"":`<div class="chart-card"><div class="chart-head"><h4>YouTube subscribers <span class="badge good" style="margin-left:4px">live</span></h4><span class="chip">target ${fmt(TG.targets.yt)}</span></div>
-         <p class="chart-sub">Weekly, last 12 weeks</p>${lineChart(weekly(yt,12),"var(--c1)","YouTube")}</div>`}
-       ${PLATVIEW==="yt"?"":`<div class="chart-card"><div class="chart-head"><h4>Instagram followers ${igLive()?`<span class="badge good" style="margin-left:4px">live</span>`:`<span class="badge mute" style="margin-left:4px">manual</span>`}</h4><span class="chip">target ${fmt(TG.targets.ig)}</span></div>
-         <p class="chart-sub">Weekly, last 12 weeks</p>${lineChart(weekly(ig,12),"var(--c3)","Instagram")}</div>`}</div></div>
 
    <div class="sec" id="geoSec">${geoSection()}</div>
 
@@ -2207,7 +2184,6 @@ function renderSummary(){
     if(!f||!t){ toast("Pick both a From and a To date"); return; }
     if(t>today()) t=today(); if(f>t) [f,t]=[t,f];
     FILTERS.from=f; FILTERS.to=t; FILTERS.period="custom"; toast("Showing "+rangeText()); setRange(); };
-  const ms=$("#monSel"); if(ms) ms.onchange=()=>{ MONTH=ms.value; saveRange(); renderSummary(); if(monthRange().from<(LIVE.since||"")) loadLive(true); };
   P.querySelectorAll("[data-who]").forEach(b=>b.onclick=()=>{ IDEA_WHO=b.dataset.who; renderSummary(); });
   P.querySelectorAll("[data-idea]").forEach(r=>r.onclick=()=>openIdea(r.dataset.idea));
   const co=$("#cmpOpen"); if(co) co.onclick=openCompare;
@@ -2266,8 +2242,8 @@ const pct=(a,b)=>b?Math.round(a/b*100):0;
 const r1=n=>n==null?"—":(Math.round(n*10)/10).toLocaleString("en-IN");
 function dstats(items){ return `<div class="dstats">${items.map(([k,v,d])=>`<div><span class="lbl">${k}</span><b>${v}</b>${d?`<small>${d}</small>`:""}</div>`).join("")}</div>`; }
 function hbars(title,rows){ const max=Math.max(1,...rows.map(r=>Number(r.v)||0));
-  return `<div class="dblock"><span class="lbl">${title}</span>${rows.length?rows.map(r=>`<div class="hbar" data-tip="${esc(r.label)}\n${esc(String(r.tip??r.text??fmt(r.v)))}">
-    <span class="hl">${esc(r.label)}</span><span class="ht"><i style="width:${(Number(r.v)||0)/max*100}%;background:${r.color||"var(--c2)"}"></i></span>
+  return `<div class="dblock ${rows.some(r=>r.tag)?"tagged":""}"><span class="lbl">${title}</span>${rows.length?rows.map(r=>`<div class="hbar" data-tip="${esc(r.label)}\n${esc(String(r.tip??r.text??fmt(r.v)))}">
+    <span class="hl">${r.tag?r.tag+" ":""}${esc(r.label)}</span><span class="ht"><i style="width:${(Number(r.v)||0)/max*100}%;background:${r.color||"var(--c2)"}"></i></span>
     <span class="hv">${r.text??fmt(r.v)}</span></div>`).join(""):`<p class="hint">Nothing here yet.</p>`}</div>`; }
 function dtable(title,head,rows,empty){
   return `<div class="dblock"><span class="lbl">${title}</span>${rows.length?`<div class="tw"><table class="mini"><thead><tr>${head.map(h=>`<th>${h}</th>`).join("")}</tr></thead>
