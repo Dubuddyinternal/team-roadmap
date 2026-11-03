@@ -15,21 +15,21 @@
 <!-- Social Media space: Summary (live YouTube numbers) / Ideation / Content Process / Schedule -->
 <script src="richtext.js"></script><!-- rich text + "Show all" in every multi-line text box (load before the spaces) -->
 <script src="okr-mail.js?v=20261104d"></script>
-<script src="social-space.js?v=20261104d"></script>
+<script src="social-space.js?v=20261103b"></script>
 <script src="pipeline.js"></script><!-- Claude edit & post panel on Content Process cards -->
 <script src="comments.js"></script><!-- 💬 comments + history at the bottom of every Social Media card and idea, with @tags by email -->
 <script src="hinglish.js"></script><script src="dictate.js"></script><!-- 🎤 dictation in every text box -->
 <script src="wiki-utm.js"></script>
 <!-- Notifications: the 🔔 bell and pop-ups (notifications.js) -->
-<script src="notifications.js"></script>
+<script src="notifications.js?v=20261103b"></script>
 <!-- LMS: learning drops (videos, articles, polls, quizzes) — Administration → LMS (lms.js) -->
 <script src="lms.js"></script>
 <!-- "Pitch a product idea" card under Social Media → Ideation (product-pitch.js) -->
 <script src="product-pitch.js"></script>
 <!-- Student ideas (tools.dubuddy.in/ideas) in the product space, status sync, idea emails, My product ideas (student-ideas.js) -->
 <script src="student-ideas.js"></script>
-<!-- Marketing mega space: campaigns (Details · Assignment · Calendar · Dashboard) — campaign-space.js -->
-<script src="campaign-space.js"></script>
+<!-- Marketing mega space: campaigns (Details · Board · Roles · Reminders · Calendar) — campaign-space.js -->
+<script src="campaign-space.js?v=20261103b"></script>
 <!-- Keep an Eye: a fixed template for studying role-model and competitor companies, inside Marketing — watch-space.js -->
 <script src="watch-space.js"></script>
 <!-- Widen our Horizon: big questions answered every week, then checked — horizon-space.js -->
@@ -5404,7 +5404,7 @@ const PERMS = [
   {key:"delete_roadmaps",  label:"Delete roadmaps",       hint:"See “Delete roadmap” in a roadmap's ⋯ menu"},
   {key:"add_spaces",       label:"Add spaces",            hint:"Create new spaces (Administration → Spaces). Nobody else sees an Add space button"},
   {key:"delete_spaces",    label:"Delete spaces",         hint:"See “Delete…” in a space's ⋯ menu and remove whole spaces"},
-  {key:"plan_campaigns",   label:"Plan & assign campaigns", hint:"In a campaign, move pieces between days on the Calendar and assign people in Assignment (a Team Manager). Roles named “Manager” have this already; Owners and Admins edit everything"},
+  {key:"plan_campaigns",   label:"Plan & assign campaigns", hint:"In a campaign, move pieces between days on the Calendar and assign people on the Board (a Team Manager). Roles named “Manager” have this already; Owners and Admins edit everything"},
   {key:"delete_social_cards", label:"Delete Social Media cards", hint:"See “Delete” on a Content Process card in Social Media. Owners and Admins always can"},
   {key:"review_maverick",  label:"Review Maverick videos", hint:"In the Maverick Admin space: approve or reject the videos creators send from maverick.dubuddy.in, verify their published links and enter the 30-day views"},
   {key:"pay_maverick",     label:"Release Maverick payouts", hint:"In the Maverick Admin space → Payouts: release base pay and bonuses to creators (the payout head). Do it once the UPI transfer is done"},
@@ -6115,7 +6115,7 @@ function restorePlace(){
     if(typeof p.socialView === "string") socialView = p.socialView;
     if(typeof p.discView === "string") discView = p.discView;
     if(typeof p.pdtView === "string") pdtView = p.pdtView;
-    if(typeof p.campView === "string") campView = p.campView;
+    if(typeof p.campView === "string") campView = (p.campView==="assign"||p.campView==="dash") ? "board" : p.campView;
     if(typeof p.watchView === "string") watchView = p.watchView;
     if(typeof p.horizonView === "string") horizonView = p.horizonView;
     if(typeof p.maverickView === "string") maverickView = p.maverickView;
@@ -6711,7 +6711,7 @@ function convertModuleToIdeas(mod, disc){
 }
 let discView = "ideas";   // sub-view inside a discovery space: ideas | roadmap | timeline
 let socialView = "summary";    // Social Media space: targets | summary | ideation | process | schedule | rivals (social-space.js)
-let campView = "details";      // Campaign space: details | assign | calendar | dash (campaign-space.js)
+let campView = "details";      // Campaign space: details | board | roles | reminders | calendar (campaign-space.js)
 let horizonView = "topics";    // Widen our Horizon space: topics | fill | check | learn (horizon-space.js)
 let maverickView = "all";      // Maverick Admin space: all | review | verify | payouts | emails (maverick-space.js)
 let watchView = "companies";   // Keep an Eye space: companies | fill | updates | compare (watch-space.js)
@@ -18410,10 +18410,103 @@ function campFixSentTypes(){
   if(n) console.info("Campaign cards: " + n + " given their real content type");
   return true;   // save the flag (and any fixes) once
 }
+// ---------- Campaign board ↔ Content Process: ONE card in two places ----------
+// Every YouTube / Instagram piece of a campaign gets its card in the Social Media space's Content Process
+// by itself (no button). Title, date and assignee are kept the same both ways: whichever side changed since
+// the last sync wins (it.sync remembers the last values). The card's column is the piece's status on the board.
+const CAMP_DEFAULT_CONTENT = "aditya.dubuddy@gmail.com";   // YouTube / Instagram pieces go to Aditya first
+const CAMP_DEFAULT_LEAD = "mannat.dubuddy@gmail.com";      // told when something is published
+const campUserByEmail = e=> USERS.find(u=>String(u.email||"").toLowerCase()===e) || null;
+const campIsContent = it=> (it.platforms && it.platforms.length ? it.platforms : [it.platform]).some(p=>p==="YouTube"||p==="Instagram");
+function campCardOf(cs, it){ const soc = campaignSocial(cs); return (it && it.sentCardId && soc && soc.sx && (soc.sx.cards||[]).find(x=>x.id===it.sentCardId)) || null; }
+function campNewCard(cs, soc, it){
+  if(window.SX && SX.normalize) SX.normalize(soc);
+  soc.sx = soc.sx || {}; soc.sx.cards = soc.sx.cards || [];
+  const today = new Date().toISOString().slice(0,10);
+  const ft = campPieceFormat(soc, it);   // Story stays a Story, a Notification a Notification… (not all Shorts / Reels)
+  const card = { id:"c"+Date.now().toString(36)+Math.random().toString(36).slice(2,5), ideaId:null, idea:it.name, format:ft.format,
+    // a piece can be on several platforms: the first of YouTube / Instagram it's ticked for decides the board's platform
+    platform: ((it.platforms && it.platforms.length ? it.platforms : [it.platform]).find(p=>p==="YouTube"||p==="Instagram")==="YouTube") ? "yt" : "ig",
+    vtype: ft.vtype,
+    stage:"todo", pre:{ source:"", tool:"", keywords:[], why:it.details||"", title:it.name, desc:"", hashtags:"" },
+    post:{ reel:null, thumb:null, postUrl:"" }, scheduled:it.date||null, published:null, acceptedOn:today, metrics:null, override:null,
+    priority:"high", fromCampaign: cs.details && cs.details.name || cs.name, fromCampaignId: cs.id, fromItemId: it.id, owner: it.owner || "", ownerId: it.ownerId || "" };
+  soc.sx.cards.push(card);
+  return card;
+}
+function campSyncCards(){
+  if(!CSPACES || !Array.isArray(CSPACES.list) || !window.CX) return false;
+  let changed = false;
+  const nameOf = id=>{ const u = USERS.find(x=>x.id===id); return u ? userDisplayName(u) : ""; };
+  CSPACES.list.filter(x=>x.type==="campaign").forEach(cs=>{
+    if(!(campAdmin(cs) || campPlanner(cs))) return;   // only people who may change the campaign write here
+    const soc = campaignSocial(cs); if(!soc) return;
+    if(!cs.lead){ const m = campUserByEmail(CAMP_DEFAULT_LEAD); if(m){ cs.lead = m.id; changed = true; } }
+    (cs.items||[]).forEach(it=>{
+      if(!campIsContent(it)) return;
+      if(!it.ownerId){ const a = campUserByEmail(CAMP_DEFAULT_CONTENT); if(a){ it.ownerId = a.id; it.owner = userDisplayName(a); changed = true; } }
+      let card = campCardOf(cs, it);
+      if(!card){
+        if(it.sentCardId && it.cardGone) return;         // someone deleted its card in Content Process: don't make it again
+        if(it.sentCardId){ it.cardGone = true; changed = true; return; }
+        card = campNewCard(cs, soc, it); it.sentCardId = card.id;
+        it.sync = { name:it.name||"", date:it.date||"", ownerId:it.ownerId||"" }; changed = true; return;
+      }
+      const S = it.sync = it.sync || { name:card.pre&&card.pre.title||card.idea||"", date:card.scheduled||"", ownerId:card.ownerId||"" };
+      const cName = (card.pre && card.pre.title) || card.idea || "", cDate = card.scheduled || "", cOwn = card.ownerId || "";
+      // title
+      if((it.name||"")!==S.name){ card.idea = it.name; card.pre = card.pre || {}; card.pre.title = it.name; S.name = it.name||""; changed = true; }
+      else if(cName && cName!==S.name){ it.name = cName; S.name = cName; changed = true; }
+      // date (a live card's date is when it went out: leave it)
+      if(card.stage!=="published"){
+        if((it.date||"")!==S.date){ card.scheduled = it.date || null; S.date = it.date||""; changed = true; }
+        else if(cDate!==S.date){ it.date = cDate; S.date = cDate; changed = true; }
+      }
+      // assignee
+      if((it.ownerId||"")!==S.ownerId){ card.ownerId = it.ownerId||""; card.owner = nameOf(it.ownerId) || it.owner || ""; S.ownerId = it.ownerId||""; changed = true; }
+      else if(cOwn!==S.ownerId){ it.ownerId = cOwn; it.owner = nameOf(cOwn); S.ownerId = cOwn; changed = true; }
+      if(card.ownerId && card.owner!==nameOf(card.ownerId) && nameOf(card.ownerId)){ card.owner = nameOf(card.ownerId); changed = true; }
+      if(!card.fromCampaignId){ card.fromCampaignId = cs.id; card.fromItemId = it.id; changed = true; }
+    });
+  });
+  return changed;
+}
+// move a piece's card in Content Process (the board's status pills); "published" = Live in both places
+function campSetCardStage(cs, it, stage, meta){
+  const card = campCardOf(cs, it); if(!card) return false;
+  card.stage = stage;
+  if(stage==="published"){
+    card.published = card.published || new Date().toISOString().slice(0,10);
+    if(meta && meta.by) card.liveBy = meta.by;
+    if(meta && meta.link){ card.post = card.post || {}; card.post.links = Object.assign({}, card.post.links||{}, { [card.platform]: meta.link }); card.post.postUrl = card.post.postUrl || meta.link; }
+  } else { card.published = null; delete card.liveBy; }
+  return true;
+}
+// ✓ Published: the reminder is closed and the campaign lead gets a 🔔 + email (campaign-remind, action "confirm")
+async function campConfirmLive(cs, x){
+  try{ await SUPA.functions.invoke("campaign-remind", { body: { action:"confirm", team:TEAM, campaign_id:cs.id, campaign:(cs.details&&cs.details.name)||cs.name,
+    item_id:x.id, title:x.title, by:x.by||"", link:x.link||"", new_date:x.newDate||"", lead:cs.lead||"" } }); }catch(e){ console.warn("campaign-remind", e); }
+}
+// the 🔔 "This card's status isn't updated" → ✓ Published, straight from the bell
+window.campPublishFromBell = function(cid, iid){
+  const cs = (CSPACES.list||[]).find(x=>x.id===cid && x.type==="campaign"); if(!cs) return false;
+  const it = (cs.items||[]).find(x=>x.id===iid), t = !it && (cs.tasks||[]).find(x=>x.id===iid); if(!it && !t) return false;
+  const who = (currentUser() && userDisplayName(currentUser())) || "the team", title = it ? it.name : t.title;
+  if(it && campIsContent(it)){ if(!campSetCardStage(cs, it, "published", { by:who })) return false; }
+  else Object.assign(it || t, { live:true, liveBy:who, liveAt:new Date().toISOString().slice(0,10) });
+  pushAll(); campConfirmLive(cs, { id:iid, title, by:who });
+  if(typeof toast==="function") toast("“"+title+"” is live ✓");
+  return true;
+};
+window.campOpenBoard = function(cid){
+  const cs = (CSPACES.list||[]).find(x=>x.id===cid && x.type==="campaign"); if(!cs) return false;
+  view = "campaign"; activeCspace = cs.id; campView = "reminders"; renderAll(); return true;
+};
 function renderContentCampaign(){
   const wrap = $("content"); wrap.innerHTML = "";
   const cs = currentCampaign();
   if(!cs){ view = "roadmap"; renderAll(); return; }
+  if(campSyncCards()) saveQuiet();
   CX.render(cs, wrap, {
     tab: campView,
     canEdit: ()=> campAdmin(cs),
@@ -18451,20 +18544,14 @@ function renderContentCampaign(){
     sendToProcess: (c, it)=>{
       const soc = campaignSocial(c);
       if(!soc) return { error:"There's no Social Media space to send it to — add one inside Marketing first." };
-      if(window.SX && SX.normalize) SX.normalize(soc);
-      soc.sx = soc.sx || {}; soc.sx.cards = soc.sx.cards || [];
-      const today = new Date().toISOString().slice(0,10);
-      const ft = campPieceFormat(soc, it);   // Story stays a Story, a Notification a Notification… (not all Shorts / Reels)
-      const card = { id:"c"+Date.now().toString(36)+Math.random().toString(36).slice(2,5), ideaId:null, idea:it.name, format:ft.format,
-        // a piece can be on several platforms: the first of YouTube / Instagram it's ticked for decides the board's platform
-        platform: ((it.platforms && it.platforms.length ? it.platforms : [it.platform]).find(p=>p==="YouTube"||p==="Instagram")==="YouTube") ? "yt" : "ig",
-        vtype: ft.vtype,
-        stage:"todo", pre:{ source:"", tool:"", keywords:[], why:it.details||"", title:it.name, desc:"", hashtags:"" },
-        post:{ reel:null, thumb:null, postUrl:"" }, scheduled:it.date||null, published:null, acceptedOn:today, metrics:null, override:null,
-        priority:"high", fromCampaign: c.details.name || c.name, owner: it.owner || "" };
-      soc.sx.cards.push(card);
-      return { cardId: card.id };
+      return { cardId: campNewCard(c, soc, it).id };
     },
+    cardOf: (c, it)=> campCardOf(c, it),
+    setCardStage: (c, it, stage, meta)=> campSetCardStage(c, it, stage, meta),
+    leadOf: c=> c.lead || ((campUserByEmail(CAMP_DEFAULT_LEAD)||{}).id) || "",
+    confirmLive: (c, x)=> campConfirmLive(c, x),
+    reminders: async c=>{ const r = await SUPA.from("campaign_reminders").select("*").eq("team_slug", TEAM).eq("campaign_id", c.id).order("sent_at", { ascending:false });
+      if(r.error) throw r.error; return r.data || []; },
     cardExists: (c, id)=>{ const soc = campaignSocial(c); return !!(soc && soc.sx && (soc.sx.cards||[]).some(x=>x.id===id)); },
     goProcess: c=>{ const soc = campaignSocial(c); if(!soc) return; view = "social"; activeCspace = soc.id; socialView = "process"; renderAll(); },
   });
@@ -18543,6 +18630,7 @@ function renderContentSocial(){
   const wrap = $("content"); wrap.innerHTML = "";
   const cs = currentSocial();
   if(!cs){ view = "roadmap"; renderAll(); return; }
+  if(campSyncCards()) saveQuiet();   // a campaign's YouTube / Instagram pieces are cards here too
   // drawn by social-space.js (the team's Social Media template); saves ride in cspaces
   SX.render(cs, wrap, {
     tab: socialView, team: TEAM, supa: SUPA,
@@ -20354,7 +20442,7 @@ function renderAll(){
           });
         }
         if(cs.type==="campaign" && view==="campaign" && activeCspace===cs.id && window.CX){
-          [["details","\uD83D\uDCDD Campaign Details"],["assign","\uD83D\uDC65 Assignment"],["calendar","\uD83D\uDDD3 Calendar"],["dash","\uD83D\uDCCA Dashboard"]].filter(([k])=> tabAllowed(cs, k)).forEach(([k,lbl])=>{
+          [["details","\uD83D\uDCDD Campaign Details"],["board","\uD83D\uDCCB Board"],["roles","\uD83D\uDC65 Roles & responsibilities"],["reminders","\u23F0 Reminders"],["calendar","\uD83D\uDDD3 Calendar"]].filter(([k])=> tabAllowed(cs, k)).forEach(([k,lbl])=>{
             const sub=document.createElement("button");
             sub.className="ws-sub"+(_nested?" ws-sub-nested":"")+(campView===k?" active":"");
             sub.textContent=lbl;

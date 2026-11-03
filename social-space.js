@@ -2708,7 +2708,7 @@ function renderProcess(){
     return `<div class="col" data-stage="${s.id}">
       <div class="col-h"><h4>${s.label}</h4><span class="count">${items.length}</span></div>
       ${items.map(c=>{ const lp=livePost(c); return `<div class="kcard ${ro?"ro":""} ${c.priority==="high"?"hot":""}" draggable="${ro?"false":"true"}" data-card="${c.id}">
-        ${c.priority==="high"?`<div class="hotbar">🔔 High priority${c.fromCampaign?` · from ${esc(c.fromCampaign)}`:""}</div>`:""}
+        ${c.priority==="high"?`<div class="hotbar">🔔 High priority${c.fromCampaign?` · from ${esc(c.fromCampaign)}`:""}</div>`:""}${c.fromCampaign&&c.owner?`<div class="hotbar" style="background:var(--surface-2);color:var(--ink-2)">👤 ${esc(c.owner)}</div>`:""}
         <h5>${fmtIcon(c)} ${esc(c.pre.title||c.idea)}</h5>
         <div class="meta">${ktags(c)}
           ${c.override?`<span class="badge crit">override</span>`:""}
@@ -4053,7 +4053,7 @@ function renderOkrs(){
         <div class="kr2s">${o.krs.map((x,i)=>krRow(x,i,R,ed,oi)).join("")||`<p class="hint">No key results yet.</p>`}</div></div>`).join("")}
       ${ed?`<div class="okr-foot2"><span style="flex:1"></span><button class="btn sm" id="okrEdit">${OKR_EDIT?"Close editing":"✎ Edit objectives & key results"}</button></div>`:""}
       ${ed&&OKR_EDIT?okrEditor(p):""}
-      ${canMailOkrs()?okrMailPanel(p, R, true):""}`:""}</div>`;
+      ${canMailOkrs()?okrMailPanel(p, R, canEditTargets()):""}`:""}</div>`;
   wireOkrs(P, p, R, people);
 }
 function okrEditor(p){
@@ -4097,9 +4097,10 @@ function okrMailPanel(p, R, ed){
       <div class="card"><h4>Sent automatically</h4>
         <label class="pp-chk mrow"><input type="checkbox" data-okrmail="mid" ${p.mail.mid?"checked":""} ${ed?"":"disabled"}> <div><b>15th of every month, 10:00 AM</b><small>OKR status so far: each key result, target vs done</small></div><span class="hint">next ${dmy(n.mid)}</span></label>
         <label class="pp-chk mrow"><input type="checkbox" data-okrmail="end" ${p.mail.end?"checked":""} ${ed?"":"disabled"}> <div><b>Last day of every month, 6:00 PM</b><small>The month's summary: what the target was and what got done</small></div><span class="hint">next ${dmy(n.end)}</span></label>
+        ${ed?"":`<p class="hint" style="margin:6px 0 0">Turning these on or off needs the <b>Edit social targets</b> permission.</p>`}
         <div class="row" style="margin-top:10px;gap:6px"><button class="btn sm" data-okrprev="mid">👁 Preview status email</button><button class="btn sm" data-okrprev="end">👁 Preview summary email</button>
-          ${ed?`<span style="flex:1"></span><button class="btn sm" data-okrsend="mid">Send status now</button><button class="btn sm" data-okrsend="end">Send summary now</button>`:""}</div></div>
-      ${ed?`<div class="card"><h4>✍️ Write a mail</h4>
+          <span style="flex:1"></span><button class="btn sm" data-okrsend="mid">Send status now</button><button class="btn sm" data-okrsend="end">Send summary now</button></div></div>
+      ${true?`<div class="card"><h4>✍️ Write a mail</h4>
         <div class="fld"><label>Subject</label><input id="okrMsgSub" placeholder="e.g. Great work on the Shorts this week!"></div>
         <div class="fld"><label>Message</label><textarea id="okrMsg" data-plain rows="5" placeholder="Write anything — it goes to ${esc(personName(p))}'s email, from DU Buddy."></textarea></div>
         <label class="pp-chk"><input type="checkbox" id="okrMsgStatus" checked> Add his OKR status below my message</label>
@@ -4138,7 +4139,8 @@ function wireOkrs(P, p, R, people){
     k.log[key]=Math.max(0,Math.min(Number(k.target)||99,(Number(k.log[key])||0)+d)); saveOkrPeople(); renderOkrs(); });
   P.querySelectorAll("[data-krset]").forEach(b=>b.onclick=()=>{ const [oi,ki]=b.dataset.krset.split(":").map(Number), k=p.objectives[oi].krs[ki], inp=P.querySelector(`[data-krpct="${oi}:${ki}"]`);
     k.log[keyOf(k)]=Math.max(0,Math.min(100,Number(inp.value)||0)); saveOkrPeople(); renderOkrs(); toast("Updated"); });
-  P.querySelectorAll("[data-okrmail]").forEach(c=>c.onchange=()=>{ p.mail[c.dataset.okrmail]=c.checked; saveOkrPeople(); toast(c.checked?"Turned on":"Turned off"); });
+  P.querySelectorAll("[data-okrmail]").forEach(c=>c.onchange=()=>{ if(!canEditTargets()){ c.checked=!c.checked; toast("Needs the Edit social targets permission"); return; }
+    p.mail[c.dataset.okrmail]=c.checked; saveOkrPeople(); toast(c.checked?"Turned on":"Turned off"); });
   P.querySelectorAll("[data-okrprev]").forEach(b=>b.onclick=()=>{ const mode=b.dataset.okrprev;
     const m=window.OKRMAIL ? OKRMAIL.build({ mode, name:personName(p), period:R.label, asOf:dmy(R.asOf), daysLeft:R.custom?0:days(R.asOf,R.to), objectives:okrMailModel(p,R),
       subject:mode==="note"?($("#okrMsgSub").value||""):"", message:mode==="note"?($("#okrMsg").value||""):"", withStatus:mode!=="note"||$("#okrMsgStatus").checked, link:location.origin+location.pathname+"?team="+OPT.team }) : null;
