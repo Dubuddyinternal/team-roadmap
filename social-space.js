@@ -167,6 +167,53 @@ table.mini th{padding:8px 10px}
 .okr2-m{position:relative}.okr2-m u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink-2);border-radius:2px}
 .fmtnums>.na{opacity:.6}
 .pquick{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.catag{display:inline-block;font-family:var(--mono);font-size:10px;font-weight:600;padding:1.5px 7px;border-radius:99px;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line);vertical-align:1px;margin-left:4px}
+.okr-top-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.okr-top-bar .platsw{margin:0}.okr-top-bar .platsw button{gap:8px}.okr-top-bar .av{width:20px;height:20px;font-size:10px}
+.okr-top-bar select{margin-left:auto;border:1px solid var(--line-2);border-radius:999px;padding:7px 12px;background:var(--surface);font-weight:600}
+.okr-hero{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;margin-bottom:14px}
+.okr-hero>div:first-child{display:flex;gap:14px;align-items:center}.okr-hero .av{width:44px;height:44px;font-size:18px}
+.okr-hero h2{font-size:21px;margin:2px 0}
+.okr-score{text-align:right}.okr-score b{display:block;font-size:34px;letter-spacing:-.03em;line-height:1}.okr-score small{font-size:16px;color:var(--ink-3)}
+.okkrs{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.okkr{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;border-top:3px solid var(--line-2)}
+.okkr.st-done{border-top-color:var(--good)}.okkr.st-ok{border-top-color:var(--c2)}.okkr.st-behind{border-top-color:var(--warn)}.okkr.st-miss{border-top-color:var(--crit)}
+.okkr-h{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.okkr-h b{font-size:14px}
+.okkr-st{margin-left:auto;font-family:var(--mono);font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:5px;background:var(--surface-2);color:var(--ink-2)}
+.okkr.st-done .okkr-st{background:var(--good-soft);color:var(--good)}.okkr.st-behind .okkr-st{background:var(--warn-soft);color:var(--warn)}.okkr.st-miss .okkr-st{background:var(--crit-soft);color:var(--crit)}
+.okkr-nums{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0 10px}
+.okkr-nums b{display:block;font-size:24px;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.15}.okkr-nums small{font-size:11px;color:var(--ink-3)}
+.okkr-m{position:relative}.okkr-m u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink-2)}
+.okkr-sub{font-size:12px;color:var(--ink-2);margin:8px 0 0}.okkr-sub .up{color:var(--good)}.okkr-sub .dn{color:var(--crit)}
+.okr-dates{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;margin-bottom:14px}
+.okr-dates select{border:1px solid var(--line-2);border-radius:999px;padding:7px 12px;background:var(--surface);font-weight:600}
+.ob2{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);margin-bottom:14px;overflow:hidden}
+.ob2-h{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:14px 18px 8px;border-top:3px solid var(--accent)}
+.ob2-h h3{font-size:17px;margin-top:3px}.ob2-pct{text-align:right}.ob2-pct b{display:block;font-size:26px;letter-spacing:-.03em;line-height:1}
+.ob2-tot{display:grid;grid-template-columns:auto minmax(120px,1fr) auto;gap:12px;align-items:center;padding:4px 18px 12px;font-size:13px;color:var(--ink-2)}
+.kr2s{border-top:1px solid var(--line)}
+.kr2{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,300px);gap:16px;padding:12px 18px;border-top:1px solid var(--line);align-items:center}
+.kr2:first-child{border-top:none}
+.kr2-l{display:flex;gap:10px;align-items:flex-start}.kr2-n{font-family:var(--mono);font-size:11px;color:var(--ink-3);padding-top:2px;min-width:30px}
+.kr2-t{font-weight:600;font-size:13.5px;line-height:1.4}.kr2-m{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px}
+.kr2-r{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;align-items:center}
+.kr2-v{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}.kr2-v span{font-size:12.5px;color:var(--ink-3);font-weight:500}
+.kr2-r .meter{height:7px}.kr2-r .meter i{background:var(--warn)}.kr2.st-done .meter i{background:var(--good)}.kr2.st-miss .meter i{background:var(--crit)}
+.kr2-p{font-family:var(--mono);font-size:11px;color:var(--ink-3);white-space:nowrap}.kr2.st-done .kr2-p{color:var(--good);font-weight:600}
+.kr-upd{grid-column:1/-1;display:flex;gap:6px;justify-content:flex-end}.kr-upd input{width:64px;border:1px solid var(--line-2);border-radius:var(--r-s);padding:3px 6px}
+.ed-ob{border:1px solid var(--line);border-radius:var(--r-s);padding:10px;margin:10px 0;background:var(--surface-4)}
+.ed-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px}.ed-row.kr{padding-left:8px}
+.ed-row input,.ed-row select{border:1px solid var(--line-2);border-radius:var(--r-s);padding:5px 8px;background:var(--surface);font-size:12.5px}
+.ed-row .ed-t{flex:1;min-width:220px}.ed-row .x{border:none;background:none;font-size:16px;color:var(--ink-3)}
+.mailp{margin-top:22px}.mailp-g{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px}
+.mailp h4{margin-bottom:8px}.mrow{display:grid!important;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;padding:8px 0;border-top:1px solid var(--line)}
+.mrow small{display:block;color:var(--ink-3);font-size:12px}
+.mailp textarea,.mailp input:not([type=checkbox]){width:100%;border:1px solid var(--line-2);border-radius:var(--r-s);padding:8px 10px;font:inherit}
+.mailframe{width:100%;height:70vh;border:1px solid var(--line);border-radius:var(--r-s);background:#fff}
+@media (max-width:700px){.kr2{grid-template-columns:1fr}}
+.okr-foot2{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px}
+.okr-edit{margin-top:14px}.okr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin:10px 0}
+.okr-grid .fld span{display:block;font-size:12px;color:var(--ink-2);margin-bottom:4px}.okr-grid input{width:100%;border:1px solid var(--line-2);border-radius:var(--r-s);padding:7px 9px}
 .ktag{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:600;padding:2.5px 7px;border-radius:5px;white-space:nowrap;margin:1px 4px 1px 0;
   background:color-mix(in srgb,var(--kc) 14%,transparent);color:var(--kc);border:1px solid color-mix(in srgb,var(--kc) 30%,transparent)}
 .ktag.faded{opacity:.55}
@@ -613,7 +660,9 @@ const DEFAULT_REG = {
   platform: { ig:"Instagram", yt:"YouTube" },
   vtype:    { reel:"Reel", long:"Long video", short:"Short", carousel:"Carousel", live:"Live", image:"Image", story:"Story" },
   source:   { keyword:"Keyword research", comment:"Student comment", trend:"Trend", product:"Product" },
-  tool:     { vidiq:"vidIQ", trends:"Google Trends", suggest:"YouTube suggest", ahrefs:"Ahrefs", manual:"Manual / none" }
+  tool:     { vidiq:"vidIQ", trends:"Google Trends", suggest:"YouTube suggest", ahrefs:"Ahrefs", manual:"Manual / none" },
+  // what kind of idea it is: counted in 🎯 Individual OKRs ("research 25 helpful ideas a month"); anyone can add their own
+  ideacat:  { helpful:"Helpful", product:"Product", experimental:"Experimental" }
 };
 /* Content types: what an idea becomes. Each has its own icon, the platforms it can go to, its video types, and
    whether Claude can edit it (only vertical videos that go to Shorts / Reels). Kept in space.sx.formats; the team
@@ -762,7 +811,7 @@ function wireOwn(obj, read, markDirty, redraw){
     obj.extra.splice(Number(b.dataset.xdel),1); markDirty(); redraw(); });
 }
 function blankIdea(o){ return Object.assign({ id:uid("i"), idea:"", by:"", created:today(), hook:"", cta:"", platform:"ig", vtype:"reel",
-  source:"", tool:"", keywords:[], title:"", desc:"", hashtags:"", why:"", studentWhy:"", status:"new", comments:[], extra:[] }, o||{}); }
+  source:"", tool:"", cat:"", keywords:[], title:"", desc:"", hashtags:"", why:"", studentWhy:"", status:"new", comments:[], extra:[] }, o||{}); }
 function blankCard(o){ return Object.assign({ id:uid("c"), ideaId:null, idea:"", platform:"ig", vtype:"reel", stage:"todo", raw:null,
   pre:{source:"",tool:"",keywords:[],why:"",title:"",desc:"",hashtags:""},
   post:{reel:null,thumb:null,postUrl:""}, scheduled:null, published:null, acceptedOn:today(), metrics:null, override:null }, o||{}); }
@@ -882,7 +931,7 @@ const H_CARD=[["stage","Status",v=>(STAGES.find(x=>x.id===v)||{}).label||v],["id
   ["shoot.tips","Shooting notes"],["raw","Raw video",v=>!v?"":v.kind==="link"?v.url:v.name],["raw.audio","Audio (WAV)",v=>v?"made":""],
   ["raw.clean","Cleaned audio",v=>v?v.name:""],["post.reel","Edited video",v=>v?v.name:""],["post.thumb","Thumbnail",v=>v?v.name:""],
   ["post.postUrl","Post link"],["extra","Own boxes",v=>(v||[]).map(x=>x.label+": "+(x.value||"")).join(" · ")]];
-const H_IDEA=[["status","Status",v=>(STATUS_UI[v]||{}).label||v],["idea","Idea"],["by","Reported by"],["hook","Hook"],["cta","CTA"],["title","Title"],
+const H_IDEA=[["status","Status",v=>(STATUS_UI[v]||{}).label||v],["idea","Idea"],["by","Reported by"],["cat","Idea category",v=>regLabel("ideacat",v)||v],["hook","Hook"],["cta","CTA"],["title","Title"],
   ["desc","Description"],["hashtags","Hashtags"],["why","Why this idea"],[x=>plats(x),"Post on",v=>v.map(k=>regLabel("platform",k)||k).join(", ")],
   ["vtype","Video type",v=>regLabel("vtype",v)||v],["extra","Own boxes",v=>(v||[]).map(x=>x.label+": "+(x.value||"")).join(" · ")]];
 const HIST={ src:null, card:new Map(), idea:new Map() };
@@ -1240,7 +1289,14 @@ function normTargets(o){
     start:{ yt:((o.start||{}).yt)||null, ig:((o.start||{}).ig)||null },
     /* "counting from" date per platform ("" = the first day of this quarter) */
     from:{ yt:((o.from||{}).yt)||"", ig:((o.from||{}).ig)||"" },
-    who:(o.who && typeof o.who==="object") ? o.who : {} };
+    who:(o.who && typeof o.who==="object") ? o.who : {},
+    /* 🎯 Individual OKRs, per person: objectives, each with key results that count themselves (see OKR_TYPES)
+       [{email, name, objectives:[{id, title, pl, total, krs:[{id, title, type, cat, plat, pl, vtype, target, period, log:{period: value}}]}],
+         mail:{mid, end}}] */
+    people:(Array.isArray(o.people)?o.people:[]).filter(x=>x && x.email).map(x=>({ email:String(x.email).toLowerCase(), name:x.name||"",
+      objectives:(Array.isArray(x.objectives)?x.objectives:[]).map(ob=>({ id:ob.id||uid("ob"), title:ob.title||"", pl:ob.pl||"", total:ob.total??null,
+        krs:(Array.isArray(ob.krs)?ob.krs:[]).map(k=>Object.assign({ id:k.id||uid("kr"), title:"", type:"manual_pct", cat:"", plat:"", pl:"", vtype:"", target:null, period:"month", log:{} }, k)) })),
+      mail:Object.assign({ mid:true, end:true }, x.mail||{}) })) };
   t.goals.forEach(g=>{ if(!g.id) g.id=uid("g"); });
   return t;
 }
@@ -2149,7 +2205,7 @@ function renderSummary(){
   const okr=(k,n,col,series,isLive)=>{
     const tgt=TG.targets[k], last=series.length?series[series.length-1]:null;
     if(!last) return `<div class="okr okr2"><div class="lbl">${n} ${AUD(k)}</div><p class="hint" style="margin:10px 0">${isLive?"Waiting for the first sync":"No count entered yet"}</p>
-      ${isLive?"":`<button class="btn sm" data-updf="1">Add the first count</button>`}${more(k,col)}</div>`;
+      ${isLive?"":`<button class="btn sm" data-updf="1">Add the first count</button>`}</div>`;
     const st=startOf(k, series), cur=last.v, ch=cur-st.v, stale=isLive && last.d<addDays(today(),-1);
     const pct=tgt?Math.max(0,Math.min(100,cur/tgt*100)):0, startPct=tgt?Math.max(0,Math.min(100,st.v/tgt*100)):0;
     return `<div class="okr okr2"><div class="okr2-h"><span class="lbl">${n} ${AUD(k)}</span>${isLive?`<span class="badge good">live</span>`:`<span class="badge mute">manual</span>`}
@@ -2162,7 +2218,7 @@ function renderSummary(){
       </div>
       <div class="meter okr2-m" title="Start ${fmt(st.v)} · now ${fmt(cur)} · target ${fmt(tgt)}"><i style="width:${pct}%;background:${col}"></i><u style="left:${startPct}%"></u></div>
       <div class="okr-foot"><span>${cur>=tgt?"Target reached 🎉":`${fmt(tgt-cur)} to go · ${pct.toFixed(1)}% of ${fmt(tgt)}`}</span>${stale?`<span class="stalec">⚠ not synced since ${dmy(last.d)}</span>`:""}</div>
-      ${weekLog(k, series, st, tgt)}${more(k,col)}</div>`; };
+      ${weekLog(k, series, st, tgt)}</div>`; };
   $("#pane-summary").innerHTML=`
    <div class="sumbar">
      <div class="platsw">${[["all","Both platforms"],["yt","YouTube"],["ig","Instagram"]].map(([k,l])=>
@@ -2589,7 +2645,7 @@ function renderIdeation(){
         ${ro?"":`<select class="stsel movesel" data-stidea="${i.id}" title="Move this idea">
           <option value="" selected>Move to…</option>${Object.entries(STATUS_UI).filter(([k])=>k!==i.status).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join("")}</select>`}`;
     return `<tr class="rowlink" data-open="${i.id}" title="Open this idea">
-      <td class="td-idea">${fmtIcon(i)} ${esc(i.idea)}${i.title?`<div class="sub">${esc(i.title)}</div>`:""}</td>
+      <td class="td-idea">${fmtIcon(i)} ${esc(i.idea)}${i.cat?` <span class="catag">${esc(regLabel("ideacat",i.cat)||i.cat)}</span>`:""}${i.title?`<div class="sub">${esc(i.title)}</div>`:""}</td>
       <td>${who(i.by)}<div class="sub vol">${dmy(i.created)}</div></td>
       <td>${ktags(i)}</td>
       <td>${decide}${sec==="open"&&i.status==="under_review"?`<div class="sub">under review</div>`:""}</td>
@@ -3016,6 +3072,7 @@ function openIdea(id,focusComments,fmtKey){
     <div class="grid2">
       <div class="fld"><label for="i-by">Reported by</label>${peopleSelect("i-by",i.by)}</div>
       <div class="fld"><label for="i-created">Reported on</label><input id="i-created" type="date" value="${esc(i.created||today())}"></div>
+      <div class="fld"><label for="i-cat">Idea category</label>${regSelect("ideacat","i-cat",i.cat||"","e.g. Trend, Festival, Exam update")}</div>
       <div class="fld"><label>Post on</label>${platPicker("i-platform",plats(i),F)}</div>
       <div class="fld" ${vtypeOptions(plats(i),F).length<2?"hidden":""}><label for="i-vtype">${F.video?"Video type":"Format"}</label>${vtypeSelect("i-vtype",i.vtype,plats(i),F)}</div>
     </div>
@@ -3074,7 +3131,7 @@ function openIdea(id,focusComments,fmtKey){
       ${!isNew?`<button class="btn danger" id="delIdea" style="margin-left:auto" data-w="1">Delete</button>`:""}</div>`,true,"idea:"+(isNew?"new":i.id));
 
     const read=()=>{
-      i.idea=$("#i-idea").value.trim(); i.studentWhy=$("#i-studentwhy").value.trim(); i.by=$("#i-by").value.trim(); i.created=$("#i-created").value||today();
+      i.idea=$("#i-idea").value.trim(); i.studentWhy=$("#i-studentwhy").value.trim(); i.by=$("#i-by").value.trim(); i.created=$("#i-created").value||today(); i.cat=readReg("ideacat","i-cat",i.cat||"");
       i.platforms=readPlats("i-platform",plats(i)); i.platform=i.platforms[0]; i.vtype=readReg("vtype","i-vtype",i.vtype)||(fmtOf(i).vtypes||[])[0]||i.format;
       i.hook=$("#i-hook").value.trim(); i.cta=$("#i-cta").value.trim();
       i.title=$("#i-title").value.trim(); i.desc=$("#i-desc").value.trim();   // research fields are off the form for now: what's stored stays
@@ -3099,7 +3156,7 @@ function openIdea(id,focusComments,fmtKey){
       if(!$("#drawer").classList.contains("on") || !exists()) return;
       if(a && $("#drawer").contains(a) && /INPUT|TEXTAREA|SELECT/.test(a.tagName)) return;
       if(dirty) read(); draw(i.keywords); };
-    ["i-vtype","i-source","i-tool"].forEach(wireReg);
+    ["i-vtype","i-source","i-tool","i-cat"].forEach(wireReg);
     $("#i-platform").onchange=()=>{ const pl=readPlats("i-platform",plats(i)); const box=$("#i-vtype").parentElement;
       const v=$("#i-vtype").value; box.querySelector("select").remove(); box.querySelector(".otherin").remove();
       box.insertAdjacentHTML("beforeend", vtypeSelect("i-vtype",v,pl)); wireReg("i-vtype");
@@ -3893,6 +3950,222 @@ function openCulture(){
   $("#saveCu").onclick=()=>{ S.culture=$("#cu").value.trim(); if(save()){ closeDrawer(); toast("Saved"); } };
 }
 
+/* ------------------------------------------------------------ 🎯 INDIVIDUAL OKRs
+   One person's objectives and key results, the same ones as on the OKRs page, counting themselves:
+     ideas    — ideas they logged in Ideation in a category (Helpful / Product / Experimental…), for a platform
+     posts    — Shorts / Reels / long videos published (synced YouTube + Instagram, plus published cards)
+     manual_pct — a % someone updates (e.g. "post 100% of calendar content…")
+     count    — "N of M done" ticked off by hand (e.g. "run 2 AI use cases")
+   An objective with a platform and a total also shows the subscriber / follower total against it.
+   Pick a month (or any dates and Confirm), or ↻ Refresh to today. Emails: the 15th (status so far), the
+   last day of the month (summary), and ✍️ Write a mail — Edge Function "social-okr". */
+const OKR_TYPES = { ideas:"Ideas logged (by category)", posts:"Posts published (by type)", manual_pct:"Percentage (updated by hand)", count:"Done count (ticked by hand)" };
+function shivamTemplate(){
+  const id=()=>uid("kr"), post="Post 100% of calendar content using the confirmed caption and hashtags, and add the post link in the calendar within 1 day";
+  const ideas=pl=>[["helpful",25,"helpful content"],["product",10,"product based content"],["experimental",10,pl==="ig"?"experimental and trendy content":"experimental content"]]
+    .map(([cat,n,w])=>({ id:id(), title:`Research ${n} ${w} ideas`, type:"ideas", cat, plat:pl, target:n, period:"month", log:{} }));
+  return [
+    { id:uid("ob"), title:"Increase YouTube subscribers to 80,000", pl:"yt", total:80000, krs:[...ideas("yt"),
+      { id:id(), title:"Upload minimum 18 Shorts", type:"posts", pl:"yt", vtype:"short", target:18, period:"month", log:{} },
+      { id:id(), title:"Upload minimum 8 long videos", type:"posts", pl:"yt", vtype:"long", target:8, period:"month", log:{} },
+      { id:id(), title:post, type:"manual_pct", target:100, period:"month", log:{} },
+      { id:id(), title:"Identify and run 2 AI use cases on your own", type:"count", target:2, period:"quarter", log:{} }] },
+    { id:uid("ob"), title:"Increase Instagram followers to 20,000", pl:"ig", total:20000, krs:[...ideas("ig"),
+      { id:id(), title:"Upload minimum 18 Reels (mix of YT Shorts and Insta-specific content)", type:"posts", pl:"ig", vtype:"reel", target:18, period:"month", log:{} },
+      { id:id(), title:post, type:"manual_pct", target:100, period:"month", log:{} }] },
+  ];
+}
+// ✉️ Emails to … (schedule, previews, Send now, Write a mail): only these logins see it — not the person it emails
+const OKR_MAILERS = ["mannat.dubuddy@gmail.com", "aditya.dubuddy@gmail.com"];
+const canMailOkrs = () => OKR_MAILERS.includes(myEmail());
+let OKR_WHO = "", OKR_EDIT = false, OKR_R = { mode:"month", month:"", from:"", to:"" };
+const myEmail = () => { try{ const u=typeof currentUser==="function"?currentUser():null; return u&&u.email?String(u.email).toLowerCase():""; }catch(_){ return ""; } };
+function memberList(){ try{ return (typeof assigneeMembers==="function"?assigneeMembers():[]).map(u=>({ email:String(u.email||"").toLowerCase(), name:(typeof userDisplayName==="function"?userDisplayName(u):u.email) })).filter(u=>u.email); }catch(_){ return []; } }
+const personName = p => p.name || ((memberList().find(u=>u.email===p.email)||{}).name) || p.email.split("@")[0];
+const monthKeyOf = d => d.slice(0,7), quarterKeyOf = d => d.slice(0,4)+"-Q"+(Math.floor((Number(d.slice(5,7))-1)/3)+1);
+function monthOf(k){ const [y,m]=k.split("-").map(Number); return { from:iso(new Date(y,m-1,1)), to:iso(new Date(y,m,0)), label:new Date(y,m-1,1).toLocaleDateString("en-GB",{month:"long",year:"numeric"}) }; }
+// the range on screen: a month (up to today) or Confirmed custom dates; "asOf" is the day the status is shown for
+function okrRange(){
+  if(OKR_R.mode==="custom" && OKR_R.from && OKR_R.to){ const to=OKR_R.to>today()?today():OKR_R.to; return { from:OKR_R.from, to, asOf:to, custom:true, label:rangeText({from:OKR_R.from,to}), months:Math.max(1,Math.round((days(OKR_R.from,to)+1)/30.4)) }; }
+  const M=monthOf(OKR_R.month||today().slice(0,7)), asOf=M.to<today()?M.to:today();
+  return { from:M.from, to:M.to, asOf, custom:false, label:M.label, months:1, finished:M.to<today() };
+}
+// an idea counts for the person who logged it ("Reported by"), matched on their name
+const ideaIsBy = (i,p) => { const a=String(i.by||"").trim().toLowerCase(), n=personName(p).trim().toLowerCase(); return !!a && (a===n || a.split(" ")[0]===n.split(" ")[0]); };
+function krValue(k, p, R){
+  if(k.type==="ideas") return IDEAS.filter(i=>ideaIsBy(i,p) && i.created>=R.from && i.created<=R.asOf && (!k.cat || i.cat===k.cat) && (!k.plat || plats(i).includes(k.plat))).length;
+  if(k.type==="posts"){ const vert=k.vtype==="short"||k.vtype==="reel";
+    return postRows().filter(r=>r.date && r.date>=R.from && r.date<=R.asOf && r.platform===k.pl && (vert ? (r.vtype==="short"||r.vtype==="reel") : r.vtype===k.vtype)).length; }
+  const key=k.period==="quarter"?quarterKeyOf(R.asOf):monthKeyOf(R.asOf);
+  return Number((k.log||{})[key]||0);
+}
+function krTarget(k, R){ const t=Number(k.target)||0; return k.period==="month" && k.type!=="manual_pct" && R.custom ? Math.ceil(t*R.months) : t; }
+function okrCompute(p, R){
+  return (p.objectives||[]).map(ob=>{
+    const krs=ob.krs.filter(k=>Number(k.target)>0).map(k=>{ const v=krValue(k,p,R), t=krTarget(k,R); return { k, v, t, pct:t?Math.min(100,v/t*100):0, met:v>=t }; });
+    const pct=krs.length?krs.reduce((a,x)=>a+x.pct,0)/krs.length:0;
+    let tot=null; if(ob.pl && Number(ob.total)>0){ const ser=ob.pl==="yt"?ytSeries():igSeries(), now=ser.length?valueAt(ser,R.asOf):null, st=ser.length?valueAt(ser,addDays(R.from,-1)):null;
+      tot={ now, st, target:Number(ob.total), gained:now!=null&&st!=null?now-st:null, pct:now!=null?Math.min(100,now/Number(ob.total)*100):0 }; }
+    return { ob, krs, pct, tot };
+  });
+}
+const krKindTag = k => k.type==="posts" ? ktag(k.pl,k.vtype) : k.type==="ideas" ? `<span class="catag">💡 ${esc(regLabel("ideacat",k.cat)||k.cat||"any")}${k.plat?" · "+(k.plat==="yt"?"YT":"Insta"):""}</span>`
+  : k.type==="count" ? `<span class="catag">✓ ticked by hand</span>` : `<span class="catag">% updated by hand</span>`;
+function krRow(x, i, R, ed, oi){
+  const k=x.k, auto=k.type==="ideas"||k.type==="posts", st=x.met?"done":R.finished?"miss":"open";
+  const vtxt = k.type==="manual_pct" ? `${fmt(x.v)}% <span>/ ${fmt(x.t)}%</span>` : k.type==="count" ? `${x.v} <span>of ${x.t} done</span>` : `${fmt(x.v)} <span>/ ${fmt(x.t)}</span>`;
+  const upd = !ed||auto ? "" : k.type==="count"
+    ? `<span class="kr-upd"><button class="btn sm" data-krstep="${oi}:${i}:-1">−</button><button class="btn sm" data-krstep="${oi}:${i}:1">＋ 1 done</button></span>`
+    : `<span class="kr-upd"><input type="number" min="0" max="100" value="${x.v}" data-krpct="${oi}:${i}"><button class="btn sm" data-krset="${oi}:${i}">Update</button></span>`;
+  return `<div class="kr2 st-${st}"><div class="kr2-l"><span class="kr2-n">KR${i+1}</span><div><div class="kr2-t">${esc(k.title)}</div>
+      <div class="kr2-m">${krKindTag(k)}<span class="hint">${k.period==="quarter"?"this quarter":R.custom?`over these ${R.months} month${R.months===1?"":"s"}`:"this month"} · ${auto?"counts itself":"updated by the team"}</span></div></div></div>
+    <div class="kr2-r"><div class="kr2-v">${vtxt}</div><div class="meter"><i style="width:${x.pct}%"></i></div><div class="kr2-p">${Math.round(x.pct)}%${x.met?" · done ✓":""}</div>${upd}</div></div>`;
+}
+function renderOkrs(){
+  const P=$("#pane-okrs"), ed=canEditTargets(), me=myEmail(), people=TG.people||[];
+  if(!OKR_WHO || !people.some(p=>p.email===OKR_WHO)) OKR_WHO=(people.find(p=>p.email===me)||people[0]||{}).email||"";
+  if(!OKR_R.month) OKR_R.month=today().slice(0,7);
+  const p=people.find(x=>x.email===OKR_WHO), R=okrRange(), mine=p&&p.email===me;
+  const months=[]; { const d=new Date(); d.setDate(1); for(let i=0;i<8;i++){ months.push(iso(d).slice(0,7)); d.setMonth(d.getMonth()-1); } }
+  const obs=p?okrCompute(p,R):[], allKrs=obs.flatMap(o=>o.krs), met=allKrs.filter(x=>x.met).length, overall=allKrs.length?allKrs.reduce((a,x)=>a+x.pct,0)/allKrs.length:0;
+  P.innerHTML=`<div class="sec">
+    <div class="okr-top-bar"><div class="platsw">${people.map(x=>`<button data-okrwho="${esc(x.email)}" class="${x.email===OKR_WHO?"on":""}">${avatar(personName(x))} ${esc(personName(x))}${x.email===me?" (you)":""}</button>`).join("")}
+      ${ed?`<button data-okradd="1" title="Add someone's objectives, e.g. Aditya">＋ Add person</button>`:""}</div></div>
+    <div class="okr-dates">
+      <select id="okrMonth">${months.map(k=>`<option value="${k}" ${OKR_R.mode==="month"&&k===OKR_R.month?"selected":""}>${monthOf(k).label}${k===today().slice(0,7)?" (this month)":""}</option>`).join("")}
+        <option value="custom" ${OKR_R.mode==="custom"?"selected":""}>Custom range</option></select>
+      <label class="dfield"><span>From</span><input type="date" id="okrFrom" value="${R.from}" max="${today()}"></label><span class="hint">→</span>
+      <label class="dfield"><span>To</span><input type="date" id="okrTo" value="${R.custom?R.to:R.asOf}" max="${today()}"></label>
+      <button class="btn dark" id="okrGo">✓ Confirm dates</button>
+      <button class="btn" id="okrNow" title="Show the status as of today, with fresh numbers">↻ Refresh to today</button>
+      <span class="hint" style="margin-left:auto">Status as of <b>${dmyY(R.asOf)}</b></span></div>
+    ${!people.length?`<div class="card"><p style="margin:0"><b>No individual OKRs yet.</b> ${ed?"Press <b>＋ Add person</b> — Shivam starts with his objectives from the OKRs page.":"Someone who can edit social targets sets them up here."}</p></div>`:""}
+    ${p?`<div class="okr-hero"><div>${avatar(personName(p))}<div><span class="lbl">${mine?"Your objectives":"Objectives"} · ${esc(R.label)}</span>
+        <h2>${mine?"Hi "+esc(personName(p).split(" ")[0])+", here's where you are":esc(personName(p))+"'s OKRs"}</h2>
+        <p class="hint">${R.custom?`${days(R.from,R.to)+1} days, targets scaled to ${R.months} month${R.months===1?"":"s"}`:R.finished?"Month finished":"Day "+(days(R.from,R.asOf)+1)+" of "+(days(R.from,R.to)+1)+" · "+(days(R.asOf,R.to))+" days left"}
+          · ideas from Ideation, posts from YouTube and Instagram</p></div></div>
+      <div class="okr-score"><b>${Math.round(overall)}<small>%</small></b><span class="lbl">${met} of ${allKrs.length} key results done</span></div></div>
+      ${obs.map((o,oi)=>`<div class="ob2"><div class="ob2-h"><div><span class="lbl">Objective ${oi+1}${o.ob.pl?" · "+(o.ob.pl==="yt"?"YouTube":"Instagram"):""}</span><h3>${esc(o.ob.title)}</h3></div>
+          <div class="ob2-pct"><b>${Math.round(o.pct)}%</b><span class="hint">${o.krs.filter(x=>x.met).length} of ${o.krs.length} done</span></div></div>
+        ${o.tot?`<div class="ob2-tot"><span>${o.ob.pl==="yt"?"Subscribers":"Followers"} now <b>${o.tot.now==null?"—":fmt(o.tot.now)}</b> of <b>${fmt(o.tot.target)}</b></span>
+          <div class="meter"><i style="width:${o.tot.pct}%;background:${o.ob.pl==="yt"?"var(--c1)":"var(--c3)"}"></i></div>
+          <span class="hint">${o.tot.gained==null?"":(o.tot.gained>=0?"+":"−")+fmt(Math.abs(o.tot.gained))+" in this period · "}${o.tot.now==null?"":fmt(Math.max(0,o.tot.target-o.tot.now))+" to go"}</span></div>`:""}
+        <div class="kr2s">${o.krs.map((x,i)=>krRow(x,i,R,ed,oi)).join("")||`<p class="hint">No key results yet.</p>`}</div></div>`).join("")}
+      ${ed?`<div class="okr-foot2"><span style="flex:1"></span><button class="btn sm" id="okrEdit">${OKR_EDIT?"Close editing":"✎ Edit objectives & key results"}</button></div>`:""}
+      ${ed&&OKR_EDIT?okrEditor(p):""}
+      ${canMailOkrs()?okrMailPanel(p, R, true):""}`:""}</div>`;
+  wireOkrs(P, p, R, people);
+}
+function okrEditor(p){
+  const catOpts=sel=>Object.entries(REG.ideacat).map(([k,v])=>`<option value="${k}" ${k===sel?"selected":""}>${esc(v)}</option>`).join("")+`<option value="" ${!sel?"selected":""}>Any category</option>`;
+  const ptOpts=k=>[["yt:short","YT Short"],["yt:long","YT Long video"],["yt:live","YT Live"],["ig:reel","Insta Reel"],["ig:image","Insta Post"],["ig:story","Insta Story"],["ig:live","Insta Live"]]
+    .map(([v,l])=>`<option value="${v}" ${v===k.pl+":"+k.vtype?"selected":""}>${l}</option>`).join("");
+  return `<div class="okr-edit card"><h4>${esc(personName(p))}'s objectives and key results</h4>
+    ${(p.objectives||[]).map((ob,oi)=>`<div class="ed-ob" data-ob="${oi}">
+      <div class="ed-row"><input class="ed-t" data-obt value="${esc(ob.title)}" placeholder="Objective">
+        <select data-obpl><option value="">No platform total</option><option value="yt" ${ob.pl==="yt"?"selected":""}>YouTube subscribers</option><option value="ig" ${ob.pl==="ig"?"selected":""}>Instagram followers</option></select>
+        <input type="number" data-obtot value="${ob.total??""}" placeholder="total to reach" style="width:120px"><button class="btn sm danger" data-obdel="${oi}">Remove</button></div>
+      ${ob.krs.map((k,ki)=>`<div class="ed-row kr" data-kr="${ki}"><span class="kr2-n">KR${ki+1}</span><input class="ed-t" data-krt value="${esc(k.title)}" placeholder="Key result">
+        <select data-krtype>${Object.entries(OKR_TYPES).map(([v,l])=>`<option value="${v}" ${k.type===v?"selected":""}>${l}</option>`).join("")}</select>
+        ${k.type==="ideas"?`<select data-krcat>${catOpts(k.cat)}</select><select data-krplat><option value="">Any platform</option><option value="yt" ${k.plat==="yt"?"selected":""}>For YouTube</option><option value="ig" ${k.plat==="ig"?"selected":""}>For Instagram</option></select>`:""}
+        ${k.type==="posts"?`<select data-krpt>${ptOpts(k)}</select>`:""}
+        <input type="number" min="0" data-krtg value="${k.target??""}" placeholder="target" style="width:80px">
+        <select data-krper><option value="month" ${k.period!=="quarter"?"selected":""}>a month</option><option value="quarter" ${k.period==="quarter"?"selected":""}>a quarter</option></select>
+        <button class="x" data-krdel="${oi}:${ki}" title="Remove">×</button></div>`).join("")}
+      <button class="btn sm" data-kradd="${oi}">＋ Add key result</button></div>`).join("")}
+    <div class="row" style="margin-top:12px"><button class="btn sm" id="obAdd">＋ Add objective</button><span style="flex:1"></span>
+      <button class="btn danger sm" id="okrDel">Remove person</button><button class="btn pri" id="okrSave">Save</button></div></div>`;
+}
+function readOkrEditor(p){
+  const box=$("#pane-okrs").querySelector(".okr-edit"); if(!box) return;
+  box.querySelectorAll(".ed-ob").forEach(el=>{ const ob=p.objectives[Number(el.dataset.ob)]; if(!ob) return;
+    ob.title=el.querySelector("[data-obt]").value.trim(); ob.pl=el.querySelector("[data-obpl]").value; const t=el.querySelector("[data-obtot]").value; ob.total=t===""?null:Number(t);
+    el.querySelectorAll(".ed-row.kr").forEach(r=>{ const k=ob.krs[Number(r.dataset.kr)]; if(!k) return;
+      k.title=r.querySelector("[data-krt]").value.trim(); k.type=r.querySelector("[data-krtype]").value;
+      const c=r.querySelector("[data-krcat]"); if(c) k.cat=c.value; const pf=r.querySelector("[data-krplat]"); if(pf) k.plat=pf.value;
+      const pt=r.querySelector("[data-krpt]"); if(pt){ const [pl,vt]=pt.value.split(":"); k.pl=pl; k.vtype=vt; }
+      if(k.type==="posts" && !k.pl){ k.pl="yt"; k.vtype="short"; }
+      const tg=r.querySelector("[data-krtg]").value; k.target=tg===""?null:Number(tg); k.period=r.querySelector("[data-krper]").value; }); });
+}
+const nextSends = p => { const t=today(), d=new Date(t+"T00:00:00"), y=d.getFullYear(), m=d.getMonth();
+  const mid=d.getDate()<15?iso(new Date(y,m,15)):iso(new Date(y,m+1,15)), last=iso(new Date(y,m+1,0));
+  return { mid, end:last }; };
+function okrMailPanel(p, R, ed){
+  const n=nextSends(p);
+  return `<div class="mailp"><div class="sec-h"><h3>✉️ Emails to ${esc(personName(p))}</h3><span class="hint">to ${esc(p.email)} · friendly notes, never warnings</span></div>
+    <div class="mailp-g">
+      <div class="card"><h4>Sent automatically</h4>
+        <label class="pp-chk mrow"><input type="checkbox" data-okrmail="mid" ${p.mail.mid?"checked":""} ${ed?"":"disabled"}> <div><b>15th of every month, 10:00 AM</b><small>OKR status so far: each key result, target vs done</small></div><span class="hint">next ${dmy(n.mid)}</span></label>
+        <label class="pp-chk mrow"><input type="checkbox" data-okrmail="end" ${p.mail.end?"checked":""} ${ed?"":"disabled"}> <div><b>Last day of every month, 6:00 PM</b><small>The month's summary: what the target was and what got done</small></div><span class="hint">next ${dmy(n.end)}</span></label>
+        <div class="row" style="margin-top:10px;gap:6px"><button class="btn sm" data-okrprev="mid">👁 Preview status email</button><button class="btn sm" data-okrprev="end">👁 Preview summary email</button>
+          ${ed?`<span style="flex:1"></span><button class="btn sm" data-okrsend="mid">Send status now</button><button class="btn sm" data-okrsend="end">Send summary now</button>`:""}</div></div>
+      ${ed?`<div class="card"><h4>✍️ Write a mail</h4>
+        <div class="fld"><label>Subject</label><input id="okrMsgSub" placeholder="e.g. Great work on the Shorts this week!"></div>
+        <div class="fld"><label>Message</label><textarea id="okrMsg" data-plain rows="5" placeholder="Write anything — it goes to ${esc(personName(p))}'s email, from DU Buddy."></textarea></div>
+        <label class="pp-chk"><input type="checkbox" id="okrMsgStatus" checked> Add his OKR status below my message</label>
+        <div class="row" style="margin-top:8px"><button class="btn sm" data-okrprev="note">👁 Preview</button><span style="flex:1"></span><button class="btn pri" id="okrMsgSend">Send to ${esc(personName(p).split(" ")[0])}</button></div></div>`:""}
+    </div></div>`;
+}
+// the email exactly as the Edge Function builds it (okr-mail.js is shared by both)
+function okrMailModel(p, R){
+  return okrCompute(p,R).map(o=>({ title:o.ob.title, pct:Math.round(o.pct),
+    total:o.tot?{ label:o.ob.pl==="yt"?"YouTube subscribers":"Instagram followers", now:o.tot.now, target:o.tot.target, gained:o.tot.gained }:null,
+    krs:o.krs.map(x=>({ title:x.k.title, type:x.k.type, done:x.v, target:x.t, pct:Math.round(x.pct), tag:x.k.type==="posts"?kindOf(x.k.pl,x.k.vtype):x.k.type==="ideas"?(regLabel("ideacat",x.k.cat)||"Ideas")+" ideas":x.k.type==="count"?"Done count":"%" })) }));
+}
+function wireOkrs(P, p, R, people){
+  P.querySelectorAll("[data-okrwho]").forEach(b=>b.onclick=()=>{ OKR_WHO=b.dataset.okrwho; OKR_EDIT=false; renderOkrs(); });
+  const mo=$("#okrMonth"); if(mo) mo.onchange=()=>{ if(mo.value==="custom"){ OKR_R.mode="custom"; OKR_R.from=R.from; OKR_R.to=R.asOf; $("#okrFrom").focus(); return; } OKR_R={ mode:"month", month:mo.value, from:"", to:"" }; renderOkrs(); };
+  const go=$("#okrGo"); if(go) go.onclick=async()=>{ let f=$("#okrFrom").value, t=$("#okrTo").value; if(!f||!t){ toast("Pick both dates"); return; } if(f>t) [f,t]=[t,f];
+    // a whole month picked by hand stays a month
+    const m=monthOf(f.slice(0,7)); OKR_R = f===m.from && (t===m.to || (t===today() && f.slice(0,7)===today().slice(0,7))) ? { mode:"month", month:f.slice(0,7) } : { mode:"custom", from:f, to:t };
+    toast("Showing "+rangeText({from:f,to:t})); renderOkrs(); await loadLive(true); };
+  const now=$("#okrNow"); if(now) now.onclick=async()=>{ OKR_R={ mode:"month", month:today().slice(0,7) }; toast("Refreshing to today…"); renderOkrs(); await loadLive(true); toast("Up to date as of "+dmy(today())); };
+  const oe=$("#okrEdit"); if(oe) oe.onclick=()=>{ OKR_EDIT=!OKR_EDIT; renderOkrs(); };
+  const add=P.querySelector("[data-okradd]"); if(add) add.onclick=()=>{
+    const taken=new Set(people.map(x=>x.email)), list=memberList().filter(u=>!taken.has(u.email));
+    openDrawer(`<div class="dr-h"><div><div class="lbl">Individual OKRs</div><h3 style="margin-top:4px">Add a person</h3></div><button class="btn sm" id="xClose">Close</button></div>
+      <div class="fld"><label>Who</label><select id="okrNew">${list.map(u=>`<option value="${esc(u.email)}">${esc(u.name)} · ${esc(u.email)}</option>`).join("")||`<option value="">Everyone already has OKRs here</option>`}</select></div>
+      <div class="fld"><label>Start from</label><select id="okrTpl"><option value="creator">The creator's objectives (as on the OKRs page for Shivam)</option><option value="empty">Empty — I'll add objectives</option></select></div>
+      <button class="btn pri" id="okrNewGo" ${list.length?"":"disabled"}>Add</button>`);
+    $("#xClose").onclick=closeDrawer;
+    $("#okrNewGo").onclick=()=>{ const e=$("#okrNew").value; if(!e) return; const u=list.find(x=>x.email===e);
+      TG.people=(TG.people||[]).concat([{ email:e, name:u?u.name:"", objectives:$("#okrTpl").value==="creator"?shivamTemplate():[], mail:{mid:true,end:true} }]);
+      OKR_WHO=e; saveOkrPeople(); closeDrawer(); renderOkrs(); toast("Added — check the numbers, then Save"); };
+  };
+  if(!p) return;
+  const keyOf=k=>k.period==="quarter"?quarterKeyOf(R.asOf):monthKeyOf(R.asOf);
+  P.querySelectorAll("[data-krstep]").forEach(b=>b.onclick=()=>{ const [oi,ki,d]=b.dataset.krstep.split(":").map(Number), k=p.objectives[oi].krs[ki], key=keyOf(k);
+    k.log[key]=Math.max(0,Math.min(Number(k.target)||99,(Number(k.log[key])||0)+d)); saveOkrPeople(); renderOkrs(); });
+  P.querySelectorAll("[data-krset]").forEach(b=>b.onclick=()=>{ const [oi,ki]=b.dataset.krset.split(":").map(Number), k=p.objectives[oi].krs[ki], inp=P.querySelector(`[data-krpct="${oi}:${ki}"]`);
+    k.log[keyOf(k)]=Math.max(0,Math.min(100,Number(inp.value)||0)); saveOkrPeople(); renderOkrs(); toast("Updated"); });
+  P.querySelectorAll("[data-okrmail]").forEach(c=>c.onchange=()=>{ p.mail[c.dataset.okrmail]=c.checked; saveOkrPeople(); toast(c.checked?"Turned on":"Turned off"); });
+  P.querySelectorAll("[data-okrprev]").forEach(b=>b.onclick=()=>{ const mode=b.dataset.okrprev;
+    const m=window.OKRMAIL ? OKRMAIL.build({ mode, name:personName(p), period:R.label, asOf:dmy(R.asOf), daysLeft:R.custom?0:days(R.asOf,R.to), objectives:okrMailModel(p,R),
+      subject:mode==="note"?($("#okrMsgSub").value||""):"", message:mode==="note"?($("#okrMsg").value||""):"", withStatus:mode!=="note"||$("#okrMsgStatus").checked, link:location.origin+location.pathname+"?team="+OPT.team }) : null;
+    openDrawer(`<div class="dr-h"><div><div class="lbl">Email preview</div><h3 style="margin-top:4px">${esc(m?m.subject:"")}</h3></div><button class="btn sm" id="xClose">Close</button></div>
+      <p class="hint" style="margin:0 0 10px">To ${esc(p.email)} · from DU Buddy</p>${m?`<iframe class="mailframe" srcdoc="${esc(m.html)}"></iframe>`:`<p class="hint">Preview isn't available.</p>`}`, true);
+    $("#xClose").onclick=closeDrawer; });
+  const send=async(mode, extra)=>{
+    try{ const r=await OPT.supa.rpc("social_okr_send_now", Object.assign({ p_team:OPT.team, p_email:p.email, p_mode:mode, p_from:R.from, p_to:R.asOf, p_subject:null, p_message:null, p_with_status:true }, extra||{}));
+      if(r.error) throw r.error; toast("Sent to "+p.email); return true; }
+    catch(e){ toast("Couldn't send: "+((e&&e.message)||"try again")); return false; } };
+  P.querySelectorAll("[data-okrsend]").forEach(b=>b.onclick=async()=>{ const mode=b.dataset.okrsend;
+    if(!confirm(`Send ${personName(p)} the ${mode==="mid"?"status":"summary"} email for ${R.label} now?`)) return; b.disabled=true; await send(mode); b.disabled=false; });
+  const ms=$("#okrMsgSend"); if(ms) ms.onclick=async()=>{ const msg=$("#okrMsg").value.trim(); if(!msg){ toast("Write a message first"); return; }
+    ms.disabled=true; if(await send("note",{ p_subject:$("#okrMsgSub").value.trim()||null, p_message:msg, p_with_status:$("#okrMsgStatus").checked })){ $("#okrMsg").value=""; $("#okrMsgSub").value=""; } ms.disabled=false; };
+  if(OKR_EDIT){
+    const box=P.querySelector(".okr-edit"), redraw=()=>{ readOkrEditor(p); renderOkrs(); };
+    box.querySelectorAll("[data-krtype]").forEach(s=>s.onchange=redraw);
+    box.querySelectorAll("[data-kradd]").forEach(b=>b.onclick=()=>{ readOkrEditor(p); p.objectives[Number(b.dataset.kradd)].krs.push({ id:uid("kr"), title:"", type:"ideas", cat:"helpful", plat:"", pl:"", vtype:"", target:null, period:"month", log:{} }); renderOkrs(); });
+    box.querySelectorAll("[data-krdel]").forEach(b=>b.onclick=()=>{ readOkrEditor(p); const [oi,ki]=b.dataset.krdel.split(":").map(Number); p.objectives[oi].krs.splice(ki,1); renderOkrs(); });
+    box.querySelectorAll("[data-obdel]").forEach(b=>b.onclick=()=>{ if(!confirm("Remove this objective and its key results?")) return; readOkrEditor(p); p.objectives.splice(Number(b.dataset.obdel),1); renderOkrs(); });
+    box.querySelector("#obAdd").onclick=()=>{ readOkrEditor(p); p.objectives.push({ id:uid("ob"), title:"", pl:"", total:null, krs:[] }); renderOkrs(); };
+    box.querySelector("#okrSave").onclick=()=>{ readOkrEditor(p); saveOkrPeople(); OKR_EDIT=false; renderOkrs(); toast("Objectives saved"); };
+    box.querySelector("#okrDel").onclick=()=>{ if(!confirm(`Remove ${personName(p)}'s individual OKRs?`)) return; TG.people=TG.people.filter(x=>x.email!==p.email); OKR_WHO=""; OKR_EDIT=false; saveOkrPeople(); renderOkrs(); };
+  }
+}
+function saveOkrPeople(){ if(OPT.saveTargets){ const t=normTargets(TG); OPT.saveTargets(SPACE, t); TG_KEY=canonJSON(t); TG.people=t.people; } }
+
 /* ------------------------------------------------------------ Keep an Eye on 2nd Love */
 /* 1st love is our users, 2nd love is our competitors: their accounts, their numbers week
    by week, a fixed study of what works for them, and "Try this" straight into Ideation. */
@@ -4024,11 +4297,12 @@ function openRivalLog(id){
 }
 
 /* ------------------------------------------------------------ mount */
-const PANES=["targets","summary","ideation","process","schedule","rivals"];
+// "targets" (🤝 Our agreement) is no longer a tab: its saved targets still drive the Summary; people's goals live in 🎯 Individual OKRs
+const PANES=["summary","okrs","ideation","process","schedule","rivals"];
 function refresh(){
   if(!R || !S) return;
   PANES.forEach(p=>{ const el=$("#pane-"+p); if(el) el.hidden = p!==TAB; });
-  ({targets:renderTargets,summary:renderSummary,ideation:renderIdeation,process:renderProcess,schedule:renderSchedule,rivals:renderRivals})[TAB]();
+  ({targets:renderTargets,summary:renderSummary,okrs:renderOkrs,ideation:renderIdeation,process:renderProcess,schedule:renderSchedule,rivals:renderRivals})[TAB]();
 }
 function mount(){
   if(HOST) return;
@@ -4046,7 +4320,7 @@ window.SX = {
   openState: ()=>OPEN,
   reopen: o=>{ if(!o||!R) return; if(o.kind==="card"&&CARDS.some(c=>c.id===o.id)) openCard(o.id); else if(o.kind==="idea"&&IDEAS.some(i=>i.id===o.id)) openIdea(o.id); },
   normalize: normalize,
-  tabs: [["targets","Our agreement"],["summary","Summary"],["ideation","Ideation"],["process","Content Process"],["schedule","Schedule"],["rivals","Keep an Eye on 2nd Love"]],
+  tabs: [["summary","Summary"],["okrs","Individual OKRs"],["ideation","Ideation"],["process","Content Process"],["schedule","Schedule"],["rivals","Keep an Eye on 2nd Love"]],
   /* draw the space. opt: {tab, team, supa, canEdit(), isMember(), me(), people(), save(),
        targets(space), canEditTargets(), saveTargets(space, obj), canDeleteCards()} */
   render: function(space, wrap, opt){
