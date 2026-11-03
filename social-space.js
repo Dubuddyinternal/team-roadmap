@@ -167,6 +167,14 @@ table.mini th{padding:8px 10px}
 .okr2-m{position:relative}.okr2-m u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink-2);border-radius:2px}
 .fmtnums>.na{opacity:.6}
 .pquick{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.ktag{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:600;padding:2.5px 7px;border-radius:5px;white-space:nowrap;margin:1px 4px 1px 0;
+  background:color-mix(in srgb,var(--kc) 14%,transparent);color:var(--kc);border:1px solid color-mix(in srgb,var(--kc) 30%,transparent)}
+.ktag.faded{opacity:.55}
+.ktags{display:inline-flex;flex-wrap:wrap;gap:2px}
+.evt .ktags{display:flex;margin-top:3px}.evt .ktag{font-size:9px;padding:1px 4px}
+.publink .pl-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line)}
+.publink .pl-row:first-of-type{border-top:none}
+.publink .pl-url{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;color:var(--ink-2)}
 .hbar .hl .tag{font-size:9.5px;padding:1.5px 6px;margin-right:2px}
 .dblock.tagged .hbar{grid-template-columns:minmax(120px,260px) 1fr auto}
 .okr-lite .okr-v{margin:4px 0 10px}.okr-lite .okr-foot{margin-top:8px}.stalec{color:var(--crit)}
@@ -603,7 +611,7 @@ details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var
 /* ------------------------------------------------------------ fixed lists */
 const DEFAULT_REG = {
   platform: { ig:"Instagram", yt:"YouTube" },
-  vtype:    { reel:"Reel", long:"Long video", short:"Short", carousel:"Carousel", live:"Live", image:"Image" },
+  vtype:    { reel:"Reel", long:"Long video", short:"Short", carousel:"Carousel", live:"Live", image:"Image", story:"Story" },
   source:   { keyword:"Keyword research", comment:"Student comment", trend:"Trend", product:"Product" },
   tool:     { vidiq:"vidIQ", trends:"Google Trends", suggest:"YouTube suggest", ahrefs:"Ahrefs", manual:"Manual / none" }
 };
@@ -617,6 +625,10 @@ const DEFAULT_FORMATS = [
     hint:"A full YouTube video (or a live stream). YouTube only." },
   { key:"post", name:"Post", icon:"🖼️", plats:["yt","ig"], defPlats:["ig"], vtypes:["image","carousel"], video:false, claude:false,
     hint:"An image or carousel — an Instagram post or a YouTube community post." },
+  { key:"story", name:"Story", icon:"⏳", plats:["ig"], defPlats:["ig"], vtypes:["story"], video:true, claude:false,
+    hint:"An Instagram story. Instagram doesn't share stories after 24 hours, so this card is the record of it." },
+  { key:"live", name:"Live session", icon:"🔴", plats:["yt","ig"], defPlats:["yt"], vtypes:["live"], video:true, claude:false, live:true,
+    hint:"A YouTube or Instagram live session." },
 ];
 let FORMATS=DEFAULT_FORMATS;
 const fmtOf = x => FORMATS.find(f=>f.key===(x&&x.format)) || FORMATS[0];
@@ -794,7 +806,7 @@ function hue(name){ let h=0; for(const ch of String(name)) h=(h*31+ch.charCodeAt
 function avatar(name){ const n=String(name||"?").trim()||"?";
   return `<span class="av" style="background:hsl(${hue(n)} 48% 42%)">${esc(n[0].toUpperCase())}</span>`; }
 const who = n => `<span class="who">${avatar(n)}${esc(n||"—")}</span>`;
-const VBASE = {reel:"var(--c1)",long:"var(--c2)",short:"var(--c3)",carousel:"var(--c4)",live:"var(--crit)",image:"var(--good)"};
+const VBASE = {reel:"var(--c1)",long:"var(--c2)",short:"var(--c3)",carousel:"var(--c4)",live:"var(--crit)",image:"var(--good)",story:"#B3417A"};
 function vtypeColor(k){ return VBASE[k] || ["var(--c2)","var(--c4)","var(--c1)","var(--c3)"][hue(k)%4]; }
 const regLabel = (kind,k) => REG[kind][k] || "";
 const vtypeLabel = k => regLabel("vtype",k) || k;
@@ -810,6 +822,19 @@ const ptags = x => plats(x).map(ptag).join("");
 // "short" on a card going to both = one vertical video, posted as a Short and as a Reel
 const vtagFor = x => both(x) && (x.vtype==="short"||x.vtype==="reel")
   ? `<span class="tag" style="background:color-mix(in srgb,${vtypeColor("short")} 15%,transparent);color:${vtypeColor("short")}">short + reel</span>` : vtag(x.vtype);
+/* Category tags: one per platform the post went to, named the way the team says it —
+   YT Short, YT Long video, YT Live, YT Community post, Insta Reel, Insta Post, Insta Story, Insta Live.
+   A vertical video posted on both gets two: YT Short + Insta Reel. */
+function kindOf(pl, vt){
+  const vert = vt==="short"||vt==="reel", post = vt==="image"||vt==="carousel";
+  if(pl==="yt") return vert?"YT Short":vt==="long"?"YT Long video":vt==="live"?"YT Live":post||vt==="community"?"YT Community post":"YT "+vtypeLabel(vt);
+  if(pl==="ig") return vert?"Insta Reel":post?"Insta Post":vt==="story"?"Insta Story":vt==="live"?"Insta Live":"Insta "+vtypeLabel(vt);
+  return platShort(pl)+" "+vtypeLabel(vt);
+}
+function kindColor(pl, vt){ const post=vt==="image"||vt==="carousel"; return vt==="live"?"var(--crit)":vt==="story"?VBASE.story:post?(pl==="yt"?"var(--c4)":"var(--good)")
+  : vt==="long"?"var(--c2)":pl==="yt"?"var(--c1)":"var(--c3)"; }
+const ktag = (pl, vt, faded) => `<span class="ktag ${faded?"faded":""}" style="--kc:${kindColor(pl,vt)}">${esc(kindOf(pl,vt))}</span>`;
+const ktags = x => plats(x).map(pl=>ktag(pl, x.vtype)).join("");
 // which video types make sense for the chosen platforms (a type tied to one platform only shows for it)
 function vtypeOptions(pl,fmt){
   if(fmt && (fmt.vtypes||[]).length){   // the type decides; on two platforms a Short and a Reel are the same vertical video
@@ -1087,7 +1112,7 @@ function postRows(){
 // Summary platform switch: "all" | "yt" | "ig" — scopes the whole Summary
 let PLATVIEW = "all";
 const platOK = x => PLATVIEW==="all" || x.platform===PLATVIEW;
-const TYPE_PLAT = { long:"yt", short:"yt", live:"yt", reel:"ig", carousel:"ig", image:"ig" };
+const TYPE_PLAT = { long:"yt", short:"yt", reel:"ig", carousel:"ig", image:"ig", story:"ig" };
 const typeVisible = k => PLATVIEW==="all" || !TYPE_PLAT[k] || TYPE_PLAT[k]===PLATVIEW;
 const inF = r => FILTERS.vtypes.includes(r.vtype) && FILTERS.platforms.includes(r.platform) && platOK(r);
 function publishedInPeriod(){ return postRows().filter(r=>inPeriod(r.date) && inF(r)).sort((a,b)=>b.date.localeCompare(a.date)); }
@@ -1720,7 +1745,7 @@ function postsSection(){
         ${ed?`<td><input type="checkbox" class="ck" data-sel="${esc(r.key)}" ${SEL.has(r.key)?"checked":""}></td>`:""}
         <td class="td-idea"><div class="row" style="gap:9px;flex-wrap:nowrap">${r.thumb?`<img class="thumb" src="${esc(r.thumb)}" alt="" loading="lazy">`:""}
           <span>${r.url?`<a href="${esc(r.url)}" target="_blank" rel="noopener" data-ext="1">${esc(r.title)}</a>`:esc(r.title)}</span></div></td>
-        <td>${ptag(r.platform)}</td><td>${vtag(r.vtype)}</td>
+        <td>${ptag(r.platform)}</td><td><span class="ktags">${ktag(r.platform,r.vtype)}${c&&plats(c).length>1?plats(c).filter(pl=>pl!==r.platform).map(pl=>ktag(pl,c.vtype,1)).join(""):""}</span></td>
         <td class="vol">${p?esc(p.kw):"—"}${p&&p.vol!=null?`<small>${fmt(p.vol)}/mo</small>`:""}</td>
         <td class="vol">${dmy(r.date)}${r.at?`<small>${new Date(r.at).toLocaleTimeString("en-IN",{hour:"numeric",minute:"2-digit"})}</small>`:""}</td>
         <td class="vol">${r.dur!=null?mmss(r.dur):"—"}</td>
@@ -2050,10 +2075,11 @@ function stackChart(bk, ser, w=520, h=190){
 }
 function typeSection(){
   const r=periodRange(), rows=postRows().filter(x=>inPeriod(x.date) && platOK(x)), yt=PLATVIEW!=="ig", ig=PLATVIEW!=="yt";
-  const T=[yt&&["long","Long videos",["long"],"yt"], yt&&["short","Shorts",["short"],"yt"], yt&&["live","Lives",["live"],"yt"],
-    ig&&["reel","Reels",["reel"],"ig"], ig&&["image","Images",["image","carousel"],"ig"]].filter(Boolean)
+  const T=[yt&&["long","YT Long videos",["long"],"yt"], yt&&["short","YT Shorts",["short"],"yt"], yt&&["live","YT Lives",["live"],"yt"], yt&&["community","YT Community posts",["image","carousel","community"],"yt"],
+    ig&&["reel","Insta Reels",["reel"],"ig"], ig&&["image","Insta Posts",["image","carousel"],"ig"], ig&&["story","Insta Stories",["story"],"ig"], ig&&["iglive","Insta Lives",["live"],"ig"]].filter(Boolean)
     .map(([k,l,ks,pl])=>{ const rs=rows.filter(x=>x.platform===pl&&ks.includes(x.vtype)); return { k, l, rs, n:rs.length, v:sum(rs,x=>x.views), color:vtypeColor(k) }; })
-    .filter(t=>t.k!=="live" || t.n);
+    .map(t=>Object.assign(t,{ color:kindColor(t.k==="iglive"?"ig":t.k==="community"?"yt":(TYPE_PLAT[t.k]||"yt"), t.k==="iglive"?"live":t.k==="community"?"image":t.k) }))
+    .filter(t=>["long","short","reel","image"].includes(t.k) || t.n);
   const tot=T.reduce((a,t)=>a+t.n,0), bk=buckets(r);
   return `<div class="chart-card"><div class="chart-head"><h4>Content type</h4><span class="hint">${esc(rangeText())}</span></div>
     <div class="fmtnums">${T.map(t=>`<div><span class="lbl"><i class="sq" style="background:${t.color}"></i>${t.l}</span><b>${fmt(t.n)}</b>
@@ -2062,7 +2088,7 @@ function typeSection(){
     ${tot?`<div class="sharebar">${T.map(t=>`<i style="width:${t.n/tot*100}%;background:${t.color}" data-tip="${esc(t.l)}: ${t.n} of ${tot} (${pct(t.n,tot)}%)"></i>`).join("")}</div>
       <p class="chart-sub" style="margin:6px 0 10px">${T.filter(t=>t.n).map(t=>`${pct(t.n,tot)}% ${t.l.toLowerCase()}`).join(" · ")} · ${bk.length&&bk[0].from===bk[0].to?"per day":days(r.from,r.to)>190?"per month":"per week"}</p>`:""}
     ${stackChart(bk, T.map(t=>({ label:t.l, color:t.color, count:b=>t.rs.filter(x=>x.date>=b.from&&x.date<=b.to).length })))}
-    <p class="hint" style="margin:6px 0 0">A Short is a YouTube video up to 3 minutes; anything longer is a long video.${ig?" Stories aren't counted: Instagram doesn't share them once they expire after 24 hours.":""}</p></div>`;
+    <p class="hint" style="margin:6px 0 0">A Short is a YouTube video up to 3 minutes; anything longer is a long video.${ig?" Stories, Instagram lives and community posts count from their cards (the platforms don't share them).":""}</p></div>`;
 }
 const PERSON_COLORS=["var(--c3)","var(--c1)","var(--c2)","var(--c4)","var(--good)","#B3417A","#3D6FB6","#7A6A55"];
 function ideasSection(vI){
@@ -2301,7 +2327,7 @@ function detailHTML(key){
     color:k==="accepted"?"var(--good)":k==="rejected"?"var(--crit)":k==="under_review"?"var(--warn)":"var(--ink-3)"}));
   const ideaRow=i=>{ const c=vC.find(x=>x.ideaId===i.id);
     return `<tr ${c?`data-card="${c.id}" style="cursor:pointer"`:""}><td class="td-idea">${esc(i.idea)}</td><td>${who(i.by)}</td><td class="vol">${dmy(i.created)}</td>
-      <td>${ptags(i)} ${vtagFor(i)}</td><td><span class="badge ${STATUS_UI[i.status].cls||"mute"}">${STATUS_UI[i.status].label}</span></td>
+      <td>${ktags(i)}</td><td><span class="badge ${STATUS_UI[i.status].cls||"mute"}">${STATUS_UI[i.status].label}</span></td>
       <td>${c?`<span class="badge mute">${esc(STAGES.find(s=>s.id===c.stage).label)}</span>`:"—"}</td></tr>`; };
 
   if(key==="ideas"){
@@ -2346,7 +2372,7 @@ function detailHTML(key){
           ["Fastest",done.length?done[done.length-1].d+" d":"—",done.length?cardTitle(done[done.length-1].c):""],["Slowest",done.length?done[0].d+" d":"—",done.length?cardTitle(done[0].c):""]])
       + `<div class="dgrid">${hbars("Average days by video type",g.map(x=>({label:x.label,v:avg(x.list,y=>y.d),color:x.color,text:r1(avg(x.list,y=>y.d))+" d"})))}</div>`
       + dtable("Each published card",["Card","Type","Accepted","Published","Days"],done.map(x=>`<tr data-card="${x.c.id}" style="cursor:pointer"><td class="td-idea">${cardTitle(x.c)}</td>
-          <td>${ptags(x.c)} ${vtagFor(x.c)}</td><td class="vol">${dmy(x.c.acceptedOn)}</td><td class="vol">${dmy(x.c.published)}</td><td class="vol">${x.d}</td></tr>`),
+          <td>${ktags(x.c)}</td><td class="vol">${dmy(x.c.acceptedOn)}</td><td class="vol">${dmy(x.c.published)}</td><td class="vol">${x.d}</td></tr>`),
           "No published cards yet. Cards count here once they are moved to Published.");
   }
 
@@ -2356,7 +2382,7 @@ function detailHTML(key){
     return head(`${pct(on,rows.length)}% shipped on the scheduled date`,`${rows.length} published card${rows.length===1?"":"s"}`)
       + dstats([["On time",on,""],["Late",late,late?`avg ${r1(avg(rows.filter(x=>x.diff>0),x=>x.diff))} days late`:""],["Early",early,""],["No date set",none,"never scheduled"]])
       + dtable("Scheduled vs published",["Card","Type","Scheduled","Published","Result"],rows.sort((a,b)=>(b.diff??-99)-(a.diff??-99)).map(x=>`<tr data-card="${x.c.id}" style="cursor:pointer">
-          <td class="td-idea">${cardTitle(x.c)}</td><td>${ptags(x.c)} ${vtagFor(x.c)}</td><td class="vol">${dmy(x.c.scheduled)}</td><td class="vol">${dmy(x.c.published)}</td>
+          <td class="td-idea">${cardTitle(x.c)}</td><td>${ktags(x.c)}</td><td class="vol">${dmy(x.c.scheduled)}</td><td class="vol">${dmy(x.c.published)}</td>
           <td>${x.diff==null?`<span class="badge mute">no date</span>`:x.diff===0?`<span class="badge good">on time</span>`:x.diff>0?`<span class="badge crit">${x.diff} d late</span>`:`<span class="badge warn">${-x.diff} d early</span>`}</td></tr>`),
           "No published cards yet.");
   }
@@ -2385,7 +2411,7 @@ function detailHTML(key){
       + `<div class="dgrid">${hbars("Waiting, by video type",TYPES().map(k=>({label:vtypeLabel(k),v:todo.filter(x=>x.c.vtype===k).length,color:vtypeColor(k)})).filter(x=>x.v))}
          ${hbars("Waiting, by platform",PLATS().map(k=>({label:regLabel("platform",k),v:todo.filter(x=>x.c.platform===k).length,color:platColor(k)})).filter(x=>x.v))}</div>`
       + dtable("Cards in Ideas",["Card","Type","Waiting","Research"],todo.map(x=>`<tr data-card="${x.c.id}" style="cursor:pointer"><td class="td-idea">${cardTitle(x.c)}</td>
-          <td>${ptags(x.c)} ${vtagFor(x.c)}</td><td class="vol">${x.age!=null?x.age+" days":"—"}</td>
+          <td>${ktags(x.c)}</td><td class="vol">${x.age!=null?x.age+" days":"—"}</td>
           <td>${gatePass(x.c,"research")?`<span class="badge good">ready</span>`:`<span class="badge warn">not done</span>`}</td></tr>`),"Nothing waiting.");
   }
   return head("Details","")+`<p class="hint">No details for this box.</p>`;
@@ -2565,7 +2591,7 @@ function renderIdeation(){
     return `<tr class="rowlink" data-open="${i.id}" title="Open this idea">
       <td class="td-idea">${fmtIcon(i)} ${esc(i.idea)}${i.title?`<div class="sub">${esc(i.title)}</div>`:""}</td>
       <td>${who(i.by)}<div class="sub vol">${dmy(i.created)}</div></td>
-      <td>${ptags(i)} ${vtagFor(i)}</td>
+      <td>${ktags(i)}</td>
       <td>${decide}${sec==="open"&&i.status==="under_review"?`<div class="sub">under review</div>`:""}</td>
       <td><button class="cbtn ${i.comments.length?"has":""}" data-cmt="${i.id}">💬 ${i.comments.length||""}</button></td></tr>`; };
 
@@ -2628,7 +2654,7 @@ function renderProcess(){
       ${items.map(c=>{ const lp=livePost(c); return `<div class="kcard ${ro?"ro":""} ${c.priority==="high"?"hot":""}" draggable="${ro?"false":"true"}" data-card="${c.id}">
         ${c.priority==="high"?`<div class="hotbar">🔔 High priority${c.fromCampaign?` · from ${esc(c.fromCampaign)}`:""}</div>`:""}
         <h5>${fmtIcon(c)} ${esc(c.pre.title||c.idea)}</h5>
-        <div class="meta">${ptags(c)}${vtagFor(c)}
+        <div class="meta">${ktags(c)}
           ${c.override?`<span class="badge crit">override</span>`:""}
           ${c.scheduled?`<span class="chip">${dmy(c.scheduled)}</span>`:""}
           ${lp?`<span class="badge good">${kfmt(lp.views)} views</span>`:""}
@@ -2647,10 +2673,11 @@ function renderProcess(){
     <div class="sec"><div class="sec-h"><h3>Content Process</h3>
       <span class="hint">${BC.length} card${BC.length===1?"":"s"} · ${ro?"click a card to open it":"drag cards between columns, or click one to open it"}</span>
       <span style="margin-left:auto;display:flex;gap:8px">${S.bin.length&&canDeleteCards()?`<button class="btn" id="openBin">🗑 Recycle bin (${S.bin.length})</button>`:""}
-      ${ro?"":`<button class="btn pri" id="newCard">+ New card</button>`}</span></div>
+      ${ro?"":`<button class="btn" id="rebuildCards" title="Make a card for every published post that has none">🔁 Cards from published posts</button><button class="btn pri" id="newCard">+ New card</button>`}</span></div>
       <div class="board">${cols}</div></div>`;
 
   const nc=$("#newCard"); if(nc) nc.onclick=()=>openCard(null);
+  const rb=$("#rebuildCards"); if(rb) rb.onclick=()=>openRebuild();
   const ob=$("#openBin"); if(ob) ob.onclick=()=>openBin();
   const P=$("#pane-process");
   P.querySelectorAll(".kcard").forEach(el=>{
@@ -2726,7 +2753,7 @@ function renderSchedule(){
       cells+=`<div class="wday ${key===TODAY?"today":""}" data-date="${key}">
         <div class="wh"><span class="lbl">${d.toLocaleDateString("en-GB",{weekday:"short"})}</span><b>${d.getDate()}</b></div>
         ${evts.map(c=>`<button class="wevt" style="border-left-color:${vtypeColor(c.vtype)}" data-card="${c.id}" ${dragAttr(c)}>
-          <h6>${esc(c.pre.title||c.idea)}</h6><div class="meta">${ptags(c)}${vtagFor(c)}</div></button>`).join("")
+          <h6>${esc(c.pre.title||c.idea)}</h6><div class="meta">${ktags(c)}</div></button>`).join("")
           ||`<span class="hint" style="font-size:11px">—</span>`}</div>`; }
     grid=`<div style="overflow-x:auto"><div class="weekgrid">${cells}</div></div>`;
   } else {
@@ -2742,7 +2769,7 @@ function renderSchedule(){
       for(let dd=1;dd<=dim;dd++){ const key=iso(new Date(y,m,dd)); const evts=all.filter(c=>c.scheduled===key);
         cells+=`<div class="day ${key===TODAY?"today":""}" data-date="${key}"><span class="dn">${dd}</span>
           ${evts.map(c=>`<button class="evt" style="border-left-color:${vtypeColor(c.vtype)}" data-card="${c.id}" ${dragAttr(c)}>
-            <b>${esc(c.pre.title||c.idea)}</b>${esc(platShort(c.platform))} · ${esc(vtypeLabel(c.vtype))}</button>`).join("")}</div>`; }
+            <b>${esc(c.pre.title||c.idea)}</b><span class="ktags">${ktags(c)}</span></button>`).join("")}</div>`; }
       return `<h4 class="cal-month" style="margin:${k?"22px":"4px"} 0 8px">${mname(md)}</h4>
         <div style="overflow-x:auto"><div class="cal">
         ${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=>`<div class="dow">${d}</div>`).join("")}${cells}</div></div>`; }).join("");
@@ -3196,6 +3223,71 @@ function applyResearch(pre,r){   // pre = a card's .pre, or an idea (same field 
 }
 
 /* ---- card drawer ---- */
+/* ------------------------------------------------------------ 🔁 CARDS FROM PUBLISHED POSTS
+   Every synced post between two dates that has no card gets one: title, platform, type, publish date
+   (so it sits on the Schedule calendar) and its live link. A YouTube Short and an Instagram Reel posted
+   within 45 minutes of each other are the same vertical video, so they share one card (YT Short + Insta Reel). */
+const REB = { from:"2026-10-01", to:"" };
+const cleanTitle = t => String(t||"").replace(/\s*#[\p{L}\p{N}_]+/gu,"").replace(/\s{2,}/g," ").trim();
+function rebuildPlan(from, to){
+  const rows=postRows().filter(r=>r.live && r.date && r.date>=from && r.date<=to && !r.card).sort((a,b)=>(a.at||"").localeCompare(b.at||""));
+  const used=new Set(), plan=[];
+  rows.forEach(r=>{ if(used.has(r.key)) return; used.add(r.key);
+    let twin=null;
+    if((r.platform==="yt"&&r.vtype==="short") || (r.platform==="ig"&&r.vtype==="reel")){
+      const want=r.platform==="yt"?"ig":"yt", wt=r.platform==="yt"?"reel":"short";
+      twin=rows.filter(x=>!used.has(x.key) && x.platform===want && x.vtype===wt && x.at && r.at && Math.abs(new Date(x.at)-new Date(r.at))<=45*60000)
+        .sort((a,b)=>Math.abs(new Date(a.at)-new Date(r.at))-Math.abs(new Date(b.at)-new Date(r.at)))[0]||null;
+      if(twin) used.add(twin.key);
+    }
+    const yt=[r,twin].find(x=>x&&x.platform==="yt"), ig=[r,twin].find(x=>x&&x.platform==="ig");
+    const first=yt||r, vt=twin?"short":r.vtype;
+    plan.push({ rows:[r,twin].filter(Boolean), platforms:twin?["yt","ig"]:[r.platform], vtype:vt,
+      title:cleanTitle(first.title)||first.title||"(no title)", igCaption:twin&&ig?ig.title:"", date:[r,twin].filter(Boolean).map(x=>x.date).sort()[0],
+      time:first.at?new Date(first.at).toTimeString().slice(0,5):"", links:Object.fromEntries([r,twin].filter(Boolean).map(x=>[x.platform,x.url])) });
+  });
+  return plan;
+}
+function cardFromPlan(p){
+  const fmt=p.vtype==="live"?"live":p.vtype==="long"?"long":p.vtype==="image"||p.vtype==="carousel"?"post":p.vtype==="story"?"story":"short";
+  return blankCard({ idea:p.title, platform:p.platforms[0], platforms:p.platforms, vtype:p.vtype, format:fmt, stage:"published",
+    pre:{source:"",tool:"",keywords:[],why:"",title:p.title,desc:"",hashtags:""},
+    post:{reel:null,thumb:null,postUrl:p.links[p.platforms[0]]||"",links:p.links},
+    scheduled:p.date, published:p.date, time:p.time, acceptedOn:p.date, rebuilt:today(),
+    extra:p.igCaption?[{label:"Instagram caption",value:p.igCaption}]:[] });
+}
+function openRebuild(){
+  if(!REB.to) REB.to=today();
+  const plan=rebuildPlan(REB.from, REB.to), n=plan.length;
+  const cnt=k=>plan.reduce((a,p)=>a+p.platforms.filter(pl=>kindOf(pl,p.vtype)===k).length,0);
+  const kinds=[...new Set(plan.flatMap(p=>p.platforms.map(pl=>kindOf(pl,p.vtype))))];
+  openDrawer(`<div class="dr-h"><div><div class="lbl">Content Process</div><h3 style="margin-top:4px">Cards from published posts</h3></div><button class="btn sm" id="xClose">Close</button></div>
+    <p class="hint" style="margin:0 0 12px">Every post YouTube and Instagram synced between these dates that has no card yet gets one, in <b>Live</b>, on its publish date in the Schedule,
+      with its 🔗 published link. A Short and a Reel posted within 45 minutes of each other share one card. Video files can't be brought back, only the cards.</p>
+    <div class="row" style="margin-bottom:12px"><label class="dfield"><span>From</span><input type="date" id="rbFrom" value="${REB.from}" max="${today()}"></label>
+      <span class="hint">→</span><label class="dfield"><span>To</span><input type="date" id="rbTo" value="${REB.to}" max="${today()}"></label>
+      <button class="btn sm" id="rbGo">Show</button></div>
+    ${dstats([["Cards",n,`for ${plan.reduce((a,p)=>a+p.rows.length,0)} posts`],["On both",plan.filter(p=>p.platforms.length>1).length,"YT Short + Insta Reel"],
+      ...kinds.map(k=>[k,cnt(k),""])])}
+    <div class="block" style="padding:0;overflow:hidden"><table class="mini" style="min-width:0"><thead><tr><th>Card title</th><th>Tags</th><th>Date</th><th>Links</th></tr></thead><tbody>
+      ${plan.map(p=>`<tr><td class="td-idea">${esc(p.title)}${p.igCaption?`<div class="hint">Insta: ${esc(p.igCaption.slice(0,90))}</div>`:""}</td>
+        <td><span class="ktags">${p.platforms.map(pl=>ktag(pl,p.vtype)).join("")}</span></td><td class="vol">${dmy(p.date)}${p.time?`<div class="hint">${p.time}</div>`:""}</td>
+        <td>${Object.entries(p.links).map(([pl,u])=>`<a href="${esc(u)}" target="_blank" rel="noopener">${pl==="yt"?"YouTube":"Instagram"} ↗</a>`).join("<br>")}</td></tr>`).join("")
+        ||`<tr><td colspan="4" class="hint">Every post in these dates already has a card.</td></tr>`}</tbody></table></div>
+    ${n&&canEdit()?`<button class="btn pri" id="rbMake" style="margin-top:14px">Create ${n} card${n===1?"":"s"}</button>`:""}`, true);
+  $("#xClose").onclick=closeDrawer;
+  $("#rbGo").onclick=()=>{ REB.from=$("#rbFrom").value||REB.from; REB.to=$("#rbTo").value||REB.to; if(REB.from>REB.to) [REB.from,REB.to]=[REB.to,REB.from]; openRebuild(); };
+  const mk=$("#rbMake"); if(mk) mk.onclick=()=>{ if(!confirm(`Create ${n} cards in Content Process → Live?`)) return;
+    plan.forEach(p=>CARDS.push(cardFromPlan(p))); if(save()){ toast(`${n} cards created in Live`); closeDrawer(true); refresh(); } };
+}
+// the live post(s) a card became: one line per platform, with its tag and an Open button
+function pubLinkHtml(c){
+  const rows=plats(c).map(pl=>({pl, url:linkOf(c,pl)})).filter(x=>x.url);
+  if(!rows.length) return "";
+  return `<div class="block publink"><div class="block-h"><h4>🔗 Published link</h4><span class="hint">${c.published?"went live "+dmy(c.published):""}</span></div>
+    ${rows.map(x=>`<div class="pl-row">${ktag(x.pl,c.vtype)}<a href="${esc(x.url)}" target="_blank" rel="noopener" class="pl-url">${esc(x.url.replace(/^https?:\/\/(www\.)?/,""))}</a>
+      <a class="btn sm" href="${esc(x.url)}" target="_blank" rel="noopener">Open ↗</a></div>`).join("")}</div>`;
+}
 function openCard(id,showGate){
   if(id) setTimeout(()=>{ OPEN={kind:"card",id}; });
   const isNew=!id;
@@ -3464,7 +3556,7 @@ function openCard(id,showGate){
       <h3 style="margin-top:4px">${isNew?"New card":esc(c.pre.title||c.idea)}</h3>
       ${isNew?"":`<div class="stgs">${STAGES.map((st,k)=>`<span class="stg ${k<idx?"done":k===idx?"now":""}"><i>${k<idx?"✓":k+1}</i>${st.label}</span>`).join("")}</div>`}</div>
       <button class="btn sm" id="xClose">Close</button></div>
-    <div class="cv"><div class="cv-main">${stepsHtml}${isNew?"":`<div data-cmthost></div>`}</div>${sideHtml}</div>
+    <div class="cv"><div class="cv-main">${stepsHtml}${pubLinkHtml(c)}${isNew?"":`<div data-cmthost></div>`}</div>${sideHtml}</div>
     <div class="row dr-foot">
       <button class="btn pri" id="saveCard" data-w="1">${isNew?"Create card":"Save changes"}</button>
       <button class="btn" id="xClose2">${canEdit()?"Cancel":"Close"}</button>
