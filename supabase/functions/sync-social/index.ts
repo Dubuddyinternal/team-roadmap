@@ -18,6 +18,7 @@
 //   pages_show_list, pages_read_engagement, business_management.
 //   IG_USER_ID (optional) — the Instagram business account id, if the token
 //   can see more than one.
+//   YT_CHANNEL_ID — the DU Buddy channel id (UC…). Any other channel is refused.
 //
 // HOW TO DEPLOY: name it exactly  sync-social , "Verify JWT" OFF (this code
 // checks the caller itself, like manage-people).
@@ -92,6 +93,13 @@ async function syncYouTube(admin, team, cfg) {
   const stats = channel.statistics;
   const today = new Date();
 
+  // Only ever sync the DU Buddy channel. YT_CHANNEL_ID (Secrets) pins it: a token made with any other
+  // channel stops here and deletes nothing. (On 3 Nov a token made with "Dubuddy Internal" wiped the
+  // main channel's posts and history through the branch below.)
+  const pinned = Deno.env.get("YT_CHANNEL_ID");
+  if (pinned && channel.id !== pinned) {
+    throw new Error(`Signed in to the wrong YouTube channel ("${channel.snippet.title}", ${num(stats.subscriberCount)} subscribers). Make the token again and pick the DU Buddy channel. Nothing was changed.`);
+  }
   // signed in to a different channel than last time: its old numbers don't belong here
   if (cfg.youtube_channel_id !== channel.id) {
     await admin.from("social_posts").delete().eq("team_slug", team).eq("platform", "youtube");
