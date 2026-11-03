@@ -14,7 +14,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Social Media space: Summary (live YouTube numbers) / Ideation / Content Process / Schedule -->
 <script src="richtext.js"></script><!-- rich text + "Show all" in every multi-line text box (load before the spaces) -->
-<script src="social-space.js?v=20261104b"></script>
+<script src="okr-mail.js?v=20261104c"></script>
+<script src="social-space.js?v=20261104c"></script>
 <script src="pipeline.js"></script><!-- Claude edit & post panel on Content Process cards -->
 <script src="comments.js"></script><!-- 💬 comments + history at the bottom of every Social Media card and idea, with @tags by email -->
 <script src="hinglish.js"></script><script src="dictate.js"></script><!-- 🎤 dictation in every text box -->
@@ -20392,7 +20393,7 @@ function renderAll(){
           _host.appendChild(_dk); devSideTree(_dk, cs);
         }
         if(cs.type==="social" && view==="social" && activeCspace===cs.id){
-          [["targets","🤝 Our agreement"],["summary","📊 Summary"],["okrs","🎯 Individual OKRs"],["ideation","💡 Ideation"],["process","🎬 Content Process"],["schedule","🗓 Schedule"],["rivals","👀 Keep an Eye on 2nd Love"]].filter(([k])=> tabAllowed(cs, k)).forEach(([k,lbl])=>{
+          [["summary","📊 Summary"],["okrs","🎯 Individual OKRs"],["ideation","💡 Ideation"],["process","🎬 Content Process"],["schedule","🗓 Schedule"],["rivals","👀 Keep an Eye on 2nd Love"]].filter(([k])=> tabAllowed(cs, k)).forEach(([k,lbl])=>{
             const sub=document.createElement("button");
             const on = socialView===k;
             sub.className="ws-sub"+(on?" active":"");

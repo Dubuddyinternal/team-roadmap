@@ -1,16 +1,16 @@
 -- =====================================================================
 -- STAGE 23a — Individual OKR emails (Social Media → 🎯 Individual OKRs)
 --
--- Each person given monthly key results in a Social Media space (Shorts, Reels, long videos,
--- subscriber / follower totals) gets:
---   * on the 20th, 10:00 AM India time — a friendly reminder, only if a key result isn't reached yet;
---   * on the 1st, 10:00 AM India time — a summary of the month before: each target and what was done.
--- People who may edit social targets (and owners) can also send either one right away from the tab.
--- The emails are built by the "social-okr" Edge Function (Verify JWT OFF; it checks the same key as
--- social-weekly: feedback_cron.cron_key). Run after stage22c. Safe to run again.
+-- Everyone given objectives in a Social Media space gets, at their registered email:
+--   * on the 15th, 10:00 AM India time — their OKR status so far (each key result, target vs done);
+--   * on the month's last day, 6:00 PM India time — the month's summary.
+-- Both are friendly notes. Each can be turned off per person in the tab. Owners and people who may
+-- edit social targets can also send either one now, or ✍️ write their own mail, from the tab.
+-- Built by the "social-okr" Edge Function (Verify JWT OFF; same key as social-weekly:
+-- feedback_cron.cron_key). Run after stage22c. Safe to run again.
 -- =====================================================================
 
-create or replace function public.social_okr_post(p_team text, p_mode text, p_email text, p_month text) returns void
+create or replace function public.social_okr_post(p_body jsonb) returns void
 language plpgsql security definer set search_path = '' as $$
 declare k text;
 begin
@@ -18,29 +18,32 @@ begin
   perform net.http_post(
     url     := 'https://bzhnzrmnbphkcasvrsnc.supabase.co/functions/v1/social-okr',
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-key', k),
-    body    := jsonb_strip_nulls(jsonb_build_object('team', p_team, 'mode', p_mode, 'email', p_email, 'month', p_month, 'force', p_email is not null)),
+    body    := p_body,
     timeout_milliseconds := 120000);
 end $$;
 
 create or replace function public.social_okr_tick(p_mode text) returns void
-language sql security definer set search_path = '' as $$ select public.social_okr_post(null, p_mode, null, null) $$;
+language sql security definer set search_path = '' as $$ select public.social_okr_post(jsonb_build_object('mode', p_mode)) $$;
 
--- ✉️ Send … now, from the tab: owners, people who may edit social targets, super-admins
-create or replace function public.social_okr_send_now(p_team text, p_email text, p_mode text, p_month text) returns boolean
+-- the tab's "Send status now" / "Send summary now" / ✍️ Write a mail: owners, people who may edit social targets, super-admins
+create or replace function public.social_okr_send_now(p_team text, p_email text, p_mode text, p_from text, p_to text,
+  p_subject text, p_message text, p_with_status boolean) returns boolean
 language plpgsql security definer set search_path = '' as $$
 begin
   if not (public.is_super() or public.my_role(p_team) = 'owner' or public.has_perm(p_team, 'edit_targets')) then
     raise exception 'Only owners or people who edit social targets can send it.';
   end if;
-  if p_mode not in ('mid', 'end') then raise exception 'mode must be mid or end'; end if;
-  perform public.social_okr_post(p_team, p_mode, lower(p_email), p_month);
+  if p_mode not in ('mid', 'end', 'note') then raise exception 'mode must be mid, end or note'; end if;
+  if p_mode = 'note' and coalesce(trim(p_message), '') = '' then raise exception 'Write a message first.'; end if;
+  perform public.social_okr_post(jsonb_strip_nulls(jsonb_build_object('team', p_team, 'mode', p_mode, 'email', lower(p_email),
+    'from', p_from, 'to', p_to, 'subject', p_subject, 'message', left(p_message, 5000), 'withStatus', p_with_status)));
   return true;
 end $$;
 
-revoke execute on function public.social_okr_post(text, text, text, text), public.social_okr_tick(text) from public, anon, authenticated;
-revoke execute on function public.social_okr_send_now(text, text, text, text) from public, anon;
-grant execute on function public.social_okr_send_now(text, text, text, text) to authenticated;
+revoke execute on function public.social_okr_post(jsonb), public.social_okr_tick(text) from public, anon, authenticated;
+revoke execute on function public.social_okr_send_now(text, text, text, text, text, text, text, boolean) from public, anon;
+grant execute on function public.social_okr_send_now(text, text, text, text, text, text, text, boolean) to authenticated;
 
--- 04:30 UTC = 10:00 AM India time
-select cron.schedule('social-okr-mid', '30 4 20 * *', $$select public.social_okr_tick('mid')$$);
-select cron.schedule('social-okr-end', '30 4 1 * *', $$select public.social_okr_tick('end')$$);
+-- 04:30 UTC = 10:00 AM India time on the 15th; 12:30 UTC = 6:00 PM India time on the 28th–31st (the function sends only on the last day)
+select cron.schedule('social-okr-mid', '30 4 15 * *', $$select public.social_okr_tick('mid')$$);
+select cron.schedule('social-okr-end', '30 12 28-31 * *', $$select public.social_okr_tick('end')$$);
