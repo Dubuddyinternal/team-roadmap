@@ -137,6 +137,44 @@ table.mini th{padding:8px 10px}
 .geo-bar.on .hl{color:var(--ink);font-weight:600}
 .geo-note{font-size:12px;color:var(--ink-3);margin:10px 0 0;line-height:1.5}
 .platsw{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.sumbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(6px);padding:10px 0;margin:-10px 0 2px;border-bottom:1px solid var(--line)}
+.sumbar .platsw{margin:0;background:var(--surface-2);border-radius:999px;padding:3px;gap:2px}
+.sumbar .platsw button{border:none;background:none;padding:7px 14px;font-size:13px}
+.sumbar .platsw button.on{background:var(--ink);color:var(--bg)}
+.rangebar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rangebar select{border:1px solid var(--line-2);border-radius:999px;padding:7px 12px;background:var(--surface);font-size:13px;font-weight:600;color:var(--ink-2)}
+.dfield{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-2);border-radius:var(--r-s);padding:3px 4px 3px 9px;background:var(--surface)}
+.dfield span{font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3)}
+.dfield input{border:none;background:none;font-size:12.5px;padding:3px 2px;color:var(--ink)}
+.rangeline{font-size:12.5px;color:var(--ink-3);margin:10px 0 14px}.rangeline b{color:var(--ink)}
+.syncbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.syncbar .hint{flex:1;min-width:180px}
+.spill{display:inline-flex;align-items:center;gap:7px;font-size:12px;border:1px solid var(--line);border-radius:999px;padding:5px 11px;background:var(--surface);color:var(--ink-2)}
+.spill .sd{width:7px;height:7px;border-radius:50%;background:var(--ink-3)}
+.spill.ok .sd{background:var(--good)} .spill.bad{border-color:color-mix(in srgb,var(--crit) 35%,var(--line));background:var(--crit-soft)} .spill.bad .sd{background:var(--crit)}
+.syncbar+.apibar{margin-bottom:10px}
+.apibar code{font-family:var(--mono);font-size:11.5px;background:var(--surface);padding:1px 5px;border-radius:4px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;margin-bottom:26px}
+.kpi{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px 11px;min-width:0;overflow:hidden}
+.kpi>i{position:absolute;left:0;top:0;bottom:0;width:3px}
+.kpi b{display:block;font-size:24px;letter-spacing:-.025em;font-variant-numeric:tabular-nums;line-height:1.15;margin:3px 0 2px}
+.kpi small{display:block;font-size:11px;color:var(--ink-3);margin-top:3px;line-height:1.35}
+.dlt{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);font-weight:600}.dlt.up{color:var(--good)}.dlt.dn{color:var(--crit)}
+.charts.two{grid-template-columns:repeat(auto-fit,minmax(380px,1fr))}
+.fmtnums{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 12px}
+.fmtnums>div{flex:1;min-width:110px;background:var(--surface-4);border:1px solid var(--line);border-radius:var(--r-s);padding:9px 11px}
+.fmtnums b{display:block;font-size:26px;letter-spacing:-.025em;line-height:1.15;font-variant-numeric:tabular-nums}
+.fmtnums small{font-size:11px;color:var(--ink-3)}
+.sq{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;vertical-align:0}
+.sharebar{display:flex;height:9px;border-radius:99px;overflow:hidden;background:var(--surface-2);gap:2px}.sharebar i{display:block;height:100%}
+.pchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.pchips .chip{display:inline-flex;align-items:center}
+.pchips .chip.on{background:var(--ink);border-color:var(--ink)}
+.idlist{max-height:228px;overflow:auto;border:1px solid var(--line);border-radius:var(--r-s)}
+.idrow{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 11px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px}
+.idrow:last-child{border-bottom:none}.idrow:hover{background:var(--surface-4)}
+.idt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.idm{display:flex;gap:6px;align-items:center;flex-shrink:0;font-size:11.5px;color:var(--ink-3)}
+@media (max-width:640px){.charts.two{grid-template-columns:1fr}.sumbar #cmpOpen{margin-left:0!important;width:100%}.idm .who{display:none}}
 .platsw button{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line-2);background:var(--surface);border-radius:999px;padding:8px 16px;font-size:13.5px;font-weight:600;color:var(--ink-2)}
 .platsw button.on{background:var(--ink);border-color:var(--ink);color:var(--bg)}
 .platsw .hint{margin-left:8px}
@@ -696,7 +734,8 @@ function blankCard(o){ return Object.assign({ id:uid("c"), ideaId:null, idea:"",
 /* ------------------------------------------------------------ module state */
 let SPACE=null, S=null, IDEAS=[], CARDS=[], REG=DEFAULT_REG, HOST=null, R=null, OPT={};
 let TAB="summary", CHARTMODE="bar";
-const FILTERS = { period:"month", vtypes:null, platforms:null };
+const FILTERS = { period:"month", from:"", to:"", vtypes:null, platforms:null };
+let IDEA_WHO = "";   // Summary → Ideas submitted: one person, or "" for everyone
 /* filter chips folded away under one "🔎 Filters · … ▾" line (stays open once opened) */
 const FDROP_OPEN = {};
 function fdrop(key, label, inner){
@@ -704,7 +743,7 @@ function fdrop(key, label, inner){
 }
 function wireFdrop(root){ root.querySelectorAll("details.fdrop").forEach(d=>{ d.ontoggle=()=>{ FDROP_OPEN[d.dataset.fdrop]=d.open; }; }); }
 const SCHED = { view:"month", cursor:null, vtypes:null, platforms:null };
-const LIVE = { team:null, status:"idle", posts:[], snaps:[], geo:[], lastAt:null, err:"", syncing:false };
+const LIVE = { team:null, status:"idle", posts:[], snaps:[], geo:[], lastAt:null, lastBy:{}, since:null, err:"", syncing:false, result:null };
 
 /* ------------------------------------------------------------ helpers */
 const $ = s => R.querySelector(s);
@@ -878,7 +917,29 @@ function moveCard(c,to){ if(!canEdit()){ toast("You can view this space but not 
     if(!c.metrics) c.metrics={views:null,likes:null,comments:null,shares:null,watch:null,ctr:null}; }
   c.stage=to; save(); return true; }
 
-function periodStart(){ return addDays(today(), -(FILTERS.period==="week"?7:FILTERS.period==="month"?30:90)); }
+/* Summary date range. Presets count today as a day ("Last 7 days" = today and the 6 before it);
+   "custom" uses FILTERS.from / FILTERS.to, both inclusive. */
+const PERIODS = [["week","Last 7 days"],["month","Last 30 days"],["quarter","Last 90 days"],["thismonth","This month"],["lastmonth","Last month"],["custom","Custom range"]];
+function periodRange(){
+  const t=today(), d=new Date(t+"T00:00:00");
+  switch(FILTERS.period){
+    case "week": return { from:addDays(t,-6), to:t };
+    case "quarter": return { from:addDays(t,-89), to:t };
+    case "thismonth": return { from:iso(new Date(d.getFullYear(), d.getMonth(), 1)), to:t };
+    case "lastmonth": return { from:iso(new Date(d.getFullYear(), d.getMonth()-1, 1)), to:iso(new Date(d.getFullYear(), d.getMonth(), 0)) };
+    case "custom": { let f=FILTERS.from||addDays(t,-29), e=FILTERS.to||t; if(e>t) e=t; if(f>e) [f,e]=[e,f]; return { from:f, to:e }; }
+    default: return { from:addDays(t,-29), to:t };
+  }
+}
+function periodStart(){ return periodRange().from; }
+function periodEnd(){ return periodRange().to; }
+const inPeriod = d => { if(!d) return false; const r=periodRange(); return d>=r.from && d<=r.to; };
+const periodDays = () => { const r=periodRange(); return days(r.from, r.to)+1; };
+// the same number of days just before the range, for "vs previous period"
+function prevRange(){ const r=periodRange(), n=periodDays(); return { from:addDays(r.from,-n), to:addDays(r.from,-1) }; }
+const dmyY = s => s ? new Date(s+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}) : "—";
+function periodLabel(){ const p=PERIODS.find(x=>x[0]===FILTERS.period); return p && FILTERS.period!=="custom" ? p[1] : rangeText(); }
+function rangeText(r){ r=r||periodRange(); const y=r.from.slice(0,4)===r.to.slice(0,4); return (y?dmy(r.from):dmyY(r.from))+" – "+dmyY(r.to); }
 function toggle(a,v){ const i=a.indexOf(v); if(i<0)a.push(v); else if(a.length>1)a.splice(i,1); }
 
 /* --- growable select --- */
@@ -912,38 +973,54 @@ function cardForIg(url){ const k=igCode(url); return k ? CARDS.find(c=>plats(c).
 // Instagram counts as connected once the sync has brought anything back
 function igLive(){ return LIVE.snaps.some(r=>r.platform==="instagram") || LIVE.posts.some(p=>p.platform==="instagram"); }
 
+// Supabase hands back at most 1,000 rows per request, so read in pages until a short page comes back
+async function allRows(make, page=1000, max=20000){
+  const out=[];
+  for(let i=0;i<max;i+=page){ const r=await make().range(i, i+page-1); if(r.error) throw r.error; const d=r.data||[]; out.push(...d); if(d.length<page) break; }
+  return out;
+}
+// how far back the follower history has to go: 130 days, or further for an older custom range
+const liveSince = () => { const a=addDays(today(),-130), b=addDays(periodStart(),-8); return a<b?a:b; };
 async function loadLive(force){
   const team = OPT.team || "";
   if(!OPT.supa || !team){ LIVE.status="error"; LIVE.err="Not signed in"; return; }
-  if(!force && LIVE.team===team && (LIVE.status==="ok" || LIVE.status==="loading")) return;
+  const since = liveSince();
+  if(!force && LIVE.team===team && (LIVE.status==="ok" || LIVE.status==="loading") && LIVE.since && LIVE.since<=since) return;
   LIVE.team=team; LIVE.status="loading";
   try{
-    const since = addDays(today(), -130);
-    const [p, s] = await Promise.all([
-      OPT.supa.from("social_posts").select("platform,external_id,title,url,thumbnail,post_type,published_at,duration_s,views,likes,comments,shares,watch_minutes,avg_view_s,avg_view_pct,impressions,followers_gained,updated_at")
-        .eq("team_slug", team).order("published_at", {ascending:false}).limit(2000),
-      OPT.supa.from("social_snapshots").select("platform,day,followers,updated_at")
-        .eq("team_slug", team).gte("day", since).order("day", {ascending:true}).limit(2000)
+    const [posts, snaps] = await Promise.all([
+      allRows(()=>OPT.supa.from("social_posts").select("platform,external_id,title,url,thumbnail,post_type,published_at,duration_s,views,likes,comments,shares,watch_minutes,avg_view_s,avg_view_pct,impressions,followers_gained,updated_at")
+        .eq("team_slug", team).order("published_at", {ascending:false}).order("external_id", {ascending:true})),
+      allRows(()=>OPT.supa.from("social_snapshots").select("platform,day,followers,updated_at")
+        .eq("team_slug", team).gte("day", since).order("day", {ascending:true}).order("platform", {ascending:true}))
     ]);
-    if(p.error) throw p.error; if(s.error) throw s.error;
-    LIVE.posts = p.data || []; LIVE.snaps = s.data || [];
+    LIVE.posts = posts; LIVE.snaps = snaps; LIVE.since = since;
     // where the audience is (stage 9a); missing table = no location charts, nothing else breaks
     const g = await OPT.supa.from("social_geo").select("platform,kind,level,name,state,value,period,updated_at").eq("team_slug", team).limit(3000);
     LIVE.geo = g.error ? [] : (g.data || []);
-    LIVE.lastAt = LIVE.snaps.reduce((m,r)=>!m||r.updated_at>m?r.updated_at:m, null);
+    // when each platform last synced (YouTube and Instagram fail separately, so one can be fresh and the other stuck)
+    LIVE.lastBy = {};
+    LIVE.snaps.forEach(r=>{ const k=r.platform==="youtube"?"yt":r.platform==="instagram"?"ig":r.platform; if(r.followers!=null && (!LIVE.lastBy[k] || r.updated_at>LIVE.lastBy[k].at)) LIVE.lastBy[k]={ at:r.updated_at, day:r.day }; });
+    LIVE.lastAt = Object.values(LIVE.lastBy).reduce((m,x)=>!m||x.at>m?x.at:m, null);
     LIVE.status="ok"; LIVE.err="";
   }catch(e){ LIVE.status="error"; LIVE.err=(e && e.message) || "Could not load"; }
   if(HOST && HOST.isConnected) refresh();
 }
+// a platform whose newest reading is more than a day and a half old has stopped syncing
+const STALE_H = 36;
+function syncAge(k){ const x=LIVE.lastBy[k]; return x ? (Date.now()-new Date(x.at).getTime())/36e5 : null; }
+const isStale = k => { const h=syncAge(k); return h==null || h>STALE_H; };
 async function syncNow(){
   if(LIVE.syncing) return;
-  LIVE.syncing=true; refresh(); toast("Syncing with YouTube — this takes about a minute");
+  LIVE.syncing=true; refresh(); toast("Syncing YouTube and Instagram — this takes about a minute");
   try{
     const { data, error } = await OPT.supa.functions.invoke("sync-social", { body:{} });
     if(error) throw error;
+    LIVE.result = data || null;
+    const errs=[data&&data.youtube&&data.youtube.error&&"YouTube: "+data.youtube.error, data&&data.instagram&&data.instagram.error&&"Instagram: "+data.instagram.error].filter(Boolean);
     if(data && data.skipped) toast("Synced "+ago(data.last_sync)+" — numbers are already fresh");
-    else if(data && data.youtube && data.youtube.error) toast("YouTube: "+data.youtube.error);
-    else toast("YouTube numbers updated");
+    else if(errs.length) toast("Sync problem — "+errs.join(" · "));
+    else toast("YouTube and Instagram numbers updated");
   }catch(e){ toast("Sync failed: "+((e && e.message)||"try again")); }
   LIVE.syncing=false;
   await loadLive(true);
@@ -989,7 +1066,7 @@ const platOK = x => PLATVIEW==="all" || x.platform===PLATVIEW;
 const TYPE_PLAT = { long:"yt", short:"yt", live:"yt", reel:"ig", carousel:"ig", image:"ig" };
 const typeVisible = k => PLATVIEW==="all" || !TYPE_PLAT[k] || TYPE_PLAT[k]===PLATVIEW;
 const inF = r => FILTERS.vtypes.includes(r.vtype) && FILTERS.platforms.includes(r.platform) && platOK(r);
-function publishedInPeriod(){ const from=periodStart(); return postRows().filter(r=>r.date && r.date>=from && inF(r)).sort((a,b)=>b.date.localeCompare(a.date)); }
+function publishedInPeriod(){ return postRows().filter(r=>inPeriod(r.date) && inF(r)).sort((a,b)=>b.date.localeCompare(a.date)); }
 
 /* ------------------------------------------------------------ charts */
 function activateTips(root){ const tt=$("#tt"); root.querySelectorAll("[data-tip]").forEach(el=>{ const t=el.getAttribute("data-tip");
@@ -1393,9 +1470,9 @@ function readTargets(){ const P=$("#pane-targets"); if(!TDRAFT||!P) return;
 const KW_COLORS=["var(--c1)","var(--c2)","var(--c3)","var(--c4)","var(--good)","var(--crit)","var(--ink-3)"];
 let KW_SCOPE="all", KW_SORT="views", KW_CHART="views";
 function keywordStats(){
-  const from=KW_SCOPE==="period"?periodStart():"";
+  const inS=d=>KW_SCOPE==="period"?inPeriod(d):!!d;
   const map={};
-  postRows().filter(r=>r.card && r.date && r.date>=from && inF(r)).forEach(r=>{
+  postRows().filter(r=>r.card && inS(r.date) && inF(r)).forEach(r=>{
     const ks=r.card.pre.keywords||[], p=ks.find(k=>k.rank==="primary")||ks[0]; if(!p||!p.kw) return;
     const key=p.kw.trim().toLowerCase();
     const g=map[key]||(map[key]={kw:p.kw.trim(),vol:null,rows:[],secondary:new Set()});
@@ -1413,7 +1490,7 @@ function keywordStats(){
 function keywordSection(){
   const list=keywordStats();
   const sorted=[...list].sort((a,b)=>KW_SORT==="vol"?(b.vol||0)-(a.vol||0):KW_SORT==="avg"?b.avgViews-a.avgViews:KW_SORT==="eng"?(b.eng||0)-(a.eng||0):KW_SORT==="perk"?(b.perK||0)-(a.perK||0):b.views-a.views);
-  const unlinked=postRows().filter(r=>!r.card && r.date && r.date>=(KW_SCOPE==="period"?periodStart():"") && inF(r)).length;
+  const unlinked=postRows().filter(r=>!r.card && (KW_SCOPE==="period"?inPeriod(r.date):!!r.date) && inF(r)).length;
   const head=`<div class="sec-h"><h3>Keyword performance</h3>
     <span class="hint">Primary keyword of each published video, from its card — which searches bring the views</span>
     <div class="seg" style="margin-left:auto"><button data-kwscope="all" class="${KW_SCOPE==="all"?"on":""}">All time</button><button data-kwscope="period" class="${KW_SCOPE==="period"?"on":""}">Selected period</button></div></div>`;
@@ -1783,7 +1860,7 @@ function wireGeo(){
    Which posts brought the new followers: YouTube "subscribers gained" per video,
    Instagram "follows" per post (both lifetime, as the platforms count them). */
 function netGain(pl){ const ser=pl==="yt"?ytSeries():igSeries(); if(!ser.length) return null;
-  const last=ser[ser.length-1], first=valueAt(ser, periodStart()); return first==null?null:last.v-first; }
+  const r=periodRange(), end=valueAt(ser, r.to), first=valueAt(ser, addDays(r.from,-1)); return first==null||end==null?null:end-first; }
 function driversSection(){
   const pub=publishedInPeriod(), withG=pub.filter(r=>r.gained!=null);
   const head=`<div class="sec-h"><h3>Which posts brought ${AUDV()}</h3>
@@ -1862,24 +1939,113 @@ function openCompare(){
 /* ------------------------------------------------------------ SUMMARY */
 function liveBar(){
   const sync = canEdit() || (OPT.isMember && OPT.isMember());
-  const btn = `<button class="btn sm" id="syncNow" ${LIVE.syncing?"disabled":""} style="flex-shrink:0">${LIVE.syncing?"Syncing…":"Sync now"}</button>`;
-  if(LIVE.status==="loading" || LIVE.status==="idle") return `<div class="apibar live"><span class="ic">LIVE</span><p>Loading the latest YouTube numbers…</p></div>`;
+  const btn = `<button class="btn sm" id="syncNow" ${LIVE.syncing?"disabled":""} style="flex-shrink:0">${LIVE.syncing?"Syncing…":"↻ Sync now"}</button>`;
+  if(LIVE.status==="loading" || LIVE.status==="idle") return `<div class="syncbar"><span class="spill"><i class="sd"></i>Loading the latest numbers…</span></div>`;
   if(LIVE.status==="error") return `<div class="apibar bad"><span class="ic">OFFLINE</span>
-    <p><b>Couldn't load the YouTube numbers</b> (${esc(LIVE.err)}). Everything computed from this space below is still correct.</p>${sync?btn:""}</div>`;
-  if(!LIVE.lastAt) return `<div class="apibar"><span class="ic">NOT SYNCED</span>
-    <p><b>YouTube hasn't synced yet.</b> It runs every morning at 8:00 AM, or press Sync now.</p>${sync?btn:""}</div>`;
-  return `<div class="apibar live"><span class="ic">LIVE</span>
-    <p><b>YouTube is connected</b> — subscribers and every video's views, likes, comments, shares and watch time fill in by
-    themselves every morning at 8:00 AM. Last synced <b>${esc(ago(LIVE.lastAt))}</b>.
-    ${igLive()?`<b>Instagram is connected too</b> — followers and every post's views, reach, likes, comments, shares and saves.`
-      :`Instagram isn't connected yet, so its numbers are typed in by hand and marked <span class="badge mute">manual</span>.`}
-    Thumbnail CTR stays in YouTube Studio — Google doesn't share it.</p>${sync?btn:""}</div>`;
+    <p><b>Couldn't load the YouTube and Instagram numbers</b> (${esc(LIVE.err)}). Everything computed from this space below is still correct.</p>${sync?btn:""}</div>`;
+  const err = k => { const r=LIVE.result&&LIVE.result[k==="yt"?"youtube":"instagram"]; return r&&r.error?r.error:""; };
+  const pill = (k,name) => { const x=LIVE.lastBy[k], st=isStale(k), e=err(k);
+    if(k==="ig" && !igLive()) return `<span class="spill mute"><i class="sd"></i><b>${name}</b> not connected · typed in by hand</span>`;
+    if(!x) return `<span class="spill bad"><i class="sd"></i><b>${name}</b> hasn't synced yet</span>`;
+    return `<span class="spill ${st?"bad":"ok"}" title="Newest reading: ${esc(dmyY(x.day))}"><i class="sd"></i><b>${name}</b> ${st?"stopped syncing · last ":"synced "}${esc(ago(x.at))}${st?` (${esc(dmy(x.day))})`:""}${e?` · ${esc(e)}`:""}</span>`; };
+  const stuck = ["yt","ig"].filter(k=>(k==="yt"||igLive()) && LIVE.lastBy[k] && isStale(k));
+  return `<div class="syncbar">${pill("yt","YouTube")}${pill("ig","Instagram")}<span class="hint">Fills in every morning at 8:00 AM · thumbnail CTR stays in YouTube Studio</span>${sync?btn:""}</div>
+    ${stuck.length?`<div class="apibar bad"><span class="ic">STALE</span><p><b>${stuck.map(k=>PLAT_NAME[k]).join(" and ")} ${stuck.length>1?"have":"has"} not synced since ${stuck.map(k=>dmy(LIVE.lastBy[k].day)).join(" / ")}.</b>
+      Counts, "this week" changes and posts after that day are missing, so they look flat. ${stuck.includes("yt")?`If Sync now says <i>Google sign-in failed</i>, the Google refresh token has expired: make a new one and replace <code>YT_REFRESH_TOKEN</code> in Supabase → Edge Functions → Secrets (see HANDOVER-social-media.md).`:""}</p></div>`:""}`;
+}
+
+/* ------------------------------------------------------------ SUMMARY: headline numbers, Shorts vs long, ideas */
+// net change in followers / subscribers over a range: the count at its end minus the count the day before it began
+function netIn(pl, r){ const ser=pl==="yt"?ytSeries():igSeries(); if(!ser.length) return null;
+  const end=valueAt(ser, r.to), start=valueAt(ser, addDays(r.from,-1)); return end==null||start==null?null:end-start; }
+const rowsIn = r => postRows().filter(x=>x.date && x.date>=r.from && x.date<=r.to && inF(x));
+function dltHTML(now, before, unit){
+  if(now==null || before==null) return `<span class="dlt">no earlier data</span>`;
+  const d=now-before; if(!d) return `<span class="dlt">same as before</span>`;
+  const p=before?Math.round(Math.abs(d)/Math.abs(before)*100):null;
+  return `<span class="dlt ${d>0?"up":"dn"}">${d>0?"▲":"▼"} ${fmt(Math.abs(d))}${unit||""}${p!=null&&p<1000?` · ${p}%`:""}</span>`;
+}
+function kpiRow(vI){
+  const r=periodRange(), pr=prevRange(), now=rowsIn(r), was=rowsIn(pr);
+  const n=(list,k)=>list.filter(x=>x.platform==="yt"&&x.vtype===k).length;
+  const ideasNow=vI.filter(i=>i.created>=r.from&&i.created<=r.to).length, ideasWas=vI.filter(i=>i.created>=pr.from&&i.created<=pr.to).length;
+  const k=(label,val,d,sub,col)=>`<div class="kpi">${col?`<i style="background:${col}"></i>`:""}<span class="lbl">${label}</span><b>${val}</b>${d}${sub?`<small>${sub}</small>`:""}</div>`;
+  const net=pl=>{ const a=netIn(pl,r), b=netIn(pl,pr), st=pl==="yt"?isStale("yt"):(igLive()&&isStale("ig"));
+    return k(pl==="yt"?"New subscribers":"New followers", a==null?"—":(a>0?"+":a<0?"−":"")+fmt(Math.abs(a)), dltHTML(a,b),
+      st?`<span style="color:var(--crit)">⚠ data stops ${dmy((LIVE.lastBy[pl]||{}).day)}</span>`:"net, whole account", pl==="yt"?"var(--c1)":"var(--c3)"); };
+  return `<div class="kpis">
+    ${k("Posts published",fmt(now.length),dltHTML(now.length,was.length),`${r1(now.length/periodDays()*7)} a week`)}
+    ${PLATVIEW!=="ig"?k("YouTube Shorts",fmt(n(now,"short")),dltHTML(n(now,"short"),n(was,"short")),"published in range",vtypeColor("short")):""}
+    ${PLATVIEW!=="ig"?k("Long videos",fmt(n(now,"long")),dltHTML(n(now,"long"),n(was,"long")),"published in range",vtypeColor("long")):""}
+    ${PLATVIEW!=="yt"?k("Instagram posts",fmt(now.filter(x=>x.platform==="ig").length),dltHTML(now.filter(x=>x.platform==="ig").length,was.filter(x=>x.platform==="ig").length),"reels, carousels, images",vtypeColor("reel")):""}
+    ${k("Views",kfmt(sum(now,x=>x.views)),dltHTML(sum(now,x=>x.views),sum(was,x=>x.views)),"on posts published in range")}
+    ${PLATVIEW!=="ig"?net("yt"):""}${PLATVIEW!=="yt"?net("ig"):""}
+    ${k("Ideas submitted",fmt(ideasNow),dltHTML(ideasNow,ideasWas),"logged in Ideation","var(--c4)")}
+  </div>`;
+}
+// time buckets for a range: days up to a month, weeks up to ~6 months, months beyond
+function buckets(r){
+  const n=days(r.from,r.to)+1, out=[];
+  if(n<=31){ for(let d=r.from; d<=r.to; d=addDays(d,1)) out.push({ from:d, to:d, label:String(Number(d.slice(8))), tip:dmy(d) }); return out; }
+  if(n<=190){ const s=new Date(r.from+"T00:00:00"); s.setDate(s.getDate()-((s.getDay()+6)%7));
+    for(let d=iso(s); d<=r.to; d=addDays(d,7)){ const e=addDays(d,6); out.push({ from:d<r.from?r.from:d, to:e>r.to?r.to:e, label:dmy(d<r.from?r.from:d), tip:"Week of "+dmy(d) }); } return out; }
+  const s=new Date(r.from.slice(0,7)+"-01T00:00:00");
+  for(let d=new Date(s); iso(d)<=r.to; d.setMonth(d.getMonth()+1)){ const f=iso(d), e=iso(new Date(d.getFullYear(), d.getMonth()+1, 0));
+    out.push({ from:f<r.from?r.from:f, to:e>r.to?r.to:e, label:d.toLocaleDateString("en-GB",{month:"short"}), tip:d.toLocaleDateString("en-GB",{month:"long",year:"numeric"}) }); }
+  return out;
+}
+// stacked columns: bk = buckets, ser = [{label,color,count(bucket)}]
+function stackChart(bk, ser, w=520, h=190){
+  const vals=bk.map(b=>ser.map(s=>s.count(b))), max=Math.max(1,...vals.map(v=>v.reduce((a,x)=>a+x,0)));
+  if(!vals.some(v=>v.some(Boolean))) return `<p class="hint" style="padding:46px 0;text-align:center">Nothing published in this range.</p>`;
+  const padL=26,padR=6,padT=12,padB=24,cw=w-padL-padR,ch=h-padT-padB,bw=cw/bk.length,gap=Math.min(6,bw*.28);
+  const step=Math.max(1,Math.ceil(max/4)), ticks=[]; for(let t=0;t<=max;t+=step) ticks.push(t);
+  const y=v=>padT+ch-v/max*ch, every=Math.ceil(bk.length/12);
+  const grid=ticks.map(t=>`<line x1="${padL}" x2="${w-padR}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)"/><text x="${padL-6}" y="${y(t)+3.5}" text-anchor="end" font-size="9.5" font-family="var(--mono)" fill="var(--ink-3)">${t}</text>`).join("");
+  const cols=bk.map((b,i)=>{ let acc=0; const x=padL+i*bw+gap/2, tot=vals[i].reduce((a,v)=>a+v,0);
+    const segs=ser.map((s,j)=>{ const v=vals[i][j]; if(!v) return ""; const y0=y(acc+v), hh=y(acc)-y0; acc+=v;
+      return `<rect x="${x}" y="${y0}" width="${Math.max(1,bw-gap)}" height="${Math.max(1,hh-1)}" rx="2" fill="${s.color}"/>`; }).join("");
+    return `<g data-tip="${esc(b.tip)}\n${ser.map((s,j)=>s.label+": "+vals[i][j]).join("\n")}">${segs}<rect x="${padL+i*bw}" y="${padT}" width="${bw}" height="${ch}" fill="transparent"/>
+      ${i%every===0?`<text x="${x+(bw-gap)/2}" y="${h-8}" text-anchor="middle" font-size="9.5" font-family="var(--mono)" fill="var(--ink-3)">${esc(b.label)}</text>`:""}</g>`; }).join("");
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" role="img" aria-label="Posts over time">${grid}${cols}</svg>`;
+}
+function formatSection(){
+  const r=periodRange(), yt=postRows().filter(x=>x.platform==="yt" && inPeriod(x.date));
+  const T=[["short","Shorts"],["long","Long videos"],["live","Lives"]].map(([k,l])=>{ const rs=yt.filter(x=>x.vtype===k); return { k, l, rs, n:rs.length, v:sum(rs,x=>x.views), g:sum(rs.filter(x=>x.gained!=null),x=>x.gained), color:vtypeColor(k) }; })
+    .filter(t=>t.k!=="live" || t.n);
+  const tot=T.reduce((a,t)=>a+t.n,0), bk=buckets(r);
+  const share=tot?T.map(t=>`<i style="width:${t.n/tot*100}%;background:${t.color}" data-tip="${esc(t.l)}: ${t.n} of ${tot} (${pct(t.n,tot)}%)"></i>`).join(""):"";
+  return `<div class="chart-card"><div class="chart-head"><h4>Shorts vs long videos</h4><span class="hint">YouTube · ${esc(rangeText())}</span></div>
+    <div class="fmtnums">${T.map(t=>`<div><span class="lbl"><i class="sq" style="background:${t.color}"></i>${t.l}</span><b>${fmt(t.n)}</b>
+      <small>${t.n?`${kfmt(Math.round(t.v/t.n))} views each · +${fmt(t.g)} subs`:"none published"}</small></div>`).join("")}</div>
+    ${tot?`<div class="sharebar">${share}</div><p class="chart-sub" style="margin:6px 0 10px">${T.map(t=>`${pct(t.n,tot)}% ${t.l.toLowerCase()}`).join(" · ")} · ${bk.length&&bk[0].from===bk[0].to?"per day":bk.length>8&&days(r.from,r.to)>190?"per month":"per week"}</p>`:""}
+    ${stackChart(bk, T.map(t=>({ label:t.l, color:t.color, count:b=>t.rs.filter(x=>x.date>=b.from&&x.date<=b.to).length })))}
+    <p class="hint" style="margin:6px 0 0">A Short is a vertical video up to 3 minutes; anything longer is a long video. Views are lifetime, so newer posts have had less time.</p></div>`;
+}
+const PERSON_COLORS=["var(--c3)","var(--c1)","var(--c2)","var(--c4)","var(--good)","#B3417A","#3D6FB6","#7A6A55"];
+function ideasSection(vI){
+  const list=vI.filter(i=>inPeriod(i.created)), people={};
+  list.forEach(i=>{ const n=(i.by||"").trim()||"Unnamed"; people[n]=(people[n]||0)+1; });
+  const ranked=Object.entries(people).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
+  const col=n=>PERSON_COLORS[ranked.findIndex(x=>x[0]===n)%PERSON_COLORS.length];
+  if(IDEA_WHO && !people[IDEA_WHO]) IDEA_WHO="";
+  const mine=list.filter(i=>!IDEA_WHO || ((i.by||"").trim()||"Unnamed")===IDEA_WHO).sort((a,b)=>b.created.localeCompare(a.created));
+  const acc=mine.filter(i=>i.status==="accepted").length;
+  const pie=donutChart(ranked.map(([n,c])=>({ label:n, v:c, color:IDEA_WHO&&IDEA_WHO!==n?"color-mix(in srgb,"+col(n)+" 22%,var(--surface))":col(n) })),330,180,"IDEAS");
+  return `<div class="chart-card"><div class="chart-head"><h4>Ideas submitted</h4><span class="hint">by person · ${esc(rangeText())}</span></div>
+    ${list.length?pie:`<p class="hint" style="padding:40px 0;text-align:center">No ideas logged in this range.</p>`}
+    ${list.length?`<div class="pchips"><button class="chip ${IDEA_WHO?"":"on"}" data-who="">Everyone · ${list.length}</button>
+      ${ranked.map(([n,c])=>`<button class="chip ${IDEA_WHO===n?"on":""}" data-who="${esc(n)}"><i class="sq" style="background:${col(n)}"></i>${esc(n)} · ${c}</button>`).join("")}</div>
+    <p class="chart-sub" style="margin:10px 0 6px">${IDEA_WHO?`<b>${esc(IDEA_WHO)}</b> submitted ${mine.length} idea${mine.length===1?"":"s"}`:`${mine.length} idea${mine.length===1?"":"s"} from ${ranked.length} ${ranked.length===1?"person":"people"}`} · ${acc} accepted</p>
+    <div class="idlist">${mine.map(i=>`<div class="idrow" data-idea="${esc(i.id)}" role="button" tabindex="0"><span class="idt">${esc(i.idea||"(untitled idea)")}</span>
+      <span class="idm">${IDEA_WHO?"":who(i.by)}${ptags(i)} <span class="vol">${dmy(i.created)}</span> <span class="badge ${(STATUS_UI[i.status]||{}).cls||"mute"}">${esc((STATUS_UI[i.status]||{}).label||i.status)}</span></span></div>`).join("")}</div>`:""}
+  </div>`;
 }
 
 function renderSummary(){
   const vI=IDEAS.filter(platOK), vC=CARDS.filter(platOK);   // Summary platform switch
-  const pub=publishedInPeriod(), from=periodStart();
-  const ideasP=vI.filter(i=>i.created>=from);
+  const pub=publishedInPeriod();
+  const ideasP=vI.filter(i=>inPeriod(i.created));
   const accepted=vI.filter(i=>i.status==="accepted");
   const decided=vI.filter(i=>["accepted","rejected"].includes(i.status));
   const acceptRate=decided.length?Math.round(accepted.length/decided.length*100):0;
@@ -1907,14 +2073,15 @@ function renderSummary(){
         <div class="meter"><i style="width:0"></i></div>
         <div class="okr-foot"><span>${isLive?"Waiting for the first sync":"No count entered yet"}</span>
         ${isLive?"":`<button class="btn sm" data-updf="1">Add the first count</button>`}</div>${more(k,col)}</div>`;
-    const last=series[series.length-1], wk=valueAt(series, addDays(last.d,-7));
+    const last=series[series.length-1], stale=isLive && last.d<addDays(today(),-1), wk=stale?null:valueAt(series, addDays(last.d,-7));
     /* progress counts from where the target started, not from zero */
     const st=startOf(k, series);
     const cur=last.v, gap=Math.max(1, tgt-st.v), gained=cur-st.v, pct=Math.max(0,Math.min(100,gained/gap*100)), delta=wk!=null?cur-wk:null;
     return `<div class="okr"><div class="okr-top">
       <div><div class="lbl" style="margin-bottom:4px">${n} ${AUD(k)} ${isLive?`<span class="badge good" style="margin-left:4px">live</span>`:`<span class="badge mute" style="margin-left:4px">manual</span>`}</div><div class="okr-v">${fmt(cur)} <small>/ ${fmt(tgt)}</small></div></div>
       <div style="text-align:right">
-        ${delta!=null?`<div class="okr-t" style="color:${delta>0?"var(--good)":"var(--crit)"}">${delta>=0?"+":"−"}${fmt(Math.abs(delta))} this week</div>`:`<div class="okr-t">as of ${dmy(last.d)}</div>`}</div></div>
+        ${stale?`<div class="okr-t" style="color:var(--crit)">⚠ last reading ${dmy(last.d)}</div><div class="hint">not synced since</div>`
+          :delta!=null?`<div class="okr-t" style="color:${delta>0?"var(--good)":delta<0?"var(--crit)":"var(--ink-3)"}">${delta>0?"+":delta<0?"−":"±"}${fmt(Math.abs(delta))} this week</div>`:`<div class="okr-t">as of ${dmy(last.d)}</div>`}</div></div>
       <div class="okr-from"><span>Started at <b>${fmt(st.v)}</b> on ${dmy(st.d)}</span><span>→</span><span>now <b>${fmt(cur)}</b></span><span>→</span><span>target <b>${fmt(tgt)}</b></span></div>
       <div class="meter"><i style="width:${pct}%;background:${col}"></i></div>
       <div class="okr-foot"><span><b style="color:${gained>0?"var(--good)":"var(--crit)"}">${gained>=0?"+":"−"}${fmt(Math.abs(gained))}</b> of +${fmt(tgt-st.v)} gained · ${pct.toFixed(1)}%</span>
@@ -1922,22 +2089,33 @@ function renderSummary(){
       ${checkpoints(k, st, cur, tgt)}
       ${weekLog(k, series, st, tgt)}${more(k,col)}</div>`; };
   $("#pane-summary").innerHTML=`
-   <div class="platsw">${[["all","Both platforms"],["yt","YouTube only"],["ig","Instagram only"]].map(([k,l])=>
-     `<button data-pview="${k}" class="${PLATVIEW===k?"on":""}">${k==="yt"?`<span class="sdot" style="background:var(--c1)"></span>`:k==="ig"?`<span class="sdot" style="background:var(--c3)"></span>`:""}${l}</button>`).join("")}
-     <span class="hint">${PLATVIEW==="all"?"Everything below covers YouTube and Instagram together":`Everything below — targets, ideas, cards, posts, keywords — is ${PLATVIEW==="yt"?"YouTube":"Instagram"} only`}</span>
-     <button class="btn pri" id="cmpOpen" style="margin-left:auto">⇄ Compare Instagram vs YouTube</button></div>
+   <div class="sumbar">
+     <div class="platsw">${[["all","Both platforms"],["yt","YouTube"],["ig","Instagram"]].map(([k,l])=>
+       `<button data-pview="${k}" class="${PLATVIEW===k?"on":""}">${k==="yt"?`<span class="sdot" style="background:var(--c1)"></span>`:k==="ig"?`<span class="sdot" style="background:var(--c3)"></span>`:""}${l}</button>`).join("")}</div>
+     <div class="rangebar">
+       <select id="perSel" aria-label="Date range">${PERIODS.map(([k,l])=>`<option value="${k}" ${FILTERS.period===k?"selected":""}>${l}</option>`).join("")}</select>
+       <label class="dfield"><span>From</span><input type="date" id="perFrom" value="${periodStart()}" max="${today()}"></label>
+       <span class="hint">→</span>
+       <label class="dfield"><span>To</span><input type="date" id="perTo" value="${periodEnd()}" max="${today()}"></label>
+     </div>
+     <button class="btn pri" id="cmpOpen" style="margin-left:auto">⇄ Compare Instagram vs YouTube</button>
+   </div>
+   <div class="rangeline"><b>${esc(rangeText())}</b> · ${periodDays()} day${periodDays()===1?"":"s"} · ${PLATVIEW==="all"?"YouTube and Instagram":PLAT_NAME[PLATVIEW]+" only"} · compared with the ${periodDays()} days before (${esc(rangeText(prevRange()))})</div>
 
-   <div class="sec">${fdrop("sum", `🔎 Filters & sync · ${FILTERS.period==="week"?"Last 7 days":FILTERS.period==="month"?"Last 30 days":"Last 90 days"} · ${(()=>{ const all=Object.keys(REG.vtype).filter(typeVisible), on=all.filter(k=>FILTERS.vtypes.includes(k)); return on.length===all.length?"all types":on.length+" of "+all.length+" types"; })()}`, `${liveBar()}<div class="row">
-     <span class="lbl">Period</span>
-     ${["week","month","quarter"].map(p=>`<button class="chip ${FILTERS.period===p?"on":""}" data-period="${p}">${p==="week"?"Last 7 days":p==="month"?"Last 30 days":"Last 90 days"}</button>`).join("")}
-     <span style="width:8px"></span><span class="lbl">Type</span>
+   <div class="sec">${liveBar()}
+     ${fdrop("sum", `🔎 Post types · ${(()=>{ const all=Object.keys(REG.vtype).filter(typeVisible), on=all.filter(k=>FILTERS.vtypes.includes(k)); return on.length===all.length?"all types":on.length+" of "+all.length+" types"; })()}`, `<div class="row">
+     <span class="lbl">Type</span>
      ${Object.keys(REG.vtype).filter(typeVisible).map(k=>`<button class="chip ${FILTERS.vtypes.includes(k)?"on":""}" data-vt="${k}">${esc(vtypeLabel(k))}</button>`).join("")}
    </div>`)}</div>
+
+   ${kpiRow(vI)}
 
    <div class="sec"><div class="sec-h"><h3>OKR progress</h3>
      <span class="hint">Two separate goals, never a combined audience number</span>
      ${igLive()?"":`<button class="btn sm" data-updf="1" style="margin-left:auto">Update Instagram count</button>`}</div>
      <div class="okrs">${PLATVIEW!=="ig"?okr("yt","YouTube","var(--c1)",yt,true):""}${PLATVIEW!=="yt"?okr("ig","Instagram","var(--c3)",ig,igLive()):""}</div></div>
+
+   <div class="sec"><div class="charts two">${PLATVIEW==="ig"?"":formatSection()}${ideasSection(vI)}</div></div>
 
    ${driversSection()}
 
@@ -1980,7 +2158,14 @@ function renderSummary(){
    <div class="sec" id="postsSec">${postsSection()}</div>`;
 
   const P=$("#pane-summary"); activateTips(P);
-  P.querySelectorAll("[data-period]").forEach(b=>b.onclick=()=>{FILTERS.period=b.dataset.period;renderSummary();});
+  const setRange=()=>{ OPEN_TILE=null; PF.limit=50; renderSummary(); if(LIVE.since && liveSince()<LIVE.since) loadLive(true); };
+  const ps=$("#perSel"); if(ps) ps.onchange=()=>{ if(ps.value==="custom"){ const r=periodRange(); FILTERS.from=r.from; FILTERS.to=r.to; } FILTERS.period=ps.value; setRange(); };
+  [["#perFrom","from"],["#perTo","to"]].forEach(([id,k])=>{ const el=$(id); if(el) el.onchange=()=>{ if(!el.value) return; const r=periodRange();
+    FILTERS.from=r.from; FILTERS.to=r.to; FILTERS[k]=el.value>today()?today():el.value;
+    if(FILTERS.from>FILTERS.to){ if(k==="from") FILTERS.to=FILTERS.from; else FILTERS.from=FILTERS.to; }
+    FILTERS.period="custom"; setRange(); }; });
+  P.querySelectorAll("[data-who]").forEach(b=>b.onclick=()=>{ IDEA_WHO=b.dataset.who; renderSummary(); });
+  P.querySelectorAll("[data-idea]").forEach(r=>r.onclick=()=>openIdea(r.dataset.idea));
   const co=$("#cmpOpen"); if(co) co.onclick=openCompare;
   P.querySelectorAll("[data-pview]").forEach(b=>b.onclick=()=>{ PLATVIEW=b.dataset.pview; OPEN_TILE=null; PF.limit=50; SEL.clear(); renderSummary(); });
   P.querySelectorAll("[data-plat]").forEach(b=>b.onclick=()=>{toggle(FILTERS.platforms,b.dataset.plat);renderSummary();});
@@ -2046,16 +2231,16 @@ function dtable(title,head,rows,empty){
 const titleCell=r=>`<td class="td-idea" style="min-width:200px">${r.url?`<a href="${esc(r.url)}" target="_blank" rel="noopener" data-ext="1">${esc(r.title)}</a>`:esc(r.title)}</td>`;
 const cardTitle=c=>esc(c.pre.title||c.idea||"Untitled");
 const TYPES=()=>Object.keys(REG.vtype), PLATS=()=>Object.keys(REG.platform);
-const periodName=()=>FILTERS.period==="week"?"last 7 days":FILTERS.period==="month"?"last 30 days":"last 90 days";
+const periodName=()=>FILTERS.period==="custom"?rangeText():periodLabel().toLowerCase();
 
 function detailHTML(key){
   const vI=IDEAS.filter(platOK), vC=CARDS.filter(platOK);   // Summary platform switch
-  const pub=publishedInPeriod(), from=periodStart(), allPub=vC.filter(c=>c.stage==="published");
+  const pub=publishedInPeriod(), allPub=vC.filter(c=>c.stage==="published");
   const head=(t,sub)=>`<div class="dh"><div><h4>${t}</h4><span class="hint">${sub}</span></div><button class="btn sm" data-dclose="1">Close ×</button></div>`;
   const byType=rows=>TYPES().map(k=>({k,label:vtypeLabel(k),rows:rows.filter(r=>r.vtype===k),color:vtypeColor(k)})).filter(g=>g.rows.length);
 
   if(key==="published"){
-    const n=pub.length, spanDays=FILTERS.period==="week"?7:FILTERS.period==="month"?30:90;
+    const n=pub.length, spanDays=periodDays();
     const g=byType(pub), wd=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
     const byDay=wd.map((d,i)=>({label:d,v:pub.filter(r=>((new Date(r.date+"T00:00:00").getDay()+6)%7)===i).length,color:"var(--c4)"}));
     const lenAvg=k=>avg(pub.filter(r=>r.vtype===k&&r.dur),r=>r.dur);
@@ -2091,7 +2276,7 @@ function detailHTML(key){
             <td class="vol">${r.watch||"—"}</td><td class="vol">${r.viewed!=null?Math.round(r.viewed)+"%":"—"}</td></tr>`),"No posts in this period.");
   }
 
-  const ideasP=vI.filter(i=>i.created>=from);
+  const ideasP=vI.filter(i=>inPeriod(i.created));
   const stBars=list=>Object.entries(STATUS_UI).map(([k,u])=>({label:u.label,v:list.filter(i=>i.status===k).length,
     color:k==="accepted"?"var(--good)":k==="rejected"?"var(--crit)":k==="under_review"?"var(--warn)":"var(--ink-3)"}));
   const ideaRow=i=>{ const c=vC.find(x=>x.ideaId===i.id);

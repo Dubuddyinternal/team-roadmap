@@ -29,7 +29,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || SERVICE_KEY;
 const MIN_GAP_MS = 10 * 60 * 1000;
-const MAX_VIDEOS = 500;
+const MAX_VIDEOS = 2000;   // Instagram already has more than 500 posts; 500 cut the oldest off
 const HISTORY_DAYS = 120;
 
 const CORS = {
@@ -174,8 +174,19 @@ async function syncYouTube(admin, team, cfg) {
     if (error) throw new Error("Saving posts failed: " + error.message);
   }
 
-  // --- follower history: today's count, walked back with daily gained/lost
-  const current = num(stats.subscriberCount);
+  // --- follower history: today's count, walked back with daily gained/lost.
+  // The Data API rounds subscriberCount to 3 significant figures (76,6xx comes back as 76,600),
+  // so it barely ever moves. YouTube Analytics has the exact lifetime gained − lost: use that when
+  // it agrees with the rounded number, and keep the rounded number (with a note) when it doesn't.
+  const rounded = num(stats.subscriberCount);
+  let current = rounded;
+  try {
+    const life = await report(token, { startDate: "2005-04-23", endDate: ymd(today), metrics: "subscribersGained,subscribersLost" });
+    const exact = life[0] ? (num(life[0].subscribersGained) || 0) - (num(life[0].subscribersLost) || 0) : null;
+    const unit = rounded ? Math.pow(10, Math.max(0, String(Math.abs(rounded)).length - 3)) : 1;
+    if (exact != null && rounded != null && Math.abs(exact - rounded) < unit * 1.5) current = exact;
+    else if (exact != null) notes.push(`Exact subscriber count (${exact}) is far from the rounded one (${rounded}); kept the rounded one.`);
+  } catch (e) { notes.push("Exact subscriber count not available: " + e.message); }
   const snaps = [{ team_slug: team, platform: "youtube", day: ymd(today), followers: current,
     total_views: num(stats.viewCount), post_count: num(stats.videoCount), updated_at: new Date().toISOString() }];
   try {
@@ -193,11 +204,9 @@ async function syncYouTube(admin, team, cfg) {
     }
   } catch (e) { notes.push("Follower history not available: " + e.message); }
 
-  // keep real past snapshots: only fill days we have never recorded
-  const { data: have } = await admin.from("social_snapshots").select("day")
-    .eq("team_slug", team).eq("platform", "youtube").lt("day", ymd(today));
-  const known = new Set((have || []).map((r) => r.day));
-  const toSave = snaps.filter((s) => s.day === ymd(today) || !known.has(s.day));
+  // YouTube's history comes from Analytics, which is exact, so every day it returns is rewritten:
+  // the old rule ("only fill days never recorded") froze the rounded 76,600 into the history.
+  const toSave = snaps;
   const { error: sErr } = await admin.from("social_snapshots").upsert(toSave);
   if (sErr) throw new Error("Saving followers failed: " + sErr.message);
 
