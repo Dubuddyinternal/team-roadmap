@@ -147,6 +147,19 @@ table.mini th{padding:8px 10px}
 .dfield span{font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3)}
 .dfield input{border:none;background:none;font-size:12.5px;padding:3px 2px;color:var(--ink)}
 .rangeline{font-size:12.5px;color:var(--ink-3);margin:10px 0 14px}.rangeline b{color:var(--ink)}
+.btn.dark{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.btn.dark.pulse{background:var(--accent);border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent)}
+.month .sec-h select{border:1px solid var(--line-2);border-radius:999px;padding:5px 11px;background:var(--surface);font-size:13px;font-weight:600;color:var(--ink)}
+.mgrid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:12px;align-items:stretch}
+.mtiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;align-content:start}
+.mt{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:11px 13px;overflow:hidden;min-width:0}
+.mt>i{position:absolute;left:0;top:0;bottom:0;width:3px}
+.mt b{display:block;font-size:22px;letter-spacing:-.025em;line-height:1.15;margin:3px 0 2px;font-variant-numeric:tabular-nums}
+.mt.big b{font-size:28px}
+.mt small{display:block;font-size:11px;color:var(--ink-3);margin-top:3px;line-height:1.35}
+.secband{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;border-top:2px solid var(--ink);padding-top:12px;margin:6px 0 14px}.secband b{font-size:16px}
+.okr-lite .okr-v{margin:4px 0 10px}.okr-lite .okr-foot{margin-top:8px}.stalec{color:var(--crit)}
+@media (max-width:900px){.mgrid{grid-template-columns:1fr}}
 .syncbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 .syncbar .hint{flex:1;min-width:180px}
 .spill{display:inline-flex;align-items:center;gap:7px;font-size:12px;border:1px solid var(--line);border-radius:999px;padding:5px 11px;background:var(--surface);color:var(--ink-2)}
@@ -980,7 +993,7 @@ async function allRows(make, page=1000, max=20000){
   return out;
 }
 // how far back the follower history has to go: 130 days, or further for an older custom range
-const liveSince = () => { const a=addDays(today(),-130), b=addDays(periodStart(),-8); return a<b?a:b; };
+const liveSince = () => [addDays(today(),-130), addDays(periodStart(),-8), addDays(monthRange().from,-40)].sort()[0];
 async function loadLive(force){
   const team = OPT.team || "";
   if(!OPT.supa || !team){ LIVE.status="error"; LIVE.err="Not signed in"; return; }
@@ -1975,10 +1988,7 @@ function kpiRow(vI){
       st?`<span style="color:var(--crit)">⚠ data stops ${dmy((LIVE.lastBy[pl]||{}).day)}</span>`:"net, whole account", pl==="yt"?"var(--c1)":"var(--c3)"); };
   return `<div class="kpis">
     ${k("Posts published",fmt(now.length),dltHTML(now.length,was.length),`${r1(now.length/periodDays()*7)} a week`)}
-    ${PLATVIEW!=="ig"?k("YouTube Shorts",fmt(n(now,"short")),dltHTML(n(now,"short"),n(was,"short")),"published in range",vtypeColor("short")):""}
-    ${PLATVIEW!=="ig"?k("Long videos",fmt(n(now,"long")),dltHTML(n(now,"long"),n(was,"long")),"published in range",vtypeColor("long")):""}
-    ${PLATVIEW!=="yt"?k("Instagram posts",fmt(now.filter(x=>x.platform==="ig").length),dltHTML(now.filter(x=>x.platform==="ig").length,was.filter(x=>x.platform==="ig").length),"reels, carousels, images",vtypeColor("reel")):""}
-    ${k("Views",kfmt(sum(now,x=>x.views)),dltHTML(sum(now,x=>x.views),sum(was,x=>x.views)),"on posts published in range")}
+    ${k("Views",kfmt(sum(now,x=>x.views)),dltHTML(sum(now,x=>x.views),sum(was,x=>x.views)),PLATVIEW!=="yt"&&r.from<addDays(today(),-180)?"Instagram only counts views for posts from the last 180 days":"on posts published in range")}
     ${PLATVIEW!=="ig"?net("yt"):""}${PLATVIEW!=="yt"?net("ig"):""}
     ${k("Ideas submitted",fmt(ideasNow),dltHTML(ideasNow,ideasWas),"logged in Ideation","var(--c4)")}
   </div>`;
@@ -2042,6 +2052,59 @@ function ideasSection(vI){
   </div>`;
 }
 
+/* ------------------------------------------------------------ MONTHLY OVERVIEW
+   One calendar month at a glance: followers / subscribers gained (net, so it can be 0 or
+   negative) and how many of each kind of post went out. Has its own month picker. */
+let MONTH = "";   // "YYYY-MM"; empty = the last full month
+function monthKey(){ if(MONTH) return MONTH; const d=new Date(); d.setDate(1); d.setMonth(d.getMonth()-1); return iso(d).slice(0,7); }
+function monthRange(k){ k=k||monthKey(); const [y,m]=k.split("-").map(Number), f=iso(new Date(y,m-1,1)), e=iso(new Date(y,m,0)); return { from:f, to:e>today()?today():e, full:e<=today() }; }
+const monthName = k => { const [y,m]=k.split("-").map(Number); return new Date(y,m-1,1).toLocaleDateString("en-GB",{month:"long",year:"numeric"}); };
+function monthChoices(){ const out=[], d=new Date(); d.setDate(1); for(let i=0;i<13;i++){ out.push(iso(d).slice(0,7)); d.setMonth(d.getMonth()-1); } return out; }
+// remember the chosen range and month for this browser tab, so a refresh keeps them
+function saveRange(){ try{ sessionStorage.setItem("sx-range", JSON.stringify({ p:FILTERS.period, f:FILTERS.from, t:FILTERS.to, m:MONTH })); }catch(_){ } }
+function loadRange(){ try{ const o=JSON.parse(sessionStorage.getItem("sx-range")||"null"); if(!o) return;
+  if(PERIODS.some(x=>x[0]===o.p)) FILTERS.period=o.p; FILTERS.from=o.f||""; FILTERS.to=o.t||""; MONTH=o.m||""; }catch(_){ } }
+loadRange();
+function monthStats(r){
+  const rows=postRows().filter(x=>x.date && x.date>=r.from && x.date<=r.to && platOK(x));
+  const n=f=>rows.filter(f).length;
+  return { rows,
+    subs: PLATVIEW!=="ig" ? netIn("yt", r) : null, fol: PLATVIEW!=="yt" ? netIn("ig", r) : null,
+    long: n(x=>x.platform==="yt"&&x.vtype==="long"), short: n(x=>x.platform==="yt"&&x.vtype==="short"), live: n(x=>x.platform==="yt"&&x.vtype==="live"),
+    reel: n(x=>x.platform==="ig"&&x.vtype==="reel"), post: n(x=>x.platform==="ig"&&(x.vtype==="image"||x.vtype==="carousel")),
+    views: sum(rows,x=>x.views) };
+}
+function monthSection(){
+  const k=monthKey(), r=monthRange(k), [y,m]=k.split("-").map(Number), pk=iso(new Date(y,m-2,1)).slice(0,7), pr=monthRange(pk);
+  const A=monthStats(r), B=monthStats(pr), yt=PLATVIEW!=="ig", ig=PLATVIEW!=="yt";
+  const signed=v=>v==null?"—":(v>0?"+":v<0?"−":"")+fmt(Math.abs(v));
+  const why=pl=>{ const ser=pl==="yt"?ytSeries():igSeries(); if(!ser.length) return "no history yet";
+    if(valueAt(ser, addDays(r.from,-1))==null) return "history starts "+dmy(ser[0].d);
+    return (pl==="yt"?isStale("yt"):igLive()&&isStale("ig")) && (LIVE.lastBy[pl]||{}).day<r.to ? "⚠ data stops "+dmy(LIVE.lastBy[pl].day) : ""; };
+  const tile=(label,val,was,col,sub,big)=>`<div class="mt ${big?"big":""}">${col?`<i style="background:${col}"></i>`:""}<span class="lbl">${label}</span><b>${val}</b>
+    ${was!==undefined?dltHTML(typeof was==="object"?was[0]:null, typeof was==="object"?was[1]:null).replace("no earlier data","—"):""}${sub?`<small>${sub}</small>`:""}</div>`;
+  const mix=[yt&&{label:"Long videos",v:A.long,color:vtypeColor("long")},yt&&{label:"Shorts",v:A.short,color:vtypeColor("short")},yt&&A.live&&{label:"Lives",v:A.live,color:vtypeColor("live")},
+    ig&&{label:"Reels",v:A.reel,color:vtypeColor("reel")},ig&&{label:"Posts",v:A.post,color:vtypeColor("image")}].filter(Boolean);
+  const total=mix.reduce((a,x)=>a+x.v,0), totalWas=(yt?B.long+B.short+B.live:0)+(ig?B.reel+B.post:0);
+  return `<div class="sec month"><div class="sec-h"><h3>Monthly overview</h3>
+      <select id="monSel" aria-label="Month">${monthChoices().map(c=>`<option value="${c}" ${c===k?"selected":""}>${monthName(c)}${monthRange(c).full?"":" (so far)"}</option>`).join("")}</select>
+      <span class="hint">${esc(rangeText(r))}${r.full?"":" · month still running"} · ▲▼ vs ${esc(monthName(pk))} · ${PLATVIEW==="all"?"YouTube and Instagram":PLAT_NAME[PLATVIEW]+" only"}</span></div>
+    <div class="mgrid">
+      <div class="mtiles">
+        ${yt?tile("Subscribers gained",signed(A.subs),[A.subs,B.subs],"var(--c1)",why("yt")||"YouTube, net (can be 0 or negative)",1):""}
+        ${ig?tile("Followers gained",signed(A.fol),[A.fol,B.fol],"var(--c3)",why("ig")||"Instagram, net (can be 0 or negative)",1):""}
+        ${tile("Total published",fmt(total),[total,totalWas],"",`${kfmt(A.views)} views on them so far`,1)}
+        ${yt?tile("Long videos",fmt(A.long),[A.long,B.long],vtypeColor("long"),"YouTube"):""}
+        ${yt?tile("Shorts",fmt(A.short),[A.short,B.short],vtypeColor("short"),"YouTube"):""}
+        ${ig?tile("Reels",fmt(A.reel),[A.reel,B.reel],vtypeColor("reel"),"Instagram"):""}
+        ${ig?tile("Posts",fmt(A.post),[A.post,B.post],vtypeColor("image"),"Instagram images & carousels"):""}
+        ${yt&&A.live?tile("Lives",fmt(A.live),[A.live,B.live],vtypeColor("live"),"YouTube"):""}
+      </div>
+      <div class="chart-card mpie"><div class="chart-head"><h4>Content mix</h4><span class="hint">${esc(monthName(k))}</span></div>
+        ${total?donutChart(mix,330,180,"PUBLISHED"):`<p class="hint" style="padding:46px 0;text-align:center">Nothing published in ${esc(monthName(k))}.</p>`}</div>
+    </div></div>`;
+}
+
 function renderSummary(){
   const vI=IDEAS.filter(platOK), vC=CARDS.filter(platOK);   // Summary platform switch
   const pub=publishedInPeriod();
@@ -2066,28 +2129,14 @@ function renderSummary(){
     return `<div class="okr-more ${open?"open":""}"><button data-okrmore="${k}">${open?"▴":"▾"} Agreement status (${n})</button>
       ${open?(n?postingTimeHTML(k,col)+gs.map(g=>goalHTML(g,col)).join("")+postLog(k,gs):`<p class="hint" style="margin:8px 0 0">No agreement targets for ${PLAT_NAME[k]} yet — set them in the <b>Our agreement</b> tab.</p>`):""}</div>`; };
   const okr=(k,n,col,series,isLive)=>{
-    const tgt=TG.targets[k];
-    if(!series.length) return `<div class="okr"><div class="okr-top"><div><div class="lbl" style="margin-bottom:4px">${n} ${AUD(k)}</div>
-        <div class="okr-v" style="color:var(--ink-3)">—</div></div>
-        <div style="text-align:right"><div class="okr-t">target ${fmt(tgt)}</div></div></div>
-        <div class="meter"><i style="width:0"></i></div>
-        <div class="okr-foot"><span>${isLive?"Waiting for the first sync":"No count entered yet"}</span>
-        ${isLive?"":`<button class="btn sm" data-updf="1">Add the first count</button>`}</div>${more(k,col)}</div>`;
-    const last=series[series.length-1], stale=isLive && last.d<addDays(today(),-1), wk=stale?null:valueAt(series, addDays(last.d,-7));
-    /* progress counts from where the target started, not from zero */
-    const st=startOf(k, series);
-    const cur=last.v, gap=Math.max(1, tgt-st.v), gained=cur-st.v, pct=Math.max(0,Math.min(100,gained/gap*100)), delta=wk!=null?cur-wk:null;
-    return `<div class="okr"><div class="okr-top">
-      <div><div class="lbl" style="margin-bottom:4px">${n} ${AUD(k)} ${isLive?`<span class="badge good" style="margin-left:4px">live</span>`:`<span class="badge mute" style="margin-left:4px">manual</span>`}</div><div class="okr-v">${fmt(cur)} <small>/ ${fmt(tgt)}</small></div></div>
-      <div style="text-align:right">
-        ${stale?`<div class="okr-t" style="color:var(--crit)">⚠ last reading ${dmy(last.d)}</div><div class="hint">not synced since</div>`
-          :delta!=null?`<div class="okr-t" style="color:${delta>0?"var(--good)":delta<0?"var(--crit)":"var(--ink-3)"}">${delta>0?"+":delta<0?"−":"±"}${fmt(Math.abs(delta))} this week</div>`:`<div class="okr-t">as of ${dmy(last.d)}</div>`}</div></div>
-      <div class="okr-from"><span>Started at <b>${fmt(st.v)}</b> on ${dmy(st.d)}</span><span>→</span><span>now <b>${fmt(cur)}</b></span><span>→</span><span>target <b>${fmt(tgt)}</b></span></div>
+    const tgt=TG.targets[k], last=series.length?series[series.length-1]:null, cur=last?last.v:null;
+    const stale=isLive && last && last.d<addDays(today(),-1), pct=cur!=null&&tgt?Math.max(0,Math.min(100,cur/tgt*100)):0;
+    return `<div class="okr okr-lite"><div class="lbl">${n} ${AUD(k)} ${isLive?`<span class="badge good" style="margin-left:4px">live</span>`:`<span class="badge mute" style="margin-left:4px">manual</span>`}</div>
+      <div class="okr-v">${cur==null?"—":fmt(cur)} <small>/ ${fmt(tgt)}</small></div>
       <div class="meter"><i style="width:${pct}%;background:${col}"></i></div>
-      <div class="okr-foot"><span><b style="color:${gained>0?"var(--good)":"var(--crit)"}">${gained>=0?"+":"−"}${fmt(Math.abs(gained))}</b> of +${fmt(tgt-st.v)} gained · ${pct.toFixed(1)}%</span>
-        <span class="num">${cur>=tgt?"target reached 🎉":(()=>{ const p=paceNeeded(k, cur, tgt); return `${fmt(tgt-cur)} to go · needs +${fmt(p.need)}/wk for ${p.w} week${p.w===1?"":"s"}${TG.by&&TG.by[k]?" (by "+dmy(TG.by[k])+")":""}`; })()}</span></div>
-      ${checkpoints(k, st, cur, tgt)}
-      ${weekLog(k, series, st, tgt)}${more(k,col)}</div>`; };
+      <div class="okr-foot"><span>${cur==null?(isLive?"Waiting for the first sync":"No count entered yet"):cur>=tgt?"Target reached 🎉":`${fmt(tgt-cur)} to go · ${pct.toFixed(1)}% of target`}</span>
+        <span class="${stale?"stalec":""}">${last?(stale?"⚠ last reading ":"as of ")+dmy(last.d):""}</span>
+        ${!isLive&&cur==null?`<button class="btn sm" data-updf="1">Add the first count</button>`:""}</div></div>`; };
   $("#pane-summary").innerHTML=`
    <div class="sumbar">
      <div class="platsw">${[["all","Both platforms"],["yt","YouTube"],["ig","Instagram"]].map(([k,l])=>
@@ -2097,10 +2146,11 @@ function renderSummary(){
        <label class="dfield"><span>From</span><input type="date" id="perFrom" value="${periodStart()}" max="${today()}"></label>
        <span class="hint">→</span>
        <label class="dfield"><span>To</span><input type="date" id="perTo" value="${periodEnd()}" max="${today()}"></label>
+       <button class="btn dark" id="perGo" ${LIVE.status==="loading"?"disabled":""}>${LIVE.status==="loading"?"Loading…":"✓ Confirm dates"}</button>
      </div>
-     <button class="btn pri" id="cmpOpen" style="margin-left:auto">⇄ Compare Instagram vs YouTube</button>
+     <button class="btn pri" id="cmpOpen" style="margin-left:auto" title="Compare an Instagram post with a YouTube video">⇄ Compare IG vs YT</button>
    </div>
-   <div class="rangeline"><b>${esc(rangeText())}</b> · ${periodDays()} day${periodDays()===1?"":"s"} · ${PLATVIEW==="all"?"YouTube and Instagram":PLAT_NAME[PLATVIEW]+" only"} · compared with the ${periodDays()} days before (${esc(rangeText(prevRange()))})</div>
+   <div class="rangeline">${PLATVIEW==="all"?"YouTube and Instagram together":PLAT_NAME[PLATVIEW]+" only"} · range <b>${esc(rangeText())}</b> (${periodDays()} day${periodDays()===1?"":"s"}), compared with the ${periodDays()} days before</div>
 
    <div class="sec">${liveBar()}
      ${fdrop("sum", `🔎 Post types · ${(()=>{ const all=Object.keys(REG.vtype).filter(typeVisible), on=all.filter(k=>FILTERS.vtypes.includes(k)); return on.length===all.length?"all types":on.length+" of "+all.length+" types"; })()}`, `<div class="row">
@@ -2108,28 +2158,19 @@ function renderSummary(){
      ${Object.keys(REG.vtype).filter(typeVisible).map(k=>`<button class="chip ${FILTERS.vtypes.includes(k)?"on":""}" data-vt="${k}">${esc(vtypeLabel(k))}</button>`).join("")}
    </div>`)}</div>
 
-   ${kpiRow(vI)}
+   ${monthSection()}
 
    <div class="sec"><div class="sec-h"><h3>OKR progress</h3>
-     <span class="hint">Two separate goals, never a combined audience number</span>
+     <span class="hint">Total ${PLATVIEW==="yt"?"subscribers":PLATVIEW==="ig"?"followers":"followers and subscribers"} today, against the target</span>
      ${igLive()?"":`<button class="btn sm" data-updf="1" style="margin-left:auto">Update Instagram count</button>`}</div>
      <div class="okrs">${PLATVIEW!=="ig"?okr("yt","YouTube","var(--c1)",yt,true):""}${PLATVIEW!=="yt"?okr("ig","Instagram","var(--c3)",ig,igLive()):""}</div></div>
+
+   <div class="secband"><span class="lbl">Selected range</span><b>${esc(rangeText())}</b><span class="hint">Everything below follows the dates at the top</span></div>
+   ${kpiRow(vI)}
 
    <div class="sec"><div class="charts two">${PLATVIEW==="ig"?"":formatSection()}${ideasSection(vI)}</div></div>
 
    ${driversSection()}
-
-   <div class="sec"><div class="sec-h"><h3>Process health</h3><span class="hint">Live from this space and the synced posts</span></div>
-     <div class="tiles" id="tiles">
-       ${tile("published","Published","",pub.length,"Posts in the selected period and filters")}
-       ${tile("views","Views","",kfmt(views),"On those posts, all-time so far")}
-       ${tile("ideas","Ideas logged","",ideasP.length,Object.entries(byPerson).map(([n,c])=>`${c} ${esc(n)}`).join(" · ")||"In the selected period")}
-       ${tile("conv","Idea → published","",conv+"<small>%</small>","Of every idea ever logged")}
-       ${tile("accept","Acceptance rate","",acceptRate+"<small>%</small>",`${accepted.length} accepted of ${decided.length} decided`)}
-       ${tile("cycle","Cycle time","",cycle+"<small> days</small>","Accepted → published, average")}
-       ${tile("ontime","On-time publish","",onTime+"<small>%</small>","Shipped on the scheduled date")}
-       ${tile("research","Research compliance",comp<100&&allPub.length?`<span class="badge warn">${allPub.length-allPub.filter(c=>gResearch(c.pre)).length} skipped</span>`:"",comp+"<small>%</small>","Published cards with a full research block")}
-       ${tile("backlog","Backlog",backlog<3?`<span class="badge crit">thin</span>`:backlog>20?`<span class="badge warn">hoarding</span>`:`<span class="badge good">healthy</span>`,backlog,"Accepted ideas waiting in To Do")}</div></div>
 
    <div class="sec"><div class="sec-h"><h3>Output and pipeline</h3></div><div class="charts">
      <div class="chart-card"><div class="chart-head"><h4>Posts by video type</h4>
@@ -2158,12 +2199,15 @@ function renderSummary(){
    <div class="sec" id="postsSec">${postsSection()}</div>`;
 
   const P=$("#pane-summary"); activateTips(P);
-  const setRange=()=>{ OPEN_TILE=null; PF.limit=50; renderSummary(); if(LIVE.since && liveSince()<LIVE.since) loadLive(true); };
-  const ps=$("#perSel"); if(ps) ps.onchange=()=>{ if(ps.value==="custom"){ const r=periodRange(); FILTERS.from=r.from; FILTERS.to=r.to; } FILTERS.period=ps.value; setRange(); };
-  [["#perFrom","from"],["#perTo","to"]].forEach(([id,k])=>{ const el=$(id); if(el) el.onchange=()=>{ if(!el.value) return; const r=periodRange();
-    FILTERS.from=r.from; FILTERS.to=r.to; FILTERS[k]=el.value>today()?today():el.value;
-    if(FILTERS.from>FILTERS.to){ if(k==="from") FILTERS.to=FILTERS.from; else FILTERS.from=FILTERS.to; }
-    FILTERS.period="custom"; setRange(); }; });
+  const setRange=async()=>{ OPEN_TILE=null; PF.limit=50; saveRange(); renderSummary(); await loadLive(true); };
+  const ps=$("#perSel"); if(ps) ps.onchange=()=>{ if(ps.value==="custom"){ const r=periodRange(); FILTERS.from=r.from; FILTERS.to=r.to; $("#perFrom").focus(); FILTERS.period="custom"; return; } FILTERS.period=ps.value; setRange(); };
+  // typing a date only marks the button; nothing changes until Confirm
+  [["#perFrom"],["#perTo"]].forEach(([id])=>{ const el=$(id); if(el) el.oninput=()=>{ const g=$("#perGo"); if(g) g.classList.add("pulse"); }; });
+  const go=$("#perGo"); if(go) go.onclick=()=>{ let f=$("#perFrom").value, t=$("#perTo").value;
+    if(!f||!t){ toast("Pick both a From and a To date"); return; }
+    if(t>today()) t=today(); if(f>t) [f,t]=[t,f];
+    FILTERS.from=f; FILTERS.to=t; FILTERS.period="custom"; toast("Showing "+rangeText()); setRange(); };
+  const ms=$("#monSel"); if(ms) ms.onchange=()=>{ MONTH=ms.value; saveRange(); renderSummary(); if(monthRange().from<(LIVE.since||"")) loadLive(true); };
   P.querySelectorAll("[data-who]").forEach(b=>b.onclick=()=>{ IDEA_WHO=b.dataset.who; renderSummary(); });
   P.querySelectorAll("[data-idea]").forEach(r=>r.onclick=()=>openIdea(r.dataset.idea));
   const co=$("#cmpOpen"); if(co) co.onclick=openCompare;
