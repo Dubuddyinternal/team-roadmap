@@ -167,6 +167,26 @@ table.mini th{padding:8px 10px}
 .okr2-m{position:relative}.okr2-m u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink-2);border-radius:2px}
 .fmtnums>.na{opacity:.6}
 .pquick{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.okr-top-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.okr-top-bar .platsw{margin:0}.okr-top-bar .platsw button{gap:8px}.okr-top-bar .av{width:20px;height:20px;font-size:10px}
+.okr-top-bar select{margin-left:auto;border:1px solid var(--line-2);border-radius:999px;padding:7px 12px;background:var(--surface);font-weight:600}
+.okr-hero{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;margin-bottom:14px}
+.okr-hero>div:first-child{display:flex;gap:14px;align-items:center}.okr-hero .av{width:44px;height:44px;font-size:18px}
+.okr-hero h2{font-size:21px;margin:2px 0}
+.okr-score{text-align:right}.okr-score b{display:block;font-size:34px;letter-spacing:-.03em;line-height:1}.okr-score small{font-size:16px;color:var(--ink-3)}
+.okkrs{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.okkr{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;border-top:3px solid var(--line-2)}
+.okkr.st-done{border-top-color:var(--good)}.okkr.st-ok{border-top-color:var(--c2)}.okkr.st-behind{border-top-color:var(--warn)}.okkr.st-miss{border-top-color:var(--crit)}
+.okkr-h{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.okkr-h b{font-size:14px}
+.okkr-st{margin-left:auto;font-family:var(--mono);font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:5px;background:var(--surface-2);color:var(--ink-2)}
+.okkr.st-done .okkr-st{background:var(--good-soft);color:var(--good)}.okkr.st-behind .okkr-st{background:var(--warn-soft);color:var(--warn)}.okkr.st-miss .okkr-st{background:var(--crit-soft);color:var(--crit)}
+.okkr-nums{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0 10px}
+.okkr-nums b{display:block;font-size:24px;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.15}.okkr-nums small{font-size:11px;color:var(--ink-3)}
+.okkr-m{position:relative}.okkr-m u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink-2)}
+.okkr-sub{font-size:12px;color:var(--ink-2);margin:8px 0 0}.okkr-sub .up{color:var(--good)}.okkr-sub .dn{color:var(--crit)}
+.okr-foot2{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px}
+.okr-edit{margin-top:14px}.okr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin:10px 0}
+.okr-grid .fld span{display:block;font-size:12px;color:var(--ink-2);margin-bottom:4px}.okr-grid input{width:100%;border:1px solid var(--line-2);border-radius:var(--r-s);padding:7px 9px}
 .ktag{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:600;padding:2.5px 7px;border-radius:5px;white-space:nowrap;margin:1px 4px 1px 0;
   background:color-mix(in srgb,var(--kc) 14%,transparent);color:var(--kc);border:1px solid color-mix(in srgb,var(--kc) 30%,transparent)}
 .ktag.faded{opacity:.55}
@@ -1240,7 +1260,11 @@ function normTargets(o){
     start:{ yt:((o.start||{}).yt)||null, ig:((o.start||{}).ig)||null },
     /* "counting from" date per platform ("" = the first day of this quarter) */
     from:{ yt:((o.from||{}).yt)||"", ig:((o.from||{}).ig)||"" },
-    who:(o.who && typeof o.who==="object") ? o.who : {} };
+    who:(o.who && typeof o.who==="object") ? o.who : {},
+    /* 🎯 Individual OKRs: [{email, name, krs:{ytTotal, igTotal, shorts, reels, longs}, mail:{mid, end}}] — monthly key results per person */
+    people:(Array.isArray(o.people)?o.people:[]).filter(x=>x && x.email).map(x=>({ email:String(x.email).toLowerCase(), name:x.name||"",
+      krs:Object.assign({ ytTotal:null, igTotal:null, shorts:null, reels:null, longs:null }, x.krs||{}),
+      mail:Object.assign({ mid:true, end:true }, x.mail||{}) })) };
   t.goals.forEach(g=>{ if(!g.id) g.id=uid("g"); });
   return t;
 }
@@ -3893,6 +3917,126 @@ function openCulture(){
   $("#saveCu").onclick=()=>{ S.culture=$("#cu").value.trim(); if(save()){ closeDrawer(); toast("Saved"); } };
 }
 
+/* ------------------------------------------------------------ 🎯 INDIVIDUAL OKRs
+   Monthly key results for one person (e.g. the creator): Shorts, Reels and long videos published this month,
+   and the subscriber / follower totals — each against its target, from the synced YouTube and Instagram data.
+   The person sees their own on opening the tab. On the 20th they get a friendly reminder if a target isn't
+   reached yet, and on the 1st a summary of the month before (Edge Function "social-okr"). */
+const OKR_KRS = [
+  { k:"shorts", label:"YouTube Shorts published", tag:["yt","short"], unit:"Shorts", count:r=>r.platform==="yt"&&r.vtype==="short" },
+  { k:"reels",  label:"Instagram Reels published", tag:["ig","reel"], unit:"Reels", count:r=>r.platform==="ig"&&r.vtype==="reel" },
+  { k:"longs",  label:"YouTube long videos published", tag:["yt","long"], unit:"long videos", count:r=>r.platform==="yt"&&r.vtype==="long" },
+  { k:"ytTotal", label:"YouTube subscribers", pl:"yt", unit:"subscribers" },
+  { k:"igTotal", label:"Instagram followers", pl:"ig", unit:"followers" },
+];
+let OKR_WHO = "", OKR_MONTH = "", OKR_EDIT = false;
+const myEmail = () => { try{ const u=typeof currentUser==="function"?currentUser():null; return u&&u.email?String(u.email).toLowerCase():""; }catch(_){ return ""; } };
+function memberList(){ try{ return (typeof assigneeMembers==="function"?assigneeMembers():[]).map(u=>({ email:String(u.email||"").toLowerCase(), name:(typeof userDisplayName==="function"?userDisplayName(u):u.email) })).filter(u=>u.email); }catch(_){ return []; } }
+const personName = p => p.name || ((memberList().find(u=>u.email===p.email)||{}).name) || p.email.split("@")[0];
+function monthOf(k){ const [y,m]=k.split("-").map(Number); const f=iso(new Date(y,m-1,1)), e=iso(new Date(y,m,0)); return { k, from:f, to:e, label:new Date(y,m-1,1).toLocaleDateString("en-GB",{month:"long",year:"numeric"}) }; }
+/* one person's key results for a month: target, achieved, left, progress */
+function okrResults(p, M){
+  const t=today(), end=M.to<t?M.to:t, rows=postRows().filter(r=>r.date && r.date>=M.from && r.date<=end);
+  const daysIn=days(M.from,M.to)+1, gone=Math.max(0,Math.min(daysIn, days(M.from, end)+1)), left=Math.max(0, days(t, M.to));
+  return OKR_KRS.filter(d=>Number(p.krs[d.k])>0).map(d=>{
+    const target=Number(p.krs[d.k]);
+    if(d.count){ const done=rows.filter(d.count).length;
+      return { d, target, done, left:Math.max(0,target-done), pct:Math.min(100,done/target*100), met:done>=target, expected:Math.round(target*gone/daysIn) }; }
+    // totals: where the count stands, and what this month had to add to stay on course for the total by the deadline
+    const ser=d.pl==="yt"?ytSeries():igSeries(); if(!ser.length) return { d, target, done:null, na:true };
+    const startV=valueAt(ser, addDays(M.from,-1)) ?? (ser.find(x=>x.d>=M.from)||{}).v ?? null, now=valueAt(ser, end);
+    const dl=(TG.by&&TG.by[d.pl])||quarterEnd(), monthsLeft=Math.max(1, (new Date(dl+"T00:00:00").getFullYear()-new Date(M.from+"T00:00:00").getFullYear())*12 + new Date(dl+"T00:00:00").getMonth()-new Date(M.from+"T00:00:00").getMonth()+1);
+    const need=startV==null?null:Math.max(0, Math.ceil((target-startV)/monthsLeft)), gained=startV==null||now==null?null:now-startV;
+    return { d, target, total:true, now, startV, gained, need, dl, met:now!=null&&(now>=target || (need!=null&&gained>=need)),
+      pct:now==null?0:Math.min(100, now/target*100), monthPct:need?Math.max(0,Math.min(100,(gained||0)/need*100)):100 };
+  });
+}
+function okrCard(x, M){
+  const past=M.to<today(), tg=x.d.tag?ktag(x.d.tag[0],x.d.tag[1]):ktag(x.d.pl, x.d.pl==="yt"?"long":"reel").replace(/>[^<]*</,">"+(x.d.pl==="yt"?"YouTube":"Instagram")+"<");
+  if(x.na) return `<div class="okkr"><div class="okkr-h">${tg}<b>${esc(x.d.label)}</b></div><p class="hint">No ${x.d.unit} history yet — it arrives with the sync.</p></div>`;
+  if(x.total){
+    const st=x.now>=x.target?"done":x.met?"ok":past?"miss":"behind";
+    return `<div class="okkr st-${st}"><div class="okkr-h">${tg}<b>${esc(x.d.label)}</b><span class="okkr-st">${st==="done"?"Target reached 🎉":st==="ok"?"On course ✓":past?"Missed":"Behind"}</span></div>
+      <div class="okkr-nums"><div><span class="lbl">Target</span><b>${fmt(x.target)}</b><small>total by ${dmy(x.dl)}</small></div>
+        <div><span class="lbl">${past?"At month end":"Now"}</span><b>${fmt(x.now)}</b><small>${x.pct.toFixed(1)}% of target</small></div>
+        <div><span class="lbl">Left</span><b>${fmt(Math.max(0,x.target-x.now))}</b><small>to reach ${fmt(x.target)}</small></div></div>
+      <div class="meter"><i style="width:${x.pct}%;background:${x.d.pl==="yt"?"var(--c1)":"var(--c3)"}"></i></div>
+      <p class="okkr-sub">This month: <b class="${x.gained>=x.need?"up":"dn"}">${x.gained==null?"—":(x.gained>=0?"+":"−")+fmt(Math.abs(x.gained))}</b> of the <b>+${fmt(x.need)}</b> it needed
+        (${fmt(x.startV)} on ${dmy(addDays(M.from,-1))}). ${x.need?`<span class="hint">${Math.round(x.monthPct)}% of this month's share</span>`:""}</p></div>`;
+  }
+  const st=x.met?"done":past?"miss":x.done>=x.expected?"ok":"behind";
+  return `<div class="okkr st-${st}"><div class="okkr-h">${tg}<b>${esc(x.d.label)}</b><span class="okkr-st">${st==="done"?"Done ✓":st==="ok"?"On pace":past?"Not reached":"Behind pace"}</span></div>
+    <div class="okkr-nums"><div><span class="lbl">Target</span><b>${fmt(x.target)}</b><small>minimum this month</small></div>
+      <div><span class="lbl">Achieved</span><b>${fmt(x.done)}</b><small>${Math.round(x.pct)}%</small></div>
+      <div><span class="lbl">Left</span><b>${fmt(x.left)}</b><small>${x.met?"all done":past?"not done":"to go"}</small></div></div>
+    <div class="meter okkr-m"><i style="width:${x.pct}%;background:${kindColor(x.d.tag[0],x.d.tag[1])}"></i>${!past&&!x.met?`<u style="left:${Math.min(100,x.expected/x.target*100)}%" title="Where it should be today: ${x.expected}"></u>`:""}</div>
+    ${!past&&!x.met?`<p class="okkr-sub">${x.done>=x.expected?"On pace":"Should be about <b>"+x.expected+"</b> by today"} · <b>${x.left}</b> more in the ${Math.max(0,days(today(),M.to))+1} days left</p>`:""}</div>`;
+}
+function renderOkrs(){
+  const P=$("#pane-okrs"), ed=canEditTargets(), me=myEmail(), people=TG.people||[];
+  if(!OKR_WHO || !people.some(p=>p.email===OKR_WHO)) OKR_WHO=(people.find(p=>p.email===me)||people[0]||{}).email||"";
+  if(!OKR_MONTH) OKR_MONTH=today().slice(0,7);
+  const p=people.find(x=>x.email===OKR_WHO), M=monthOf(OKR_MONTH), mine=p&&p.email===me;
+  const months=[]; { const d=new Date(); d.setDate(1); for(let i=0;i<6;i++){ months.push(iso(d).slice(0,7)); d.setMonth(d.getMonth()-1); } }
+  const res=p?okrResults(p,M):[], metN=res.filter(x=>x.met || (M.to>=today() && !x.total && !x.na && x.done>=x.expected)).length;
+  const daysLeft=Math.max(0,days(today(),M.to))+(M.to>=today()?1:0);
+  P.innerHTML=`<div class="sec">
+    <div class="okr-top-bar"><div class="platsw">${people.map(x=>`<button data-okrwho="${esc(x.email)}" class="${x.email===OKR_WHO?"on":""}">${avatar(personName(x))} ${esc(personName(x))}${x.email===me?" (you)":""}</button>`).join("")}
+      ${ed?`<button data-okradd="1" title="Add a person's monthly key results">＋ Add person</button>`:""}</div>
+      <select id="okrMonth">${months.map(k=>`<option value="${k}" ${k===OKR_MONTH?"selected":""}>${monthOf(k).label}${k===today().slice(0,7)?" (this month)":""}</option>`).join("")}</select></div>
+    ${!people.length?`<div class="card"><p style="margin:0"><b>No individual OKRs yet.</b> ${ed?"Press <b>＋ Add person</b> to set someone's monthly key results — for example Shivam: 18 Shorts, 18 Reels, 8 long videos, 80,000 YouTube subscribers and 20,000 Instagram followers.":"Someone who can edit social targets sets them up here."}</p></div>`:""}
+    ${p?`<div class="okr-hero"><div>${avatar(personName(p))}<div><span class="lbl">${mine?"Your objectives":"Objectives"} · ${esc(M.label)}</span>
+        <h2>${mine?"Hi "+esc(personName(p).split(" ")[0])+", here's your month":esc(personName(p))+"'s key results"}</h2>
+        <p class="hint">${M.to<today()?"Month finished":"Day "+(days(M.from,today())+1)+" of "+(days(M.from,M.to)+1)+" · "+daysLeft+" day"+(daysLeft===1?"":"s")+" left"} · counted from the synced YouTube and Instagram posts</p></div></div>
+      <div class="okr-score"><b>${metN}<small> / ${res.length}</small></b><span class="lbl">key results ${M.to<today()?"met":"on course"}</span></div></div>
+      <div class="okkrs">${res.map(x=>okrCard(x,M)).join("")||`<p class="hint">No key results set for ${esc(personName(p))} yet.</p>`}</div>
+      <div class="okr-foot2">
+        <span class="hint">✉️ ${p.mail.mid?"Friendly reminder on the 20th if a target isn't reached yet":"No 20th reminder"} · ${p.mail.end?"month summary on the 1st":"no month summary"} · to ${esc(p.email)}</span>
+        <span style="flex:1"></span>
+        ${ed?`<button class="btn sm" data-okrsend="mid">✉️ Send reminder now</button><button class="btn sm" data-okrsend="end">✉️ Send month summary now</button><button class="btn sm" id="okrEdit">${OKR_EDIT?"Close editing":"✎ Edit targets"}</button>`:""}</div>
+      ${ed&&OKR_EDIT?okrEditor(p):""}`:""}</div>`;
+  P.querySelectorAll("[data-okrwho]").forEach(b=>b.onclick=()=>{ OKR_WHO=b.dataset.okrwho; OKR_EDIT=false; renderOkrs(); });
+  const mo=$("#okrMonth"); if(mo) mo.onchange=()=>{ OKR_MONTH=mo.value; renderOkrs(); };
+  const oe=$("#okrEdit"); if(oe) oe.onclick=()=>{ OKR_EDIT=!OKR_EDIT; renderOkrs(); };
+  const add=P.querySelector("[data-okradd]"); if(add) add.onclick=()=>{
+    const taken=new Set(people.map(x=>x.email)), list=memberList().filter(u=>!taken.has(u.email));
+    openDrawer(`<div class="dr-h"><div><div class="lbl">Individual OKRs</div><h3 style="margin-top:4px">Add a person</h3></div><button class="btn sm" id="xClose">Close</button></div>
+      <div class="fld"><label>Who</label><select id="okrNew">${list.map(u=>`<option value="${esc(u.email)}">${esc(u.name)} · ${esc(u.email)}</option>`).join("")||`<option value="">Everyone already has key results</option>`}</select></div>
+      <p class="hint">They start with the creator's usual month — 18 Shorts, 18 Reels, 8 long videos, and the subscriber / follower totals from Our agreement. Change any of them after.</p>
+      <button class="btn pri" id="okrNewGo" ${list.length?"":"disabled"}>Add</button>`);
+    $("#xClose").onclick=closeDrawer;
+    $("#okrNewGo").onclick=()=>{ const e=$("#okrNew").value; if(!e) return; const u=list.find(x=>x.email===e);
+      TG.people=(TG.people||[]).concat([{ email:e, name:u?u.name:"", krs:{ ytTotal:TG.targets.yt, igTotal:TG.targets.ig, shorts:18, reels:18, longs:8 }, mail:{mid:true,end:true} }]);
+      OKR_WHO=e; OKR_EDIT=true; saveOkrPeople(); closeDrawer(); renderOkrs(); };
+  };
+  P.querySelectorAll("[data-okrsend]").forEach(b=>b.onclick=async()=>{
+    const mode=b.dataset.okrsend;
+    if(!confirm(mode==="mid"?`Send ${personName(p)} the friendly reminder for ${M.label} now?`:`Send ${personName(p)} the summary for ${M.label} now?`)) return;
+    b.disabled=true;
+    try{ const r=await OPT.supa.rpc("social_okr_send_now", { p_team:OPT.team, p_email:p.email, p_mode:mode, p_month:M.k });
+      if(r.error) throw r.error; toast("Sent to "+p.email); }
+    catch(e){ toast("Couldn't send: "+((e&&e.message)||"try again")); }
+    b.disabled=false; });
+  if(OKR_EDIT && p){
+    const box=P.querySelector(".okr-edit");
+    box.querySelector("#okrSave").onclick=()=>{
+      box.querySelectorAll("[data-okrk]").forEach(i=>{ p.krs[i.dataset.okrk]=i.value===""?null:Number(i.value); });
+      p.mail.mid=box.querySelector("#okrMid").checked; p.mail.end=box.querySelector("#okrEnd").checked;
+      saveOkrPeople(); OKR_EDIT=false; renderOkrs(); toast("Key results saved"); };
+    box.querySelector("#okrDel").onclick=()=>{ if(!confirm(`Remove ${personName(p)}'s individual OKRs?`)) return;
+      TG.people=TG.people.filter(x=>x.email!==p.email); OKR_WHO=""; OKR_EDIT=false; saveOkrPeople(); renderOkrs(); };
+  }
+}
+function okrEditor(p){
+  return `<div class="okr-edit card"><h4>${esc(personName(p))}'s monthly key results</h4>
+    <div class="okr-grid">${OKR_KRS.map(d=>`<label class="fld"><span>${d.tag?ktag(d.tag[0],d.tag[1]):""}${esc(d.label)}${d.count?" — minimum per month":" — total to reach"}</span>
+      <input type="number" min="0" data-okrk="${d.k}" value="${p.krs[d.k]??""}" placeholder="not tracked"></label>`).join("")}</div>
+    <label class="pp-chk"><input type="checkbox" id="okrMid" ${p.mail.mid?"checked":""}> Friendly reminder on the 20th if a target isn't reached yet</label>
+    <label class="pp-chk"><input type="checkbox" id="okrEnd" ${p.mail.end?"checked":""}> Month summary on the 1st (target vs done)</label>
+    <div class="row" style="margin-top:10px"><button class="btn pri" id="okrSave">Save</button><button class="btn danger" id="okrDel">Remove person</button></div></div>`;
+}
+function saveOkrPeople(){ if(OPT.saveTargets){ const t=normTargets(TG); OPT.saveTargets(SPACE, t); TG_KEY=canonJSON(t); } }
+
 /* ------------------------------------------------------------ Keep an Eye on 2nd Love */
 /* 1st love is our users, 2nd love is our competitors: their accounts, their numbers week
    by week, a fixed study of what works for them, and "Try this" straight into Ideation. */
@@ -4024,11 +4168,11 @@ function openRivalLog(id){
 }
 
 /* ------------------------------------------------------------ mount */
-const PANES=["targets","summary","ideation","process","schedule","rivals"];
+const PANES=["targets","summary","okrs","ideation","process","schedule","rivals"];
 function refresh(){
   if(!R || !S) return;
   PANES.forEach(p=>{ const el=$("#pane-"+p); if(el) el.hidden = p!==TAB; });
-  ({targets:renderTargets,summary:renderSummary,ideation:renderIdeation,process:renderProcess,schedule:renderSchedule,rivals:renderRivals})[TAB]();
+  ({targets:renderTargets,summary:renderSummary,okrs:renderOkrs,ideation:renderIdeation,process:renderProcess,schedule:renderSchedule,rivals:renderRivals})[TAB]();
 }
 function mount(){
   if(HOST) return;
@@ -4046,7 +4190,7 @@ window.SX = {
   openState: ()=>OPEN,
   reopen: o=>{ if(!o||!R) return; if(o.kind==="card"&&CARDS.some(c=>c.id===o.id)) openCard(o.id); else if(o.kind==="idea"&&IDEAS.some(i=>i.id===o.id)) openIdea(o.id); },
   normalize: normalize,
-  tabs: [["targets","Our agreement"],["summary","Summary"],["ideation","Ideation"],["process","Content Process"],["schedule","Schedule"],["rivals","Keep an Eye on 2nd Love"]],
+  tabs: [["targets","Our agreement"],["summary","Summary"],["okrs","Individual OKRs"],["ideation","Ideation"],["process","Content Process"],["schedule","Schedule"],["rivals","Keep an Eye on 2nd Love"]],
   /* draw the space. opt: {tab, team, supa, canEdit(), isMember(), me(), people(), save(),
        targets(space), canEditTargets(), saveTargets(space, obj), canDeleteCards()} */
   render: function(space, wrap, opt){
