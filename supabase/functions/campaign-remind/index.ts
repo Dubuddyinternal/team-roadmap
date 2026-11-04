@@ -2,6 +2,7 @@
 // STAGE 24a — "campaign-remind" Edge Function: campaign board reminders
 //
 // action "tick"    (cron, header x-cron-key — every day 10:00 AM India time)
+//   On the deadline day: the owner of each card / sub task due today that isn't done gets "📅 due today" (🔔 + email).
 //   For every campaign (team_data cspaces): each board card (a piece from Campaign Details, or a board
 //   task) whose deadline has passed and that isn't Live gets ONE reminder per deadline: a 🔔 to its owner
 //   ("This card's status isn't updated", ref camp:<campaign>:<item> → ✓ Published in the bell) and an email.
@@ -9,6 +10,9 @@
 // action "confirm" (a signed-in team member — the board's / bell's ✓ Published, or "Not yet: new date")
 //   body { team, campaign_id, campaign, item_id, title, by, link?, new_date?, lead? }
 //   Closes the reminder and tells the campaign lead (🔔 + email).
+// action "notify"  (a signed-in team member — the 🔔 Notify button on a card or sub task)
+//   body { team, campaign_id, campaign, item_id, title, parent?, due?, to }  → a 🔔 + email to `to` now.
+// Sub tasks are items "<card id>~<sub id>"; their ✓ in the bell marks the sub task done.
 // Same Zoho Mail secrets as social-okr. DEPLOY: name exactly  campaign-remind , "Verify JWT" OFF.
 // =====================================================================
 
@@ -64,6 +68,13 @@ function boardRows(cs: any, soc: any) {
     } else out.push({ id: it.id, title: it.name || "(untitled)", due: it.date || "", ownerId: it.ownerId || "", content: false, live: !!it.live, how: "Confirmed by " + (it.liveBy || "the team") });
   }
   for (const t of cs.tasks || []) out.push({ id: t.id, title: t.title || "(untitled)", due: t.due || "", ownerId: t.ownerId || "", content: false, live: !!t.live, how: "Confirmed by " + (t.liveBy || "the team") });
+  // sub tasks: the same reminders as a card
+  const hosts = [...(cs.items || []).map((it: any) => ({ id: it.id, title: it.name, subs: it.subs })), ...(cs.tasks || []).map((t: any) => ({ id: t.id, title: t.title, subs: t.subs }))];
+  for (const h of hosts) for (const st of (Array.isArray(h.subs) ? h.subs : [])) {
+    if (!st || !st.id) continue;
+    const done = st.status ? st.status === "done" : !!st.done;
+    out.push({ id: h.id + "~" + st.id, title: String(st.t || "a sub task"), parent: h.title || "", due: st.due || "", ownerId: st.ownerId || "", content: false, sub: true, live: done, how: "Sub task done" });
+  }
   return out;
 }
 
@@ -108,6 +119,38 @@ Deno.serve(async (req) => {
     return json({ ok: true, told: lead.email, mailed: mailed || "sent" });
   }
 
+  // ---------------------------------------------------------------- notify (🔔 Notify button)
+  if (body.action === "notify") {
+    const raw = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+    if (raw.split(".").length !== 3) return json({ ok: false, error: "Sign in first." }, 401);
+    const { data: who } = await admin.auth.getUser(raw);
+    const me = who?.user; if (!me) return json({ ok: false, error: "Sign in first." }, 401);
+    const team = String(body.team || ""), cid = String(body.campaign_id || ""), iid = String(body.item_id || ""), to = String(body.to || "");
+    if (!team || !cid || !iid || !to) return json({ ok: false, error: "Bad request" }, 400);
+    const { data: mem } = await admin.from("memberships").select("user_id").eq("team_slug", team).eq("user_id", me.id).maybeSingle();
+    const { data: meP } = await admin.from("profiles").select("id,email,name,profile,is_super").eq("id", me.id).maybeSingle();
+    if (!mem && !(meP && meP.is_super)) return json({ ok: false, error: "Not in this team" }, 403);
+    const { data: toMem } = await admin.from("memberships").select("user_id").eq("team_slug", team).eq("user_id", to).maybeSingle();
+    const { data: prof } = await admin.from("profiles").select("id,email,name,profile").eq("id", to).maybeSingle();
+    if (!toMem || !prof) return json({ ok: false, error: "That person isn't in this team" });
+    const title = String(body.title || "a card").slice(0, 160), parent = String(body.parent || "").slice(0, 160);
+    const camp = String(body.campaign || "the campaign").slice(0, 140), due = /^\d{4}-\d{2}-\d{2}$/.test(body.due || "") ? body.due : "";
+    const from = firstName(meP), appLink = APP_URL + "?team=" + encodeURIComponent(team);
+    const what = "“" + title + "”" + (parent ? " (a sub task of “" + parent + "”)" : "");
+    await admin.from("campaign_reminders").insert({ team_slug: team, campaign_id: cid, item_id: iid, title, due: due || todayIST(), to_user: to,
+      to_name: (prof.profile && prof.profile.displayName) || prof.name || "", kind: "nudge-" + Date.now(), status: "done", how: "🔔 Notified by " + from, done_at: new Date().toISOString() });
+    await admin.from("team_notifications").insert({ team_slug: team, title: "🔔 " + from + " is reminding you: " + title, audience: "people", recipients: [to],
+      body: what + " · " + camp + (due ? " · due " + dmy(due) : "") + "\nWhen it's out, press ✓ Published (or open the board).", bell: true, popup: true, created_by: me.id, ref: "camp:" + cid + ":" + iid });
+    let mailed = "no email";
+    if (send && prof.email) {
+      const err = await send(prof.email, "🔔 " + title + (due ? " — due " + dmy(due) : "") + " · " + camp,
+        "Hi " + firstName(prof) + ",\n\n" + from + " is reminding you about " + what + " in " + camp + (due ? ", due " + dmy(due) : "") + ".\n\n" + appLink + "\n\n— The DU Buddy team",
+        page(firstName(prof), ["<b>" + esc(from) + "</b> is reminding you about <b>" + esc(what) + "</b> in <b>" + esc(camp) + "</b>."], [["Due", due ? dmy(due) : ""], ["Campaign", camp]], "Open the campaign board", appLink));
+      mailed = err || "sent";
+    }
+    return json({ ok: true, mailed });
+  }
+
   // ---------------------------------------------------------------- tick (cron)
   const { data: cfg } = await admin.from("feedback_cron").select("cron_key").eq("id", 1).single();
   const key = req.headers.get("x-cron-key") || "";
@@ -132,13 +175,28 @@ Deno.serve(async (req) => {
         }
         // a new date replaced the old deadline: the old reminder is "moved"
         for (const o of mine.filter((o: any) => o.due !== r.due)) await admin.from("campaign_reminders").update({ status: "moved", how: "New date: " + dmy(r.due), done_at: new Date().toISOString() }).eq("id", o.id);
-        if (!r.due || r.due >= today || r.due < START || !r.ownerId) continue;
+        if (!r.due || r.due > today || r.due < START || !r.ownerId) continue;
+        const dueToday = r.due === today;
         const { data: prof } = await admin.from("profiles").select("id,email,name,profile").eq("id", r.ownerId).maybeSingle();
         const ins = await admin.from("campaign_reminders").insert({ team_slug: team, campaign_id: cs.id, item_id: r.id, title: r.title, due: r.due,
-          to_user: r.ownerId, to_name: prof ? ((prof.profile && prof.profile.displayName) || prof.name || "") : "" }).select("id").maybeSingle();
+          to_user: r.ownerId, to_name: prof ? ((prof.profile && prof.profile.displayName) || prof.name || "") : "", kind: dueToday ? "due" : "overdue" }).select("id").maybeSingle();
         if (ins.error) continue;   // already reminded for this deadline (unique), or a bad row
+        const what = "“" + r.title + "”" + (r.sub ? " (a sub task of “" + r.parent + "”)" : "");
+        if (dueToday) {
+          await admin.from("team_notifications").insert({ team_slug: team, title: "📅 Due today: " + r.title, audience: "people", recipients: [r.ownerId],
+            body: what + " · " + camp + " · due today (" + dmy(r.due) + ")\nWhen it's out, press ✓ " + (r.sub ? "Published to mark it done." : "Published."), bell: true, popup: true, ref: "camp:" + cs.id + ":" + r.id });
+          if (send && prof && prof.email) {
+            const err = await send(prof.email, "📅 Due today: " + r.title + " — " + camp,
+              "Hi " + firstName(prof) + ",\n\n" + what + " in " + camp + " is due today.\nWhen it's out, press ✓ Published on the campaign board (or in your 🔔).\n\n" + appLink + "\n\n— The DU Buddy team",
+              page(firstName(prof), ["<b>" + esc(what) + "</b> in <b>" + esc(camp) + "</b> is due <b>today</b>.", "When it's out, press <b>✓ Published</b> on the campaign board (or in your 🔔)."],
+                [["Campaign", camp], ["Due", dmy(r.due)]], "Open the campaign board", appLink));
+            if (err) failed.push(prof.email + ": " + err);
+          }
+          sent.push("due today: " + r.title + " → " + (prof ? prof.email : r.ownerId));
+          continue;
+        }
         await admin.from("team_notifications").insert({ team_slug: team, title: "⏰ This card's status isn't updated", audience: "people", recipients: [r.ownerId],
-          body: "“" + r.title + "” · " + camp + " · was due " + dmy(r.due) + "\nIs it out? Press ✓ Published, or open the board to give it a new date.",
+          body: what + " · " + camp + " · was due " + dmy(r.due) + "\nIs it out? Press ✓ Published, or open the board to give it a new date.",
           bell: true, popup: true, ref: "camp:" + cs.id + ":" + r.id });
         if (send && prof && prof.email) {
           const err = await send(prof.email, "⏰ Is “" + r.title + "” out? — " + camp,

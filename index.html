@@ -29,7 +29,7 @@
 <!-- Student ideas (tools.dubuddy.in/ideas) in the product space, status sync, idea emails, My product ideas (student-ideas.js) -->
 <script src="student-ideas.js"></script>
 <!-- Marketing mega space: campaigns (Details · Board · Roles · Reminders · Calendar) — campaign-space.js -->
-<script src="campaign-space.js?v=20261103b"></script>
+<script src="campaign-space.js?v=20261104c"></script>
 <!-- Keep an Eye: a fixed template for studying role-model and competitor companies, inside Marketing — watch-space.js -->
 <script src="watch-space.js"></script>
 <!-- Widen our Horizon: big questions answered every week, then checked — horizon-space.js -->
@@ -18490,6 +18490,14 @@ async function campConfirmLive(cs, x){
 // the 🔔 "This card's status isn't updated" → ✓ Published, straight from the bell
 window.campPublishFromBell = function(cid, iid){
   const cs = (CSPACES.list||[]).find(x=>x.id===cid && x.type==="campaign"); if(!cs) return false;
+  const [pid, sid] = String(iid).split("~");
+  if(sid){   // a sub task: ✓ marks it done
+    const host = (cs.items||[]).find(x=>x.id===pid) || (cs.tasks||[]).find(x=>x.id===pid);
+    const sub = host && (host.subs||[]).find(s=>s.id===sid); if(!sub) return false;
+    sub.status = "done"; sub.done = true; pushAll();
+    campConfirmLive(cs, { id:iid, title:sub.t, by:(currentUser() && userDisplayName(currentUser())) || "the team" });
+    if(typeof toast==="function") toast("\u201C"+sub.t+"\u201D is done \u2713"); return true;
+  }
   const it = (cs.items||[]).find(x=>x.id===iid), t = !it && (cs.tasks||[]).find(x=>x.id===iid); if(!it && !t) return false;
   const who = (currentUser() && userDisplayName(currentUser())) || "the team", title = it ? it.name : t.title;
   if(it && campIsContent(it)){ if(!campSetCardStage(cs, it, "published", { by:who })) return false; }
@@ -18550,6 +18558,11 @@ function renderContentCampaign(){
     setCardStage: (c, it, stage, meta)=> campSetCardStage(c, it, stage, meta),
     leadOf: c=> c.lead || ((campUserByEmail(CAMP_DEFAULT_LEAD)||{}).id) || "",
     confirmLive: (c, x)=> campConfirmLive(c, x),
+    // 🔔 Notify on a card or sub task: a bell + email to its assignee right now (campaign-remind, action "notify")
+    nudge: async (c, x)=>{
+      try{ const r = await SUPA.functions.invoke("campaign-remind", { body: Object.assign({ action:"notify", team:TEAM, campaign_id:c.id, campaign:(c.details&&c.details.name)||c.name }, x) });
+        return r.data || { ok:false, error:(r.error && r.error.message) || "unknown" }; }catch(e){ return { ok:false, error:e.message }; }
+    },
     reminders: async c=>{ const r = await SUPA.from("campaign_reminders").select("*").eq("team_slug", TEAM).eq("campaign_id", c.id).order("sent_at", { ascending:false });
       if(r.error) throw r.error; return r.data || []; },
     cardExists: (c, id)=>{ const soc = campaignSocial(c); return !!(soc && soc.sx && (soc.sx.cards||[]).some(x=>x.id===id)); },
