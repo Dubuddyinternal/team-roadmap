@@ -36,6 +36,8 @@ const todayIST = () => new Date(Date.now() + 5.5 * 3600e3).toISOString().slice(0
 const dmy = (d: string) => d ? new Date(d + "T00:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }) : "";
 const plats = (it: any) => Array.isArray(it.platforms) && it.platforms.length ? it.platforms : (it.platform ? [it.platform] : []);
 const isContent = (it: any) => plats(it).some((p: string) => p === "YouTube" || p === "Instagram");
+/* a card can have several assignees: ownerId first, then coOwnerIds */
+const owners = (o: any, extra = "") => [...new Set([o.ownerId || extra, ...(Array.isArray(o.coOwnerIds) ? o.coOwnerIds : [])].filter(Boolean))] as string[];
 
 async function mailer() {
   const user = Deno.env.get("SMTP_USER"), pass = Deno.env.get("SMTP_PASS");
@@ -63,17 +65,17 @@ function boardRows(cs: any, soc: any) {
   for (const it of cs.items || []) {
     if (isContent(it)) {
       const card = it.sentCardId ? cards.find((c) => c && c.id === it.sentCardId) : null;
-      out.push({ id: it.id, title: it.name || "(untitled)", due: it.date || "", ownerId: it.ownerId || (card && card.ownerId) || "", content: true,
+      out.push({ id: it.id, title: it.name || "(untitled)", due: it.date || "", ownerId: it.ownerId || (card && card.ownerId) || "", ownerIds: owners(it, card && card.ownerId), content: true,
         live: !!(card && card.stage === "published"), how: card && card.liveBy ? "Confirmed by " + card.liveBy : "Live in Content Process" });
-    } else out.push({ id: it.id, title: it.name || "(untitled)", due: it.date || "", ownerId: it.ownerId || "", content: false, live: !!it.live, how: "Confirmed by " + (it.liveBy || "the team") });
+    } else out.push({ id: it.id, title: it.name || "(untitled)", due: it.date || "", ownerId: it.ownerId || "", ownerIds: owners(it), content: false, live: !!it.live, how: "Confirmed by " + (it.liveBy || "the team") });
   }
-  for (const t of cs.tasks || []) out.push({ id: t.id, title: t.title || "(untitled)", due: t.due || "", ownerId: t.ownerId || "", content: false, live: !!t.live, how: "Confirmed by " + (t.liveBy || "the team") });
+  for (const t of cs.tasks || []) out.push({ id: t.id, title: t.title || "(untitled)", due: t.due || "", ownerId: t.ownerId || "", ownerIds: owners(t), content: false, live: !!t.live, how: "Confirmed by " + (t.liveBy || "the team") });
   // sub tasks: the same reminders as a card
   const hosts = [...(cs.items || []).map((it: any) => ({ id: it.id, title: it.name, subs: it.subs })), ...(cs.tasks || []).map((t: any) => ({ id: t.id, title: t.title, subs: t.subs }))];
   for (const h of hosts) for (const st of (Array.isArray(h.subs) ? h.subs : [])) {
     if (!st || !st.id) continue;
     const done = st.status ? st.status === "done" : !!st.done;
-    out.push({ id: h.id + "~" + st.id, title: String(st.t || "a sub task"), parent: h.title || "", due: st.due || "", ownerId: st.ownerId || "", content: false, sub: true, live: done, how: "Sub task done" });
+    out.push({ id: h.id + "~" + st.id, title: String(st.t || "a sub task"), parent: h.title || "", due: st.due || "", ownerId: st.ownerId || "", ownerIds: st.ownerId ? [st.ownerId] : [], content: false, sub: true, live: done, how: "Sub task done" });
   }
   return out;
 }
@@ -175,38 +177,35 @@ Deno.serve(async (req) => {
         }
         // a new date replaced the old deadline: the old reminder is "moved"
         for (const o of mine.filter((o: any) => o.due !== r.due)) await admin.from("campaign_reminders").update({ status: "moved", how: "New date: " + dmy(r.due), done_at: new Date().toISOString() }).eq("id", o.id);
-        if (!r.due || r.due > today || r.due < START || !r.ownerId) continue;
+        if (!r.due || r.due > today || r.due < START || !r.ownerIds.length) continue;
         const dueToday = r.due === today;
-        const { data: prof } = await admin.from("profiles").select("id,email,name,profile").eq("id", r.ownerId).maybeSingle();
+        const { data: profs } = await admin.from("profiles").select("id,email,name,profile").in("id", r.ownerIds);
+        const prof = (profs || []).find((x: any) => x.id === r.ownerId) || (profs || [])[0] || null;
         const ins = await admin.from("campaign_reminders").insert({ team_slug: team, campaign_id: cs.id, item_id: r.id, title: r.title, due: r.due,
-          to_user: r.ownerId, to_name: prof ? ((prof.profile && prof.profile.displayName) || prof.name || "") : "", kind: dueToday ? "due" : "overdue" }).select("id").maybeSingle();
+          to_user: r.ownerId, to_name: (profs || []).map((x: any) => (x.profile && x.profile.displayName) || x.name || "").filter(Boolean).join(", "), kind: dueToday ? "due" : "overdue" }).select("id").maybeSingle();
         if (ins.error) continue;   // already reminded for this deadline (unique), or a bad row
         const what = "“" + r.title + "”" + (r.sub ? " (a sub task of “" + r.parent + "”)" : "");
-        if (dueToday) {
-          await admin.from("team_notifications").insert({ team_slug: team, title: "📅 Due today: " + r.title, audience: "people", recipients: [r.ownerId],
-            body: what + " · " + camp + " · due today (" + dmy(r.due) + ")\nWhen it's out, press ✓ " + (r.sub ? "Published to mark it done." : "Published."), bell: true, popup: true, ref: "camp:" + cs.id + ":" + r.id });
-          if (send && prof && prof.email) {
-            const err = await send(prof.email, "📅 Due today: " + r.title + " — " + camp,
-              "Hi " + firstName(prof) + ",\n\n" + what + " in " + camp + " is due today.\nWhen it's out, press ✓ Published on the campaign board (or in your 🔔).\n\n" + appLink + "\n\n— The DU Buddy team",
-              page(firstName(prof), ["<b>" + esc(what) + "</b> in <b>" + esc(camp) + "</b> is due <b>today</b>.", "When it's out, press <b>✓ Published</b> on the campaign board (or in your 🔔)."],
-                [["Campaign", camp], ["Due", dmy(r.due)]], "Open the campaign board", appLink));
-            if (err) failed.push(prof.email + ": " + err);
-          }
-          sent.push("due today: " + r.title + " → " + (prof ? prof.email : r.ownerId));
-          continue;
+        await admin.from("team_notifications").insert(dueToday
+          ? { team_slug: team, title: "📅 Due today: " + r.title, audience: "people", recipients: r.ownerIds,
+              body: what + " · " + camp + " · due today (" + dmy(r.due) + ")\nWhen it's out, press ✓ Published.", bell: true, popup: true, ref: "camp:" + cs.id + ":" + r.id }
+          : { team_slug: team, title: "⏰ This card's status isn't updated", audience: "people", recipients: r.ownerIds,
+              body: what + " · " + camp + " · was due " + dmy(r.due) + "\nIs it out? Press ✓ Published, or open the board to give it a new date.", bell: true, popup: true, ref: "camp:" + cs.id + ":" + r.id });
+        for (const pf of (send ? profs || [] : [])) {
+          if (!pf.email) continue;
+          const err = dueToday
+            ? await send(pf.email, "📅 Due today: " + r.title + " — " + camp,
+              "Hi " + firstName(pf) + ",\n\n" + what + " in " + camp + " is due today.\nWhen it's out, press ✓ Published on the campaign board (or in your 🔔).\n\n" + appLink + "\n\n— The DU Buddy team",
+              page(firstName(pf), ["<b>" + esc(what) + "</b> in <b>" + esc(camp) + "</b> is due <b>today</b>.", "When it's out, press <b>✓ Published</b> on the campaign board (or in your 🔔)."],
+                [["Campaign", camp], ["Due", dmy(r.due)]], "Open the campaign board", appLink))
+            : await send(pf.email, "⏰ Is “" + r.title + "” out? — " + camp,
+              "Hi " + firstName(pf) + ",\n\n" + what + " in " + camp + " was due " + dmy(r.due) + ", but it isn't Live yet.\nIf it's out, press ✓ Published on the campaign board (or in your 🔔). If not, give it a new date there.\n\n" + appLink + "\n\n— The DU Buddy team",
+              page(firstName(pf), ["<b>" + esc(what) + "</b> in <b>" + esc(camp) + "</b> was due <b>" + esc(dmy(r.due)) + "</b>, but it isn't Live yet.",
+                "If it's out, press <b>✓ Published</b> on the campaign board (or in your 🔔). If not, give it a new date there."],
+                [["Campaign", camp], ["Was due", dmy(r.due)], ["Where", r.content ? "Campaign board + Content Process" : "Campaign board"]], "Open the campaign board", appLink));
+          if (err) failed.push(pf.email + ": " + err);
         }
-        await admin.from("team_notifications").insert({ team_slug: team, title: "⏰ This card's status isn't updated", audience: "people", recipients: [r.ownerId],
-          body: what + " · " + camp + " · was due " + dmy(r.due) + "\nIs it out? Press ✓ Published, or open the board to give it a new date.",
-          bell: true, popup: true, ref: "camp:" + cs.id + ":" + r.id });
-        if (send && prof && prof.email) {
-          const err = await send(prof.email, "⏰ Is “" + r.title + "” out? — " + camp,
-            "Hi " + firstName(prof) + ",\n\n“" + r.title + "” in " + camp + " was due " + dmy(r.due) + ", but its card isn't Live yet.\nIf it's out, press ✓ Published on the campaign board (or in your 🔔). If not, give it a new date there.\n\n" + appLink + "\n\n— The DU Buddy team",
-            page(firstName(prof), ["<b>“" + esc(r.title) + "”</b> in <b>" + esc(camp) + "</b> was due <b>" + esc(dmy(r.due)) + "</b>, but its card isn't Live yet.",
-              "If it's out, press <b>✓ Published</b> on the campaign board (or in your 🔔). If not, give it a new date there."],
-              [["Campaign", camp], ["Was due", dmy(r.due)], ["Where", r.content ? "Campaign board + Content Process" : "Campaign board"]], "Open the campaign board", appLink));
-          if (err) failed.push(prof.email + ": " + err);
-        }
-        sent.push(r.title + " → " + (prof ? prof.email : r.ownerId));
+        sent.push((dueToday ? "due today: " : "") + r.title + " → " + (profs || []).map((x: any) => x.email).join(", "));
+        continue;
       }
     }
   }

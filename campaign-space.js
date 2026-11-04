@@ -103,7 +103,9 @@ const BCSS = `
 /* type tags: the same look as Content Process (.ktag in social-space.js) */
 .kt{display:inline-block;font-family:var(--mono);font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;white-space:nowrap;
   background:color-mix(in srgb,var(--kc) 14%,transparent);color:var(--kc);border:1px solid color-mix(in srgb,var(--kc) 30%,transparent)}
-.cevt .kts{display:flex;flex-wrap:wrap;gap:2px;margin-top:3px}.cevt .kt{font-size:8.5px;padding:0 4px}
+.cevt .kts{display:flex!important;flex-wrap:wrap;gap:3px;margin-top:4px;white-space:normal!important;overflow:visible!important}.cevt span.kt{display:inline-block;font-size:9.5px;padding:1px 5px;color:var(--kc);overflow:visible;text-overflow:clip}
+.kb-pp{display:flex;gap:5px;flex-wrap:wrap}.kb-pp button{font:inherit;font-size:12px;padding:4px 10px 4px 4px;border-radius:99px;border:1px solid var(--line-2);background:var(--surface);cursor:pointer;display:inline-flex;align-items:center;gap:6px;color:var(--ink-2)}
+.kb-pp button .av{width:20px;height:20px;font-size:10px}.kb-pp button.on{border-color:var(--accent);background:var(--accent-soft,#FBEAE2);color:var(--ink);font-weight:600}
 .kb-it.hl{box-shadow:0 0 0 2px var(--saffron),0 4px 14px rgba(240,163,43,.25);background:linear-gradient(0deg,var(--surface),var(--saffron-soft))}
 .kb-it.hl.live{background:var(--good-soft)}
 .cevt.hl{box-shadow:0 0 0 2px var(--saffron);font-weight:700}
@@ -2175,7 +2177,7 @@ function shiftMonth(ym, n){
 }
 /* a card you can pick up */
 function evtHTML(c, it){
-  const k = kindOf(it), who = ownerName(it);
+  const k = kindOf(it), ids = assigneesOf(it), who = ids.length>1 ? ids.map(i=>(kbName(i)||"").split(" ")[0]).join(" + ") : ownerName(it);
   return `<button class="cevt ${it.highlight?"hl":""}" data-drag="${esc(it.id)}" title="${esc(it.name)}${canPlan()?" — drag to move":""}"
     style="border-left-color:${k.c};background:color-mix(in srgb,${k.c} 9%,transparent)">
     <b>${it.highlight?"⭐":k.emo} ${esc(it.name)}</b>
@@ -2349,6 +2351,7 @@ function wireCalendar(c){
 /* tapping a piece: an admin gets the whole item, a Team Manager just its day */
 function openPiece(c, id){
   const i = c.items.findIndex(x=>x.id===id); if(i<0) return;
+  if(canPlan()) return kbOpen(c, id);   // the same card panel as the board: assignees, sub tasks, Notify, ✏️ Edit, 🗑 Delete
   if(canEdit()) return itemDialog(c, i);
   if(!canPlan()) return;
   const it = c.items[i];
@@ -2373,15 +2376,17 @@ function openPiece(c, id){
      c.lead — the person told when something is published */
 /* one tag per type, coloured like Content Process: YT Short / Insta Reel for reels, else the type's own name */
 const KT_COLORS = { "YT Short":"var(--c1)", "Insta Reel":"var(--c3)", "YT Long video":"var(--c2)", "Story":"#B3417A", "Poster":"var(--c4)",
-  "Community Post":"#0F7F86", "Notification":"#B4560B", "Webinar":"var(--crit)", "WhatsApp message":"var(--good)", "Banner":"#5B6B7A" };
+  "Community Post":"#0F7F86", "Notification":"#B4560B", "Webinar":"var(--crit)", "WhatsApp":"var(--good)", "Banner":"#5B6B7A", "Community post":"#0F7F86" };
 function typeLabels(it){
-  if(it.kind==="reel"||it.kind==="influencer"){ const pl=platsOf(it), out=[];
-    if(pl.includes("YouTube")) out.push("YT Short"); if(pl.includes("Instagram")) out.push("Insta Reel");
-    return out.length ? out : [kindName(it)]; }
+  const pl=platsOf(it), yt=pl.includes("YouTube"), ig=pl.includes("Instagram"), out=[];
+  if(it.kind==="reel"||it.kind==="influencer"){ if(yt) out.push("YT Short"); if(ig) out.push("Insta Reel"); return out.length ? out : [kindName(it)]; }
   if(it.kind==="longvideo") return ["YT Long video"];
-  return [kindName(it)];
+  const n = it.kind==="whatsapp" ? "WhatsApp" : kindName(it);
+  if(yt) out.push("YT "+n); if(ig) out.push("Insta "+n);   // the same names Content Process gives (YT Poster, Insta Story…)
+  return out.length ? out : [n];
 }
-const ktOne = l => `<span class="kt" style="--kc:${KT_COLORS[l]||"var(--ink-3)"}">${esc(l)}</span>`;
+const ktBase = l => String(l).replace(/^(YT|Insta) /,"");
+const ktOne = l => `<span class="kt" style="--kc:${KT_COLORS[l]||KT_COLORS[ktBase(l)]||"var(--ink-3)"}">${esc(l)}</span>`;
 const typeTags = it => typeLabels(it).map(ktOne).join("");
 const CP_STAGES = [["todo","Ideas"],["draft","To shoot"],["inprogress","Editing"],["inreview","Your check"],["approved","Scheduled"],["published","Live"]];
 const KB_COLS = [["todo","Not started"],["prog","In progress"],["late","Past deadline · waiting"],["live","Live ✓"]];
@@ -2395,18 +2400,22 @@ const kbName = id => { const p=kbPeople().find(x=>x.id===id); return p ? p.name 
 function kbSubs(o){ if(!Array.isArray(o.subs)) o.subs=[];
   o.subs.forEach(s=>{ if(!s.id) s.id=uid("st"); if(!s.status) s.status = s.done ? "done" : "todo"; s.done = s.status==="done"; }); return o.subs; }
 const subLate = s => s.status!=="done" && !!s.due && s.due < TODAY;
+/* a card can have several assignees: ownerId is the first, coOwnerIds the others */
+const assigneesOf = o => [...new Set([o.ownerId, ...(Array.isArray(o.coOwnerIds)?o.coOwnerIds:[])].filter(Boolean))];
 function kbRows(c){
   if(!Array.isArray(c.tasks)) c.tasks = [];
   const rows = c.items.map(it=>{
     const content = isContentPiece(it), card = content && OPT.cardOf ? OPT.cardOf(c, it) : null;
     const si = card ? Math.max(0, CP_STAGES.findIndex(s=>s[0]===card.stage)) : 0;
     const live = content ? !!(card && card.stage==="published") : !!it.live;
-    return { src:"piece", ref:it, id:it.id, title:it.name||"(untitled)", due:it.date||"", ownerId:it.ownerId||"", owner:ownerName(it), content, card, si, live,
+    const ids = assigneesOf(it);
+    return { src:"piece", ref:it, id:it.id, title:it.name||"(untitled)", due:it.date||"", ownerId:it.ownerId||"", ownerIds:ids, owner:ids.length>1?ids.map(kbName).filter(Boolean).join(", "):ownerName(it), content, card, si, live,
       liveBy: content ? (card && card.liveBy) || "Content Process" : it.liveBy||"", link: content ? ((card&&card.post&&(Object.values(card.post.links||{}).find(Boolean)||card.post.postUrl))||"") : it.link||"",
       cat: content ? "c:"+kindName(it) : "k:"+kindName(it), catLabel: kindName(it), subs: kbSubs(it), plats: platsOf(it), hl: !!it.highlight, tags: typeTags(it), labels: typeLabels(it) };
   });
   c.tasks.forEach(t=>{ if(!Array.isArray(t.subs)) t.subs=[];
-    rows.push({ src:"task", ref:t, id:t.id, title:t.title||"(untitled)", due:t.due||"", ownerId:t.ownerId||"", owner:t.ownerId?kbName(t.ownerId)||t.owner:t.owner||"", content:false, card:null, si:0,
+    const ids = assigneesOf(t);
+    rows.push({ src:"task", ref:t, id:t.id, title:t.title||"(untitled)", due:t.due||"", ownerId:t.ownerId||"", ownerIds:ids, owner:ids.length?ids.map(kbName).filter(Boolean).join(", "):t.owner||"", content:false, card:null, si:0,
       live:!!t.live, liveBy:t.liveBy||"", link:t.link||"", cat:"k:"+(t.kind||"Other"), catLabel:t.kind||"Other", subs:kbSubs(t), plats:[], hl:!!t.highlight, tags:ktOne(t.kind||"Other"), labels:[t.kind||"Other"] }); });
   return rows;
 }
@@ -2418,10 +2427,12 @@ function kbTags(x){
     + (x.content ? `<span class="kb-tag sync" title="The same card is on Content Process">↔ Content Process</span>`
        : x.plats.filter(p=>!PROCESS_PLATFORMS.includes(p)).map(p=>`<span class="kb-tag">${esc(p)}</span>`).join(""));
 }
-const kbWho = (id, name) => name ? `<span class="kb-who">${avatar(name)}${esc(name)}</span>` : `<span class="kb-who hint">No one yet</span>`;
+const kbWho = (id, name, ids) => ids && ids.length>1
+  ? `<span class="kb-who">${ids.map(i=>avatar(kbName(i)||"?")).join("")}${esc(ids.map(i=>(kbName(i)||"").split(" ")[0]).join(" + "))}</span>`
+  : name ? `<span class="kb-who">${avatar(name)}${esc(name)}</span>` : `<span class="kb-who hint">No one yet</span>`;
 const kbByLine = x => x.liveBy==="Content Process" ? "Live in Content Process" : "Confirmed by " + x.liveBy;
 function kbPass(x){
-  if(KBF.who && x.ownerId!==KBF.who && !(x.subs||[]).some(s=>s.ownerId===KBF.who)) return false;
+  if(KBF.who && !x.ownerIds.includes(KBF.who) && !(x.subs||[]).some(s=>s.ownerId===KBF.who)) return false;
   if(KBF.cat){ if(KBF.cat==="content"&&!x.content) return false; if(KBF.cat==="tasks"&&x.content) return false; if(KBF.cat==="hl"&&!x.hl) return false; if(KBF.cat.startsWith("t:")&&!x.labels.includes(KBF.cat.slice(2))) return false; }
   if(KBF.date){ const wk=addDays(TODAY,7);
     if(KBF.date==="today"&&x.due!==TODAY) return false; if(KBF.date==="week"&&!(x.due>=TODAY&&x.due<=wk)) return false;
@@ -2439,7 +2450,7 @@ function kbHead(c, rows){
         <span><i class="kb-dot" style="background:var(--crit)"></i>${late} past deadline</span><span><i class="kb-dot" style="background:var(--line-2)"></i>${n-l-prog-late} not started</span></div></div></div>`;
 }
 function kbFilters(c, rows){
-  const ids=[...new Set(rows.flatMap(x=>[x.ownerId,...(x.subs||[]).map(s=>s.ownerId)]).filter(Boolean))];
+  const ids=[...new Set(rows.flatMap(x=>[...x.ownerIds,...(x.subs||[]).map(s=>s.ownerId)]).filter(Boolean))];
   const days=[...new Set(rows.map(x=>x.due).filter(Boolean))].sort();
   const cats=[...new Set(rows.flatMap(x=>x.labels))].sort();
   return `<div class="kb-f">
@@ -2458,9 +2469,9 @@ function kbCard(x){
   const sub = (x.content ? `<div class="kb-sub"><span>Content Process: <b>${esc(x.card?CP_STAGES[x.si][1]:"not there yet")}</b></span><span class="mb"><i style="width:${kbPct(x)}%"></i></span></div>` : "")
     + (x.subs.length || !x.content ? `<div class="kb-sub"><span>${nd}/${x.subs.length} sub tasks</span><span class="mb"><i style="width:${x.subs.length?Math.round(nd/x.subs.length*100):0}%"></i></span></div>` : "");
   return `<div role="button" tabindex="0" class="kb-it ${st} ${x.hl?"hl":""}" data-kb="${esc(x.id)}"><span class="kb-t">${esc(x.title)}</span><span class="kb-m">${kbTags(x)}</span>${x.live?"":sub}
-    <span class="kb-m">${kbWho(x.ownerId,x.owner)}<span class="kb-sp"></span>${x.live?`<span class="kb-by">✓ ${esc(kbByLine(x))}</span>`
+    <span class="kb-m">${kbWho(x.ownerId,x.owner,x.ownerIds)}<span class="kb-sp"></span>${x.live?`<span class="kb-by">✓ ${esc(kbByLine(x))}</span>`
       :x.due?`<span class="kb-due ${st==="late"?"late":""}">${st==="late"?"⏰ was due "+dmy(x.due):"due "+dmy(x.due)}</span>`:`<span class="kb-due">no date</span>`}</span>
-    ${!x.live && x.ownerId && canPlan() ? `<span class="kb-m"><button type="button" class="kb-nt" data-kbnotify="${esc(x.id)}" title="Send ${esc(x.owner)} a 🔔 and an email about this card">🔔 Notify ${esc((x.owner||"").split(" ")[0])}</button></span>` : ""}</div>`;
+    ${!x.live && x.ownerIds.length && canPlan() ? `<span class="kb-m"><button type="button" class="kb-nt" data-kbnotify="${esc(x.id)}" title="Send ${esc(x.owner)} a 🔔 and an email about this card">🔔 Notify ${esc(x.ownerIds.map(i=>(kbName(i)||"").split(" ")[0]).join(" + "))}</button></span>` : ""}</div>`;
 }
 function boardPane(c){
   const rows=kbRows(c), list=rows.filter(kbPass);
@@ -2469,13 +2480,13 @@ function boardPane(c){
     : `<div class="dashed" style="padding:30px;text-align:center"><b>Nothing on the board yet.</b><p class="hint">Add content pieces in Campaign Details, or press ＋ Add task for a webinar, banner or notification.</p></div>`);
 }
 function rolesPane(c){
-  const rows=kbRows(c), ids=[...new Set(rows.flatMap(x=>[x.ownerId,...(x.subs||[]).map(s=>s.ownerId)]).filter(Boolean))];
+  const rows=kbRows(c), ids=[...new Set(rows.flatMap(x=>[...x.ownerIds,...(x.subs||[]).map(s=>s.ownerId)]).filter(Boolean))];
   const lead=OPT.leadOf?OPT.leadOf(c):"", d=c.details;
   return kbHead(c, rows) + `<div class="kb-plan"><div><span class="lbl">What we're doing</span><b>${esc(d.name||c.name)}</b><p>${esc(d.tagline||offerLine(c)||"Set the offer in Campaign Details.")}</p></div>
       <div><span class="lbl">What I expect</span><b>${esc(d.goal||"Every piece live by its deadline")}</b><p>Every piece live by its date, with the link on the card. If one slips, its owner confirms or gives a new date the next day.</p></div>
       <div><span class="lbl">Who does what</span><b>YouTube / Instagram pieces go to Aditya first</b><p>Whoever a card is given to shows under their name below, here and in Content Process.</p>
         <p style="margin-top:8px">Told when something is published: ${canEdit()?`<select id="kbLead" class="kb-sel">${kbPeople().map(p=>`<option value="${esc(p.id)}" ${lead===p.id?"selected":""}>${esc(p.name)}</option>`).join("")}</select>`:`<b>${esc(kbName(lead)||"—")}</b>`}</p></div></div>
-    <div class="kb-roles">${ids.map(id=>{ const name=kbName(id)||"Someone", role=(kbPeople().find(p=>p.id===id)||{}).role||"", mine=rows.filter(x=>x.ownerId===id), subs=rows.flatMap(x=>(x.subs||[]).filter(s=>s.ownerId===id).map(s=>({s,x}))), l=mine.filter(x=>x.live).length, late=mine.filter(kbLate).length;
+    <div class="kb-roles">${ids.map(id=>{ const name=kbName(id)||"Someone", role=(kbPeople().find(p=>p.id===id)||{}).role||"", mine=rows.filter(x=>x.ownerIds.includes(id)), subs=rows.flatMap(x=>(x.subs||[]).filter(s=>s.ownerId===id).map(s=>({s,x}))), l=mine.filter(x=>x.live).length, late=mine.filter(kbLate).length;
       return `<div class="kb-role"><div class="kb-role-h">${avatar(name)}<div><b>${esc(name)}</b><span class="hint">${esc(role)}</span></div></div>
         <div class="kb-rp"><span class="num">${l}/${mine.length} live</span><span class="kb-bar"><i style="width:${mine.length?l/mine.length*100:0}%;background:var(--good)"></i></span>${late?`<span class="kb-tag late">${late} past deadline</span>`:""}</div>
         <div style="display:grid;gap:3px">${mine.map(x=>`<button type="button" class="kb-rl" data-kb="${esc(x.id)}"><span>${x.live?"✅":kbLate(x)?"⏰":"▫️"} ${esc(x.title)}</span><span class="kb-due">${x.due?dmy(x.due):""}</span></button>`).join("")||`<span class="hint">No cards of their own.</span>`}</div>
@@ -2513,7 +2524,7 @@ function wireBoard(c){
   const ld=B.querySelector("#kbLead"); if(ld) ld.onchange=()=>{ c.lead=ld.value; save(); toast(kbName(ld.value)+" is told when something is published"); };
 }
 function kbClose(){ KBOPEN=null; const d=R&&R.querySelector("#kbDr"); if(d) d.classList.remove("on"); const s=R&&R.querySelector("#kbScrim"); if(s) s.classList.remove("on"); }
-const kbCanTouch = x => canPlan() || (!!x.ownerId && x.ownerId===me());
+const kbCanTouch = x => canPlan() || x.ownerIds.includes(me());
 function kbOpen(c, id, keep){
   const x=kbRows(c).find(y=>y.id===id); if(!x){ kbClose(); return; } KBOPEN=id;
   const st=kbState(x), d=$("#kbDr"), ed=kbCanTouch(x), pl=canPlan();
@@ -2524,9 +2535,9 @@ function kbOpen(c, id, keep){
         <p class="hint" style="margin:2px 0 0">${esc(x.owner||"Its owner")} gets a 🔔 and an email asking to confirm.</p>${ed?`<input id="kbLink" placeholder="Link or proof (the post URL, Firebase campaign number…)">
         <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn kb-good" id="kbPub">✓ Published</button>${pl||x.ownerId===me()?`<button class="btn" id="kbLater">Not yet: new date</button>`:""}</div>`:""}</div>`:""}
     ${!x.live && (x.ownerId || pl) ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
-      ${x.ownerId && pl ? `<button class="btn" id="kbNotify">🔔 Notify ${esc(x.owner)}</button>` : ""}
+      ${x.ownerIds.length && pl ? `<button class="btn" id="kbNotify">🔔 Notify ${esc(x.ownerIds.map(i=>(kbName(i)||"").split(" ")[0]).join(" + "))}</button>` : ""}
       ${pl ? `<button class="btn ${x.hl?"pri":""}" id="kbHl">${x.hl?"⭐ Highlighted — remove":"⭐ Highlight this card"}</button>` : ""}</div>` : ""}
-    <div class="kb-blk"><div class="kb-kv"><span>Assignee</span><span>${pl?`<select id="kbOwner"><option value="">— nobody yet —</option>${kbPeople().map(p=>`<option value="${esc(p.id)}" ${x.ownerId===p.id?"selected":""}>${esc(p.name)}${p.role?" · "+esc(p.role):""}</option>`).join("")}</select>`:kbWho(x.ownerId,x.owner)}</span>
+    <div class="kb-blk"><div class="kb-kv"><span>Assignees</span><span>${pl?`<span class="kb-pp" id="kbOwners">${kbPeople().map(p=>`<button type="button" data-kbown="${esc(p.id)}" class="${x.ownerIds.includes(p.id)?"on":""}" aria-pressed="${x.ownerIds.includes(p.id)}">${avatar(p.name)}${esc(p.name)}</button>`).join("")}</span>`:kbWho(x.ownerId,x.owner,x.ownerIds)}</span>
       <span>Deadline</span><span>${pl&&x.src==="task"?`<input type="date" id="kbDue" value="${esc(x.due)}">`:x.due?dmy(x.due):"No date"}</span><span>Category</span><span>${esc(x.catLabel)}</span></div>
       ${x.src==="piece"?`<p class="hint" style="margin:8px 0 0">${x.content?"Title, date and assignee are the same in Content Process. ":""}The title and date come from Campaign Details${x.content?" (or the card in Content Process)":""}.</p>`:""}</div>
     ${x.content?`<div class="kb-blk"><h4>Status, in both places</h4>${x.card?`
@@ -2537,12 +2548,15 @@ function kbOpen(c, id, keep){
       :`<p class="hint" style="margin:0">The card is being made in Content Process — it appears there the next time someone who plans this campaign opens it.</p>`}</div>`
     :`<div class="kb-blk">${!x.live&&st!=="late"&&ed?`<input id="kbLink" placeholder="Link or proof, once it's out" style="width:100%"><button class="btn kb-good" id="kbPub" style="margin-top:8px">✓ Published</button>`:`<span class="hint">${x.live?"It's live.":""}</span>`}
       ${pl&&x.src==="task"?`<div style="margin-top:12px"><button class="btn sm danger" id="kbDel">Delete this task</button></div>`:""}</div>`}
-    ${kbSubsBlock(x)}`;
+    ${kbSubsBlock(x)}
+    ${x.src==="piece" && canEdit() ? `<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" id="kbEdit">✏️ Edit details</button><button class="btn sm danger" id="kbDelPiece">🗑 Delete this card</button></div>` : ""}`;
   d.classList.add("on"); $("#kbScrim").classList.add("on");
   d.querySelector("#kbX").onclick=kbClose;
   const pub=d.querySelector("#kbPub"); if(pub) pub.onclick=()=>kbPublish(c, x, (d.querySelector("#kbLink")||{}).value||"");
   const later=d.querySelector("#kbLater"); if(later) later.onclick=()=>kbNewDate(c, x);
-  const ow=d.querySelector("#kbOwner"); if(ow) ow.onchange=()=>kbReassign(c, x, ow.value);
+  d.querySelectorAll("[data-kbown]").forEach(b=>b.onclick=()=>{ const id=b.dataset.kbown, ids=x.ownerIds.includes(id)?x.ownerIds.filter(i=>i!==id):[...x.ownerIds,id]; kbReassign(c, x, ids); });
+  const ed2=d.querySelector("#kbEdit"); if(ed2) ed2.onclick=()=>{ const i=c.items.indexOf(x.ref); if(i>=0){ kbClose(); itemDialog(c, i); } };
+  const dp=d.querySelector("#kbDelPiece"); if(dp) dp.onclick=()=>kbDeletePiece(c, x);
   const du=d.querySelector("#kbDue"); if(du) du.onchange=()=>{ x.ref.due=du.value; save(); };
   const go=d.querySelector("#kbGo"); if(go) go.onclick=()=>{ kbClose(); OPT.goProcess(c); };
   d.querySelectorAll("[data-kbcp]").forEach(b=>b.onclick=()=>{ const sid=b.dataset.kbcp; if(sid==="published"){ kbPublish(c,x,""); return; }
@@ -2591,12 +2605,13 @@ function kbAddSub(c, x){
 }
 /* 🔔 Notify: the assignee gets a bell and an email about this card (or one of its sub tasks) right now */
 async function kbNotify(c, x, sub, btn){
-  const to = sub ? sub.ownerId : x.ownerId; if(!to){ toast("Give it an assignee first"); return; }
+  const tos = sub ? [sub.ownerId].filter(Boolean) : x.ownerIds; if(!tos.length){ toast("Give it an assignee first"); return; }
   if(!OPT.nudge){ toast("Notifying isn't available here"); return; }
   if(btn) btn.disabled = true;
   try{
-    const r = await OPT.nudge(c, { item_id: sub ? x.id+"~"+sub.id : x.id, title: sub ? sub.t : x.title, parent: sub ? x.title : "", due: sub ? (sub.due||"") : x.due, to });
-    toast(r && r.ok ? `🔔 ${kbName(to)} has been notified (bell${r.mailed==="sent"?" + email":""})` : "Couldn't notify: " + ((r && (r.error||r.reason)) || "try again"));
+    const rs = await Promise.all(tos.map(to=>OPT.nudge(c, { item_id: sub ? x.id+"~"+sub.id : x.id, title: sub ? sub.t : x.title, parent: sub ? x.title : "", due: sub ? (sub.due||"") : x.due, to })));
+    const ok = tos.filter((_,i)=>rs[i] && rs[i].ok), bad = rs.find(r=>!(r && r.ok));
+    toast(ok.length ? `🔔 ${ok.map(i=>(kbName(i)||"").split(" ")[0]).join(" + ")} notified (bell + email)${bad?" · one failed: "+(bad.error||bad.reason||""):""}` : "Couldn't notify: " + ((bad && (bad.error||bad.reason)) || "try again"));
   }catch(e){ toast("Couldn't notify: " + e.message); }
   if(btn) btn.disabled = false;
 }
@@ -2616,12 +2631,23 @@ function kbNewDate(c, x){
       if(x.src==="task") x.ref.due=v.date; else x.ref.date=v.date;
       save(); if(OPT.confirmLive) OPT.confirmLive(c, { id:x.id, title:x.title, by:kbName(me())||"", newDate:v.date }); toast("New date: "+dmy(v.date)); } });
 }
-function kbReassign(c, x, id){
-  const name=kbName(id);
-  x.ref.ownerId=id; x.ref.owner=name;
+/* set a card's assignees: the first stays first if still on it; everyone new is told (email + 🔔) */
+function kbReassign(c, x, ids){
+  ids = [...new Set((Array.isArray(ids)?ids:[ids]).filter(Boolean))];
+  const was = assigneesOf(x.ref), first = ids.includes(x.ref.ownerId) ? x.ref.ownerId : (ids[0]||"");
+  x.ref.ownerId = first; x.ref.owner = kbName(first);
+  x.ref.coOwnerIds = ids.filter(i=>i!==first);
   save();
-  if(id && OPT.notify) OPT.notify(c, x.src==="piece" ? x.ref : { ownerId:id, owner:name, name:x.title, kind:"other", kindOther:x.catLabel, date:x.due, platform:"", details:"A task on the campaign board." });
-  toast(id ? `Now with ${name} — under ${name.split(" ")[0]} in Roles${x.content?" and on the card in Content Process":""}` : "No one has it now");
+  ids.filter(i=>!was.includes(i)).forEach(id=>{ if(OPT.notify) OPT.notify(c, x.src==="piece" ? Object.assign({}, x.ref, { ownerId:id, owner:kbName(id) }) : { ownerId:id, owner:kbName(id), name:x.title, kind:"other", kindOther:x.catLabel, date:x.due, platform:"", details:"A task on the campaign board." }); });
+  toast(ids.length ? `Assigned to ${ids.map(i=>(kbName(i)||"").split(" ")[0]).join(" + ")}${x.content?" · the same on the card in Content Process":""}` : "No one has it now");
+}
+/* delete a piece (from the board or a calendar tap), after a quick confirmation; its Content Process card goes too */
+function kbDeletePiece(c, x){
+  openDialog({ title:`Delete “${x.title}”?`, sub:`It's removed from Campaign Details, the board and the calendar${x.content?", and its card leaves Content Process":""}. You can undo straight after.`, okLabel:"Delete", fields:[],
+    onSave:()=>{ const i=c.items.indexOf(x.ref); if(i<0) return;
+      const gone=c.items.splice(i,1)[0], card = x.content && OPT.removeCard ? OPT.removeCard(c, gone) : null;
+      kbClose(); save();
+      toastUndo(`“${x.title}” deleted`, ()=>{ c.items.splice(i,0,gone); if(card && OPT.restoreCard) OPT.restoreCard(c, card); save(); }); } });
 }
 function kbAddTask(c){
   const ppl=kbPeople(), mine=me();

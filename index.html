@@ -29,7 +29,7 @@
 <!-- Student ideas (tools.dubuddy.in/ideas) in the product space, status sync, idea emails, My product ideas (student-ideas.js) -->
 <script src="student-ideas.js"></script>
 <!-- Marketing mega space: campaigns (Details · Board · Roles · Reminders · Calendar) — campaign-space.js -->
-<script src="campaign-space.js?v=20261104c"></script>
+<script src="campaign-space.js?v=20261105a"></script>
 <!-- Keep an Eye: a fixed template for studying role-model and competitor companies, inside Marketing — watch-space.js -->
 <script src="watch-space.js"></script>
 <!-- Widen our Horizon: big questions answered every week, then checked — horizon-space.js -->
@@ -18465,7 +18465,11 @@ function campSyncCards(){
       // assignee
       if((it.ownerId||"")!==S.ownerId){ card.ownerId = it.ownerId||""; card.owner = nameOf(it.ownerId) || it.owner || ""; S.ownerId = it.ownerId||""; changed = true; }
       else if(cOwn!==S.ownerId){ it.ownerId = cOwn; it.owner = nameOf(cOwn); S.ownerId = cOwn; changed = true; }
-      if(card.ownerId && card.owner!==nameOf(card.ownerId) && nameOf(card.ownerId)){ card.owner = nameOf(card.ownerId); changed = true; }
+      // several assignees: the card lists them all ("Aditya, Shivam"); the first is its ownerId
+      const all = [...new Set([it.ownerId, ...(Array.isArray(it.coOwnerIds)?it.coOwnerIds:[])].filter(Boolean))];
+      const names = all.map(nameOf).filter(Boolean).join(", ");
+      if(names && card.owner!==names){ card.owner = names; changed = true; }
+      if(JSON.stringify(card.ownerIds||[])!==JSON.stringify(all)){ card.ownerIds = all; changed = true; }
       if(!card.fromCampaignId){ card.fromCampaignId = cs.id; card.fromItemId = it.id; changed = true; }
     });
   });
@@ -18555,6 +18559,10 @@ function renderContentCampaign(){
       return { cardId: campNewCard(c, soc, it).id };
     },
     cardOf: (c, it)=> campCardOf(c, it),
+    // deleting a piece takes its Content Process card with it (and undo puts it back)
+    removeCard: (c, it)=>{ const soc = campaignSocial(c), L = soc && soc.sx && soc.sx.cards; if(!L) return null;
+      const i = L.findIndex(x=>x.id===it.sentCardId); return i<0 ? null : { i, card: L.splice(i,1)[0] }; },
+    restoreCard: (c, r)=>{ const soc = campaignSocial(c), L = soc && soc.sx && soc.sx.cards; if(L && r && !L.some(x=>x.id===r.card.id)) L.splice(Math.min(r.i, L.length), 0, r.card); },
     setCardStage: (c, it, stage, meta)=> campSetCardStage(c, it, stage, meta),
     leadOf: c=> c.lead || ((campUserByEmail(CAMP_DEFAULT_LEAD)||{}).id) || "",
     confirmLive: (c, x)=> campConfirmLive(c, x),
