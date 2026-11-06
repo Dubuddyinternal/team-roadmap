@@ -565,6 +565,16 @@ details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var
 .fld label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:5px;font-weight:500}
 .fld input,.fld select,.fld textarea{width:100%;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-s);padding:8px 10px;font-size:13px}
 .fld textarea{resize:vertical;min-height:62px;font-family:inherit}
+/* a text box with reference pictures (📎 Add picture) */
+.picbox{border:1px solid var(--line-2);border-radius:var(--r-s);background:var(--surface)}
+.picbox textarea{border:none!important;border-radius:var(--r-s) var(--r-s) 0 0!important}
+.picbox textarea:focus{outline:none}.picbox:focus-within{border-color:var(--accent)}
+.picrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;border-top:1px dashed var(--line-2)}
+.pic{position:relative;display:inline-block}.pic img{width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--line);display:block}
+.picx{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:1px solid var(--line-2);background:var(--surface);cursor:pointer;font-size:13px;line-height:1;padding:0;color:var(--ink-2)}
+.picadd{font-size:12px;font-weight:600;color:var(--accent);cursor:pointer;border:1px dashed var(--line-2);border-radius:6px;padding:6px 10px;display:inline-flex;align-items:center;gap:4px}
+.picadd:hover{border-color:var(--accent)}
+.fld label.picadd{font-family:inherit;font-size:12px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--accent);margin:0}
 .fld.bad input,.fld.bad select,.fld.bad textarea{border-color:var(--crit)}
 .fld .req{color:var(--crit);font-family:var(--mono);font-size:10px;margin-left:4px;letter-spacing:0}
 .fld .hookin{font-family:var(--sans);font-size:13px}
@@ -765,6 +775,26 @@ function ownBoxes(list){
 }
 // 🤖 what Claude gets from a card: every box on it, by step, with the box's own label, plus every box of its idea.
 // Read from the open card itself (and the idea's fields + own boxes), so boxes added or renamed later come along too.
+/* 📎 a text box that also takes pictures for reference: each picture is uploaded (the page's uploadPhoto) and kept as a link */
+function picsHtml(imgs){ return (imgs||[]).map((u,k)=>`<span class="pic"><a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="Reference picture ${k+1}" loading="lazy"></a>${canEdit()?`<button type="button" class="picx" data-picx="${k}" title="Remove this picture" aria-label="Remove picture ${k+1}">×</button>`:""}</span>`).join(""); }
+function picBox(id, label, text, imgs, ph){
+  return `<div class="fld"><label for="${id}">${esc(label)}</label><div class="picbox">
+    <textarea id="${id}" placeholder="${esc(ph||"")}">${esc(text||"")}</textarea>
+    <div class="picrow" data-pics="${id}">${picsHtml(imgs)}${canEdit()?`<label class="picadd">📎 Add picture<input type="file" accept="image/*" multiple hidden></label>`:""}<span class="hint" data-picst></span></div></div></div>`;
+}
+function wirePicBox(root, id, arr, onChange){
+  const row=root.querySelector(`[data-pics="${id}"]`); if(!row) return;
+  const st=row.querySelector("[data-picst]");
+  const bind=()=>row.querySelectorAll("[data-picx]").forEach(b=>b.onclick=()=>{ arr.splice(+b.dataset.picx,1); redraw(); onChange(); });
+  const redraw=()=>{ row.querySelectorAll(".pic").forEach(e=>e.remove()); row.insertAdjacentHTML("afterbegin", picsHtml(arr)); bind(); };
+  bind();
+  const inp=row.querySelector("input[type=file]"); if(!inp) return;
+  inp.onchange=async()=>{ const fs=[...inp.files]; inp.value=""; if(!fs.length) return;
+    if(typeof uploadPhoto!=="function"){ st.textContent="Uploading isn't available here."; return; }
+    for(const f of fs){ st.textContent="Uploading…";
+      try{ arr.push(await uploadPhoto(f)); redraw(); onChange(); }catch(e){ st.textContent="Couldn't upload the picture: "+(e.message||e); return; } }
+    st.textContent=""; };
+}
 const IDEA_BOX = { idea:"Idea", studentWhy:"Why should students watch this video?", hook:"Hook", cta:"CTA (call to action)",
   title:"Title", desc:"Description", hashtags:"Hashtags", why:"Why this topic (research)", source:"Research source", tool:"Research tool",
   keywords:"Keywords", platform:"Post on", platforms:"Post on", vtype:"Video type", format:"Format" };
@@ -814,7 +844,7 @@ function blankIdea(o){ return Object.assign({ id:uid("i"), idea:"", by:"", creat
   source:"", tool:"", cat:"", keywords:[], title:"", desc:"", hashtags:"", why:"", studentWhy:"", status:"new", comments:[], extra:[] }, o||{}); }
 function blankCard(o){ return Object.assign({ id:uid("c"), ideaId:null, idea:"", platform:"ig", vtype:"reel", stage:"todo", raw:null,
   pre:{source:"",tool:"",keywords:[],why:"",title:"",desc:"",hashtags:""},
-  post:{reel:null,thumb:null,postUrl:""}, scheduled:null, published:null, acceptedOn:today(), metrics:null, override:null }, o||{}); }
+  post:{reel:null,thumb:null,postUrl:"",links:{}}, scheduled:null, published:null, acceptedOn:today(), metrics:null, override:null }, o||{}); }
 
 /* ------------------------------------------------------------ module state */
 let SPACE=null, S=null, IDEAS=[], CARDS=[], REG=DEFAULT_REG, HOST=null, R=null, OPT={};
@@ -2547,7 +2577,7 @@ function setStatus(i,st){
     CARDS.push(blankCard({ ideaId:i.id, idea:i.idea, format:i.format, platform:plats(i)[0], platforms:[...plats(i)], vtype:i.vtype, stage:"todo",
       scheduled:slot, time:slotPlan(plats(i)[0]).time,
       pre:{ source:i.source, tool:i.tool, keywords:(i.keywords||[]).map(k=>({...k})),
-            why:i.why, title:i.title, desc:i.desc, hashtags:i.hashtags },
+            why:i.why, title:i.title, desc:i.desc, hashtags:i.hashtags, refImgs:(i.studentWhyImgs||[]).slice() },
       extra:(i.extra||[]).map(x=>({ label:x.label, value:x.value })) }));
     toast(slot?`Accepted — booked for ${dow(slot)} ${dmy(slot)}, in Content Process → Ideas`:"Accepted — card created in Content Process → Ideas");
   } else if(st==="accepted"){ const c=CARDS.find(x=>x.ideaId===i.id);
@@ -2682,7 +2712,7 @@ function renderIdeation(){
   P.querySelectorAll("[data-iresearch]").forEach(b=>b.onclick=async()=>{ const i=IDEAS.find(x=>x.id===b.dataset.iresearch); if(!i) return;
     b.disabled=true; b.textContent="…";
     try{ await PIPE.research({ id:i.id, idea:i.idea, platform:i.platform, vtype:i.vtype, scheduled:null,
-        pre:{ title:i.title, desc:i.desc, hashtags:i.hashtags, keywords:i.keywords, why:i.why } }, { idea:()=>i });
+        pre:{ title:i.title, desc:i.desc, hashtags:i.hashtags, keywords:i.keywords, why:i.why, refImgs:(i.studentWhyImgs||[]).slice() } }, { idea:()=>i });
       refresh(); toast("vidIQ is researching this idea — results land in the row in a minute"); }
     catch(e){ toast(e.message); b.disabled=false; b.textContent="🔎 Research"; } });
   // the whole row opens the idea, except clicks on its own controls
@@ -3026,10 +3056,11 @@ function openIdea(id,focusComments,fmtKey){
   const i=isNew ? blankIdea({ by:meName(), format:F0.key, platforms:[...(F0.defPlats||F0.plats)], platform:(F0.defPlats||F0.plats)[0], vtype:(F0.vtypes||[])[0]||F0.key }) : IDEAS.find(x=>x.id===id);
   if(!i) return;
   // the form's fields as they were when opened, so "discard changes" really discards
-  const FORM=["idea","studentWhy","by","created","format","platform","platforms","vtype","hook","cta","source","tool","keywords","title","desc","hashtags","why"];
+  const FORM=["idea","studentWhy","studentWhyImgs","by","created","format","platform","platforms","vtype","hook","cta","source","tool","keywords","title","desc","hashtags","why"];
   const snap=()=>JSON.stringify(FORM.map(k=>i[k])), restore=t=>JSON.parse(t).forEach((v,n)=>{ i[FORM[n]]=v; });
   let opened=snap(), dirty=false;
   const markDirty=()=>{ if(dirty) return; dirty=true; const d=$("#dirtyDot"); if(d) d.hidden=false; };
+  const whyImgs=(i.studentWhyImgs||[]).slice();   // 📎 pictures in "Why should students watch this video?"
 
   const draw=(kwList0)=>{ let kwList=kwList0;
     // vidIQ research for this idea ("<idea>__r"): new results go straight in, like on a card
@@ -3067,8 +3098,7 @@ function openIdea(id,focusComments,fmtKey){
     <div class="dr-cols"><div class="dr-col">
     <div class="fld"><label for="i-idea">Idea</label>
       <input id="i-idea" value="${esc(i.idea)}" placeholder="${F.video?"What is the video, in one line?":"What is the post about, in one line?"}"></div>
-    <div class="fld"><label for="i-studentwhy">Why should students watch this video?</label>
-      <textarea id="i-studentwhy" placeholder="Would you suggest this video to your little brother or cousin? Why?">${esc(i.studentWhy||"")}</textarea></div>
+    ${picBox("i-studentwhy","Why should students watch this video?", i.studentWhy, whyImgs, "Would you suggest this video to your little brother or cousin? Why?")}
     <div class="grid2">
       <div class="fld"><label for="i-by">Reported by</label>${peopleSelect("i-by",i.by)}</div>
       <div class="fld"><label for="i-created">Reported on</label><input id="i-created" type="date" value="${esc(i.created||today())}"></div>
@@ -3131,7 +3161,7 @@ function openIdea(id,focusComments,fmtKey){
       ${!isNew?`<button class="btn danger" id="delIdea" style="margin-left:auto" data-w="1">Delete</button>`:""}</div>`,true,"idea:"+(isNew?"new":i.id));
 
     const read=()=>{
-      i.idea=$("#i-idea").value.trim(); i.studentWhy=$("#i-studentwhy").value.trim(); i.by=$("#i-by").value.trim(); i.created=$("#i-created").value||today(); i.cat=readReg("ideacat","i-cat",i.cat||"");
+      i.idea=$("#i-idea").value.trim(); i.studentWhy=$("#i-studentwhy").value.trim(); i.studentWhyImgs=whyImgs.slice(); i.by=$("#i-by").value.trim(); i.created=$("#i-created").value||today(); i.cat=readReg("ideacat","i-cat",i.cat||"");
       i.platforms=readPlats("i-platform",plats(i)); i.platform=i.platforms[0]; i.vtype=readReg("vtype","i-vtype",i.vtype)||(fmtOf(i).vtypes||[])[0]||i.format;
       i.hook=$("#i-hook").value.trim(); i.cta=$("#i-cta").value.trim();
       i.title=$("#i-title").value.trim(); i.desc=$("#i-desc").value.trim();   // research fields are off the form for now: what's stored stays
@@ -3143,6 +3173,7 @@ function openIdea(id,focusComments,fmtKey){
     const saved=()=>{ dirty=false; opened=snap(); };
 
     $("#xClose").onclick=$("#xClose2").onclick=()=>closeDrawer();
+    wirePicBox($("#drawer"), "i-studentwhy", whyImgs, markDirty);
     $("#drawer").oninput=$("#drawer").onchange=e=>{ if(!e.target.closest("#cmtBlock")) markDirty(); };
     wireOwn(i, read, markDirty, ()=>draw(i.keywords));
     const fb=$("#i-fmt"); if(fb) fb.onclick=()=>{ read(); const keep={...i};
@@ -3189,7 +3220,7 @@ function openIdea(id,focusComments,fmtKey){
     if(rb) rb.onclick=async()=>{ read(); persist(); if(save()) saved();
       rb.disabled=true; rb.textContent="Asking vidIQ…";
       try{ await PIPE.research({ id:i.id, idea:i.idea, platform:i.platform, vtype:i.vtype, scheduled:null,
-          pre:{ title:i.title, desc:i.desc, hashtags:i.hashtags, keywords:i.keywords, why:i.why } }, { idea:()=>i }); draw(i.keywords); }
+          pre:{ title:i.title, desc:i.desc, hashtags:i.hashtags, keywords:i.keywords, why:i.why, refImgs:(i.studentWhyImgs||[]).slice() } }, { idea:()=>i }); draw(i.keywords); }
       catch(e){ toast(e.message); rb.disabled=false; rb.textContent="🔎 Fill with vidIQ"; } };
     $("#drawer").querySelectorAll("[data-rs-title]").forEach(b=>b.onclick=()=>{ read(); i.title=b.dataset.rsTitle; markDirty(); draw(i.keywords);
       toast("Title filled in — press Save to keep it"); });
@@ -3354,6 +3385,7 @@ function openCard(id,showGate){
   const FORM=["idea","format","platform","platforms","vtype","scheduled","time","pre","metrics","shoot"];
   const snap=()=>JSON.stringify(FORM.map(k=>c[k])), restore=t=>JSON.parse(t).forEach((v,i)=>{ c[FORM[i]]=v; });
   let opened=snap(), dirty=false, scrolledToReview=false;
+  const refImgs=(c.pre && c.pre.refImgs || []).slice();   // 📎 pictures in "Comments & reference"
   const markDirty=()=>{ if(dirty) return; dirty=true; const d=$("#dirtyDot"); if(d) d.hidden=false; };
 
   const draw=(kwList0)=>{ let kwList=kwList0;
@@ -3476,8 +3508,9 @@ function openCard(id,showGate){
         <button class="btn sm" id="repull" style="margin-left:6px" data-w="1">Re-pull from idea</button></p>`:""}
       <div class="fld"><label for="r-title">Title</label><input id="r-title" value="${esc(c.pre.title)}"></div>
       <div class="fld"><label for="r-desc">${F.video?"Description":"Caption"}</label><textarea id="r-desc">${esc(c.pre.desc)}</textarea></div>
-      <div class="fld" style="margin-bottom:0"><label for="r-hashtags">Hashtags</label>
+      <div class="fld"><label for="r-hashtags">Hashtags</label>
         <input id="r-hashtags" value="${esc(c.pre.hashtags)}" placeholder="#cuet #du"></div>
+      ${picBox("r-ref","Comments & reference", c.pre.refNote, refImgs, "Any comments for the team — what to keep in mind, what the reference picture shows…")}
       ${useClaude?`<p class="hint" style="margin:8px 0 0">Claude polishes these at the final check.</p>`:""}`;
     const shootBody=live?`<p class="hint pre-note" style="margin:12px 0 10px">${slot?`Goes live <b>${esc(slot.label)}</b>.`:`Set the “Goes live on” date on the right.`} Plan what you'll say — it's live, so there's no edit afterwards.</p>
       <div class="fld"><label for="s-hook">Opening (first minute)</label><input id="s-hook" value="${esc(c.shoot.hook)}" placeholder="Who you are, what this session answers"></div>
@@ -3632,6 +3665,8 @@ function openCard(id,showGate){
       c.scheduled=$("#c-sched").value||null; c.time=$("#c-time").value||null;
       c.pre.title=$("#r-title").value.trim();   // research fields are off the card for now: what's stored stays
       c.pre.desc=$("#r-desc").value.trim(); c.pre.hashtags=$("#r-hashtags").value.trim();
+      c.pre.refNote=$("#r-ref").value.trim(); c.pre.refImgs=refImgs.slice();
+      c.post = c.post || {}; c.post.links = c.post.links && typeof c.post.links==="object" ? c.post.links : {};   // a brand-new card has none yet
       $("#drawer").querySelectorAll("[data-plink]").forEach(e=>{ c.post.links[e.dataset.plink]=e.value.trim(); });
       c.post.postUrl=c.post.links[c.platform]||Object.values(c.post.links).find(Boolean)||"";
       if($("#e-brief")) c.editBrief=$("#e-brief").value.trim();
@@ -3644,6 +3679,7 @@ function openCard(id,showGate){
     const persist=()=>{ if(!CARDS.find(x=>x.id===c.id)) CARDS.push(c); };
 
     $("#xClose").onclick=$("#xClose2").onclick=()=>closeDrawer();
+    wirePicBox($("#drawer"), "r-ref", refImgs, markDirty);
     // typing anywhere in the card (not in the Claude panel) = unsaved changes; closing asks first
     $("#drawer").oninput=$("#drawer").onchange=e=>{ if(!e.target.closest("#pipePanel,[data-cmthost]")) markDirty(); };
 
