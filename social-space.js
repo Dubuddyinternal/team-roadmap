@@ -574,6 +574,7 @@ details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var
 .picx{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:1px solid var(--line-2);background:var(--surface);cursor:pointer;font-size:13px;line-height:1;padding:0;color:var(--ink-2)}
 .picadd{font-size:12px;font-weight:600;color:var(--accent);cursor:pointer;border:1px dashed var(--line-2);border-radius:6px;padding:6px 10px;display:inline-flex;align-items:center;gap:4px}
 .picadd:hover{border-color:var(--accent)}
+.picbox.dropping{border-color:var(--accent);border-style:dashed;background:color-mix(in srgb,var(--accent) 6%,var(--surface))}
 .fld label.picadd{font-family:inherit;font-size:12px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--accent);margin:0}
 .fld.bad input,.fld.bad select,.fld.bad textarea{border-color:var(--crit)}
 .fld .req{color:var(--crit);font-family:var(--mono);font-size:10px;margin-left:4px;letter-spacing:0}
@@ -780,7 +781,7 @@ function picsHtml(imgs){ return (imgs||[]).map((u,k)=>`<span class="pic"><a href
 function picBox(id, label, text, imgs, ph){
   return `<div class="fld"><label for="${id}">${esc(label)}</label><div class="picbox">
     <textarea id="${id}" placeholder="${esc(ph||"")}">${esc(text||"")}</textarea>
-    <div class="picrow" data-pics="${id}">${picsHtml(imgs)}${canEdit()?`<label class="picadd">📎 Add picture<input type="file" accept="image/*" multiple hidden></label>`:""}<span class="hint" data-picst></span></div></div></div>`;
+    <div class="picrow" data-pics="${id}">${picsHtml(imgs)}${canEdit()?`<label class="picadd">📎 Add picture<input type="file" accept="image/*" multiple hidden></label><span class="hint">or drop / paste a picture here</span>`:""}<span class="hint" data-picst></span></div></div></div>`;
 }
 function wirePicBox(root, id, arr, onChange){
   const row=root.querySelector(`[data-pics="${id}"]`); if(!row) return;
@@ -789,11 +790,19 @@ function wirePicBox(root, id, arr, onChange){
   const redraw=()=>{ row.querySelectorAll(".pic").forEach(e=>e.remove()); row.insertAdjacentHTML("afterbegin", picsHtml(arr)); bind(); };
   bind();
   const inp=row.querySelector("input[type=file]"); if(!inp) return;
-  inp.onchange=async()=>{ const fs=[...inp.files]; inp.value=""; if(!fs.length) return;
+  const add=async files=>{ const fs=[...files].filter(f=>/^image\//.test(f.type)); if(!fs.length){ st.textContent="Only pictures can go here."; return; }
     if(typeof uploadPhoto!=="function"){ st.textContent="Uploading isn't available here."; return; }
     for(const f of fs){ st.textContent="Uploading…";
       try{ arr.push(await uploadPhoto(f)); redraw(); onChange(); }catch(e){ st.textContent="Couldn't upload the picture: "+(e.message||e); return; } }
     st.textContent=""; };
+  inp.onchange=()=>{ const fs=[...inp.files]; inp.value=""; if(fs.length) add(fs); };
+  // drop pictures anywhere on the box, or paste one into the text
+  const box=row.closest(".picbox"), ta=box.querySelector("textarea");
+  const hasFiles=e=>e.dataTransfer && [...(e.dataTransfer.types||[])].includes("Files");
+  box.addEventListener("dragover",e=>{ if(!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect="copy"; box.classList.add("dropping"); });
+  box.addEventListener("dragleave",e=>{ if(!box.contains(e.relatedTarget)) box.classList.remove("dropping"); });
+  box.addEventListener("drop",e=>{ if(!hasFiles(e)) return; e.preventDefault(); box.classList.remove("dropping"); add(e.dataTransfer.files); });
+  if(ta) ta.addEventListener("paste",e=>{ const fs=[...((e.clipboardData&&e.clipboardData.files)||[])].filter(f=>/^image\//.test(f.type)); if(fs.length){ e.preventDefault(); add(fs); } });
 }
 const IDEA_BOX = { idea:"Idea", studentWhy:"Why should students watch this video?", hook:"Hook", cta:"CTA (call to action)",
   title:"Title", desc:"Description", hashtags:"Hashtags", why:"Why this topic (research)", source:"Research source", tool:"Research tool",
@@ -2883,7 +2892,8 @@ function renderSchedule(){
     <div class="sec"><div class="sec-h">
       <button class="btn sm" id="prev">←</button><h3>${heading}</h3><button class="btn sm" id="next">→</button>
       <button class="btn sm" id="todayBtn">Today</button>
-      <span class="hint" style="margin-left:auto">${canEdit()?"Drag a card to another day to move it — its time stays the same · ":""}${all.length} scheduled card${all.length===1?"":"s"} match these filters</span></div>
+      <span class="hint" style="margin-left:auto">${canEdit()?"Drag a card to another day to move it — its time stays the same · double-click a day to add a card on it · ":""}${all.length} scheduled card${all.length===1?"":"s"} match these filters</span>
+      ${canEdit()?`<button class="btn pri" id="schedNew">+ New card</button>`:""}</div>
       ${grid}
       <div class="legend" style="margin-top:14px">
         ${Object.keys(REG.vtype).map(k=>`<span><i style="background:${vtypeColor(k)}"></i>${esc(vtypeLabel(k))}</span>`).join("")}</div></div>`;
@@ -2893,6 +2903,8 @@ function renderSchedule(){
   P.querySelectorAll("[data-splat]").forEach(b=>b.onclick=()=>{toggle(SCHED.platforms,b.dataset.splat);renderSchedule();});
   P.querySelectorAll("[data-svt]").forEach(b=>b.onclick=()=>{toggle(SCHED.vtypes,b.dataset.svt);renderSchedule();});
   P.querySelectorAll("[data-card]").forEach(b=>b.onclick=()=>openCard(b.dataset.card));
+  const sn=P.querySelector("#schedNew"); if(sn) sn.onclick=()=>openCard(null);
+  if(canEdit()) P.querySelectorAll("[data-date]").forEach(d=>d.ondblclick=e=>{ if(e.target.closest("[data-card]")) return; openCard(null, false, { scheduled:d.dataset.date }); });
   // drag a card onto another day: the date changes, the time doesn't
   let dragId=null;
   P.querySelectorAll("[data-card][draggable=true]").forEach(b=>{
@@ -3376,10 +3388,10 @@ function pubLinkHtml(c){
     ${rows.map(x=>`<div class="pl-row">${ktag(x.pl,c.vtype)}<a href="${esc(x.url)}" target="_blank" rel="noopener" class="pl-url">${esc(x.url.replace(/^https?:\/\/(www\.)?/,""))}</a>
       <a class="btn sm" href="${esc(x.url)}" target="_blank" rel="noopener">Open ↗</a></div>`).join("")}</div>`;
 }
-function openCard(id,showGate){
+function openCard(id,showGate,preset){
   if(id) setTimeout(()=>{ OPEN={kind:"card",id}; });
   const isNew=!id;
-  const c=isNew ? blankCard() : CARDS.find(x=>x.id===id);
+  const c=isNew ? blankCard(preset||undefined) : CARDS.find(x=>x.id===id);
   if(!c) return;
   // the form's fields as they were when opened, so "discard changes" really discards
   const FORM=["idea","format","platform","platforms","vtype","scheduled","time","pre","metrics","shoot"];
