@@ -29,7 +29,7 @@
 <!-- Student ideas (tools.dubuddy.in/ideas) in the product space, status sync, idea emails, My product ideas (student-ideas.js) -->
 <script src="student-ideas.js"></script>
 <!-- Marketing mega space: campaigns (Details · Board · Roles · Reminders · Calendar) — campaign-space.js -->
-<script src="campaign-space.js?v=20261106c"></script>
+<script src="campaign-space.js?v=20261107c"></script>
 <!-- Keep an Eye: a fixed template for studying role-model and competitor companies, inside Marketing — watch-space.js -->
 <script src="watch-space.js"></script>
 <!-- Widen our Horizon: big questions answered every week, then checked — horizon-space.js -->
@@ -18436,6 +18436,7 @@ function campNewCard(cs, soc, it){
 }
 function campSyncCards(){
   if(!CSPACES || !Array.isArray(CSPACES.list) || !window.CX) return false;
+  campSyncCards.n = campSyncCards.n || 0;
   let changed = false;
   const nameOf = id=>{ const u = USERS.find(x=>x.id===id); return u ? userDisplayName(u) : ""; };
   CSPACES.list.filter(x=>x.type==="campaign").forEach(cs=>{
@@ -18471,6 +18472,13 @@ function campSyncCards(){
       if(names && card.owner!==names){ card.owner = names; changed = true; }
       if(JSON.stringify(card.ownerIds||[])!==JSON.stringify(all)){ card.ownerIds = all; changed = true; }
       if(!card.fromCampaignId){ card.fromCampaignId = cs.id; card.fromItemId = it.id; changed = true; }
+      // type and platforms: the campaign piece decides (a Webinar changed to a Live session changes the card's type too)
+      const want = campPieceFormat(soc, it);
+      if(card.format !== want.format){ card.format = want.format; card.vtype = want.vtype; changed = true; campSyncCards.n++; }
+      const pl = (it.platforms && it.platforms.length ? it.platforms : [it.platform]).map(p=>p==="YouTube"?"yt":p==="Instagram"?"ig":null).filter(Boolean);
+      const cpl = Array.isArray(card.platforms) && card.platforms.length ? card.platforms : [card.platform];
+      if(pl.length && pl.slice().sort().join()!==cpl.slice().sort().join()){ card.platforms = pl; card.platform = pl[0];
+        if(pl.length===2 && card.vtype==="reel") card.vtype = "short"; changed = true; campSyncCards.n++; }
     });
   });
   return changed;
@@ -18567,6 +18575,13 @@ function renderContentCampaign(){
     leadOf: c=> c.lead || ((campUserByEmail(CAMP_DEFAULT_LEAD)||{}).id) || "",
     confirmLive: (c, x)=> campConfirmLive(c, x),
     // 🔔 Notify on a card or sub task: a bell + email to its assignee right now (campaign-remind, action "notify")
+    // 🔄 Sync with Social Media: run the sync now and save straight away (another open tab needs a refresh to see it)
+    syncNow: c=>{ const soc = campaignSocial(c), cards = ()=> ((soc && soc.sx && soc.sx.cards) || []).filter(x=>x.fromCampaignId===c.id);
+      const before = new Map(cards().map(x=>[x.id, JSON.stringify(x)]));
+      const ch = campSyncCards();
+      const n = cards().filter(x=>before.get(x.id)!==JSON.stringify(x)).length;
+      if(ch){ _pushDirty = true; pushNow(); }
+      return { changed: ch, n, total: cards().length }; },
     nudge: async (c, x)=>{
       try{ const r = await SUPA.functions.invoke("campaign-remind", { body: Object.assign({ action:"notify", team:TEAM, campaign_id:c.id, campaign:(c.details&&c.details.name)||c.name }, x) });
         return r.data || { ok:false, error:(r.error && r.error.message) || "unknown" }; }catch(e){ return { ok:false, error:e.message }; }
