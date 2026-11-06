@@ -103,7 +103,18 @@ const BCSS = `
 /* type tags: the same look as Content Process (.ktag in social-space.js) */
 .kt{display:inline-block;font-family:var(--mono);font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;white-space:nowrap;
   background:color-mix(in srgb,var(--kc) 14%,transparent);color:var(--kc);border:1px solid color-mix(in srgb,var(--kc) 30%,transparent)}
-.cevt .kts{display:flex!important;flex-wrap:wrap;gap:3px;margin-top:4px;white-space:normal!important;overflow:visible!important}.cevt span.kt{display:inline-block;font-size:9.5px;padding:1px 5px;color:var(--kc);overflow:visible;text-overflow:clip}
+.cevt{background:var(--surface-2)!important;border:none!important;border-left:2.5px solid var(--line-2)!important;border-radius:4px!important;padding:4px 6px!important}
+.cevt b{font-size:10.5px!important;color:var(--ink)}
+.cevt .kts{display:flex!important;flex-wrap:wrap;gap:3px;margin-top:3px;white-space:normal!important;overflow:visible!important}.cevt span.kt{display:inline-block;font-size:9px;padding:1px 4px;color:var(--kc);overflow:visible;text-overflow:clip;margin:0}
+.cevt span.cwho{font-size:9.5px;margin-top:2px}
+/* a dropdown with tick boxes, so a filter can take several values */
+.msel{position:relative}.msbtn{background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-s);padding:7px 28px 7px 9px;font:inherit;font-size:12.5px;min-width:160px;max-width:240px;text-align:left;cursor:pointer;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative}
+.msbtn::after{content:"▾";position:absolute;right:9px;top:50%;transform:translateY(-50%);color:var(--ink-3);font-size:11px}
+.msel.on .msbtn{border-color:var(--ink);font-weight:600}
+.mspop{position:absolute;top:calc(100% + 4px);left:0;z-index:40;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);box-shadow:0 10px 28px rgba(26,24,21,.16);padding:6px;min-width:220px;max-height:320px;overflow:auto}
+.mspop label{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0;font-family:inherit;color:var(--ink)}
+.mspop label:hover{background:var(--surface-2)}.fsel .mspop input{width:15px;height:15px;min-width:0;padding:0;margin:0;flex:none;accent-color:var(--accent)}
+.msft{display:flex;justify-content:space-between;gap:6px;border-top:1px solid var(--line);margin-top:4px;padding:6px 2px 0}
 .kb-pp{display:flex;gap:5px;flex-wrap:wrap}.kb-pp button{font:inherit;font-size:12px;padding:4px 10px 4px 4px;border-radius:99px;border:1px solid var(--line-2);background:var(--surface);cursor:pointer;display:inline-flex;align-items:center;gap:6px;color:var(--ink-2)}
 .kb-pp button .av{width:20px;height:20px;font-size:10px}.kb-pp button.on{border-color:var(--accent);background:var(--accent-soft,#FBEAE2);color:var(--ink);font-weight:600}
 .kb-it.hl{box-shadow:0 0 0 2px var(--saffron),0 4px 14px rgba(240,163,43,.25);background:linear-gradient(0deg,var(--surface),var(--saffron-soft))}
@@ -846,7 +857,7 @@ p{margin:0}
 let HOST=null, R=null, SPACE=null, OPT={};
 let CTAB="details", CALVIEW="grid", ASSIGNFILTER="All", CALMONTH="";
 let MEMBERVIEW=false;   /* an admin looking at the campaign the way the team sees it */
-let CALFILTER={ range:"all", anchor:"", type:"all", platform:"all", owner:"all" };
+let CALFILTER={ range:"all", anchor:"", type:[], platform:[], owner:[] }, MSOPEN=null;   // type / platform / owner: several at once, [] = all
 const $ = s => R.querySelector(s);
 
 /* ------------------------------------------------------------ helpers */
@@ -2112,9 +2123,11 @@ function weekOf(d){ const x=new Date(d+"T00:00:00"), off=(x.getDay()+6)%7;
   return [isoD(s), isoD(e)]; }
 function passFilter(it){
   const F = CALFILTER;
-  if(F.type !== "all" && !typeLabels(it).includes(F.type)) return false;   // the same tags as the board (YT Short, Poster, Webinar…)
-  if(F.platform !== "all" && !platsOf(it).includes(F.platform)) return false;
-  if(F.owner !== "all" && ownerName(it) !== F.owner) return false;
+  const many = v => Array.isArray(v) ? v : (v && v!=="all" ? [v] : []);
+  const T=many(F.type), P=many(F.platform), O=many(F.owner);
+  if(T.length && !typeLabels(it).some(l=>T.includes(l))) return false;   // the same tags as the board (YT Short, YT Poster, Webinar…)
+  if(P.length && !platsOf(it).some(p=>P.includes(p))) return false;
+  if(O.length && !calOwners(it).some(o=>O.includes(o))) return false;
   if(F.range !== "all"){
     if(!it.date) return false;
     const a = F.anchor || TODAY;
@@ -2125,7 +2138,17 @@ function passFilter(it){
   return true;
 }
 const filtered = c => c.items.filter(passFilter);
-const filterOn = () => CALFILTER.range!=="all" || CALFILTER.type!=="all" || CALFILTER.platform!=="all" || CALFILTER.owner!=="all";
+const filterOn = () => CALFILTER.range!=="all" || ["type","platform","owner"].some(k=>[].concat(CALFILTER[k]).filter(v=>v&&v!=="all").length);
+const calOwners = it => { const ids=assigneesOf(it), n=ids.map(kbName).filter(Boolean); return n.length ? n : [ownerName(it)].filter(Boolean); };
+function msel(id, label, vals, opts, allLabel){
+  vals=[].concat(vals).filter(v=>v&&v!=="all");
+  const sum = !vals.length ? allLabel : vals.length<=2 ? vals.map(v=>(opts.find(o=>o[0]===v)||[v,v])[1]).join(", ") : vals.length+" selected";
+  return `<div class="fsel msel ${vals.length?"on":""}" data-ms="${id}"><span>${esc(label)}</span>
+    <button type="button" class="msbtn" aria-haspopup="true" aria-expanded="${MSOPEN===id}">${esc(sum)}</button>
+    <div class="mspop" ${MSOPEN===id?"":"hidden"} role="group" aria-label="${esc(label)}">
+      ${opts.map(([v,t])=>`<label><input type="checkbox" value="${esc(v)}" ${vals.includes(v)?"checked":""}>${esc(t)}</label>`).join("")}
+      <div class="msft"><button type="button" class="btn sm" data-msall>${esc(allLabel)}</button><button type="button" class="btn sm pri" data-msok>Done</button></div></div></div>`;
+}
 
 function calendarPane(c){
   if(!c.items.length) return `<div class="empty">
@@ -2136,7 +2159,7 @@ function calendarPane(c){
   const dated = shown.filter(i=>i.date), undated = shown.filter(i=>!i.date);
   const kinds = [...new Set(c.items.flatMap(typeLabels))].sort();
   const plats = allPlats(c);
-  const owners = [...new Set(c.items.map(ownerName).filter(Boolean))];
+  const owners = [...new Set(c.items.flatMap(calOwners))].sort();
   const sel = (id,label,value,opts) => `<label class="fsel"><span>${label}</span>
     <select data-cf="${id}">${opts.map(([v,t])=>`<option value="${esc(v)}" ${value===v?"selected":""}>${esc(t)}</option>`).join("")}</select></label>`;
   return `${canPlan() ? "" : memberBar()}
@@ -2152,9 +2175,9 @@ function calendarPane(c){
       ${sel("range","Show", CALFILTER.range, [["all","All dates"],["day","A single day"],["week","A week"],["month","A month"]])}
       ${CALFILTER.range!=="all" ? `<label class="fsel"><span>${CALFILTER.range==="day"?"Which day":CALFILTER.range==="week"?"Week containing":"Month containing"}</span>
         <input type="date" data-cf="anchor" value="${esc(CALFILTER.anchor||TODAY)}"></label>` : ""}
-      ${sel("type","Content type", CALFILTER.type, [["all","All types"], ...kinds.map(k=>[k, k])])}
-      ${sel("platform","Platform / Category", CALFILTER.platform, [["all","All platforms"], ...plats.map(p=>[p,p])])}
-      ${sel("owner","Accountable person", CALFILTER.owner, [["all","Everyone"], ...owners.map(o=>[o,o])])}
+      ${msel("type","Content type", CALFILTER.type, kinds.map(k=>[k, k]), "All types")}
+      ${msel("platform","Platform / Category", CALFILTER.platform, plats.map(p=>[p,p]), "All platforms")}
+      ${msel("owner","Accountable person", CALFILTER.owner, owners.map(o=>[o,o]), "Everyone")}
       ${filterOn()?`<button class="btn sm" id="clearFilter">Clear filters</button>`:""}
     </div>
     ${shown.length
@@ -2163,7 +2186,7 @@ function calendarPane(c){
           <p>Loosen one of them, or clear them all.</p>
           <button class="btn" id="clearFilter2">Clear filters</button></div>`}
     <div class="legend" style="margin-top:16px">
-      ${Object.entries(ITEM_KINDS).filter(([k])=>shown.some(i=>i.kind===k)).map(([,v])=>`<span><i style="background:${v.c}"></i>${esc(v.label)}</span>`).join("")}
+      ${[...new Set(shown.flatMap(typeLabels))].sort().map(ktOne).join(" ")}
     </div>`;
 }
 function monthShown(c, shown){
@@ -2178,10 +2201,10 @@ function shiftMonth(ym, n){
 /* a card you can pick up */
 function evtHTML(c, it){
   const k = kindOf(it), ids = assigneesOf(it), who = ids.length>1 ? ids.map(i=>(kbName(i)||"").split(" ")[0]).join(" + ") : ownerName(it);
-  return `<button class="cevt ${it.highlight?"hl":""}" data-drag="${esc(it.id)}" title="${esc(it.name)}${canPlan()?" — drag to move":""}"
-    style="border-left-color:${k.c};background:color-mix(in srgb,${k.c} 9%,transparent)">
-    <b>${it.highlight?"⭐":k.emo} ${esc(it.name)}</b>
-    <span class="kts">${typeTags(it)}</span>${who?`<span>${esc(who)}</span>`:""}</button>`;
+  return `<button class="cevt ${it.highlight?"hl":""}" data-drag="${esc(it.id)}" title="${esc(it.name)}${who?" · "+esc(who):""}${canPlan()?" — drag to move":""}"
+    style="border-left-color:${ktColor(typeLabels(it)[0])}">
+    <b>${it.highlight?"⭐ ":""}${esc(it.name)}</b>
+    <span class="kts">${typeTags(it)}</span>${who?`<span class="cwho">${esc(who)}</span>`:""}</button>`;
 }
 function gridView(c, shown){
   const ym = monthShown(c, shown);
@@ -2342,8 +2365,16 @@ function wireCalendar(c){
     if(k==="range" && el.value!=="all" && !CALFILTER.anchor) CALFILTER.anchor = TODAY;
     draw();
   });
+  W.querySelectorAll("[data-ms]").forEach(box=>{ const k=box.dataset.ms, pop=box.querySelector(".mspop");
+    box.querySelector(".msbtn").onclick=e=>{ e.stopPropagation(); MSOPEN = MSOPEN===k ? null : k; draw(); };
+    pop.onclick=e=>e.stopPropagation();
+    pop.querySelectorAll("input[type=checkbox]").forEach(cb=>cb.onchange=()=>{ CALFILTER[k]=[...pop.querySelectorAll("input:checked")].map(x=>x.value); MSOPEN=k; draw(); });
+    pop.querySelector("[data-msall]").onclick=()=>{ CALFILTER[k]=[]; MSOPEN=k; draw(); };
+    pop.querySelector("[data-msok]").onclick=()=>{ MSOPEN=null; draw(); };
+  });
+  W.onclick = e => { if(MSOPEN && !(e.target.closest && e.target.closest(".msel"))){ MSOPEN=null; draw(); } };
   ["clearFilter","clearFilter2"].forEach(id=>{ const b=$("#"+id);
-    if(b) b.onclick=()=>{ CALFILTER={range:"all",anchor:"",type:"all",platform:"all",owner:"all"}; draw(); }; });
+    if(b) b.onclick=()=>{ CALFILTER={range:"all",anchor:"",type:[],platform:[],owner:[]}; draw(); }; });
   const g = $("#genFlow"); if(g) g.onclick=()=>{ CALVIEW = CALVIEW==="flow" ? "grid" : "flow"; draw(); };
   if(canPlan()) W.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openPiece(c, b.dataset.open));
   else W.querySelectorAll("[data-open]").forEach(b=>{ b.style.cursor="default"; });
@@ -2386,7 +2417,9 @@ function typeLabels(it){
   return out.length ? out : [n];
 }
 const ktBase = l => String(l).replace(/^(YT|Insta) /,"");
-const ktOne = l => `<span class="kt" style="--kc:${KT_COLORS[l]||KT_COLORS[ktBase(l)]||"var(--ink-3)"}">${esc(l)}</span>`;
+const ktColor = l => /Story$/.test(l) ? "#B3417A" : /Long video$/.test(l) ? "var(--c2)" : /Live$/.test(l) ? "var(--crit)"
+  : /^YT /.test(l) ? "var(--c1)" : /^Insta /.test(l) ? "var(--c3)" : (KT_COLORS[l]||KT_COLORS[ktBase(l)]||"var(--ink-3)");
+const ktOne = l => `<span class="kt" style="--kc:${ktColor(l)}">${esc(l)}</span>`;
 const typeTags = it => typeLabels(it).map(ktOne).join("");
 const CP_STAGES = [["todo","Ideas"],["draft","To shoot"],["inprogress","Editing"],["inreview","Your check"],["approved","Scheduled"],["published","Live"]];
 const KB_COLS = [["todo","Not started"],["prog","In progress"],["late","Past deadline · waiting"],["live","Live ✓"]];
@@ -2678,7 +2711,7 @@ window.CX = {
     mount();
     OPT = opt || {};
     if(!SPACE || SPACE.id!==space.id){ KBF={who:"",date:"",cat:""}; KBOPEN=null; KBREM=null; KBREMFOR=""; if(R) kbClose(); }
-    if(SPACE!==space){ SPACE=space; ASSIGNFILTER="All"; CALMONTH=""; DAYSEL=null; CALFILTER={range:"all",anchor:"",type:"all",platform:"all",owner:"all"}; if(R) closeDialog(); }
+    if(SPACE!==space){ SPACE=space; ASSIGNFILTER="All"; CALMONTH=""; DAYSEL=null; CALFILTER={range:"all",anchor:"",type:[],platform:[],owner:[]}; if(R) closeDialog(); }
     normalize(space);
     CTAB = ["details","board","roles","reminders","calendar"].includes(OPT.tab) ? OPT.tab : OPT.tab==="assign"||OPT.tab==="dash" ? "board" : "details";
     if(HOST.parentNode!==wrap) wrap.appendChild(HOST);
