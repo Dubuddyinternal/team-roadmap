@@ -2627,8 +2627,8 @@ const IDEA_SECTIONS=[
 ];
 let IDEA_OPEN_SECS=null;   // which sections are unfolded (remembered while the page is open)
 // "+ New idea": pick the type first; the idea page then fits that type
-function pickFormat(then){
-  openDrawer(`<div class="dr-h"><div><div class="lbl">New idea</div><h3 style="margin-top:4px">What kind of content is it?</h3></div>
+function pickFormat(then, what){
+  openDrawer(`<div class="dr-h"><div><div class="lbl">${esc(what||"New idea")}</div><h3 style="margin-top:4px">What kind of content is it?</h3></div>
       <button class="btn sm" id="xClose">Close</button></div>
     <div class="fpick">${FORMATS.filter(f=>!f.hidden).map(f=>`<button class="fpick-c" data-fmt="${esc(f.key)}">
       <span class="fpick-i">${f.icon}</span><b>${esc(f.name)}</b>
@@ -2637,9 +2637,15 @@ function pickFormat(then){
       ${canEdit()?`<button class="fpick-c add" data-fmt-add><span class="fpick-i">＋</span><b>Add a type</b><span class="hint">e.g. Story, Podcast clip, Webinar</span></button>`:""}</div>`);
   $("#xClose").onclick=()=>closeDrawer();
   $("#drawer").querySelectorAll("[data-fmt]").forEach(b=>b.onclick=()=>then(b.dataset.fmt));
-  const ad=$("#drawer").querySelector("[data-fmt-add]"); if(ad) ad.onclick=()=>openFormats(null, ()=>pickFormat(then));
+  const ad=$("#drawer").querySelector("[data-fmt-add]"); if(ad) ad.onclick=()=>openFormats(null, ()=>pickFormat(then, what));
 }
 
+// "+ New card": pick the type first (like a new idea), then the card opens set to that type
+function newCardOfType(preset){
+  pickFormat(k=>{ const F=fmtOf({format:k}), pl=[...(F.defPlats||F.plats||["ig"])];
+    let vt=(F.vtypes||[])[0]||F.key; if(pl.length>1 && vt==="reel") vt="short";
+    openCard(null, false, Object.assign({ format:k, platforms:pl, platform:pl[0], vtype:vt }, preset||{})); }, "New card");
+}
 // ⚙ Content types: change the built-in ones, add new ones
 function openFormats(editKey, back){
   const f0=editKey?FORMATS.find(f=>f.key===editKey):null;
@@ -2798,7 +2804,7 @@ function renderProcess(){
       ${ro?"":`<button class="btn" id="rebuildCards" title="Make a card for every published post that has none">🔁 Cards from published posts</button><button class="btn pri" id="newCard">+ New card</button>`}</span></div>
       <div class="board">${cols}</div></div>`;
 
-  const nc=$("#newCard"); if(nc) nc.onclick=()=>openCard(null);
+  const nc=$("#newCard"); if(nc) nc.onclick=()=>newCardOfType();
   { const P0=$("#pane-process"), pop=P0.querySelector(".pmpop");
     P0.querySelector("#pmBtn").onclick=e=>{ e.stopPropagation(); PROCOPEN=!PROCOPEN; renderProcess(); };
     pop.onclick=e=>e.stopPropagation();
@@ -2937,8 +2943,8 @@ function renderSchedule(){
   P.querySelectorAll("[data-splat]").forEach(b=>b.onclick=()=>{toggle(SCHED.platforms,b.dataset.splat);renderSchedule();});
   P.querySelectorAll("[data-svt]").forEach(b=>b.onclick=()=>{toggle(SCHED.vtypes,b.dataset.svt);renderSchedule();});
   P.querySelectorAll("[data-card]").forEach(b=>b.onclick=()=>openCard(b.dataset.card));
-  const sn=P.querySelector("#schedNew"); if(sn) sn.onclick=()=>openCard(null);
-  if(canEdit()) P.querySelectorAll("[data-date]").forEach(d=>d.ondblclick=e=>{ if(e.target.closest("[data-card]")) return; openCard(null, false, { scheduled:d.dataset.date }); });
+  const sn=P.querySelector("#schedNew"); if(sn) sn.onclick=()=>newCardOfType();
+  if(canEdit()) P.querySelectorAll("[data-date]").forEach(d=>d.ondblclick=e=>{ if(e.target.closest("[data-card]")) return; newCardOfType({ scheduled:d.dataset.date }); });
   // drag a card onto another day: the date changes, the time doesn't
   let dragId=null;
   P.querySelectorAll("[data-card][draggable=true]").forEach(b=>{
