@@ -107,6 +107,7 @@ const BCSS = `
 .cevt b{font-size:10.5px!important;color:var(--ink)}
 .cevt .kts{display:flex!important;flex-wrap:wrap;gap:3px;margin-top:3px;white-space:normal!important;overflow:visible!important}.cevt span.kt{display:inline-block;font-size:9px;padding:1px 4px;color:var(--kc);overflow:visible;text-overflow:clip;margin:0}
 .cevt span.cwho{font-size:9.5px;margin-top:2px}
+.cevt.live{background:var(--good-soft)!important;border-left-color:var(--good)!important}.cevt.live b{color:var(--good)}
 /* a dropdown with tick boxes, so a filter can take several values */
 .msel{position:relative}.msbtn{background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-s);padding:7px 28px 7px 9px;font:inherit;font-size:12.5px;min-width:160px;max-width:240px;text-align:left;cursor:pointer;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative}
 .msbtn::after{content:"▾";position:absolute;right:9px;top:50%;transform:translateY(-50%);color:var(--ink-3);font-size:11px}
@@ -2204,9 +2205,11 @@ function shiftMonth(ym, n){
 /* a card you can pick up */
 function evtHTML(c, it){
   const k = kindOf(it), ids = assigneesOf(it), who = ids.length>1 ? ids.map(i=>(kbName(i)||"").split(" ")[0]).join(" + ") : ownerName(it);
-  return `<button class="cevt ${it.highlight?"hl":""}" data-drag="${esc(it.id)}" title="${esc(it.name)}${who?" · "+esc(who):""}${canPlan()?" — drag to move":""}"
-    style="border-left-color:${ktColor(typeLabels(it)[0])}">
-    <b>${it.highlight?"⭐ ":""}${esc(it.name)}</b>
+  const card = isContentPiece(it) && OPT.cardOf ? OPT.cardOf(c, it) : null;
+  const live = isContentPiece(it) ? !!(card && card.stage==="published") : !!it.live;   // Live = green, as on the board
+  return `<button class="cevt ${it.highlight?"hl":""} ${live?"live":""}" data-drag="${esc(it.id)}" title="${esc(it.name)}${who?" · "+esc(who):""}${live?" · Live":""}${canPlan()?" — drag to move":""}"
+    style="border-left-color:${live?"var(--good)":ktColor(typeLabels(it)[0])}">
+    <b>${live?"✓ ":it.highlight?"⭐ ":""}${esc(it.name)}</b>
     <span class="kts">${typeTags(it)}</span>${who?`<span class="cwho">${esc(who)}</span>`:""}</button>`;
 }
 function gridView(c, shown){

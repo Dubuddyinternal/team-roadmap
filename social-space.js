@@ -645,6 +645,10 @@ details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var
 .wday .wh b{font-size:17px;letter-spacing:-.02em}
 .wevt{border:1px solid var(--line);border-left:3px solid;border-radius:var(--r-s);padding:8px;text-align:left;width:100%;background:var(--surface-4)}
 .wevt h6{margin:0 0 5px;font-size:11.5px;font-weight:600;line-height:1.35}
+/* a card that's Live is green, on the Schedule and on the board */
+.evt.live,.wevt.live{background:var(--good-soft,#E4F2EA);border-left-color:var(--good)!important}
+.evt.live b,.wevt.live h6{color:var(--good)}
+.kcard.live{background:var(--good-soft,#E4F2EA);border-color:color-mix(in srgb,var(--good) 35%,transparent)}
 .wevt .meta{display:flex;gap:4px;flex-wrap:wrap}
 
 .rvgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
@@ -2768,7 +2772,7 @@ function renderProcess(){
   const cols=STAGES.map(s=>{ const items=BC.filter(c=>c.stage===s.id);
     return `<div class="col" data-stage="${s.id}">
       <div class="col-h"><h4>${s.label}</h4><span class="count">${items.length}</span></div>
-      ${items.map(c=>{ const lp=livePost(c); return `<div class="kcard ${ro?"ro":""} ${c.priority==="high"?"hot":""}" draggable="${ro?"false":"true"}" data-card="${c.id}">
+      ${items.map(c=>{ const lp=livePost(c); return `<div class="kcard ${ro?"ro":""} ${c.priority==="high"?"hot":""} ${c.stage==="published"?"live":""}" draggable="${ro?"false":"true"}" data-card="${c.id}">
         ${c.priority==="high"?`<div class="hotbar">🔔 High priority${c.fromCampaign?` · from ${esc(c.fromCampaign)}`:""}</div>`:""}${c.fromCampaign&&c.owner?`<div class="hotbar" style="background:var(--surface-2);color:var(--ink-2)">👤 ${esc(c.owner)}</div>`:""}
         <h5>${fmtIcon(c)} ${esc(c.pre.title||c.idea)}</h5>
         <div class="meta">${ktags(c)}
@@ -2877,7 +2881,7 @@ function renderSchedule(){
       const evts=all.filter(c=>c.scheduled===key);
       cells+=`<div class="wday ${key===TODAY?"today":""}" data-date="${key}">
         <div class="wh"><span class="lbl">${d.toLocaleDateString("en-GB",{weekday:"short"})}</span><b>${d.getDate()}</b></div>
-        ${evts.map(c=>`<button class="wevt" style="border-left-color:${vtypeColor(c.vtype)}" data-card="${c.id}" ${dragAttr(c)}>
+        ${evts.map(c=>`<button class="wevt ${c.stage==="published"?"live":""}" style="border-left-color:${c.stage==="published"?"var(--good)":vtypeColor(c.vtype)}" data-card="${c.id}" ${dragAttr(c)}>
           <h6>${esc(c.pre.title||c.idea)}</h6><div class="meta">${ktags(c)}</div></button>`).join("")
           ||`<span class="hint" style="font-size:11px">—</span>`}</div>`; }
     grid=`<div style="overflow-x:auto"><div class="weekgrid">${cells}</div></div>`;
@@ -2893,8 +2897,8 @@ function renderSchedule(){
       let cells=""; for(let i=0;i<start;i++) cells+=`<div class="day pad"></div>`;
       for(let dd=1;dd<=dim;dd++){ const key=iso(new Date(y,m,dd)); const evts=all.filter(c=>c.scheduled===key);
         cells+=`<div class="day ${key===TODAY?"today":""}" data-date="${key}"><span class="dn">${dd}</span>
-          ${evts.map(c=>`<button class="evt" style="border-left-color:${vtypeColor(c.vtype)}" data-card="${c.id}" ${dragAttr(c)}>
-            <b>${esc(c.pre.title||c.idea)}</b><span class="ktags">${ktags(c)}</span></button>`).join("")}</div>`; }
+          ${evts.map(c=>`<button class="evt ${c.stage==="published"?"live":""}" style="border-left-color:${c.stage==="published"?"var(--good)":vtypeColor(c.vtype)}" data-card="${c.id}" ${dragAttr(c)} ${c.stage==="published"?'title="Live"':""}>
+            <b>${c.stage==="published"?"✓ ":""}${esc(c.pre.title||c.idea)}</b><span class="ktags">${ktags(c)}</span></button>`).join("")}</div>`; }
       return `<h4 class="cal-month" style="margin:${k?"22px":"4px"} 0 8px">${mname(md)}</h4>
         <div style="overflow-x:auto"><div class="cal">
         ${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=>`<div class="dow">${d}</div>`).join("")}${cells}</div></div>`; }).join("");
