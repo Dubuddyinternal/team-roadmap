@@ -648,6 +648,9 @@ details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var
 .wday .wh b{font-size:17px;letter-spacing:-.02em}
 .wevt{border:1px solid var(--line);border-left:3px solid;border-radius:var(--r-s);padding:8px;text-align:left;width:100%;background:var(--surface-4)}
 .wevt h6{margin:0 0 5px;font-size:11.5px;font-weight:600;line-height:1.35}
+.evrow{display:flex;align-items:flex-end;justify-content:space-between;gap:4px}.evrow .ktags,.evrow .meta{min-width:0}
+.inits{display:inline-flex;flex:none;margin-left:auto}.inits i{font-style:normal;width:17px;height:17px;border-radius:50%;color:#fff;font-size:9.5px;font-weight:700;display:inline-grid;place-items:center;border:1.5px solid var(--surface);margin-left:-4px;font-family:var(--sans,inherit)}
+.inits i:first-child{margin-left:0}.inits i.more{background:var(--ink-3);font-size:8px}
 /* a card that's Live is green, on the Schedule and on the board */
 .evt.live,.wevt.live{background:var(--good-soft,#E4F2EA);border-left-color:var(--good)!important}
 .evt.live b,.wevt.live h6{color:var(--good)}
@@ -939,7 +942,11 @@ const ktag = (pl, vt, faded) => `<span class="ktag ${faded?"faded":""}" style="-
 const ktags = x => plats(x).map(pl=>ktag(pl, x.vtype)).join("");
 // a tag from its label alone (for the category filter)
 const ktagFromLabel = l => `<span class="ktag" style="--kc:${/Story$/.test(l)?VBASE.story:/Live$/.test(l)?"var(--crit)":/Long video$/.test(l)?"var(--c2)":/^YT /.test(l)?"var(--c1)":"var(--c3)"}">${esc(l)}</span>`;
-let PROCF=[], PROCOPEN=false;   // Content Process: categories shown ([] = all), and whether the dropdown is open
+let PROCF=[], PROCOPEN=false;
+/* the assigned people's initials (S for Shivam…), each person in their own colour; the full names on hover */
+const INI_COLORS=["#C8511B","#6246D4","#0F7F86","#B3417A","#17784F","#9A7C00","#3B6FB6","#AE2318"];
+function initials(c){ const names=String(c.owner||"").split(",").map(x=>x.trim()).filter(Boolean); if(!names.length) return "";
+  return `<span class="inits" title="${esc(names.join(", "))}">${names.slice(0,3).map(n=>`<i style="background:${INI_COLORS[hue(n.toLowerCase())%INI_COLORS.length]}">${esc(n.charAt(0).toUpperCase())}</i>`).join("")}${names.length>3?`<i class="more">+${names.length-3}</i>`:""}</span>`; }   // Content Process: categories shown ([] = all), and whether the dropdown is open
 // which video types make sense for the chosen platforms (a type tied to one platform only shows for it)
 function vtypeOptions(pl,fmt){
   if(fmt && (fmt.vtypes||[]).length){   // the type decides; on two platforms a Short and a Reel are the same vertical video
@@ -2789,7 +2796,7 @@ function renderProcess(){
           ${c.scheduled?`<span class="chip">${dmy(c.scheduled)}</span>`:""}
           ${lp?`<span class="badge good">${kfmt(lp.views)} views</span>`:""}
           ${window.PIPE?PIPE.badge(c.id):""}</div>
-        ${gateChips(c)}
+        ${gateChips(c)}${c.owner?`<div style="display:flex;justify-content:flex-end;margin-top:6px">${initials(c)}</div>`:""}
 </div>`; }).join("")||`<div class="dashed" style="margin:0">${ro?"empty":"drop here"}</div>`}
       </div>`;}).join("");
 
@@ -2891,7 +2898,7 @@ function renderSchedule(){
       cells+=`<div class="wday ${key===TODAY?"today":""}" data-date="${key}">
         <div class="wh"><span class="lbl">${d.toLocaleDateString("en-GB",{weekday:"short"})}</span><b>${d.getDate()}</b></div>
         ${evts.map(c=>`<button class="wevt ${c.stage==="published"?"live":""}" style="border-left-color:${c.stage==="published"?"var(--good)":vtypeColor(c.vtype)}" data-card="${c.id}" ${dragAttr(c)}>
-          <h6>${esc(c.pre.title||c.idea)}</h6><div class="meta">${ktags(c)}</div></button>`).join("")
+          <h6>${esc(c.pre.title||c.idea)}</h6><div class="evrow"><div class="meta">${ktags(c)}</div>${initials(c)}</div></button>`).join("")
           ||`<span class="hint" style="font-size:11px">—</span>`}</div>`; }
     grid=`<div style="overflow-x:auto"><div class="weekgrid">${cells}</div></div>`;
   } else {
@@ -2907,7 +2914,7 @@ function renderSchedule(){
       for(let dd=1;dd<=dim;dd++){ const key=iso(new Date(y,m,dd)); const evts=all.filter(c=>c.scheduled===key);
         cells+=`<div class="day ${key===TODAY?"today":""}" data-date="${key}"><span class="dn">${dd}</span>
           ${evts.map(c=>`<button class="evt ${c.stage==="published"?"live":""}" style="border-left-color:${c.stage==="published"?"var(--good)":vtypeColor(c.vtype)}" data-card="${c.id}" ${dragAttr(c)} ${c.stage==="published"?'title="Live"':""}>
-            <b>${c.stage==="published"?"✓ ":""}${esc(c.pre.title||c.idea)}</b><span class="ktags">${ktags(c)}</span></button>`).join("")}</div>`; }
+            <b>${c.stage==="published"?"✓ ":""}${esc(c.pre.title||c.idea)}</b><span class="evrow"><span class="ktags">${ktags(c)}</span>${initials(c)}</span></button>`).join("")}</div>`; }
       return `<h4 class="cal-month" style="margin:${k?"22px":"4px"} 0 8px">${mname(md)}</h4>
         <div style="overflow-x:auto"><div class="cal">
         ${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=>`<div class="dow">${d}</div>`).join("")}${cells}</div></div>`; }).join("");

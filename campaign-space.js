@@ -107,6 +107,9 @@ const BCSS = `
 .cevt b{font-size:10.5px!important;color:var(--ink)}
 .cevt .kts{display:flex!important;flex-wrap:wrap;gap:3px;margin-top:3px;white-space:normal!important;overflow:visible!important}.cevt span.kt{display:inline-block;font-size:9px;padding:1px 4px;color:var(--kc);overflow:visible;text-overflow:clip;margin:0}
 .cevt span.cwho{font-size:9.5px;margin-top:2px}
+.cevt .evrow{display:flex!important;align-items:flex-end;justify-content:space-between;gap:4px;overflow:visible!important;white-space:normal!important}.cevt .evrow .kts{min-width:0}
+.cevt span.inits{display:inline-flex!important;flex:none;margin-left:auto;overflow:visible!important}.cevt .inits i{font-style:normal;width:17px;height:17px;border-radius:50%;color:#fff;font-size:9.5px;font-weight:700;display:inline-grid;place-items:center;border:1.5px solid var(--surface);margin-left:-4px}
+.cevt .inits i:first-child{margin-left:0}.cevt .inits i.more{background:var(--ink-3);font-size:8px}
 .cevt.live{background:var(--good-soft)!important;border-left-color:var(--good)!important}.cevt.live b{color:var(--good)}
 /* a dropdown with tick boxes, so a filter can take several values */
 .msel{position:relative}.msbtn{background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-s);padding:7px 28px 7px 9px;font:inherit;font-size:12.5px;min-width:160px;max-width:240px;text-align:left;cursor:pointer;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative}
@@ -2142,6 +2145,11 @@ function passFilter(it){
 }
 const filtered = c => c.items.filter(passFilter);
 const filterOn = () => CALFILTER.range!=="all" || ["type","platform","owner"].some(k=>[].concat(CALFILTER[k]).filter(v=>v&&v!=="all").length);
+/* the assigned people's initials in the corner (the same colours as the Social Media schedule) */
+const INI_COLORS=["#C8511B","#6246D4","#0F7F86","#B3417A","#17784F","#9A7C00","#3B6FB6","#AE2318"];
+const iniHue = n => { let h=0; for(const ch of String(n)) h=(h*31+ch.charCodeAt(0))%360; return h; };
+function calInits(it){ const names=calOwners(it); if(!names.length) return "";
+  return `<span class="inits" title="${esc(names.join(", "))}">${names.slice(0,3).map(n=>`<i style="background:${INI_COLORS[iniHue(n.toLowerCase())%INI_COLORS.length]}">${esc(n.charAt(0).toUpperCase())}</i>`).join("")}${names.length>3?`<i class="more">+${names.length-3}</i>`:""}</span>`; }
 const calOwners = it => { const ids=assigneesOf(it), n=ids.map(kbName).filter(Boolean); return n.length ? n : [ownerName(it)].filter(Boolean); };
 function msel(id, label, vals, opts, allLabel){
   vals=[].concat(vals).filter(v=>v&&v!=="all");
@@ -2210,7 +2218,7 @@ function evtHTML(c, it){
   return `<button class="cevt ${it.highlight?"hl":""} ${live?"live":""}" data-drag="${esc(it.id)}" title="${esc(it.name)}${who?" · "+esc(who):""}${live?" · Live":""}${canPlan()?" — drag to move":""}"
     style="border-left-color:${live?"var(--good)":ktColor(typeLabels(it)[0])}">
     <b>${live?"✓ ":it.highlight?"⭐ ":""}${esc(it.name)}</b>
-    <span class="kts">${typeTags(it)}</span>${who?`<span class="cwho">${esc(who)}</span>`:""}</button>`;
+    <span class="evrow"><span class="kts">${typeTags(it)}</span>${calInits(it)}</span></button>`;
 }
 function gridView(c, shown){
   const ym = monthShown(c, shown);
