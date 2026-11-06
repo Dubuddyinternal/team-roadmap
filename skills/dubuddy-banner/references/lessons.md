@@ -27,6 +27,11 @@
 - **Shell quoting:** `$FRAMES` in quotes passes one argument, so pass frame lists unquoted.
 - **Precomp clipping:** some players clip precomps to their w/h, so keep precomp art inside its bounds (the head
   art precomp is offset by (150, 200)).
+- **Skottie forgives what lottie-web doesn't.** The Diwali build's mask path was written
+  `"pt": {"a": 0, "k": [{...}]}` (shape wrapped in a list). Skottie rendered it fine, but lottie-web threw
+  while building the offer precomp and the whole banner was blank. A static shape is `"k": {...}`.
+  `check_banner.py` now checks structure, and a final check in lottie-web (cdnjs bodymovin 5.12.2) is
+  required before delivery, not optional.
 - **Periodic motion must divide OP,** or the loop pops. `check_banner.py` catches this.
 - **Size:** 10 copies of the head geometry and per-bulb twinkle keys made the file 1.2 MB. Sharing the
   precomp and phase-grouping the twinkles brought it to about 850 KB at 30fps.

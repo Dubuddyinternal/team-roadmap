@@ -55,7 +55,9 @@ MP4 preview for the user. Report raw and gzip sizes.
    no slots or `sid`, no text layers, no images, no expressions, and a seamless loop.
 9. **Preview:** render all frames (`SCALE=1 PAD=4`) and run
    `ffmpeg -framerate 30 -i f%04d.png -pix_fmt yuv420p preview.mp4`. Send the MP4 and the light JSONs.
-   Optionally confirm in lottie-web (cdnjs bodymovin 5.12.2) from a local page.
+   **Always confirm in lottie-web** (cdnjs bodymovin 5.12.2) from a local page before delivery: step
+   through several frames with `goToAndStop` and check that nothing throws. Skottie renders some files
+   that lottie-web and lottie-ios can't load (see lessons.md), so a good MP4 alone doesn't prove the file works.
 10. **Hand off** with the sizes, the canvas size per variant (the containers must match the aspect
     ratio) and anything not verified on a device.
 

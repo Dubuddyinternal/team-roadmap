@@ -2,6 +2,8 @@
 
 usage: python3 check_banner.py <file.json> [frames...]
   - plain-Lottie checklist: no "sid"/"slots", no text layers, no images, no expressions
+  - structure: static values not wrapped in lists, valid keyframes, parents/refIds that exist, unique
+    layer inds (Skottie forgives these; lottie-web and lottie-ios crash and show a blank banner)
   - size, fps, duration, raw and gzip size
   - loop seam: renders the first two and last two frames; the last->first jump must be no bigger
     than a normal frame step (otherwise the loop visibly pops)
@@ -28,6 +30,37 @@ if '"slots"' in s: problems.append('contains a "slots" block')
 if any(l.get("ty") == 5 for l in all_layers): problems.append("contains text layers - convert copy to vector glyphs")
 if any(a.get("p") for a in L.get("assets", [])): problems.append("contains image assets")
 if re.search(r'"x"\s*:\s*"', s): problems.append("contains expressions")
+
+# ---- structure: things Skottie (render_frames.cjs) tolerates but lottie-web / lottie-ios crash on ----
+# A crash while building one layer leaves the whole animation blank in lottie-web, so these must be exact.
+def check_props(o, where, out):
+    if isinstance(o, dict):
+        if "a" in o and "k" in o and o["a"] in (0, 1):
+            k = o["k"]
+            if o["a"] == 0 and isinstance(k, list) and k and isinstance(k[0], dict):
+                out.append(f"{where}: static value wrapped in a list (use \"k\": {{...}}, not [{{...}}])")
+            if o["a"] == 1 and not (isinstance(k, list) and k and all(isinstance(q, dict) and "t" in q for q in k)):
+                out.append(f"{where}: animated property without a keyframe list")
+        for key, v in o.items():
+            check_props(v, f"{where}/{key}" if key not in ("it", "shapes", "layers") else where, out)
+    elif isinstance(o, list):
+        for v in o:
+            check_props(v, where, out)
+struct = []
+asset_ids = {a["id"] for a in L.get("assets", [])}
+for owner, layers in [("root", L["layers"])] + [(f"asset {a['id']}", a.get("layers", [])) for a in L.get("assets", [])]:
+    inds = [l.get("ind") for l in layers]
+    if len(set(inds)) != len(inds): struct.append(f"{owner}: duplicate layer ind")
+    for l in layers:
+        where = f"{owner} / layer '{l.get('nm', '?')}'"
+        if "parent" in l and l["parent"] not in inds: struct.append(f"{where}: parent {l['parent']} not in the same layer list")
+        if l.get("ty") == 0 and l.get("refId") not in asset_ids: struct.append(f"{where}: precomp refId '{l.get('refId')}' missing")
+        for m in l.get("masksProperties", []):
+            if "pt" not in m: struct.append(f"{where}: mask without a path (pt)")
+        check_props(l, where, struct)
+if struct:
+    problems.append(f"structure ({len(struct)} issue(s), first: {struct[0]})")
+    for q in struct[:10]: print("  structure:", q)
 
 dur = (L["op"] - L["ip"]) / L["fr"]
 print(f"{os.path.basename(src)}: {L['w']}x{L['h']} @ {L['fr']:g}fps, {dur:.2f}s, "
@@ -62,4 +95,4 @@ shutil.rmtree(tmp)
 
 if problems:
     print("FAIL:\n  - " + "\n  - ".join(problems)); sys.exit(1)
-print("PASS: plain Lottie (no slots, text layers, images or expressions) and a seamless loop")
+print("PASS: plain Lottie (no slots, text layers, images or expressions), valid structure and a seamless loop")
