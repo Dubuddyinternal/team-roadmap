@@ -565,6 +565,13 @@ details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var
 .fld label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:5px;font-weight:500}
 .fld input,.fld select,.fld textarea{width:100%;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-s);padding:8px 10px;font-size:13px}
 .fld textarea{resize:vertical;min-height:62px;font-family:inherit}
+.pmsel{position:relative}.pmbtn{background:var(--surface);border:1px solid var(--line-2);border-radius:999px;padding:6px 26px 6px 12px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--ink-2);position:relative;max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pmbtn::after{content:"▾";position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--ink-3)}
+.pmsel.on .pmbtn{border-color:var(--ink);color:var(--ink);font-weight:600}
+.pmpop{position:absolute;top:calc(100% + 4px);left:0;z-index:40;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);box-shadow:0 10px 28px rgba(26,24,21,.16);padding:6px;min-width:240px;max-height:380px;overflow:auto}
+.pmpop label{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;font-size:13px;cursor:pointer}
+.pmpop label:hover{background:var(--surface-2)}.pmpop input{width:15px;height:15px;accent-color:var(--accent);flex:none}
+.pmft{display:flex;justify-content:space-between;gap:6px;border-top:1px solid var(--line);margin-top:6px;padding:6px 2px 0}
 /* a text box with reference pictures (📎 Add picture) */
 .picbox{border:1px solid var(--line-2);border-radius:var(--r-s);background:var(--surface)}
 .picbox textarea{border:none!important;border-radius:var(--r-s) var(--r-s) 0 0!important}
@@ -923,6 +930,9 @@ function kindColor(pl, vt){ const post=vt==="image"||vt==="carousel"; return vt=
   : vt==="long"?"var(--c2)":pl==="yt"?"var(--c1)":"var(--c3)"; }
 const ktag = (pl, vt, faded) => `<span class="ktag ${faded?"faded":""}" style="--kc:${kindColor(pl,vt)}">${esc(kindOf(pl,vt))}</span>`;
 const ktags = x => plats(x).map(pl=>ktag(pl, x.vtype)).join("");
+// a tag from its label alone (for the category filter)
+const ktagFromLabel = l => `<span class="ktag" style="--kc:${/Story$/.test(l)?VBASE.story:/Live$/.test(l)?"var(--crit)":/Long video$/.test(l)?"var(--c2)":/^YT /.test(l)?"var(--c1)":"var(--c3)"}">${esc(l)}</span>`;
+let PROCF=[], PROCOPEN=false;   // Content Process: categories shown ([] = all), and whether the dropdown is open
 // which video types make sense for the chosen platforms (a type tied to one platform only shows for it)
 function vtypeOptions(pl,fmt){
   if(fmt && (fmt.vtypes||[]).length){   // the type decides; on two platforms a Short and a Reel are the same vertical video
@@ -1018,7 +1028,7 @@ function gAssets(c){
   return !!((c.post?.reel||byClaude) && c.post?.postUrl && (!plats(c).includes("yt") || c.vtype!=="long" || c.post?.thumb)); }
 // Ideas → To shoot → Editing are free (the research block is off for now) · leaving Editing needs the edited video ·
 // leaving Your check needs the copy · going Live needs the link
-function gateFor(f){ return f==="inprogress"?"edited":f==="inreview"?"copy":f==="approved"?"live":null; }
+function gateFor(f){ return f==="inreview"?"copy":f==="approved"?"live":null; }   // leaving Editing no longer needs the edited video
 function prepMissing(c){ const p=c.pre||{}, k=p.keywords||[], prim=k.find(x=>x.rank==="primary")||k[0], out=[];
   if(!(gResearch(p)||c.override)){
     if(!p.source) out.push("idea source"); if(!p.tool) out.push("research tool");
@@ -2742,7 +2752,19 @@ function gateChips(c){ const r=gResearch(c.pre)||!!c.override, e=gEdited(c), cp=
 
 function renderProcess(){
   const ro=!canEdit();
-  const BC=boardCards();
+  const ALL=boardCards();
+  const cardTags = c => plats(c).map(pl=>kindOf(pl,c.vtype));
+  const fOpts = [...new Map(ALL.map(c=>{ const F=fmtOf(c); return ["f:"+F.key, F.icon+" "+F.name]; })).entries()].sort((a,b)=>a[1].localeCompare(b[1]));
+  const tOpts = [...new Set(ALL.flatMap(cardTags))].sort().map(t=>["t:"+t, t]);
+  PROCF = PROCF.filter(v=>fOpts.some(o=>o[0]===v)||tOpts.some(o=>o[0]===v));
+  const passCat = c => !PROCF.length || PROCF.some(v=> v.startsWith("f:") ? fmtOf(c).key===v.slice(2) : cardTags(c).includes(v.slice(2)));
+  const BC=ALL.filter(passCat);
+  const catLabel = !PROCF.length ? "All categories" : PROCF.length<=2 ? PROCF.map(v=>([...fOpts,...tOpts].find(o=>o[0]===v)||[v,v.slice(2)])[1]).join(", ") : PROCF.length+" selected";
+  const catSel = `<div class="pmsel ${PROCF.length?"on":""}"><button type="button" class="pmbtn" id="pmBtn" aria-haspopup="true" aria-expanded="${PROCOPEN}">🏷 ${esc(catLabel)}</button>
+    <div class="pmpop" ${PROCOPEN?"":"hidden"} role="group" aria-label="Category">
+      <div class="lbl" style="padding:4px 8px">Type</div>${fOpts.map(([v,t])=>`<label><input type="checkbox" value="${esc(v)}" ${PROCF.includes(v)?"checked":""}>${esc(t)}</label>`).join("")}
+      <div class="lbl" style="padding:8px 8px 4px">Tag</div>${tOpts.map(([v,t])=>`<label><input type="checkbox" value="${esc(v)}" ${PROCF.includes(v)?"checked":""}>${ktagFromLabel(t)}</label>`).join("")}
+      <div class="pmft"><button type="button" class="btn sm" id="pmAll">All categories</button><button type="button" class="btn sm pri" id="pmOk">Done</button></div></div></div>`;
   const cols=STAGES.map(s=>{ const items=BC.filter(c=>c.stage===s.id);
     return `<div class="col" data-stage="${s.id}">
       <div class="col-h"><h4>${s.label}</h4><span class="count">${items.length}</span></div>
@@ -2763,15 +2785,23 @@ function renderProcess(){
       <span class="ic" style="color:var(--accent);border-color:var(--accent)">FLOW</span>
       <p><b>Ideas → To shoot → Editing → Your check → Scheduled → Live.</b> Accepting an idea books the next free posting slot.
       Claude moves cards through Editing and Your check by itself; you approve the edit, then post now or at the slot.
-      A card moves through <b>Ideas</b> and <b>To shoot</b> freely, leaves <b>Editing</b> only with an edited video,
-      and leaves <b>Your check</b> only with the title, description and hashtags.</p></div>
+      A card moves through <b>Ideas</b>, <b>To shoot</b> and <b>Editing</b> freely,
+      leaves <b>Your check</b> only with the title, description and hashtags, and goes <b>Live</b> with its post link.</p></div>
     <div class="sec"><div class="sec-h"><h3>Content Process</h3>
-      <span class="hint">${BC.length} card${BC.length===1?"":"s"} · ${ro?"click a card to open it":"drag cards between columns, or click one to open it"}</span>
+      <span class="hint">${BC.length}${PROCF.length?" of "+ALL.length:""} card${BC.length===1?"":"s"} · ${ro?"click a card to open it":"drag cards between columns, or click one to open it"}</span>
+      ${catSel}
       <span style="margin-left:auto;display:flex;gap:8px">${S.bin.length&&canDeleteCards()?`<button class="btn" id="openBin">🗑 Recycle bin (${S.bin.length})</button>`:""}
       ${ro?"":`<button class="btn" id="rebuildCards" title="Make a card for every published post that has none">🔁 Cards from published posts</button><button class="btn pri" id="newCard">+ New card</button>`}</span></div>
       <div class="board">${cols}</div></div>`;
 
   const nc=$("#newCard"); if(nc) nc.onclick=()=>openCard(null);
+  { const P0=$("#pane-process"), pop=P0.querySelector(".pmpop");
+    P0.querySelector("#pmBtn").onclick=e=>{ e.stopPropagation(); PROCOPEN=!PROCOPEN; renderProcess(); };
+    pop.onclick=e=>e.stopPropagation();
+    pop.querySelectorAll("input[type=checkbox]").forEach(cb=>cb.onchange=()=>{ PROCF=[...pop.querySelectorAll("input:checked")].map(x=>x.value); PROCOPEN=true; renderProcess(); });
+    pop.querySelector("#pmAll").onclick=()=>{ PROCF=[]; PROCOPEN=true; renderProcess(); };
+    pop.querySelector("#pmOk").onclick=()=>{ PROCOPEN=false; renderProcess(); };
+    P0.onclick=e=>{ if(PROCOPEN && !(e.target.closest && e.target.closest(".pmsel"))){ PROCOPEN=false; renderProcess(); } }; }
   const rb=$("#rebuildCards"); if(rb) rb.onclick=()=>openRebuild();
   const ob=$("#openBin"); if(ob) ob.onclick=()=>openBin();
   const P=$("#pane-process");
