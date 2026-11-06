@@ -565,6 +565,9 @@ details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var
 .fld label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:5px;font-weight:500}
 .fld input,.fld select,.fld textarea{width:100%;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-s);padding:8px 10px;font-size:13px}
 .fld textarea{resize:vertical;min-height:62px;font-family:inherit}
+.aspick{display:flex;flex-wrap:wrap;gap:5px}.aspp{font:inherit;font-size:12px;padding:3px 10px 3px 3px;border-radius:99px;border:1px solid var(--line-2);background:var(--surface);cursor:pointer;display:inline-flex;align-items:center;gap:6px;color:var(--ink-2)}
+.aspp .av{width:20px;height:20px;border-radius:50%;background:var(--surface-2);display:inline-grid;place-items:center;font-size:10px;font-weight:700;color:var(--ink-2)}
+.aspp.on{border-color:var(--accent);background:var(--accent-soft);color:var(--ink);font-weight:600}.aspp.on .av{background:var(--accent);color:#fff}.aspp:disabled{cursor:default}
 .pmsel{position:relative}.pmbtn{background:var(--surface);border:1px solid var(--line-2);border-radius:999px;padding:6px 26px 6px 12px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--ink-2);position:relative;max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pmbtn::after{content:"▾";position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--ink-3)}
 .pmsel.on .pmbtn{border-color:var(--ink);color:var(--ink);font-weight:600}
@@ -2779,7 +2782,7 @@ function renderProcess(){
     return `<div class="col" data-stage="${s.id}">
       <div class="col-h"><h4>${s.label}</h4><span class="count">${items.length}</span></div>
       ${items.map(c=>{ const lp=livePost(c); return `<div class="kcard ${ro?"ro":""} ${c.priority==="high"?"hot":""} ${c.stage==="published"?"live":""}" draggable="${ro?"false":"true"}" data-card="${c.id}">
-        ${c.priority==="high"?`<div class="hotbar">🔔 High priority${c.fromCampaign?` · from ${esc(c.fromCampaign)}`:""}</div>`:""}${c.fromCampaign&&c.owner?`<div class="hotbar" style="background:var(--surface-2);color:var(--ink-2)">👤 ${esc(c.owner)}</div>`:""}
+        ${c.priority==="high"?`<div class="hotbar">🔔 High priority${c.fromCampaign?` · from ${esc(c.fromCampaign)}`:""}</div>`:""}${c.owner?`<div class="hotbar" style="background:var(--surface-2);color:var(--ink-2)">👤 ${esc(c.owner)}</div>`:""}
         <h5>${fmtIcon(c)} ${esc(c.pre.title||c.idea)}</h5>
         <div class="meta">${ktags(c)}
           ${c.override?`<span class="badge crit">override</span>`:""}
@@ -3434,10 +3437,15 @@ function openCard(id,showGate,preset){
   const c=isNew ? blankCard(preset||undefined) : CARDS.find(x=>x.id===id);
   if(!c) return;
   // the form's fields as they were when opened, so "discard changes" really discards
-  const FORM=["idea","format","platform","platforms","vtype","scheduled","time","pre","metrics","shoot"];
+  const FORM=["idea","format","platform","platforms","vtype","scheduled","time","pre","metrics","shoot","ownerId","ownerIds","owner"];
   const snap=()=>JSON.stringify(FORM.map(k=>c[k])), restore=t=>JSON.parse(t).forEach((v,i)=>{ c[FORM[i]]=v; });
   let opened=snap(), dirty=false, scrolledToReview=false;
   const refImgs=(c.pre && c.pre.refImgs || []).slice();   // 📎 pictures in "Comments & reference"
+  // 👥 who the card is assigned to (several people); a card from before has just a name
+  const TEAM_=(OPT.team && OPT.team()) || [];
+  const asg = (Array.isArray(c.ownerIds) && c.ownerIds.length ? c.ownerIds : c.ownerId ? [c.ownerId]
+    : String(c.owner||"").split(",").map(n=>(TEAM_.find(p=>p.name.toLowerCase()===n.trim().toLowerCase())||{}).id)).filter(Boolean);
+  const asgAtOpen = asg.slice();
   const markDirty=()=>{ if(dirty) return; dirty=true; const d=$("#dirtyDot"); if(d) d.hidden=false; };
 
   const draw=(kwList0)=>{ let kwList=kwList0;
@@ -3681,6 +3689,8 @@ function openCard(id,showGate,preset){
           <p class="hint" style="margin:4px 0 0">Goes to the Recycle bin for ${BIN_DAYS} days — restore it from the board.</p>`:""}</div>`}
       <div class="sbox"><h5>Details</h5>
         <div class="fld"><label>Post on</label>${platPicker("c-platform",plats(c),F)}</div>
+        ${TEAM_.length?`<div class="fld"><label>Assigned to</label><div class="aspick">${TEAM_.map(p=>`<button type="button" class="aspp ${asg.includes(p.id)?"on":""}" data-asg="${esc(p.id)}" aria-pressed="${asg.includes(p.id)}" ${canEdit()?"":"disabled"}><span class="av">${esc((p.name||"?").trim().charAt(0).toUpperCase())}</span>${esc(p.name)}</button>`).join("")}</div>
+          <p class="hint" style="margin:4px 0 0">Tap to add or remove. Everyone new gets an email and a 🔔 when you save.</p></div>`:""}
         <div class="fld" ${vtypeOptions(plats(c),F).length<2?"hidden":""}><label for="c-vtype">${F.video?"Video type":"Format"}</label>
           ${vtypeSelect("c-vtype",c.vtype,plats(c),F)}</div>
         <div class="grid2">
@@ -3715,6 +3725,7 @@ function openCard(id,showGate,preset){
       c.vtype=readReg("vtype","c-vtype",c.vtype)||"short";
       if(both(c) && c.vtype==="reel") c.vtype="short";   // one vertical video for both
       c.scheduled=$("#c-sched").value||null; c.time=$("#c-time").value||null;
+      if(TEAM_.length){ c.ownerIds=asg.slice(); c.ownerId=asg[0]||""; c.owner=asg.map(id=>(TEAM_.find(p=>p.id===id)||{}).name).filter(Boolean).join(", "); }
       c.pre.title=$("#r-title").value.trim();   // research fields are off the card for now: what's stored stays
       c.pre.desc=$("#r-desc").value.trim(); c.pre.hashtags=$("#r-hashtags").value.trim();
       c.pre.refNote=$("#r-ref").value.trim(); c.pre.refImgs=refImgs.slice();
@@ -3959,8 +3970,12 @@ function openCard(id,showGate,preset){
     });
     $("#drawer").querySelectorAll("[data-clear]").forEach(b=>b.onclick=()=>{ read(); c.post[b.dataset.clear]=null; draw(c.pre.keywords); });
 
+    $("#drawer").querySelectorAll("[data-asg]").forEach(b=>b.onclick=()=>{ const id=b.dataset.asg, i=asg.indexOf(id);
+      if(i>=0) asg.splice(i,1); else asg.push(id); b.classList.toggle("on", i<0); b.setAttribute("aria-pressed", String(i<0)); markDirty(); });
     const sc=$("#saveCard"); if(sc) sc.onclick=()=>{ const was=slotOf(c); read(); if(!c.idea&&!c.pre.title){toast("A card needs an idea or a title");return;}
-      persist(); if(save()){ dirty=false; closeDrawer(true); toast(isNew?"Card created":"Saved");
+      persist(); if(save()){ dirty=false; closeDrawer(true);
+        const fresh=asg.filter(id=>!asgAtOpen.includes(id)); if(fresh.length && OPT.assigned) OPT.assigned(SPACE, c, fresh, F.name);
+        toast((isNew?"Card created":"Saved") + (fresh.length?` · ${fresh.map(id=>(TEAM_.find(p=>p.id===id)||{}).name||"").filter(Boolean).join(", ")} told by email + 🔔`:""));
         // a post Claude will publish at the slot follows the card's new date / time
         const j=window.PIPE&&PIPE.job(c.id), now=slotOf(c);
         if(j && j.status==="scheduled" && now && (!was || was.iso!==now.iso))

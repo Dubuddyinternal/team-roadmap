@@ -15,7 +15,7 @@
 <!-- Social Media space: Summary (live YouTube numbers) / Ideation / Content Process / Schedule -->
 <script src="richtext.js"></script><!-- rich text + "Show all" in every multi-line text box (load before the spaces) -->
 <script src="okr-mail.js?v=20261104d"></script>
-<script src="social-space.js?v=20261107d"></script>
+<script src="social-space.js?v=20261107e"></script>
 <script src="pipeline.js"></script><!-- Claude edit & post panel on Content Process cards -->
 <script src="comments.js"></script><!-- 💬 comments + history at the bottom of every Social Media card and idea, with @tags by email -->
 <script src="hinglish.js"></script><script src="dictate.js"></script><!-- 🎤 dictation in every text box -->
@@ -18430,7 +18430,8 @@ function campNewCard(cs, soc, it){
     vtype: ft.vtype,
     stage:"todo", pre:{ source:"", tool:"", keywords:[], why:it.details||"", title:it.name, desc:"", hashtags:"" },
     post:{ reel:null, thumb:null, postUrl:"" }, scheduled:it.date||null, published:null, acceptedOn:today, metrics:null, override:null,
-    priority:"high", fromCampaign: cs.details && cs.details.name || cs.name, fromCampaignId: cs.id, fromItemId: it.id, owner: it.owner || "", ownerId: it.ownerId || "" };
+    priority:"high", fromCampaign: cs.details && cs.details.name || cs.name, fromCampaignId: cs.id, fromItemId: it.id, owner: it.owner || "", ownerId: it.ownerId || "",
+    ownerIds: [...new Set([it.ownerId, ...(Array.isArray(it.coOwnerIds)?it.coOwnerIds:[])].filter(Boolean))] };
   soc.sx.cards.push(card);
   return card;
 }
@@ -18451,7 +18452,7 @@ function campSyncCards(){
         if(it.sentCardId && it.cardGone) return;         // someone deleted its card in Content Process: don't make it again
         if(it.sentCardId){ it.cardGone = true; changed = true; return; }
         card = campNewCard(cs, soc, it); it.sentCardId = card.id;
-        it.sync = { name:it.name||"", date:it.date||"", ownerId:it.ownerId||"" }; changed = true; return;
+        it.sync = { name:it.name||"", date:it.date||"", ownerId:it.ownerId||"", all:card.ownerIds.slice() }; changed = true; return;
       }
       const S = it.sync = it.sync || { name:card.pre&&card.pre.title||card.idea||"", date:card.scheduled||"", ownerId:card.ownerId||"" };
       const cName = (card.pre && card.pre.title) || card.idea || "", cDate = card.scheduled || "", cOwn = card.ownerId || "";
@@ -18463,14 +18464,19 @@ function campSyncCards(){
         if((it.date||"")!==S.date){ card.scheduled = it.date || null; S.date = it.date||""; changed = true; }
         else if(cDate!==S.date){ it.date = cDate; S.date = cDate; changed = true; }
       }
-      // assignee
-      if((it.ownerId||"")!==S.ownerId){ card.ownerId = it.ownerId||""; card.owner = nameOf(it.ownerId) || it.owner || ""; S.ownerId = it.ownerId||""; changed = true; }
-      else if(cOwn!==S.ownerId){ it.ownerId = cOwn; it.owner = nameOf(cOwn); S.ownerId = cOwn; changed = true; }
-      // several assignees: the card lists them all ("Aditya, Shivam"); the first is its ownerId
-      const all = [...new Set([it.ownerId, ...(Array.isArray(it.coOwnerIds)?it.coOwnerIds:[])].filter(Boolean))];
+      // assignees (several): whichever side changed since the last sync wins — the campaign piece, or the card in Content Process
+      const uniq = a=>[...new Set(a.filter(Boolean))], sig = a=>a.join(",");
+      const itAll = uniq([it.ownerId, ...(Array.isArray(it.coOwnerIds)?it.coOwnerIds:[])]);
+      const cAll = uniq(Array.isArray(card.ownerIds) && card.ownerIds.length ? card.ownerIds : [cOwn]);
+      if(!Array.isArray(S.all)) S.all = sig(itAll)!==sig([S.ownerId].filter(Boolean)) || !cAll.length ? itAll : cAll;   // first time
+      let all = S.all;
+      if(sig(itAll)!==sig(S.all)) all = itAll;
+      else if(sig(cAll)!==sig(S.all)) all = cAll;
+      if(sig(all)!==sig(itAll)){ it.ownerId = all[0]||""; it.owner = nameOf(all[0]); it.coOwnerIds = all.slice(1); changed = true; }
+      if(sig(all)!==sig(cAll) || (card.ownerId||"")!==(all[0]||"")){ card.ownerIds = all; card.ownerId = all[0]||""; changed = true; }
+      if(sig(S.all)!==sig(all)){ S.all = all; changed = true; } S.ownerId = all[0]||"";
       const names = all.map(nameOf).filter(Boolean).join(", ");
-      if(names && card.owner!==names){ card.owner = names; changed = true; }
-      if(JSON.stringify(card.ownerIds||[])!==JSON.stringify(all)){ card.ownerIds = all; changed = true; }
+      if(card.owner!==names){ card.owner = names; changed = true; }
       if(!card.fromCampaignId){ card.fromCampaignId = cs.id; card.fromItemId = it.id; changed = true; }
       // type and platforms: the campaign piece decides (a Webinar changed to a Live session changes the card's type too)
       const want = campPieceFormat(soc, it);
@@ -18673,6 +18679,13 @@ function renderContentSocial(){
     canEdit: canEditHere, isMember: ()=>!!currentUser(),
     me: ()=>{ const u=currentUser(); return u ? userDisplayName(u) : ""; },
     people: ()=>USERS.filter(u=>isMember(u, TEAM)).map(userDisplayName),
+    team: ()=>USERS.filter(u=>isMember(u, TEAM)).map(u=>({ id:u.id, name:userDisplayName(u) })),
+    // someone new on a card: an email + a 🔔 (idea-mail "assign", like a campaign piece)
+    assigned: (sp, c, ids, fmtName)=>{ const me = (currentUser()||{}).id;
+      (ids||[]).filter(id=>id && id!==me).forEach(id=> SUPA.functions.invoke("idea-mail", { body: { action:"assign", team:TEAM, user_id:id,
+        campaign: (sp && sp.name) || "Social Media", item: { name:(c.pre && c.pre.title) || c.idea || "a card", kind:fmtName || "Content", kindOther:"",
+          date:c.scheduled || "", platform:(c.platforms||[c.platform]).map(p=>p==="yt"?"YouTube":p==="ig"?"Instagram":p).join(", "),
+          details:"A card in Content Process" + (c.fromCampaign ? " (from " + c.fromCampaign + ")" : "") + "." } } }).catch(()=>{})); },
     targets: sp=>SOCIAL_TARGETS[sp.id] || null,
     canEditTargets: ()=>hasPerm("edit_targets"),
     // deleting a Content Process card: Owners and Admins, plus any role given "Delete Social Media cards"
