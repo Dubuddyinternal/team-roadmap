@@ -2171,7 +2171,8 @@ function calendarPane(c){
         <button data-cv="list" class="${CALVIEW==="list"?"on":""}">List</button>
       </div>
       <span class="hint">${dated.length} dated${undated.length?` · ${undated.length} with no date`:""}${filterOn()?` <b style="color:var(--accent)">of ${c.items.length}</b>`:""}</span>
-      <button class="btn pri" id="genFlow" style="margin-left:auto">${CALVIEW==="flow"?"← Back to calendar":"⚡ Generate flowchart"}</button>
+      ${canPlan()&&OPT.syncNow?`<button class="btn" id="syncSocial" style="margin-left:auto" title="Make every YouTube / Instagram card here match its card in Social Media (title, date, assignees, type, platforms)">🔄 Sync with Social Media</button>`:""}
+      <button class="btn pri" id="genFlow" style="${canPlan()&&OPT.syncNow?"":"margin-left:auto"}">${CALVIEW==="flow"?"← Back to calendar":"⚡ Generate flowchart"}</button>
     </div>
     <div class="filterbar">
       ${sel("range","Show", CALFILTER.range, [["all","All dates"],["day","A single day"],["week","A week"],["month","A month"]])}
@@ -2378,6 +2379,8 @@ function wireCalendar(c){
   ["clearFilter","clearFilter2"].forEach(id=>{ const b=$("#"+id);
     if(b) b.onclick=()=>{ CALFILTER={range:"all",anchor:"",type:[],platform:[],owner:[]}; draw(); }; });
   const g = $("#genFlow"); if(g) g.onclick=()=>{ CALVIEW = CALVIEW==="flow" ? "grid" : "flow"; draw(); };
+  const sy = $("#syncSocial"); if(sy) sy.onclick=()=>{ const r = OPT.syncNow(c) || {};
+    toast(r.n ? `🔄 Synced — ${r.n} card${r.n===1?"":"s"} updated in Social Media (refresh any other open Social Media tab)` : `✓ Already in sync — all ${r.total||0} cards match Social Media`); };
   if(canPlan()) W.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openPiece(c, b.dataset.open));
   else W.querySelectorAll("[data-open]").forEach(b=>{ b.style.cursor="default"; });
 }
