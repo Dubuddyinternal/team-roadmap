@@ -119,6 +119,8 @@ const BCSS = `
 .kb-pp button .av{width:20px;height:20px;font-size:10px}.kb-pp button.on{border-color:var(--accent);background:var(--accent-soft,#FBEAE2);color:var(--ink);font-weight:600}
 .kb-it.hl{box-shadow:0 0 0 2px var(--saffron),0 4px 14px rgba(240,163,43,.25);background:linear-gradient(0deg,var(--surface),var(--saffron-soft))}
 .kb-it.hl.live{background:var(--good-soft)}
+.kb-it[data-drag]{cursor:grab;-webkit-user-select:none;user-select:none}.kb-it.dragging{opacity:.35}
+.kb-col.over{outline:2px dashed var(--accent);outline-offset:-2px;background:color-mix(in srgb,var(--accent) 6%,var(--surface-2))}
 .cevt.hl{box-shadow:0 0 0 2px var(--saffron);font-weight:700}
 .kb-tag.hl{background:var(--saffron);color:#4A2E00;border-color:var(--saffron)}
 .kb-nt{font:inherit;font-size:11px;font-weight:600;border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);border-radius:99px;padding:2px 9px;cursor:pointer}
@@ -2293,7 +2295,7 @@ function dropOnto(c, id, target){
 }
 function pointerDrag(el, opts){
   el.addEventListener("pointerdown", e=>{
-    if(e.button) return;
+    if(e.button || (opts.ignore && e.target.closest && e.target.closest(opts.ignore))) return;
     const x0 = e.clientX, y0 = e.clientY;
     let live = false, ghost = null, over = null, ox = 0, oy = 0;
     const root = $("#root");
@@ -2453,7 +2455,7 @@ function kbRows(c){
   return rows;
 }
 const kbLate = x => !x.live && !!x.due && x.due < TODAY;
-const kbState = x => x.live ? "live" : kbLate(x) ? "late" : (x.content ? x.si>0 : x.subs.some(s=>s.status!=="todo")) ? "prog" : "todo";
+const kbState = x => x.live ? "live" : kbLate(x) ? "late" : (x.content ? x.si>0 : (x.ref.bstatus ? x.ref.bstatus==="prog" : x.subs.some(s=>s.status!=="todo"))) ? "prog" : "todo";
 const kbPct = x => x.content ? Math.round(x.si/5*100) : x.subs.length ? Math.round(x.subs.filter(s=>s.done).length/x.subs.length*100) : 0;
 function kbTags(x){
   return (x.hl?`<span class="kb-tag hl">⭐ Highlight</span>`:"") + x.tags
@@ -2508,8 +2510,8 @@ function kbCard(x){
 }
 function boardPane(c){
   const rows=kbRows(c), list=rows.filter(kbPass);
-  return kbHead(c, rows) + kbFilters(c, rows) + (rows.length ? `<div class="kb-board">${KB_COLS.map(([k,l])=>{ const xs=list.filter(x=>kbState(x)===k);
-      return `<div class="kb-col ${k}"><div class="kb-col-h"><h4>${l}</h4><span class="n">${xs.length}</span></div>${xs.map(kbCard).join("")||`<p class="hint" style="padding:6px;margin:0">Nothing here.</p>`}</div>`; }).join("")}</div>`
+  return kbHead(c, rows) + kbFilters(c, rows) + (rows.length && canPlan() ? `<p class="hint" style="margin:-4px 0 10px">✋ Drag a card to another column to change its status. Live = ✓ Published.</p>` : "") + (rows.length ? `<div class="kb-board">${KB_COLS.map(([k,l])=>{ const xs=list.filter(x=>kbState(x)===k);
+      return `<div class="kb-col ${k}" data-kbdrop="${k}"><div class="kb-col-h"><h4>${l}</h4><span class="n">${xs.length}</span></div>${xs.map(kbCard).join("")||`<p class="hint" style="padding:6px;margin:0">Nothing here.</p>`}</div>`; }).join("")}</div>`
     : `<div class="dashed" style="padding:30px;text-align:center"><b>Nothing on the board yet.</b><p class="hint">Add content pieces in Campaign Details, or press ＋ Add task for a webinar, banner or notification.</p></div>`);
 }
 function rolesPane(c){
@@ -2548,7 +2550,12 @@ function remindersPane(c){
 }
 function wireBoard(c){
   const B=$("#body");
-  B.querySelectorAll("[data-kb]").forEach(b=>{ b.onclick=()=>kbOpen(c, b.dataset.kb);
+  const rows0 = kbRows(c);
+  B.querySelectorAll(".kb-board [data-kb]").forEach(el=>{ const x=rows0.find(y=>y.id===el.dataset.kb); if(!x || !kbCanTouch(x)) return;
+    el.dataset.drag="1";   // ✋ drag a card to another column
+    pointerDrag(el, { zone:"[data-kbdrop]", ignore:"button,a,input,select",
+      onTap: ()=>kbOpen(c, x.id), onDrop: z=>kbMove(c, x, z.dataset.kbdrop), onMiss: ()=>{} }); });
+  B.querySelectorAll("[data-kb]").forEach(b=>{ if(!b.dataset.drag) b.onclick=()=>kbOpen(c, b.dataset.kb);
     if(b.tagName!=="BUTTON") b.onkeydown=e=>{ if((e.key==="Enter"||e.key===" ") && e.target===b){ e.preventDefault(); kbOpen(c, b.dataset.kb); } }; });
   B.querySelectorAll("[data-kbnotify]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); const x=kbRows(c).find(y=>y.id===b.dataset.kbnotify); if(x) kbNotify(c, x, null, b); });
   [["#kbWho","who"],["#kbDate","date"],["#kbCat","cat"]].forEach(([id,k])=>{ const e=B.querySelector(id); if(e) e.onchange=()=>{ KBF[k]=e.value; draw(); }; });
@@ -2647,6 +2654,26 @@ async function kbNotify(c, x, sub, btn){
     toast(ok.length ? `🔔 ${ok.map(i=>(kbName(i)||"").split(" ")[0]).join(" + ")} notified (bell + email)${bad?" · one failed: "+(bad.error||bad.reason||""):""}` : "Couldn't notify: " + ((bad && (bad.error||bad.reason)) || "try again"));
   }catch(e){ toast("Couldn't notify: " + e.message); }
   if(btn) btn.disabled = false;
+}
+/* a card dropped on another column */
+function kbMove(c, x, col){
+  const from = kbState(x); if(col===from) return;
+  if(col==="late"){ toast("“Past deadline” comes from the date — drop it on another column, or give it a new date"); return; }
+  if(col==="live"){ kbPublish(c, x, ""); return; }
+  const setStatus = ()=>{
+    if(x.content){ const sid = col==="todo" ? "todo" : (x.si>0 && x.si<5 ? CP_STAGES[x.si][0] : "draft");
+      if(!(OPT.setCardStage && OPT.setCardStage(c, x.ref, sid))){ toast("Couldn't reach the card in Content Process"); return; } }
+    else { if(x.live) Object.assign(x.ref, { live:false, liveBy:"", liveAt:"" }); x.ref.bstatus = col; }
+    save(); toast(`“${x.title}” → ${col==="todo"?"Not started":"In progress"}${x.content?" · Content Process → "+CP_STAGES.find(s=>s[0]===(col==="todo"?"todo":(x.si>0&&x.si<5?CP_STAGES[x.si][0]:"draft")))[1]:""}`);
+  };
+  if(from==="late"){   // still past its deadline: it needs a new date to leave that column
+    openDialog({ title:"A new date", sub:`“${x.title}” is past its deadline. Pick the new date and it moves to ${col==="todo"?"Not started":"In progress"}.`, okLabel:"Move",
+      fields:[{ k:"date", label:"New date", type:"date", value:addDays(TODAY,1) }],
+      onSave:v=>{ if(!v.date || v.date<TODAY){ toast("Pick today or a later date"); return false; }
+        if(x.src==="task") x.ref.due=v.date; else x.ref.date=v.date; x.due=v.date; setStatus(); } });
+    return;
+  }
+  setStatus();
 }
 function kbPublish(c, x, link){
   if(x.live) return;
