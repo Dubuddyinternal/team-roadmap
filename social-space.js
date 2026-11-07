@@ -3449,7 +3449,7 @@ function openCard(id,showGate,preset){
   let opened=snap(), dirty=false, scrolledToReview=false;
   const refImgs=(c.pre && c.pre.refImgs || []).slice();   // 📎 pictures in "Comments & reference"
   // 👥 who the card is assigned to (several people); a card from before has just a name
-  const TEAM_=(OPT.team && OPT.team()) || [];
+  const TEAM_=(OPT.teamPeople && OPT.teamPeople()) || [];
   const asg = (Array.isArray(c.ownerIds) && c.ownerIds.length ? c.ownerIds : c.ownerId ? [c.ownerId]
     : String(c.owner||"").split(",").map(n=>(TEAM_.find(p=>p.name.toLowerCase()===n.trim().toLowerCase())||{}).id)).filter(Boolean);
   const asgAtOpen = asg.slice();

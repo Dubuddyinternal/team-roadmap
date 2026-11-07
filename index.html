@@ -15,7 +15,7 @@
 <!-- Social Media space: Summary (live YouTube numbers) / Ideation / Content Process / Schedule -->
 <script src="richtext.js"></script><!-- rich text + "Show all" in every multi-line text box (load before the spaces) -->
 <script src="okr-mail.js?v=20261104d"></script>
-<script src="social-space.js?v=20261107f"></script>
+<script src="social-space.js?v=20261107g"></script>
 <script src="pipeline.js"></script><!-- Claude edit & post panel on Content Process cards -->
 <script src="comments.js"></script><!-- 💬 comments + history at the bottom of every Social Media card and idea, with @tags by email -->
 <script src="hinglish.js"></script><script src="dictate.js"></script><!-- 🎤 dictation in every text box -->
@@ -18679,7 +18679,7 @@ function renderContentSocial(){
     canEdit: canEditHere, isMember: ()=>!!currentUser(),
     me: ()=>{ const u=currentUser(); return u ? userDisplayName(u) : ""; },
     people: ()=>USERS.filter(u=>isMember(u, TEAM)).map(userDisplayName),
-    team: ()=>USERS.filter(u=>isMember(u, TEAM)).map(u=>({ id:u.id, name:userDisplayName(u) })),
+    teamPeople: ()=>USERS.filter(u=>isMember(u, TEAM)).map(u=>({ id:u.id, name:userDisplayName(u) })),   // not "team": that one is the team slug
     // someone new on a card: an email + a 🔔 (idea-mail "assign", like a campaign piece)
     assigned: (sp, c, ids, fmtName)=>{ const me = (currentUser()||{}).id;
       (ids||[]).filter(id=>id && id!==me).forEach(id=> SUPA.functions.invoke("idea-mail", { body: { action:"assign", team:TEAM, user_id:id,
