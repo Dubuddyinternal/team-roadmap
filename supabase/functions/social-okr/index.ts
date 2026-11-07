@@ -52,6 +52,10 @@ function postRows(posts: any[], sx: any) {
     pls.forEach((pl) => {
       const url = ((c.post && c.post.links) || {})[pl] || (pl === c.platform && c.post && c.post.postUrl) || "";
       if (pl === "yt" && yt.has(ytId(url) || "")) return;
+      // no link: where the platform reports this kind of post itself, the synced posts already count it
+      const synced = pl === "yt" ? yt.size > 0 : ig.size > 0;
+      if (!url && synced && (pl === "yt" ? ["short", "reel", "long"].includes(c.vtype)
+        : ["short", "reel", "image", "carousel"].includes(c.vtype) || /poster/i.test(String(c.format || "")))) return;
       if (pl === "ig" && ig.has(igCode(url) || "")) return;
       rows.push({ platform: pl, vtype: (c.vtype === "short" || c.vtype === "reel") ? (pl === "yt" ? "short" : "reel") : c.vtype, date: c.published || null });
     });
