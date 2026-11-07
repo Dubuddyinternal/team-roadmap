@@ -1212,8 +1212,14 @@ function postRows(){
       gained: p.followers_gained!=null ? p.followers_gained : ((S.typedFollows||{})["v:"+p.external_id] ?? null),
       gainedTyped: p.followers_gained==null && (S.typedFollows||{})["v:"+p.external_id]!=null });
   });
+  // a Live card with no post link can't be matched to its synced post — where the platform reports that kind of post
+  // itself (Shorts, Reels, long videos, posts), the synced numbers already include it, so the card isn't counted again
+  const synced = { yt: LIVE.posts.some(p=>p.platform==="youtube"), ig: LIVE.posts.some(p=>p.platform==="instagram") };
+  const reported = c => plats(c).every(pl=> synced[pl] && (pl==="yt" ? ["short","reel","long"].includes(c.vtype)
+    : ["short","reel","image","carousel"].includes(c.vtype) || (!fmtOf(c).video && !/story|live|community/i.test(c.vtype+" "+fmtOf(c).name))));
   CARDS.filter(c=>c.stage==="published").forEach(c=>{
     if(livePost(c)) return;                          // already listed from the synced posts
+    if(reported(c)) return;                          // the platform counts it (the card just has no link yet)
     rows.push({ key:"c:"+c.id, live:false, platform:c.platform, vtype:c.vtype, title:c.pre.title||c.idea, url:c.post.postUrl||"",
       thumb:null, date:c.published, views:c.metrics?.views, likes:c.metrics?.likes, comments:c.metrics?.comments,
       shares:c.metrics?.shares, watch:c.metrics?.watch||null, viewed:null, ctr:c.metrics?.ctr, card:c,
