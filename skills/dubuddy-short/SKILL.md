@@ -85,4 +85,3 @@ Prints the QC table per version. Read `qc_yt/sheet.jpg` + `qc_ig/sheet.jpg`; fix
 ## Your rules (saved with “remember this”)
 Standing rules the owner asked to remember for every video. Newest last; a rule here beats anything above it.
 - When a video mentions a college by name, show its real photo from the owner's folder ~/Library/CloudStorage/OneDrive-Personal/MAC laptop/Resources/College photos/ (SRCC, Hindu, Hansraj, LSR, Miranda, Ramjas, St Stephen's, Venky, JMI, JNU, BHU, Allahabad, DU). Use Wikimedia/Openverse only for a college not in that folder. _(2026-11-13)_
-- Whenever Shivam is the speaker (short or long video), add a name tag with an arrow pointing at him: 'Shivam' + 'Shaheed Sukhdev College of Business Studies (SSCBS, DU)' — whether or not he says his name. Show it once early (first ~2–6 s, after the hook card lands), beside his head/shoulder, never over the face or captions, in both YT and IG versions. _(2026-11-13)_
