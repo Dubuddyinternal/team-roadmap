@@ -81,3 +81,7 @@ Prints the QC table per version. Read `qc_yt/sheet.jpg` + `qc_ig/sheet.jpg`; fix
 
 ## 4 · Clean (end of session, or when the user says "clean")
 "Clean" = keep ONLY the rendered videos (`output/youtube/final_yt.mp4`, `output/instagram/final_ig.mp4`); everything else for the clip goes — edit files, previews, mattes, cut.mp4, cached transcript, **and the original source footage**. `bash $S/clean.sh "$ED" --dry-run` → show the list → `bash $S/clean.sh "$ED"` (moves to Trash; refuses if no rendered finals exist). At the end of every session remind the user / run it once they're happy — after this nothing can be re-edited, only re-shot.
+
+## Your rules (saved with “remember this”)
+Standing rules the owner asked to remember for every video. Newest last; a rule here beats anything above it.
+- When a video mentions a college by name, show its real photo from the owner's folder ~/Library/CloudStorage/OneDrive-Personal/MAC laptop/Resources/College photos/ (SRCC, Hindu, Hansraj, LSR, Miranda, Ramjas, St Stephen's, Venky, JMI, JNU, BHU, Allahabad, DU). Use Wikimedia/Openverse only for a college not in that folder. _(2026-11-13)_
