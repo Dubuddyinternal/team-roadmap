@@ -225,3 +225,53 @@ tl.to([I+"c1",I+"c2",I+"gk"],{autoAlpha:0,y:-50,duration:.22,ease:"power2.in"},{
     st = (end - start - .5) / 3
     return {"display": "float", "kind": "custom", "start": round(start, 3), "dur": round(end - start, 3), "z": 22, "html": html, "js": js,
             "sfx": [["whoosh-short", start, .2]] + [["bubble", start + .15 + k * st, .22] for k in range(3)] + [["ding", start + .6 + k * st, .14] for k in range(3)]}
+
+
+# ---------------------------------------------------------------- Shivam name tag (owner rule 2026-11-13)
+import os
+SHIVAM_PHOTOS = os.path.expanduser("~/Library/CloudStorage/OneDrive-Personal/MAC laptop/Resources/College photos")
+
+
+def shivam_tag(ed, t_in, t_out, x=60, y=928, tip=(317, 877)):
+    """Every video where Shivam speaks gets this tag (approved design "A", 2026-11-13): paper card beside his jaw —
+    orange top stripe, DU STUDENT chip (cap icon), big "Shivam", divider, "Shaheed Sukhdev College / of Business Studies",
+    dark SSCBS · DU chip with the DU logo — plus an orange hand-drawn arrow from the card's top-right corner to his jaw.
+    Returns a float item (z 23 = in front of a speaker matte, so the arrow stays visible). Place it where nothing else
+    sits for t_in…t_out (≥ ~2 s, early, after the hook lands), keep it off the face/captions; tip = arrowhead point
+    (aim at the jaw edge). Copies DU.png into <ed>/broll/du_logo.png. Add the returned dict to plan["broll"]."""
+    import shutil
+    os.makedirs(os.path.join(ed, "broll"), exist_ok=True)
+    lg = os.path.join(ed, "broll", "du_logo.png")
+    if not os.path.exists(lg) and os.path.exists(os.path.join(SHIVAM_PHOTOS, "DU.png")):
+        shutil.copy(os.path.join(SHIVAM_PHOTOS, "DU.png"), lg)
+    X, Y, cx = x, y, x + 120
+    tx, ty = tip
+    sx, sy = X + 202, Y - 2                                   # arrow start: card top-right
+    html = svg(f'''<g id="{I}nt"><g filter="url(#{I}shadow)"><rect x="{X}" y="{Y}" width="240" height="236" rx="24" fill="#fffdf7"/></g>
+ <rect x="{X}" y="{Y}" width="240" height="236" rx="24" fill="#fffdf7" filter="url(#{I}paper)"/>
+ <path d="M{X} {Y + 24} a24 24 0 0 1 24 -24 h192 a24 24 0 0 1 24 24 v4 h-240 z" fill="{OR}"/>
+ <g id="{I}nb"><rect x="{cx - 84}" y="{Y + 42}" width="168" height="34" rx="17" fill="#fde7d9"/>
+  <path d="M{cx - 70} {Y + 56} l14 -6 l14 6 l-14 6 z M{cx - 64} {Y + 59} v6 q8 5 16 0 v-6" fill="{ORD}"/>
+  <text x="{cx + 20}" y="{Y + 65}" text-anchor="middle" style="font-family:var(--mono),monospace;letter-spacing:.1em" font-size="14" font-weight="700" fill="{ORD}">DU STUDENT</text></g>
+ <text x="{cx}" y="{Y + 128}" text-anchor="middle" font-size="50" font-weight="800" letter-spacing="-1.5" fill="{INK}">Shivam</text>
+ <line x1="{cx - 80}" y1="{Y + 146}" x2="{cx + 80}" y2="{Y + 146}" stroke="#e6dccf" stroke-width="2"/>
+ <text x="{cx}" y="{Y + 172}" text-anchor="middle" font-size="17.5" letter-spacing="-.2" font-weight="700" fill="#4f4a58">Shaheed Sukhdev College</text>
+ <text x="{cx}" y="{Y + 193}" text-anchor="middle" font-size="17.5" letter-spacing="-.2" font-weight="700" fill="#4f4a58">of Business Studies</text>
+ <g id="{I}nc"><rect x="{cx - 68}" y="{Y + 206}" width="136" height="20" rx="10" fill="{INK}"/>
+  <image href="assets/broll/du_logo.png" x="{cx - 62}" y="{Y + 208}" width="28" height="16"/>
+  <text x="{cx + 14}" y="{Y + 221}" text-anchor="middle" style="font-family:var(--mono),monospace;letter-spacing:.12em" font-size="12" font-weight="700" fill="#fff">SSCBS · DU</text></g></g>
+<path id="{I}na" d="M{sx} {sy} C {sx + 8} {sy - 22}, {(sx + tx) / 2 + 4:.0f} {ty + 11}, {tx - 3} {ty + 1}" stroke="{OR}" stroke-width="6" fill="none" stroke-linecap="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"/>
+<path id="{I}nh" d="M{tx - 19} {ty - 9} L{tx} {ty} L{tx - 15} {ty + 15}" stroke="{OR}" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<circle id="{I}nd" cx="{sx}" cy="{Y}" r="6" fill="{OR}"/>''')
+    js = f'''(function(){{var I="#{{ID}}";tl.set([I+"nt",I+"na",I+"nh",I+"nd",I+"nb",I+"nc"],{{autoAlpha:0}},0);
+tl.fromTo(I+"nt",{{autoAlpha:0,x:-90,scale:.9,svgOrigin:"{cx} {Y + 118}"}},{{autoAlpha:1,x:0,scale:1,duration:.4,ease:"back.out(1.8)"}},{t_in:.3f});
+tl.fromTo(I+"nd",{{autoAlpha:0,scale:0,svgOrigin:"{sx} {Y}"}},{{autoAlpha:1,scale:1,duration:.18,ease:"back.out(3)"}},{t_in + .2:.3f});
+tl.fromTo(I+"nb",{{autoAlpha:0,y:8}},{{autoAlpha:1,y:0,duration:.25,ease:"back.out(2)"}},{t_in + .2:.3f});
+tl.set(I+"na",{{autoAlpha:1}},{t_in + .25:.3f});tl.fromTo(I+"na",{{strokeDashoffset:1}},{{strokeDashoffset:0,duration:.35,ease:"sine.out"}},{t_in + .25:.3f});
+tl.fromTo(I+"nc",{{autoAlpha:0,scale:.6,svgOrigin:"{cx} {Y + 216}"}},{{autoAlpha:1,scale:1,duration:.25,ease:"back.out(2.4)"}},{t_in + .4:.3f});
+tl.fromTo(I+"nh",{{autoAlpha:0,scale:0,svgOrigin:"{tx} {ty}"}},{{autoAlpha:1,scale:1,duration:.2,ease:"back.out(3)"}},{t_in + .55:.3f});
+tl.to(I+"nt",{{y:-5,duration:.8,yoyo:true,repeat:1,ease:"sine.inOut"}},{t_in + .5:.3f});
+tl.to([I+"nt",I+"na",I+"nh",I+"nd"],{{autoAlpha:0,x:-60,duration:.25,ease:"power2.in"}},{t_out - .27:.3f});
+tl.set([I+"nt",I+"na",I+"nh",I+"nd"],{{autoAlpha:0}},{t_out - .02:.3f});}})();'''
+    return {"display": "float", "kind": "custom", "start": round(t_in - .05, 3), "dur": round(t_out - t_in + .05, 3), "z": 23,
+            "html": html, "js": js, "files": ["broll/du_logo.png"], "sfx": [["swing", t_in, .12], ["pencil", t_in + .25, .1]]}
