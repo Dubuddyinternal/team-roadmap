@@ -1045,22 +1045,24 @@ const H_CARD=[["stage","Status",v=>(STAGES.find(x=>x.id===v)||{}).label||v],["id
 const H_IDEA=[["status","Status",v=>(STATUS_UI[v]||{}).label||v],["idea","Idea"],["by","Reported by"],["cat","Idea category",v=>regLabel("ideacat",v)||v],["hook","Hook"],["cta","CTA"],["title","Title"],
   ["desc","Description"],["hashtags","Hashtags"],["why","Why this idea"],[x=>plats(x),"Post on",v=>v.map(k=>regLabel("platform",k)||k).join(", ")],
   ["vtype","Video type",v=>regLabel("vtype",v)||v],["extra","Own boxes",v=>(v||[]).map(x=>x.label+": "+(x.value||"")).join(" · ")]];
-const HIST={ src:null, card:new Map(), idea:new Map() };
+const H_TASK=[["title","Title"],["status","Status",v=>(tkStages().find(x=>x[0]===v)||[,v])[1]],[x=>(x.ownerIds||[]).map(taskName).filter(Boolean).join(", "),"Assigned to"],
+  ["due","Due"],[x=>(x.labels||[]).join(", "),"Labels"],["details","Details"],[x=>(x.imgs||[]).length,"Pictures"]];
+const HIST={ src:null, card:new Map(), idea:new Map(), task:new Map() };
 const hSnap=(o,spec)=>{ const out={}; spec.forEach(([g,l,f])=>{ const v=typeof g==="function"?g(o):at(o,g);
   let t=f?f(v):v; t=t==null?"":typeof t==="object"?JSON.stringify(t):String(t); out[l]=t.slice(0,600); }); return out; };
-function histBase(){ HIST.src=S; HIST.card=new Map(CARDS.map(c=>[c.id,hSnap(c,H_CARD)])); HIST.idea=new Map(IDEAS.map(i=>[i.id,hSnap(i,H_IDEA)])); }
+function histBase(){ HIST.src=S; HIST.card=new Map(CARDS.map(c=>[c.id,hSnap(c,H_CARD)])); HIST.idea=new Map(IDEAS.map(i=>[i.id,hSnap(i,H_IDEA)])); HIST.task=new Map((S.tasks||[]).map(t=>[t.id,hSnap(t,H_TASK)])); }
 function histDiff(){
   if(!window.CMT || !CMT.log || !SPACE) return;
   if(HIST.src!==S){ histBase(); return; }
   const ev=[], scope="cs:"+SPACE.id;
-  [["card",CARDS,H_CARD,c=>c.pre&&c.pre.title||c.idea],["idea",IDEAS,H_IDEA,i=>i.idea]].forEach(([kind,list,spec,name])=>{
+  [["card",CARDS,H_CARD,c=>c.pre&&c.pre.title||c.idea],["idea",IDEAS,H_IDEA,i=>i.idea],["task",S.tasks||[],H_TASK,t=>t.title]].forEach(([kind,list,spec,name])=>{
     const base=HIST[kind], seen=new Set();
-    list.forEach(o=>{ seen.add(o.id); const now=hSnap(o,spec), old=base.get(o.id), place="card:"+kind+":"+o.id, label=(kind==="idea"?"idea":"card")+" “"+String(name(o)||o.id).slice(0,80)+"”";
+    list.forEach(o=>{ seen.add(o.id); const now=hSnap(o,spec), old=base.get(o.id), place="card:"+kind+":"+o.id, label=(kind==="idea"?"idea":kind==="task"?"task":"card")+" “"+String(name(o)||o.id).slice(0,80)+"”";
       if(!old){ ev.push({ place, scope, place_label:label, field:"created", old_val:"", new_val:String(name(o)||"") }); }
       else Object.keys(now).forEach(l=>{ if(now[l]!==old[l]) ev.push({ place, scope, place_label:label, field:l, old_val:old[l], new_val:now[l] }); });
       base.set(o.id, now); });
     [...base.keys()].filter(id=>!seen.has(id)).forEach(id=>{ const old=base.get(id);
-      ev.push({ place:"card:"+kind+":"+id, scope, place_label:(kind==="idea"?"idea":"card")+" “"+String(old.Title||old.Idea||id).slice(0,80)+"”", field:"deleted", old_val:"", new_val:"" });
+      ev.push({ place:"card:"+kind+":"+id, scope, place_label:(kind==="idea"?"idea":kind==="task"?"task":"card")+" “"+String(old.Title||old.Idea||id).slice(0,80)+"”", field:"deleted", old_val:"", new_val:"" });
       base.delete(id); });
   });
   if(ev.length) CMT.log(ev.slice(0,200));
@@ -4726,7 +4728,8 @@ function openTask(id, preset){
     <div class="fld" style="max-width:220px"><label for="tk-due">Due</label><input id="tk-due" type="date" value="${esc(t.due||"")}"></div>
     ${picBox("tk-d","Details", t.details, imgs, "Anything they need to know — links, the exact wording, a screenshot of what to change…")}
     <div class="row dr-foot"><button class="btn pri" id="tkSave">${isNew?"Create task":"Save changes"}</button><button class="btn" id="tkCancel">Cancel</button>
-      ${!isNew&&tkCanDel()?`<button class="btn danger" id="tkDel" style="margin-left:auto">🗑 Delete</button>`:""}</div>`, false, "task:"+t.id);
+      ${!isNew&&tkCanDel()?`<button class="btn danger" id="tkDel" style="margin-left:auto">🗑 Delete</button>`:""}</div>
+    ${isNew?"":`<div data-cmthost></div>`}`, false, "task:"+t.id);
   const D=$("#drawer");
   $("#xClose").onclick=$("#tkCancel").onclick=()=>closeDrawer(true);
   wirePicBox(D, "tk-d", imgs, ()=>{});
@@ -4747,6 +4750,7 @@ function openTask(id, preset){
     const fresh=asg.filter(i=>!was.includes(i)); if(fresh.length && OPT.taskAssigned) OPT.taskAssigned(SPACE, t, fresh);
     closeDrawer(true); toast((isNew?"Task created":"Saved")+(fresh.length?` · ${fresh.map(taskName).filter(Boolean).join(", ")} told by email + 🔔`:"")); renderTasks(); };
   const del=$("#tkDel"); if(del) del.onclick=()=>tkDelete(t, ()=>closeDrawer(true));
+  if(!isNew){ mountComments("task", t.id, t.title); setTimeout(()=>{ OPEN={kind:"task",id:t.id}; }); }   // 💬 Activity: comments + history
   setTimeout(()=>{ const e=$("#tk-t"); if(e&&isNew) e.focus(); },30);
 }
 
@@ -4772,7 +4776,8 @@ function mount(){
 
 window.SX = {
   openState: ()=>OPEN,
-  reopen: o=>{ if(!o||!R) return; if(o.kind==="card"&&CARDS.some(c=>c.id===o.id)) openCard(o.id); else if(o.kind==="idea"&&IDEAS.some(i=>i.id===o.id)) openIdea(o.id); },
+  reopen: o=>{ if(!o||!R) return; if(o.kind==="card"&&CARDS.some(c=>c.id===o.id)) openCard(o.id); else if(o.kind==="idea"&&IDEAS.some(i=>i.id===o.id)) openIdea(o.id);
+    else if(o.kind==="task"&&(S.tasks||[]).some(t=>t.id===o.id)){ if(TAB!=="tasks"&&OPT.setTab) OPT.setTab("tasks"); setTimeout(()=>openTask(o.id),60); } },
   normalize: normalize,
   tabs: [["summary","Analysis"],["tasks","Tasks"],["okrs","Individual OKRs"],["ideation","Ideation"],["process","Content Process"],["schedule","Schedule"],["rivals","Keep an Eye on 2nd Love"]],
   /* draw the space. opt: {tab, team, supa, canEdit(), isMember(), me(), people(), save(),

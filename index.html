@@ -15,7 +15,7 @@
 <!-- Social Media space: Summary (live YouTube numbers) / Ideation / Content Process / Schedule -->
 <script src="richtext.js"></script><!-- rich text + "Show all" in every multi-line text box (load before the spaces) -->
 <script src="okr-mail.js?v=20261119b"></script>
-<script src="social-space.js?v=20261120j"></script>
+<script src="social-space.js?v=20261120k"></script>
 <script src="pipeline.js"></script><!-- Claude edit & post panel on Content Process cards -->
 <script src="comments.js"></script><!-- 💬 comments + history at the bottom of every Social Media card and idea, with @tags by email -->
 <script src="hinglish.js"></script><script src="dictate.js"></script><!-- 🎤 dictation in every text box -->
@@ -29,7 +29,7 @@
 <!-- Student ideas (tools.dubuddy.in/ideas) in the product space, status sync, idea emails, My product ideas (student-ideas.js) -->
 <script src="student-ideas.js"></script>
 <!-- Marketing mega space: campaigns (Details · Board · Roles · Reminders · Calendar) — campaign-space.js -->
-<script src="campaign-space.js?v=20261120b"></script>
+<script src="campaign-space.js?v=20261120c"></script>
 <!-- Keep an Eye: a fixed template for studying role-model and competitor companies, inside Marketing — watch-space.js -->
 <script src="watch-space.js"></script>
 <!-- Widen our Horizon: big questions answered every week, then checked — horizon-space.js -->
@@ -6188,6 +6188,7 @@ function placeSnapshot(){
     okrView2, paneTab, contentMode, page, adminView, mtView, y: window.scrollY || 0,
     socialView, discView, pdtView, campView, watchView, horizonView, maverickView, // the tab inside a space
     sxOpen: (window.SX && SX.openState) ? SX.openState() : null,     // a card or idea open in Social Media
+    cxOpen: (window.CX && CX.openState) ? CX.openState() : null,     // a card open on a campaign board
   };
 }
 function savePlace(){
@@ -6221,7 +6222,14 @@ window.cmtCardPlace = function(kind, id, title){
   const nav = Object.assign(placeSnapshot(), { y: 0, page: "", sxOpen: { kind, id } });
   const sp = (typeof currentSocial === "function" && currentSocial()) || {};
   const key = "card:" + kind + ":" + id;
-  return { key, label: (sp.name || "Social Media") + " → " + (kind === "idea" ? "idea" : "card") + " “" + String(title || id).slice(0, 80) + "”", nav, history: { place: key } };
+  return { key, label: (sp.name || "Social Media") + " → " + (kind === "idea" ? "idea" : kind === "task" ? "task" : "card") + " “" + String(title || id).slice(0, 80) + "”", nav, history: { place: key } };
+};
+/* 💬 a campaign board card's Activity (comments + history); the link in emails reopens the card */
+window.cmtCampPlace = function(cid, id, title){
+  const cs = (CSPACES.list || []).find(x=> x.id === cid) || {};
+  const nav = Object.assign(placeSnapshot(), { y: 0, page: "", cxOpen: id });
+  const key = "camp:" + cid + ":" + id;
+  return { key, label: (cs.name || "Campaign") + " → card “" + String(title || id).slice(0, 80) + "”", nav, history: { place: key } };
 };
 window.addEventListener("pagehide", savePlace);
 window.addEventListener("beforeunload", savePlace);
@@ -6254,7 +6262,7 @@ function restorePlace(){
     if(typeof p.maverickView === "string") maverickView = p.maverickView;
     // and that this person may still see
     if(typeof spaceViewAllowed === "function" && !spaceViewAllowed()) throw 0;
-    _pendingPlace = { page: p.page || "", adminView: p.adminView, mtView: p.mtView, y: p.y || 0, sxOpen: p.sxOpen || null };
+    _pendingPlace = { page: p.page || "", adminView: p.adminView, mtView: p.mtView, y: p.y || 0, sxOpen: p.sxOpen || null, cxOpen: p.cxOpen || null };
     return true;
   }catch(_){
     // put the old values back
@@ -6274,6 +6282,7 @@ function restorePageAfterRender(){
     else if(pp.page === "kim") openKim();
     if(pp.y) setTimeout(()=> window.scrollTo(0, pp.y), 50);
     if(pp.sxOpen && view === "social" && window.SX && SX.reopen) setTimeout(()=> SX.reopen(pp.sxOpen), 80);
+    if(pp.cxOpen && view === "campaign" && window.CX && CX.reopen) setTimeout(()=> CX.reopen(pp.cxOpen), 80);
   }catch(_){ }
 }
 function defaultView(){
