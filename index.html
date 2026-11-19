@@ -29,7 +29,7 @@
 <!-- Student ideas (tools.dubuddy.in/ideas) in the product space, status sync, idea emails, My product ideas (student-ideas.js) -->
 <script src="student-ideas.js"></script>
 <!-- Marketing mega space: campaigns (Details · Board · Roles · Reminders · Calendar) — campaign-space.js -->
-<script src="campaign-space.js?v=20261120c"></script>
+<script src="campaign-space.js?v=20261120d"></script>
 <!-- Keep an Eye: a fixed template for studying role-model and competitor companies, inside Marketing — watch-space.js -->
 <script src="watch-space.js"></script>
 <!-- Widen our Horizon: big questions answered every week, then checked — horizon-space.js -->
@@ -20647,7 +20647,7 @@ function renderAll(){
           });
         }
         if(cs.type==="campaign" && view==="campaign" && activeCspace===cs.id && window.CX){
-          [["details","\uD83D\uDCDD Campaign Details"],["board","\uD83D\uDCCB Board"],["reminders","\u23F0 Reminders"],["calendar","\uD83D\uDDD3 Calendar"]].filter(([k])=> tabAllowed(cs, k)).forEach(([k,lbl])=>{
+          [["details","\uD83D\uDCDD Campaign Details"],["board","\uD83D\uDCCB Board"],["calendar","\uD83D\uDDD3 Calendar"],["reminders","\u23F0 Reminders"]].filter(([k])=> tabAllowed(cs, k)).forEach(([k,lbl])=>{
             const sub=document.createElement("button");
             sub.className="ws-sub"+(_nested?" ws-sub-nested":"")+(campView===k?" active":"");
             sub.textContent=lbl;
