@@ -227,7 +227,48 @@ async function syncYouTube(admin, team, cfg) {
   const { error: sErr } = await admin.from("social_snapshots").upsert(toSave);
   if (sErr) throw new Error("Saving followers failed: " + sErr.message);
 
-  return { channel: channel.snippet.title, followers: current, videos: posts.size, history_days: toSave.length - 1, notes };
+  // --- subscribers gained / lost per video, per day (exact). One Analytics call per day: the days not
+  // saved yet (up to 40 a run, so the first runs fill the history) plus the last 4 days, which YouTube revises.
+  let byVideoDays = 0;
+  try { byVideoDays = await ytSubsByVideo(admin, team, token, today); }
+  catch (e) { notes.push("Subscribers per video per day not available: " + e.message); }
+
+  return { channel: channel.snippet.title, followers: current, videos: posts.size, history_days: toSave.length - 1, subs_by_video_days: byVideoDays, notes };
+}
+
+async function ytSubsByVideo(admin, team, token, today) {
+  const first = ymd(new Date(today.getTime() - HISTORY_DAYS * 86400000)), last = ymd(new Date(today.getTime() - 86400000));
+  const { data: have } = await admin.from("social_post_daily").select("day").eq("team_slug", team).eq("platform", "youtube")
+    .not("subs_gained", "is", null).gte("day", first).limit(50000);
+  const known = new Set((have || []).map((r) => r.day));
+  const recent = new Set([1, 2, 3, 4].map((n) => ymd(new Date(today.getTime() - n * 86400000))));
+  const want = [];
+  for (let t = new Date(last + "T00:00:00Z").getTime(); ymd(new Date(t)) >= first; t -= 86400000) {
+    const d = ymd(new Date(t));
+    if (recent.has(d) || !known.has(d)) want.push(d);
+    if (want.length >= 44) break;
+  }
+  let done = 0;
+  for (let i = 0; i < want.length; i += 4) {
+    const chunk = want.slice(i, i + 4);
+    const got = await Promise.all(chunk.map((d) => report(token, {
+      startDate: d, endDate: d, dimensions: "video", sort: "-subscribersGained", maxResults: "200",
+      metrics: "subscribersGained,subscribersLost",
+    }).then((rows) => ({ d, rows })).catch((e) => ({ d, err: e.message }))));
+    const rows = [];
+    for (const g of got) {
+      if (g.err) { if (!done && i === 0 && got.every((x) => x.err)) throw new Error(g.err); continue; }
+      done++;
+      for (const r of g.rows) {
+        const sg = num(r.subscribersGained) || 0, sl = num(r.subscribersLost) || 0;
+        if (sg || sl) rows.push({ team_slug: team, platform: "youtube", external_id: r.video, day: g.d, subs_gained: sg, subs_lost: sl });
+      }
+      // a day with no video gains still counts as done (so it isn't asked again): one marker row
+      if (!g.rows.some((r) => num(r.subscribersGained) || num(r.subscribersLost))) rows.push({ team_slug: team, platform: "youtube", external_id: "_none", day: g.d, subs_gained: 0, subs_lost: 0 });
+    }
+    if (rows.length) { const { error } = await admin.from("social_post_daily").upsert(rows); if (error) throw new Error(error.message); }
+  }
+  return done;
 }
 
 // ---------------------------------------------------------------- Instagram
