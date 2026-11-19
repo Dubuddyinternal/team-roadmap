@@ -42,10 +42,16 @@ const KIND: Record<string, string> = { "yt:short": "YT Short", "yt:long": "YT Lo
 function postRows(posts: any[], sx: any) {
   const VT: Record<string, string> = { "Short": "short", "Long video": "long", "Live": "live", "Reel": "reel", "Carousel": "carousel", "Image": "image" };
   const rows: any[] = [], yt = new Set<string>(), ig = new Set<string>();
+  // which card each live post belongs to (by its link), so a Short + Reel pair counts as one video
+  const cardOf: Record<string, string> = {};
+  ((sx && sx.cards) || []).forEach((c: any) => { const L = (c && c.post && c.post.links) || {};
+    const y = ytId(L.yt || (c && c.post && c.post.postUrl) || ""), g = igCode(L.ig || (c && c.post && c.post.postUrl) || "");
+    if (y) cardOf["yt:" + y] = c.id; if (g) cardOf["ig:" + g] = c.id; });
   posts.forEach((p) => {
     const pl = p.platform === "youtube" ? "yt" : p.platform === "instagram" ? "ig" : p.platform;
     if (pl === "yt") yt.add(p.external_id); else { const c = igCode(p.url); if (c) ig.add(c); }
-    rows.push({ platform: pl, vtype: VT[p.post_type] || "long", date: p.published_at ? new Date(Date.parse(p.published_at) + 5.5 * 3600e3).toISOString().slice(0, 10) : null });
+    const card = pl === "yt" ? cardOf["yt:" + p.external_id] : cardOf["ig:" + (igCode(p.url) || "")];
+    rows.push({ platform: pl, vtype: VT[p.post_type] || "long", at: p.published_at, card: card || null, date: p.published_at ? new Date(Date.parse(p.published_at) + 5.5 * 3600e3).toISOString().slice(0, 10) : null });
   });
   ((sx && sx.cards) || []).filter((c: any) => c && c.stage === "published").forEach((c: any) => {
     const pls: string[] = Array.isArray(c.platforms) && c.platforms.length ? c.platforms : [c.platform];
@@ -57,10 +63,20 @@ function postRows(posts: any[], sx: any) {
       if (!url && synced && (pl === "yt" ? ["short", "reel", "long"].includes(c.vtype)
         : ["short", "reel", "image", "carousel"].includes(c.vtype) || /poster/i.test(String(c.format || "")))) return;
       if (pl === "ig" && ig.has(igCode(url) || "")) return;
-      rows.push({ platform: pl, vtype: (c.vtype === "short" || c.vtype === "reel") ? (pl === "yt" ? "short" : "reel") : c.vtype, date: c.published || null });
+      rows.push({ platform: pl, vtype: (c.vtype === "short" || c.vtype === "reel") ? (pl === "yt" ? "short" : "reel") : c.vtype, date: c.published || null, card: c.id, at: null });
     });
   });
   return rows;
+}
+/* Shorts / Reels key results: each video once, whether a YT Short, an Insta Reel or both (as the page counts them) */
+function vertPieces(rows: any[]) {
+  const seen = new Set<string>(), loose: any[] = []; let n = 0;
+  rows.forEach((r) => { if (r.card) { if (!seen.has(r.card)) { seen.add(r.card); n++; } } else loose.push(r); });
+  const used = new Set<number>();
+  loose.forEach((r, i) => { if (used.has(i)) return; used.add(i); n++;
+    const j = loose.findIndex((x, jj) => !used.has(jj) && x.platform !== r.platform && x.at && r.at && Math.abs(Date.parse(x.at) - Date.parse(r.at)) <= 45 * 60000);
+    if (j >= 0) used.add(j); });
+  return n;
 }
 /* one person's objectives for a date range, in the shape okr-mail.js takes */
 function model(p: any, name: string, R: { from: string; asOf: string; months: number; custom: boolean }, ideas: any[], rows: any[], ser: Record<string, Pt[]>, cats: Record<string, string>) {
@@ -70,10 +86,11 @@ function model(p: any, name: string, R: { from: string; asOf: string; months: nu
     const krs = (ob.krs || []).filter((k: any) => Number(k.target) > 0).map((k: any) => {
       let v = 0;
       if (k.type === "ideas") v = ideas.filter((i) => by(i) && i.created >= R.from && i.created <= R.asOf && (!k.cat || i.cat === k.cat) && (!k.plat || plats(i).includes(k.plat))).length;
-      else if (k.type === "posts") { const vert = k.vtype === "short" || k.vtype === "reel"; v = rows.filter((r) => r.date && r.date >= R.from && r.date <= R.asOf && r.platform === k.pl && (vert ? (r.vtype === "short" || r.vtype === "reel") : r.vtype === k.vtype)).length; }
+      else if (k.type === "posts") { const vert = k.vtype === "short" || k.vtype === "reel", inR = (r: any) => r.date && r.date >= R.from && r.date <= R.asOf;
+        v = vert ? vertPieces(rows.filter((r) => inR(r) && (r.vtype === "short" || r.vtype === "reel"))) : rows.filter((r) => inR(r) && r.platform === k.pl && r.vtype === k.vtype).length; }
       else v = Number((k.log || {})[k.period === "quarter" ? quarterKey(R.asOf) : R.asOf.slice(0, 7)] || 0);
       const t = k.period === "month" && k.type !== "manual_pct" && R.custom ? Math.ceil(Number(k.target) * R.months) : Number(k.target);
-      const tag = k.type === "posts" ? (KIND[k.pl + ":" + k.vtype] || "Posts") : k.type === "ideas" ? (cats[k.cat] || "Any") + " ideas" : k.type === "count" ? "Done count" : "%";
+      const tag = k.type === "posts" ? ((k.vtype === "short" || k.vtype === "reel") ? "YT Short / Insta Reel" : (KIND[k.pl + ":" + k.vtype] || "Posts")) : k.type === "ideas" ? (cats[k.cat] || "Any") + " ideas" : k.type === "count" ? "Done count" : "%";
       return { title: k.title, type: k.type, done: v, target: t, pct: Math.round(t ? Math.min(100, v / t * 100) : 0), tag };
     });
     let total = null;
