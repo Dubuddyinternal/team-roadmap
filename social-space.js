@@ -597,6 +597,10 @@ details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var
 .tkc.late{border-left:3px solid var(--crit)}.tkc.live h5{text-decoration:line-through;color:var(--ink-3)}
 .tkc-d{font-size:12px;color:var(--ink-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap}
 .tkc-rep{font-size:11.5px;color:var(--ink-3);margin:-2px 0 6px}.tkc-rep b{color:var(--ink-2);font-weight:600}
+.tk-colh{cursor:grab}.tk-grip{color:var(--ink-3);margin-right:5px;font-size:12px;opacity:0;transition:opacity .12s}.tk-col:hover .tk-grip{opacity:1}
+.tk-ren{border:none;background:none;color:var(--ink-3);font-size:12px;cursor:pointer;margin-left:5px;padding:0 3px;border-radius:4px;opacity:0;transition:opacity .12s}.tk-col:hover .tk-ren,.tk-ren:focus{opacity:1}.tk-ren:hover{color:var(--ink);background:var(--surface)}
+.tk-col.dragging{opacity:.45}.tk-col.colover{box-shadow:inset 3px 0 0 var(--accent)}
+@media (hover:none){.tk-grip,.tk-ren{opacity:1}}
 .tk-mv{display:inline-flex;opacity:0;transition:opacity .12s}.tk-col:hover .tk-mv,.tk-mv:focus-within{opacity:1}
 .tk-mv button{border:none;background:none;color:var(--ink-3);font-size:15px;line-height:1;padding:0 4px;cursor:pointer;border-radius:4px}.tk-mv button:hover:not(:disabled){color:var(--ink);background:var(--surface)}.tk-mv button:disabled{opacity:.3;cursor:default}
 @media (hover:none){.tk-mv{opacity:1}}
@@ -4555,9 +4559,15 @@ let TASKF={ who:[], labels:[], date:"all", view:"board", cursor:"", open:null };
 const TK_BASE=[["idea","Ideas"],["todo","To do"],["doing","In progress"],["done","Done"]];
 // statuses = the three built-in ones + any the team adds with the ＋ after the last column: S.taskStages=[{id,label}]
 function tkStages(){ const extra=(Array.isArray(S.taskStages)?S.taskStages:[]).filter(x=>x&&x.id&&x.label&&!TK_BASE.some(b=>b[0]===x.id));
-  const all=TK_BASE.concat(extra.map(x=>[x.id,x.label])), ord=Array.isArray(S.taskOrder)?S.taskOrder:[];   // S.taskOrder: the columns' order, set with ‹ ›
+  const nm=(S.taskNames&&typeof S.taskNames==="object")?S.taskNames:{};   // renamed built-in statuses
+  const all=TK_BASE.map(([id,l])=>[id, nm[id]||l]).concat(extra.map(x=>[x.id,x.label])), ord=Array.isArray(S.taskOrder)?S.taskOrder:[];   // S.taskOrder: the columns' order, set with ‹ ›
   const at=id=>{ const i=ord.indexOf(id); return i<0 ? 1000+all.findIndex(x=>x[0]===id) : i; };
   return all.slice().sort((a,b)=>at(a[0])-at(b[0])); }
+function tkRenameStage(id){ const cur=(tkStages().find(x=>x[0]===id)||[])[1]||""; const n=(prompt("Rename this status", cur)||"").trim().slice(0,30);
+  if(!n || n===cur) return; if(tkStages().some(x=>x[0]!==id && x[1].toLowerCase()===n.toLowerCase())){ toast("That name is already used"); return; }
+  const ex=(S.taskStages||[]).find(x=>x.id===id); if(ex) ex.label=n; else { S.taskNames=Object.assign({}, S.taskNames||{}, { [id]:n }); }
+  if(save()) toast("Renamed to "+n); renderTasks(); }
+function tkMoveStageTo(id, before){ const ids=tkStages().map(x=>x[0]).filter(x=>x!==id); const j=ids.indexOf(before); if(j<0) return; ids.splice(j,0,id); S.taskOrder=ids; if(save()) toast("Status moved"); renderTasks(); }
 function tkMoveStage(id, dir){ const ids=tkStages().map(x=>x[0]), i=ids.indexOf(id), j=i+dir; if(i<0||j<0||j>=ids.length) return;
   [ids[i],ids[j]]=[ids[j],ids[i]]; S.taskOrder=ids; if(save()) toast("Status moved"); renderTasks(); }
 const TK_LABELS=["Caption","Thumbnail","Bio / profile","Edit","Upload","Design","Research","Comments"];
@@ -4626,10 +4636,10 @@ function renderTasks(){
     const STG=tkStages();
     body=`<div class="tk-board" style="grid-template-columns:repeat(${STG.length},minmax(230px,1fr))${ed?" 40px":""}">${STG.map(([id,lab])=>{ const items=list.filter(t=>t.status===id).sort(sortT), custom=!TK_BASE.some(b=>b[0]===id);
       const ix=STG.findIndex(x=>x[0]===id);
-      return `<div class="col tk-col" data-tkcol="${esc(id)}"><div class="col-h"><h4>${esc(lab)}${id==="done"?' <span style="color:var(--good)">✓</span>':""}</h4>
+      return `<div class="col tk-col" data-tkcol="${esc(id)}"><div class="col-h ${ed?"tk-colh":""}" ${ed?`draggable="true" data-tkcolh="${esc(id)}" title="Drag to move this status · double-click the name to rename it"`:""}><h4>${ed?`<span class="tk-grip" aria-hidden="true">⠿</span>`:""}${esc(lab)}${id==="done"?' <span style="color:var(--good)">✓</span>':""}${ed?`<button type="button" class="tk-ren" data-tkren="${esc(id)}" title="Rename this status" aria-label="Rename ${esc(lab)}">✎</button>`:""}</h4>
           <span style="display:flex;gap:4px;align-items:center">${ed?`<span class="tk-mv"><button type="button" data-tkmv="${esc(id)}|-1" ${ix===0?"disabled":""} title="Move this status left" aria-label="Move ${esc(lab)} left">‹</button><button type="button" data-tkmv="${esc(id)}|1" ${ix===STG.length-1?"disabled":""} title="Move this status right" aria-label="Move ${esc(lab)} right">›</button></span>`:""}<span class="count">${items.length}</span>${ed&&custom?`<button type="button" class="tk-colx" data-tkcolx="${esc(id)}" title="Remove this status" aria-label="Remove status ${esc(lab)}">×</button>`:""}</span></div>
         <div class="tk-items">${items.map(t=>tkCard(t,ed)).join("")||(ed?"":`<div class="dashed" style="margin:0">empty</div>`)}</div>
-        ${ed?`<button type="button" class="tk-addcard" data-tkadd="${esc(id)}">＋ Add task</button>`:""}</div>`; }).join("")}
+        ${ed?`<button type="button" class="tk-addcard" data-tkadd="${esc(id)}">＋ Add card</button>`:""}</div>`; }).join("")}
       ${ed?`<button type="button" class="tk-addcol" id="tkAddCol" title="Add a status" aria-label="Add a status">＋</button>`:""}</div>`;
   }
   P.innerHTML=`<div class="sec"><div class="sec-h"><h3>Tasks</h3>
@@ -4675,10 +4685,20 @@ function renderTasks(){
     el.addEventListener("dragstart",e=>{ drag=t.id; el.classList.add("dragging"); e.dataTransfer.effectAllowed="move"; try{ e.dataTransfer.setData("text/plain",t.id); }catch(_){ } });
     el.addEventListener("dragend",()=>{ el.classList.remove("dragging"); setTimeout(()=>drag=null,30); P.querySelectorAll(".over,.dropon").forEach(x=>x.classList.remove("over","dropon")); }); });
   if(!ed) return;
+  let colDrag=null;
+  P.querySelectorAll("[data-tkren]").forEach(b=>{ b.onclick=e=>{ e.stopPropagation(); tkRenameStage(b.dataset.tkren); }; b.setAttribute("draggable","false"); });
+  P.querySelectorAll("[data-tkcolh]").forEach(h=>{
+    h.ondblclick=()=>tkRenameStage(h.dataset.tkcolh);
+    h.addEventListener("dragstart",e=>{ if(drag) return; colDrag=h.dataset.tkcolh; h.parentNode.classList.add("dragging"); e.dataTransfer.effectAllowed="move"; try{ e.dataTransfer.setData("text/plain","col:"+colDrag); }catch(_){ } });
+    h.addEventListener("dragend",()=>{ colDrag=null; P.querySelectorAll(".tk-col").forEach(c=>c.classList.remove("dragging","colover")); }); });
   P.querySelectorAll("[data-tkcol]").forEach(col=>{
-    col.addEventListener("dragover",e=>{ if(!drag) return; e.preventDefault(); e.dataTransfer.dropEffect="move"; col.classList.add("over"); });
-    col.addEventListener("dragleave",e=>{ if(!col.contains(e.relatedTarget)) col.classList.remove("over"); });
-    col.addEventListener("drop",e=>{ e.preventDefault(); col.classList.remove("over"); const t=T.find(x=>x.id===drag); drag=null; if(!t) return;
+    col.addEventListener("dragover",e=>{ if(colDrag){ if(colDrag!==col.dataset.tkcol){ e.preventDefault(); col.classList.add("colover"); } return; }
+      if(!drag) return; e.preventDefault(); e.dataTransfer.dropEffect="move"; col.classList.add("over"); });
+    col.addEventListener("dragleave",e=>{ if(!col.contains(e.relatedTarget)) col.classList.remove("over","colover"); });
+    col.addEventListener("drop",e=>{ e.preventDefault(); col.classList.remove("over","colover");
+      if(colDrag){ const c=colDrag; colDrag=null; if(c!==col.dataset.tkcol){ const ids=tkStages().map(x=>x[0]); const from=ids.indexOf(c), to=ids.indexOf(col.dataset.tkcol);
+          if(from<to){ const nx=ids[to+1]; if(nx) tkMoveStageTo(c, nx); else { const r=ids.filter(x=>x!==c); r.push(c); S.taskOrder=r; if(save()) toast("Status moved"); renderTasks(); } } else tkMoveStageTo(c, col.dataset.tkcol); } return; }
+      const t=T.find(x=>x.id===drag); drag=null; if(!t) return;
       const to=col.dataset.tkcol; if(t.status===to) return; tkSetStatus(t,to); if(save()) toast("Moved to "+(tkStages().find(s=>s[0]===to)||[,""])[1]); renderTasks(); }); });
   P.querySelectorAll("[data-tkdate]").forEach(day=>{
     day.ondblclick=e=>{ if(e.target.closest("[data-tk]")) return; openTask(null, { due:day.dataset.tkdate }); };
