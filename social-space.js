@@ -319,6 +319,14 @@ details.fdrop{margin-bottom:14px}
 .dl-r.wl-h>span{text-align:right}.dl-r.wl-h>span:first-child{text-align:left}
 .dl-pick{display:inline-flex;gap:8px;align-items:center;font-size:12.5px;color:var(--ink-2);margin:0 0 8px}.dl-pick select{border:1px solid var(--line-2);border-radius:var(--r-s);padding:4px 8px;font:inherit;font-size:12.5px;background:var(--surface)}
 .dl{max-height:420px}
+.dl-gbtn{border:none;background:none;font:inherit;color:inherit;cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;padding:0}.dl-gbtn:hover{text-decoration-style:solid}
+.gs-r{display:grid;grid-template-columns:56px 1fr 56px;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.gs.yt .gs-r{grid-template-columns:56px 1fr 56px 48px}
+.gs-r img,.gs-ph{width:56px;height:34px;object-fit:cover;border-radius:5px;background:var(--surface-2);display:block}
+.gs-t{min-width:0;font-size:13px;line-height:1.35}.gs-t a{color:var(--ink);text-decoration:none}.gs-t a:hover{text-decoration:underline}.gs-t small{display:block;color:var(--ink-3);font-size:11.5px;margin-top:2px}
+.gs-g{font-family:var(--mono,monospace);color:var(--good);text-align:right}.gs-l{font-family:var(--mono,monospace);color:var(--crit);text-align:right}
+.gs-h{font-family:var(--mono,monospace);font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);padding-top:0}.gs-h span:nth-child(n+3){text-align:right}
+.gs-rest .gs-t{color:var(--ink-2)}
 .wl{border:1px solid var(--line);border-radius:10px;overflow:auto;max-height:320px}
 .wl-r{display:grid;grid-template-columns:minmax(92px,1fr) 58px 56px 74px 74px 16px;min-width:420px;gap:6px;align-items:center;padding:7px 12px;border-bottom:1px solid var(--line);font-size:12.5px}
 .wl-r:last-child{border-bottom:0}.wl-r b{font-family:var(--mono,monospace);text-align:right}
@@ -1492,11 +1500,43 @@ function dayLog(k, series){
   const head=`<div class="dl-r wl-h"><span>Date</span><span>Gain</span><span>Loss</span><span>Change</span></div>`;
   const body=rows.map(r=>`<div class="dl-r ${r.d===today()?"now":""}">
       <span>${new Date(r.d+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})}${r.d===today()?" · today":""}</span>
-      <b class="dl-g">${num(r.g)}</b><b class="dl-l">${num(r.l)}</b>
+      <b class="dl-g">${r.g ? `<button type="button" class="dl-gbtn" data-dlday="${k}|${r.d}" title="Which ${k==="yt"?"videos":"posts"} brought them">${num(r.g)}</button>` : num(r.g)}</b><b class="dl-l">${num(r.l)}</b>
       <b class="${r.ch>0?"dl-up":r.ch<0?"dl-dn":""}">${num(r.ch,true)}</b></div>`).join("")
     + `<div class="dl-r tot"><span>${monthName(mk).split(" ")[0]} total</span><b class="dl-g">${anyG?fmt(tg):"—"}</b><b class="dl-l">${anyG&&anyC?fmt(tl):"—"}</b><b class="${tc>0?"dl-up":tc<0?"dl-dn":""}">${anyC?num(tc,true):"—"}</b></div>`;
   const pick=`<label class="dl-pick">Month <select data-dlmonth="${k}" aria-label="Month">${months.map(x=>`<option value="${x}" ${x===mk?"selected":""}>${monthName(x)}</option>`).join("")}</select></label>`;
   return fdrop("dl-"+k, `📆 Day by day · ${monthName(mk)}${anyC?` · ${tc>0?"+":tc<0?"−":""}${fmt(Math.abs(tc))}`:""}`, `${pick}<div class="wl dl">${head}${body}</div>`);
+}
+/* a day's Gain → which videos / posts brought them. YouTube: exact (Analytics, per video per day, saved by the sync).
+   Instagram: an estimate — Meta doesn't say, so the sync splits each day's new followers by the views each post got that day. */
+async function openGainSources(k, d){
+  const plat = k==="yt" ? "youtube" : "instagram", yt = k==="yt";
+  const day = new Date(d+"T00:00:00").toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric"});
+  const snap = LIVE.snaps.find(r=>r.platform===plat && r.day===d), total = snap && snap.gained!=null ? Number(snap.gained) : null;
+  const head = `<div class="dr-h"><div><div class="lbl">${yt?"YouTube subscribers":"Instagram followers"} · ${esc(day)}</div><h3 style="margin-top:4px">${total!=null?fmt(total)+" gained":"Gained"}</h3></div><button class="btn sm" id="xClose">Close</button></div>`;
+  openDrawer(head+`<p class="hint">Loading…</p>`, false, "gain:"+k+d); $("#xClose").onclick=()=>closeDrawer(true);
+  let rows=[];
+  try{ const r = await OPT.supa.from("social_post_daily").select("external_id,est_follows,subs_gained,subs_lost").eq("team_slug", LIVE.team || OPT.team).eq("platform", plat).eq("day", d).limit(500);
+    if(r.error) throw r.error; rows = r.data || []; }
+  catch(e){ openDrawer(head+`<p class="hint">Couldn't load this: ${esc(e.message||String(e))}</p>`, false, "gain:"+k+d); $("#xClose").onclick=()=>closeDrawer(true); return; }
+  const post = id => LIVE.posts.find(p=>p.platform===plat && p.external_id===id);
+  const list = (yt ? rows.filter(r=>r.external_id!=="_none" && (Number(r.subs_gained)||Number(r.subs_lost))).map(r=>({ id:r.external_id, g:Number(r.subs_gained)||0, l:Number(r.subs_lost)||0 }))
+                   : rows.filter(r=>Number(r.est_follows)>0).map(r=>({ id:r.external_id, g:Number(r.est_follows) })))
+    .sort((a,b)=>b.g-a.g);
+  const sum = list.reduce((s,x)=>s+x.g,0), saved = yt ? rows.length>0 : list.length>0;
+  const item = x => { const p = post(x.id) || {}, title = p.title || (yt ? "Video "+x.id : "Post "+x.id), url = p.url || (yt ? "https://www.youtube.com/watch?v="+x.id : "");
+    return `<div class="gs-r">${p.thumbnail?`<img src="${esc(p.thumbnail)}" alt="" loading="lazy">`:`<span class="gs-ph"></span>`}
+      <div class="gs-t">${url?`<a href="${esc(url)}" target="_blank" rel="noopener">${esc(title)}</a>`:esc(title)}<small>${esc(p.post_type||"")}${p.published_at?" · posted "+esc(dmy(String(p.published_at).slice(0,10))):""}</small></div>
+      <b class="gs-g">${yt?"+"+fmt(x.g):"≈ +"+(Math.round(x.g*10)/10)}</b>${yt?`<b class="gs-l">${x.l?"−"+fmt(x.l):""}</b>`:""}</div>`; };
+  let body;
+  if(!saved) body = `<p class="hint">${yt ? "This day isn't loaded yet — the daily sync fills a few weeks of history per run. Try again tomorrow." : "Instagram's estimate only covers about the last 30–40 days, and not this day."}</p>`;
+  else {
+    const rest = total!=null ? Math.round((total - sum)*10)/10 : null;
+    body = `${yt?`<div class="gs-r gs-h"><span></span><span>Video</span><span>Gained</span><span>Lost</span></div>`:""}
+      ${list.map(item).join("") || `<p class="hint">No ${yt?"video":"post"} is credited with new ${yt?"subscribers":"followers"} on this day.</p>`}
+      ${rest!=null && rest>0.5 ? `<div class="gs-r gs-rest"><span class="gs-ph"></span><div class="gs-t">${yt?"Not from a video":"Not linked to a post"}<small>${yt?"channel page, search, other places on YouTube":"profile visits, other places on Instagram"}</small></div><b class="gs-g">+${fmt(Math.round(rest))}</b>${yt?"<b></b>":""}</div>` : ""}
+      <p class="hint" style="margin-top:12px">${yt ? "Exact numbers from YouTube Analytics." : "≈ Estimate: Meta doesn't say which post brought a follower, so each day's new followers are split across posts by the views they got that day."}</p>`;
+  }
+  openDrawer(head+`<div class="gs ${yt?"yt":""}">${body}</div>`, false, "gain:"+k+d); $("#xClose").onclick=()=>closeDrawer(true);
 }
 /* 📅 the agreement week by week, for the whole quarter: for each weekly (or daily ×7) target, how many were posted
    in each week from the "counting from" date to the end of the quarter (weeks still to come show what's needed),
@@ -2411,6 +2451,7 @@ function renderSummary(){
   const sn=$("#syncNow"); if(sn) sn.onclick=syncNow;
   P.querySelectorAll("[data-okrmore]").forEach(b=>b.onclick=()=>{ OKR_OPEN[b.dataset.okrmore]=!OKR_OPEN[b.dataset.okrmore]; renderSummary(); });
   wireFdrop(P);
+  P.querySelectorAll("[data-dlday]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); const [k,d]=b.dataset.dlday.split("|"); openGainSources(k, d); });
   P.querySelectorAll("[data-dlmonth]").forEach(sel=>{ sel.onclick=e=>e.stopPropagation(); sel.onchange=()=>{ DLMONTH[sel.dataset.dlmonth]=sel.value; FDROP_OPEN["dl-"+sel.dataset.dlmonth]=true; renderSummary(); }; });
   P.querySelectorAll("[data-pfadd]").forEach(b=>b.onclick=()=>openProof(b.dataset.pfadd, b.dataset.pfmetric));
   P.querySelectorAll("[data-pfimg]").forEach(i=>i.onclick=()=>{ if(typeof showPhoto==="function") showPhoto(i.dataset.pfimg); else window.open(i.dataset.pfimg,"_blank"); });
