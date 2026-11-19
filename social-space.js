@@ -4111,9 +4111,22 @@ const ideaIsBy = (i,p) => { const a=String(i.by||"").trim().toLowerCase(), n=per
 function krValue(k, p, R){
   if(k.type==="ideas") return IDEAS.filter(i=>ideaIsBy(i,p) && i.created>=R.from && i.created<=R.asOf && (!k.cat || i.cat===k.cat) && (!k.plat || plats(i).includes(k.plat))).length;
   if(k.type==="posts"){ const vert=k.vtype==="short"||k.vtype==="reel";
-    return postRows().filter(r=>r.date && r.date>=R.from && r.date<=R.asOf && r.platform===k.pl && (vert ? (r.vtype==="short"||r.vtype==="reel") : r.vtype===k.vtype)).length; }
+    const inR=r=>r.date && r.date>=R.from && r.date<=R.asOf;
+    if(!vert) return postRows().filter(r=>inR(r) && r.platform===k.pl && r.vtype===k.vtype).length;
+    return vertPieces(postRows().filter(r=>inR(r) && (r.vtype==="short"||r.vtype==="reel"))); }
   const key=k.period==="quarter"?quarterKeyOf(R.asOf):monthKeyOf(R.asOf);
   return Number((k.log||{})[key]||0);
+}
+/* Shorts / Reels key results count each video once, whether it went out as a YT Short, an Insta Reel or both:
+   a Short and a Reel on the same card are one; without a card, a Short and a Reel posted within 45 minutes are one */
+function vertPieces(rows){
+  const seen=new Set(), loose=[]; let n=0;
+  rows.forEach(r=>{ if(r.card){ if(!seen.has(r.card.id)){ seen.add(r.card.id); n++; } } else loose.push(r); });
+  const used=new Set();
+  loose.forEach((r,i)=>{ if(used.has(i)) return; used.add(i); n++;
+    const j=loose.findIndex((x,jj)=>!used.has(jj) && x.platform!==r.platform && x.at && r.at && Math.abs(new Date(x.at)-new Date(r.at))<=45*60000);
+    if(j>=0) used.add(j); });
+  return n;
 }
 function krTarget(k, R){ const t=Number(k.target)||0; return k.period==="month" && k.type!=="manual_pct" && R.custom ? Math.ceil(t*R.months) : t; }
 function okrCompute(p, R){
@@ -4125,7 +4138,7 @@ function okrCompute(p, R){
     return { ob, krs, pct, tot };
   });
 }
-const krKindTag = k => k.type==="posts" ? ktag(k.pl,k.vtype) : k.type==="ideas" ? `<span class="catag">💡 ${esc(regLabel("ideacat",k.cat)||k.cat||"any")}${k.plat?" · "+(k.plat==="yt"?"YT":"Insta"):""}</span>`
+const krKindTag = k => k.type==="posts" ? ((k.vtype==="short"||k.vtype==="reel") ? ktag("yt","short")+ktag("ig","reel") : ktag(k.pl,k.vtype)) : k.type==="ideas" ? `<span class="catag">💡 ${esc(regLabel("ideacat",k.cat)||k.cat||"any")}${k.plat?" · "+(k.plat==="yt"?"YT":"Insta"):""}</span>`
   : k.type==="count" ? `<span class="catag">✓ ticked by hand</span>` : `<span class="catag">% updated by hand</span>`;
 function krRow(x, i, R, ed, oi){
   const k=x.k, auto=k.type==="ideas"||k.type==="posts", st=x.met?"done":R.finished?"miss":"open";
