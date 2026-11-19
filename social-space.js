@@ -4494,7 +4494,7 @@ function tkCard(t, ed){ const names=(t.ownerIds||[]).map(taskName).filter(Boolea
     ${t.details?`<div class="tkc-d" style="margin-top:7px">${esc(t.details)}</div>`:""}
     ${(t.imgs||[]).length?`<span class="tk-pics" style="margin-top:7px">${t.imgs.slice(0,3).map(u=>`<img src="${esc(u)}" alt="" loading="lazy">`).join("")}${t.imgs.length>3?`<span class="hint">+${t.imgs.length-3}</span>`:""}</span>`:""}
     <div class="tkc-foot">${done&&t.doneBy?`<span class="hint">✓ ${esc(t.doneBy)}${t.doneAt?" · "+esc(dmy(t.doneAt)):""}</span>`:"<span></span>"}
-      <span style="display:flex;gap:6px;align-items:center">${ed?`<button type="button" class="tkc-del" data-tkdel title="Delete this task" aria-label="Delete ${esc(t.title)}">🗑</button>`:""}${tkInits(t)}</span></div></div>`; }
+      <span style="display:flex;gap:6px;align-items:center">${ed&&tkCanDel()?`<button type="button" class="tkc-del" data-tkdel title="Delete this task" aria-label="Delete ${esc(t.title)}">🗑</button>`:""}${tkInits(t)}</span></div></div>`; }
 function tkSel(key, icon, opts, single){ const cur=TASKF[key], open=TASKF.open===key;
   const label = single ? (String(cur).startsWith("on:") ? dmy(cur.slice(3)) : (opts.find(o=>o[0]===cur)||opts[0])[1]) : !cur.length ? opts.allLabel : cur.length<=2 ? cur.map(v=>(opts.find(o=>o[0]===v)||[v,v])[1]).join(", ") : cur.length+" selected";
   const on = single ? cur!=="all" : cur.length>0;
@@ -4590,7 +4590,8 @@ function renderTasks(){
     day.addEventListener("drop",e=>{ e.preventDefault(); day.classList.remove("dropon"); const t=T.find(x=>x.id===drag); drag=null; if(!t) return;
       if(t.due===day.dataset.tkdate) return; t.due=day.dataset.tkdate; if(save()) toast("Due "+dmy(t.due)); renderTasks(); }); });
 }
-function tkDelete(t, after){ if(!confirm(`Delete the task “${t.title}”? This can't be undone.`)) return false;
+const tkCanDel = () => canEdit() && (!OPT.canDeleteWork || !!OPT.canDeleteWork());   // 🛡 Space permissions → Delete work
+function tkDelete(t, after){ if(!tkCanDel()){ toast("You can't delete work in this space"); return false; } if(!confirm(`Delete the task “${t.title}”? This can't be undone.`)) return false;
   const i=S.tasks.indexOf(t); if(i>=0) S.tasks.splice(i,1); if(!save()) return false; toast("Task deleted"); if(after) after(); renderTasks(); return true; }
 function openTask(id, preset){
   const isNew=!id, t=isNew ? tkFix(Object.assign({ id:uid("tk"), title:"", details:"", imgs:[], ownerIds:[], labels:[], due:"", status:"todo", done:false, by:meName(), at:new Date().toISOString() }, preset||{})) : S.tasks.find(x=>x.id===id);
@@ -4607,7 +4608,7 @@ function openTask(id, preset){
     <div class="fld" style="max-width:220px"><label for="tk-due">Due</label><input id="tk-due" type="date" value="${esc(t.due||"")}"></div>
     ${picBox("tk-d","Details", t.details, imgs, "Anything they need to know — links, the exact wording, a screenshot of what to change…")}
     <div class="row dr-foot"><button class="btn pri" id="tkSave">${isNew?"Create task":"Save changes"}</button><button class="btn" id="tkCancel">Cancel</button>
-      ${!isNew?`<button class="btn danger" id="tkDel" style="margin-left:auto">🗑 Delete</button>`:""}</div>`, false, "task:"+t.id);
+      ${!isNew&&tkCanDel()?`<button class="btn danger" id="tkDel" style="margin-left:auto">🗑 Delete</button>`:""}</div>`, false, "task:"+t.id);
   const D=$("#drawer");
   $("#xClose").onclick=$("#tkCancel").onclick=()=>closeDrawer(true);
   wirePicBox(D, "tk-d", imgs, ()=>{});

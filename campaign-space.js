@@ -883,6 +883,8 @@ const isAdmin = () => !OPT.canEdit || OPT.canEdit();
 const canEdit = () => isAdmin() && !MEMBERVIEW;
 /* a Team Manager (or admin): moves pieces on the calendar, works the Assignment tab */
 const canPlan = () => !MEMBERVIEW && (isAdmin() || !!(OPT.canPlan && OPT.canPlan()));
+/* 🛡 Space permissions (Marketing heads) → "Delete work": pieces, tasks and sub tasks */
+const canDelWork = () => !OPT.canDeleteWork || !!OPT.canDeleteWork();
 const me = () => (OPT.me && OPT.me()) || "";
 const dmyY = s => s ? new Date(s+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}) : "";
 /* the line a Team Member sees on every tab */
@@ -1773,6 +1775,7 @@ function wireDetails(c){
   });
   W.querySelectorAll("[data-edititem]").forEach(b=>b.onclick=()=>itemDialog(c, c.items.findIndex(x=>x.id===b.dataset.edititem)));
   W.querySelectorAll("[data-rmitem]").forEach(b=>b.onclick=()=>{
+    if(!canDelWork()){ toast("You can't delete work in this space"); return; }
     const i = c.items.findIndex(x=>x.id===b.dataset.rmitem); if(i<0) return;
     const gone = c.items[i];
     c.items.splice(i,1); save();
@@ -2601,9 +2604,9 @@ function kbOpen(c, id, keep){
       ${OPT.goProcess?`<button class="btn sm" id="kbGo" style="margin-top:8px">Open Content Process →</button>`:""}`
       :`<p class="hint" style="margin:0">The card is being made in Content Process — it appears there the next time someone who plans this campaign opens it.</p>`}</div>`
     :`<div class="kb-blk">${!x.live&&st!=="late"&&ed?`<input id="kbLink" placeholder="Link or proof, once it's out" style="width:100%"><button class="btn kb-good" id="kbPub" style="margin-top:8px">✓ Published</button>`:`<span class="hint">${x.live?"It's live.":""}</span>`}
-      ${pl&&x.src==="task"?`<div style="margin-top:12px"><button class="btn sm danger" id="kbDel">Delete this task</button></div>`:""}</div>`}
+      ${pl&&x.src==="task"&&canDelWork()?`<div style="margin-top:12px"><button class="btn sm danger" id="kbDel">Delete this task</button></div>`:""}</div>`}
     ${kbSubsBlock(x)}
-    ${x.src==="piece" && canEdit() ? `<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" id="kbEdit">✏️ Edit details</button><button class="btn sm danger" id="kbDelPiece">🗑 Delete this card</button></div>` : ""}`;
+    ${x.src==="piece" && canEdit() ? `<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" id="kbEdit">✏️ Edit details</button>${canDelWork()?`<button class="btn sm danger" id="kbDelPiece">🗑 Delete this card</button>`:""}</div>` : ""}`;
   d.classList.add("on"); $("#kbScrim").classList.add("on");
   d.querySelector("#kbX").onclick=kbClose;
   const pub=d.querySelector("#kbPub"); if(pub) pub.onclick=()=>kbPublish(c, x, (d.querySelector("#kbLink")||{}).value||"");
@@ -2643,7 +2646,7 @@ function kbSubsBlock(x){
             :`<span class="kb-who">${s.ownerId?avatar(kbName(s.ownerId))+esc(kbName(s.ownerId)):"No one yet"}</span>`}
           ${m?`<input type="date" data-kbsubd value="${esc(s.due||"")}" aria-label="Deadline">`:`<span class="kb-due">${s.due?"due "+dmy(s.due):"no date"}</span>`}
           ${pl&&s.ownerId&&s.status!=="done"?`<button class="kb-nt" data-kbsubn>🔔 Notify</button>`:""}
-          ${pl?`<button class="x" data-kbsubx title="Remove">×</button>`:""}
+          ${pl&&canDelWork()?`<button class="x" data-kbsubx title="Remove">×</button>`:""}
         </span></div>`; }).join("") || `<p class="hint" style="margin:0">No sub tasks yet.${pl?" Add one for each piece of work, like finding the speaker.":""}</p>`}
     ${x.subs.length?`<p class="hint" style="margin:8px 0 0">On a sub task's deadline day its owner gets a 🔔 and an email, and again the morning after if it isn't done.</p>`:""}</div>`;
 }
@@ -2717,6 +2720,7 @@ function kbReassign(c, x, ids){
 }
 /* delete a piece (from the board or a calendar tap), after a quick confirmation; its Content Process card goes too */
 function kbDeletePiece(c, x){
+  if(!canDelWork()){ toast("You can't delete work in this space"); return; }
   openDialog({ title:`Delete “${x.title}”?`, sub:`It's removed from Campaign Details, the board and the calendar${x.content?", and its card leaves Content Process":""}. You can undo straight after.`, okLabel:"Delete", fields:[],
     onSave:()=>{ const i=c.items.indexOf(x.ref); if(i<0) return;
       const gone=c.items.splice(i,1)[0], card = x.content && OPT.removeCard ? OPT.removeCard(c, gone) : null;
