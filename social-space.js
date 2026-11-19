@@ -569,6 +569,24 @@ details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var
 .tk input[type=checkbox]{width:18px;height:18px;margin-top:2px;accent-color:var(--good)}.tk.done{border-left-color:var(--good);background:var(--good-soft)}.tk.done .tk-t{text-decoration:line-through;color:var(--ink-3)}
 .tk.late{border-left-color:var(--crit)}.tk-main{display:grid;gap:4px;min-width:0}.tk-t{font-size:14px;overflow-wrap:anywhere}.tk-d{font-size:12.5px;color:var(--ink-2);white-space:pre-wrap;overflow-wrap:anywhere}
 .tk-m{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px}.tk-who{font-size:12px;color:var(--ink-2)}.tk-due{font-family:var(--mono);font-size:11px;color:var(--ink-3)}.tk.late .tk-due{color:var(--crit);font-weight:600}
+.tk-board{grid-auto-flow:row;grid-template-columns:repeat(3,minmax(240px,1fr))}
+.tkc{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-s);padding:10px 11px;margin-bottom:8px;cursor:pointer;display:grid;gap:6px}
+.tkc[draggable=true]{cursor:grab}.tkc:hover{border-color:var(--ink-3)}.tkc.dragging{opacity:.4}
+.tkc.late{border-left:3px solid var(--crit)}.tkc.done{background:var(--good-soft,#E4F2EA);border-color:color-mix(in srgb,var(--good) 35%,transparent)}
+.tkc.done h5{text-decoration:line-through;color:var(--ink-3)}
+.tkc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:6px}.tkc-top .ktags{min-width:0}
+.tkc-due{font-family:var(--mono);font-size:11px;color:var(--ink-2);white-space:nowrap;background:var(--surface-2);border-radius:5px;padding:2px 6px}
+.tkc.late .tkc-due{color:#fff;background:var(--crit);font-weight:600}.tkc.done .tkc-due{color:var(--good)}
+.tkc-who{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2)}.tkc-who .inits{margin-left:0}
+.tkc h5{font-size:13px;font-weight:600;margin:0;line-height:1.38;overflow-wrap:anywhere}
+.tkc-d{font-size:12px;color:var(--ink-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap}
+.tkc-foot{display:flex;justify-content:space-between;align-items:center;font-size:11px;min-height:20px}
+.tkc-del{border:1px solid transparent;background:none;border-radius:6px;padding:1px 6px;font-size:13px;cursor:pointer;opacity:.55}.tkc-del:hover{opacity:1;border-color:var(--crit);background:color-mix(in srgb,var(--crit) 10%,transparent)}
+.tk-nodate{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px}
+.tk-seg button{padding:6px 14px;font-size:12px}
+.tk-labs{display:flex;flex-wrap:wrap;gap:6px}.tk-lab{font-family:var(--mono);font-size:11.5px;font-weight:600;padding:4px 9px;border-radius:6px;cursor:pointer;color:var(--kc);background:transparent;border:1px dashed color-mix(in srgb,var(--kc) 45%,transparent)}
+.tk-lab.on{background:color-mix(in srgb,var(--kc) 14%,transparent);border-style:solid}
+@media (max-width:760px){.tk-board{grid-template-columns:1fr}}
 .tk-pics{display:flex;gap:5px;align-items:center}.tk-pics img{width:40px;height:40px;object-fit:cover;border-radius:5px;border:1px solid var(--line)}
 .aspick{display:flex;flex-wrap:wrap;gap:5px}.aspp{font:inherit;font-size:12px;padding:3px 10px 3px 3px;border-radius:99px;border:1px solid var(--line-2);background:var(--surface);cursor:pointer;display:inline-flex;align-items:center;gap:6px;color:var(--ink-2)}
 .aspp .av{width:20px;height:20px;border-radius:50%;background:var(--surface-2);display:inline-grid;place-items:center;font-size:10px;font-weight:700;color:var(--ink-2)}
@@ -4442,63 +4460,156 @@ function openRivalLog(id){
 
 /* ------------------------------------------------------------ ✅ TASKS
    General jobs for the content team that aren't a piece of content: "put this in the caption", "update the bio"…
-   S.tasks = [{ id, title, details, imgs:[], ownerIds:[], due, done, doneAt, doneBy, by, at }] — saved with the space.
+   S.tasks = [{ id, title, details, imgs:[], ownerIds:[], labels:[], due, status:todo|doing|done, done, doneAt, doneBy, by, at }] — saved with the space.
    Everyone newly assigned gets an email and a 🔔 (OPT.taskAssigned → idea-mail "assign"). */
-let TASKF={ who:"", show:"open" };
+let TASKF={ who:[], labels:[], date:"all", view:"board", cursor:"", open:null };
+const TK_STAGES=[["todo","To do"],["doing","In progress"],["done","Done"]];
+const TK_LABELS=["Caption","Thumbnail","Bio / profile","Edit","Upload","Design","Research","Comments"];
+const TK_COLORS=["#C8511B","#6246D4","#0F7F86","#B3417A","#17784F","#9A7C00","#3B6FB6","#AE2318"];
 const taskTeam = () => (OPT.teamPeople && OPT.teamPeople()) || [];
 const taskName = id => (taskTeam().find(p=>p.id===id)||{}).name || "";
-const taskLate = t => !t.done && !!t.due && t.due < today();
-function taskInits(t){ const names=(t.ownerIds||[]).map(taskName).filter(Boolean); if(!names.length) return `<span class="hint">No one yet</span>`;
-  return `<span class="inits" title="${esc(names.join(", "))}">${names.slice(0,4).map(n=>`<i style="background:${INI_COLORS[hue(n.toLowerCase())%INI_COLORS.length]}">${esc(n.charAt(0).toUpperCase())}</i>`).join("")}</span><span class="tk-who">${esc(names.join(", "))}</span>`; }
+const taskLate = t => t.status!=="done" && !!t.due && t.due < today();
+const tkLabelColor = l => TK_COLORS[hue(String(l).toLowerCase())%TK_COLORS.length];
+const tkLabel = l => `<span class="ktag" style="--kc:${tkLabelColor(l)}">${esc(l)}</span>`;
+const tkAllLabels = () => [...new Set([...TK_LABELS, ...S.tasks.flatMap(t=>t.labels||[])])];
+function tkFix(t){ t.labels=Array.isArray(t.labels)?t.labels:[]; t.ownerIds=Array.isArray(t.ownerIds)?t.ownerIds:[];
+  if(!["todo","doing","done"].includes(t.status)) t.status = t.done ? "done" : "todo"; t.done = t.status==="done"; return t; }
+function tkSetStatus(t, st){ t.status=st; const d=st==="done"; if(d!==!!t.done){ t.done=d; t.doneAt=d?today():""; t.doneBy=d?meName():""; } }
+function tkInits(t, max){ const names=(t.ownerIds||[]).map(taskName).filter(Boolean); if(!names.length) return "";
+  return `<span class="inits" title="${esc(names.join(", "))}">${names.slice(0,max||4).map(n=>`<i style="background:${INI_COLORS[hue(n.toLowerCase())%INI_COLORS.length]}">${esc(n.charAt(0).toUpperCase())}</i>`).join("")}${names.length>(max||4)?`<i class="more">+${names.length-(max||4)}</i>`:""}</span>`; }
+function tkDatePass(t){ const d=TASKF.date, T0=today(); if(d==="all") return true; if(d==="nodate") return !t.due; if(!t.due) return false;
+  if(d==="overdue") return taskLate(t); if(d==="today") return t.due===T0;
+  const n=new Date(T0+"T00:00:00"); n.setDate(n.getDate()+7); const wk=iso(n);
+  if(d==="week") return t.due>=T0 && t.due<=wk; return true; }
+const TK_DATES=[["all","Any date"],["overdue","⏰ Past due"],["today","Due today"],["week","Due in the next 7 days"],["nodate","No due date"]];
+function tkCard(t, ed){ const names=(t.ownerIds||[]).map(taskName).filter(Boolean), late=taskLate(t);
+  return `<div class="tkc ${t.status==="done"?"done":""} ${late?"late":""}" data-tk="${esc(t.id)}" draggable="${ed?"true":"false"}">
+    <div class="tkc-top"><span class="ktags">${(t.labels||[]).map(tkLabel).join("")||`<span class="hint" style="font-size:11px">No label</span>`}</span>
+      <span class="tkc-due">${t.due?`${t.status==="done"?"📅 ":late?"⏰ ":"📅 "}${esc(dmy(t.due))}`:"No date"}</span></div>
+    <div class="tkc-who">${tkInits(t)}<span>${names.length?esc(names.join(", ")):`<span class="hint">Not assigned</span>`}</span></div>
+    <h5>${t.status==="done"?"✓ ":""}${esc(t.title)}</h5>
+    ${t.details?`<div class="tkc-d">${esc(t.details)}</div>`:""}
+    ${(t.imgs||[]).length?`<span class="tk-pics">${t.imgs.slice(0,3).map(u=>`<img src="${esc(u)}" alt="" loading="lazy">`).join("")}${t.imgs.length>3?`<span class="hint">+${t.imgs.length-3}</span>`:""}</span>`:""}
+    <div class="tkc-foot"><span class="hint">${t.status==="done"&&t.doneBy?`✓ ${esc(t.doneBy)}${t.doneAt?" · "+esc(dmy(t.doneAt)):""}`:t.by?`from ${esc(t.by)}`:""}</span>
+      ${ed?`<button type="button" class="tkc-del" data-tkdel title="Delete this task" aria-label="Delete ${esc(t.title)}">🗑</button>`:""}</div></div>`; }
+function tkSel(key, icon, opts, single){ const cur=TASKF[key], open=TASKF.open===key;
+  const label = single ? (opts.find(o=>o[0]===cur)||opts[0])[1] : !cur.length ? opts.allLabel : cur.length<=2 ? cur.map(v=>(opts.find(o=>o[0]===v)||[v,v])[1]).join(", ") : cur.length+" selected";
+  const on = single ? cur!=="all" : cur.length>0;
+  return `<div class="pmsel ${on?"on":""}" data-tksel="${key}"><button type="button" class="pmbtn" aria-haspopup="true" aria-expanded="${open}">${icon} ${esc(label)}</button>
+    <div class="pmpop" ${open?"":"hidden"} role="group">${opts.map(([v,t,html])=>`<label><input type="${single?"radio":"checkbox"}" name="tk-${key}" value="${esc(v)}" ${single?(cur===v?"checked":""):(cur.includes(v)?"checked":"")}>${html||esc(t)}</label>`).join("")||`<span class="hint" style="padding:6px 8px;display:block">Nothing yet</span>`}
+      ${single?"":`<div class="pmft"><button type="button" class="btn sm" data-tkclr>Clear</button><button type="button" class="btn sm pri" data-tkok>Done</button></div>`}</div></div>`; }
 function renderTasks(){
-  const P=$("#pane-tasks"), T=S.tasks, ed=canEdit(), team=taskTeam();
-  const pass = t => (!TASKF.who || (t.ownerIds||[]).includes(TASKF.who)) && (TASKF.show==="all" || (TASKF.show==="done" ? t.done : !t.done));
-  const list = T.filter(pass).sort((a,b)=> (a.done-b.done) || String(a.due||"9999").localeCompare(String(b.due||"9999")) || String(b.at||"").localeCompare(String(a.at||"")));
-  const open=T.filter(t=>!t.done).length, late=T.filter(taskLate).length;
-  const chip=(k,v,l,n)=>`<button class="chip ${TASKF[k]===v?"on":""}" data-tf="${k}:${esc(v)}">${esc(l)}${n!=null?` · ${n}`:""}</button>`;
+  const P=$("#pane-tasks"), ed=canEdit(), team=taskTeam(); S.tasks.forEach(tkFix); const T=S.tasks;
+  if(!TASKF.cursor) TASKF.cursor=today();
+  const labs=[...new Set(T.flatMap(t=>t.labels||[]))].sort();
+  TASKF.labels=TASKF.labels.filter(l=>labs.includes(l));
+  const pass = t => (!TASKF.who.length || TASKF.who.some(w=> w==="_none" ? !(t.ownerIds||[]).length : (t.ownerIds||[]).includes(w)))
+    && (!TASKF.labels.length || TASKF.labels.some(l=>(t.labels||[]).includes(l))) && tkDatePass(t);
+  const list=T.filter(pass), open=T.filter(t=>t.status!=="done").length, late=T.filter(taskLate).length;
+  const whoOpts=team.map(p=>[p.id,p.name,`${`<span class="inits"><i style="background:${INI_COLORS[hue(String(p.name).toLowerCase())%INI_COLORS.length]}">${esc(String(p.name).charAt(0).toUpperCase())}</i></span>`} ${esc(p.name)}`]).concat([["_none","Not assigned"]]); whoOpts.allLabel="Everyone";
+  const labOpts=labs.map(l=>[l,l,tkLabel(l)]); labOpts.allLabel="All labels";
+  const sortT=(a,b)=> String(a.due||"9999").localeCompare(String(b.due||"9999")) || String(b.at||"").localeCompare(String(a.at||""));
+  let body="";
+  if(TASKF.view==="calendar"){
+    const cur=new Date(TASKF.cursor+"T00:00:00"), y=cur.getFullYear(), m=cur.getMonth(), TODAY=today();
+    const start=(new Date(y,m,1).getDay()+6)%7, dim=new Date(y,m+1,0).getDate();
+    let cells=""; for(let i=0;i<start;i++) cells+=`<div class="day pad"></div>`;
+    for(let dd=1;dd<=dim;dd++){ const key=iso(new Date(y,m,dd)); const ev=list.filter(t=>t.due===key).sort(sortT);
+      cells+=`<div class="day ${key===TODAY?"today":""}" data-tkdate="${key}"><span class="dn">${dd}</span>
+        ${ev.map(t=>`<button type="button" class="evt ${t.status==="done"?"live":""}" style="border-left-color:${t.status==="done"?"var(--good)":taskLate(t)?"var(--crit)":(t.labels||[])[0]?tkLabelColor(t.labels[0]):"var(--ink-3)"}" data-tk="${esc(t.id)}" draggable="${ed?"true":"false"}">
+          <b>${t.status==="done"?"✓ ":""}${esc(t.title)}</b><span class="evrow"><span class="ktags">${(t.labels||[]).map(tkLabel).join("")}</span>${tkInits(t,3)}</span></button>`).join("")}</div>`; }
+    const nodate=list.filter(t=>!t.due&&t.status!=="done");
+    body=`<div class="sec-h" style="margin-top:4px"><button class="btn sm" data-tkm="-1">←</button><h3>${cur.toLocaleDateString("en-GB",{month:"long",year:"numeric"})}</h3><button class="btn sm" data-tkm="1">→</button><button class="btn sm" data-tkm="0">Today</button>
+        <span class="hint" style="margin-left:auto">${ed?"Drag a task to another day to change its due date · double-click a day to add a task on it":""}</span></div>
+      <div style="overflow-x:auto"><div class="cal">${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=>`<div class="dow">${d}</div>`).join("")}${cells}</div></div>
+      ${nodate.length?`<div class="lbl" style="margin:16px 0 8px">No due date · ${nodate.length}</div><div class="tk-nodate">${nodate.sort(sortT).map(t=>tkCard(t,ed)).join("")}</div>`:""}`;
+  } else {
+    body=`<div class="board tk-board">${TK_STAGES.map(([id,lab])=>{ const items=list.filter(t=>t.status===id).sort(sortT);
+      return `<div class="col" data-tkcol="${id}"><div class="col-h"><h4>${lab}${id==="done"?' <span style="color:var(--good)">✓</span>':""}</h4><span class="count">${items.length}</span></div>
+        ${items.map(t=>tkCard(t,ed)).join("")||`<div class="dashed" style="margin:0">${ed?"drop here":"empty"}</div>`}</div>`; }).join("")}</div>`;
+  }
   P.innerHTML=`<div class="sec"><div class="sec-h"><h3>Tasks</h3>
       <span class="hint">General jobs for the content team, not tied to a card · ${open} open${late?` · <b style="color:var(--crit)">${late} past due</b>`:""}</span>
-      ${ed?`<button class="btn pri" id="tkNew" style="margin-left:auto">+ New task</button>`:""}</div>
-    <div class="row" style="gap:6px;margin-bottom:12px;flex-wrap:wrap"><span class="lbl">Show</span>${chip("show","open","Open",open)}${chip("show","done","Done",T.length-open)}${chip("show","all","All",T.length)}
-      <span style="width:10px"></span><span class="lbl">Person</span>${chip("who","","Everyone")}${team.map(p=>chip("who",p.id,p.name,T.filter(t=>!t.done&&(t.ownerIds||[]).includes(p.id)).length)).join("")}</div>
-    <div class="tk-list">${list.map(t=>`<div class="tk ${t.done?"done":""} ${taskLate(t)?"late":""}" data-tk="${esc(t.id)}">
-        <input type="checkbox" data-tkdone ${t.done?"checked":""} ${ed?"":"disabled"} aria-label="Done: ${esc(t.title)}">
-        <div class="tk-main"><b class="tk-t">${esc(t.title)}</b>${t.details?`<span class="tk-d">${esc(t.details)}</span>`:""}
-          ${(t.imgs||[]).length?`<span class="tk-pics">${t.imgs.slice(0,4).map(u=>`<img src="${esc(u)}" alt="" loading="lazy">`).join("")}${t.imgs.length>4?`<span class="hint">+${t.imgs.length-4}</span>`:""}</span>`:""}
-          <span class="tk-m">${taskInits(t)}${t.due?`<span class="tk-due">${t.done?"":taskLate(t)?"⏰ was due ":"due "}${esc(dmy(t.due))}</span>`:""}${t.done&&t.doneBy?`<span class="tk-due" style="color:var(--good)">✓ done by ${esc(t.doneBy)}${t.doneAt?" · "+esc(dmy(t.doneAt)):""}</span>`:""}${t.by?`<span class="hint">· from ${esc(t.by)}</span>`:""}</span></div>
-        ${ed?`<button class="btn sm" data-tkedit>Open</button>`:""}</div>`).join("")
-      || `<div class="dashed" style="padding:26px;text-align:center">${T.length?"Nothing here with these filters.":`<b>No tasks yet.</b><p class="hint" style="margin:6px 0 0">Give someone a job like “put the sale code in every caption today” or “update the Instagram bio link”.</p>`}</div>`}</div></div>`;
-  P.querySelectorAll("[data-tf]").forEach(b=>b.onclick=()=>{ const [k,v]=b.dataset.tf.split(":"); TASKF[k]=v; renderTasks(); });
+      <span style="margin-left:auto;display:flex;gap:8px;align-items:center"><div class="seg" role="group" aria-label="View"><button data-tkv="board" class="${TASKF.view==="board"?"on":""}">▦ Board</button><button data-tkv="calendar" class="${TASKF.view==="calendar"?"on":""}">📅 Calendar</button></div>
+      ${ed?`<button class="btn pri" id="tkNew">+ New task</button>`:""}</span></div>
+    <div class="row" style="gap:8px;margin-bottom:14px;flex-wrap:wrap"><span class="lbl">Filter</span>
+      ${tkSel("date","📅",TK_DATES,true)}${tkSel("who","👤",whoOpts)}${tkSel("labels","🏷",labOpts)}
+      ${TASKF.who.length||TASKF.labels.length||TASKF.date!=="all"?`<button class="btn sm" id="tkClrAll">Clear filters</button>`:""}
+      <span class="hint">${list.length} of ${T.length} task${T.length===1?"":"s"}</span></div>
+    ${T.length?body:`<div class="dashed" style="padding:26px;text-align:center"><b>No tasks yet.</b><p class="hint" style="margin:6px 0 0">Give someone a job like “put the sale code in every caption today” or “update the Instagram bio link”.</p></div>`}</div>`;
+  // view, month, filters
+  P.querySelectorAll("[data-tkv]").forEach(b=>b.onclick=()=>{ TASKF.view=b.dataset.tkv; renderTasks(); });
+  P.querySelectorAll("[data-tkm]").forEach(b=>b.onclick=()=>{ const n=+b.dataset.tkm; if(!n){ TASKF.cursor=today(); } else { const d=new Date(TASKF.cursor+"T00:00:00"); d.setDate(1); d.setMonth(d.getMonth()+n); TASKF.cursor=iso(d); } renderTasks(); });
+  const ca=P.querySelector("#tkClrAll"); if(ca) ca.onclick=()=>{ TASKF.who=[]; TASKF.labels=[]; TASKF.date="all"; TASKF.open=null; renderTasks(); };
+  P.querySelectorAll("[data-tksel]").forEach(box=>{ const key=box.dataset.tksel, pop=box.querySelector(".pmpop");
+    box.querySelector(".pmbtn").onclick=e=>{ e.stopPropagation(); TASKF.open = TASKF.open===key ? null : key; renderTasks(); };
+    pop.onclick=e=>e.stopPropagation();
+    pop.querySelectorAll("input").forEach(inp=>inp.onchange=()=>{
+      if(inp.type==="radio"){ TASKF[key]=inp.value; TASKF.open=null; } else { TASKF[key]=[...pop.querySelectorAll("input:checked")].map(x=>x.value); TASKF.open=key; }
+      renderTasks(); });
+    const c=pop.querySelector("[data-tkclr]"); if(c) c.onclick=()=>{ TASKF[key]=[]; renderTasks(); };
+    const k=pop.querySelector("[data-tkok]"); if(k) k.onclick=()=>{ TASKF.open=null; renderTasks(); }; });
+  P.onclick=e=>{ if(TASKF.open && !(e.target.closest && e.target.closest(".pmsel"))){ TASKF.open=null; renderTasks(); } };
   const nb=P.querySelector("#tkNew"); if(nb) nb.onclick=()=>openTask(null);
-  P.querySelectorAll("[data-tk]").forEach(row=>{ const t=T.find(x=>x.id===row.dataset.tk); if(!t) return;
-    const cb=row.querySelector("[data-tkdone]"); if(cb) cb.onchange=()=>{ t.done=cb.checked; t.doneAt=cb.checked?today():""; t.doneBy=cb.checked?meName():""; if(save()) toast(cb.checked?"✓ Done":"Back to open"); renderTasks(); };
-    const ob=row.querySelector("[data-tkedit]"); if(ob) ob.onclick=()=>openTask(t.id); });
+  // cards: open, delete, drag
+  let drag=null;
+  P.querySelectorAll("[data-tk]").forEach(el=>{ const t=T.find(x=>x.id===el.dataset.tk); if(!t) return;
+    el.addEventListener("click",e=>{ if(drag) return; if(e.target.closest("[data-tkdel]")) return; openTask(t.id); });
+    const del=el.querySelector("[data-tkdel]"); if(del) del.onclick=e=>{ e.stopPropagation(); tkDelete(t); };
+    if(!ed) return;
+    el.addEventListener("dragstart",e=>{ drag=t.id; el.classList.add("dragging"); e.dataTransfer.effectAllowed="move"; try{ e.dataTransfer.setData("text/plain",t.id); }catch(_){ } });
+    el.addEventListener("dragend",()=>{ el.classList.remove("dragging"); setTimeout(()=>drag=null,30); P.querySelectorAll(".over,.dropon").forEach(x=>x.classList.remove("over","dropon")); }); });
+  if(!ed) return;
+  P.querySelectorAll("[data-tkcol]").forEach(col=>{
+    col.addEventListener("dragover",e=>{ if(!drag) return; e.preventDefault(); e.dataTransfer.dropEffect="move"; col.classList.add("over"); });
+    col.addEventListener("dragleave",e=>{ if(!col.contains(e.relatedTarget)) col.classList.remove("over"); });
+    col.addEventListener("drop",e=>{ e.preventDefault(); col.classList.remove("over"); const t=T.find(x=>x.id===drag); drag=null; if(!t) return;
+      const to=col.dataset.tkcol; if(t.status===to) return; tkSetStatus(t,to); if(save()) toast("Moved to "+TK_STAGES.find(s=>s[0]===to)[1]); renderTasks(); }); });
+  P.querySelectorAll("[data-tkdate]").forEach(day=>{
+    day.ondblclick=e=>{ if(e.target.closest("[data-tk]")) return; openTask(null, { due:day.dataset.tkdate }); };
+    day.addEventListener("dragover",e=>{ if(!drag) return; e.preventDefault(); e.dataTransfer.dropEffect="move"; day.classList.add("dropon"); });
+    day.addEventListener("dragleave",e=>{ if(!day.contains(e.relatedTarget)) day.classList.remove("dropon"); });
+    day.addEventListener("drop",e=>{ e.preventDefault(); day.classList.remove("dropon"); const t=T.find(x=>x.id===drag); drag=null; if(!t) return;
+      if(t.due===day.dataset.tkdate) return; t.due=day.dataset.tkdate; if(save()) toast("Due "+dmy(t.due)); renderTasks(); }); });
 }
-function openTask(id){
-  const isNew=!id, t=isNew ? { id:uid("tk"), title:"", details:"", imgs:[], ownerIds:[], due:"", done:false, by:meName(), at:new Date().toISOString() } : S.tasks.find(x=>x.id===id);
-  if(!t) return;
-  const team=taskTeam(), asg=(t.ownerIds||[]).slice(), was=asg.slice(), imgs=(t.imgs||[]).slice();
+function tkDelete(t, after){ if(!confirm(`Delete the task “${t.title}”? This can't be undone.`)) return false;
+  const i=S.tasks.indexOf(t); if(i>=0) S.tasks.splice(i,1); if(!save()) return false; toast("Task deleted"); if(after) after(); renderTasks(); return true; }
+function openTask(id, preset){
+  const isNew=!id, t=isNew ? tkFix(Object.assign({ id:uid("tk"), title:"", details:"", imgs:[], ownerIds:[], labels:[], due:"", status:"todo", done:false, by:meName(), at:new Date().toISOString() }, preset||{})) : S.tasks.find(x=>x.id===id);
+  if(!t) return; tkFix(t);
+  const team=taskTeam(), asg=t.ownerIds.slice(), was=asg.slice(), imgs=(t.imgs||[]).slice(), labs=t.labels.slice(); let st=t.status;
   openDrawer(`<div class="dr-h"><div><div class="lbl">Tasks</div><h3 style="margin-top:4px">${isNew?"New task":esc(t.title)}</h3></div><button class="btn sm" id="xClose">Close</button></div>
     <div class="fld"><label for="tk-t">What needs doing</label><input id="tk-t" value="${esc(t.title)}" placeholder="Put the Diwali sale code in every caption today"></div>
-    ${picBox("tk-d","Details", t.details, imgs, "Anything they need to know — links, the exact wording, a screenshot of what to change…")}
+    <div class="fld"><label>Status</label><div class="seg tk-seg" role="group">${TK_STAGES.map(([v,l])=>`<button type="button" data-tkst="${v}" class="${st===v?"on":""}">${l}</button>`).join("")}</div></div>
+    <div class="fld"><label>Labels</label><div class="tk-labs" id="tkLabs"></div>
+      <div class="row" style="gap:6px;margin-top:6px"><input id="tk-lab" placeholder="Add a label, e.g. Caption" style="max-width:240px"><button type="button" class="btn sm" id="tkLabAdd">Add</button></div>
+      <p class="hint" style="margin:4px 0 0">Shown on the card, like the video tags on the content calendar.</p></div>
     <div class="fld"><label>Assigned to</label><div class="aspick">${team.map(p=>`<button type="button" class="aspp ${asg.includes(p.id)?"on":""}" data-asg="${esc(p.id)}" aria-pressed="${asg.includes(p.id)}"><span class="av">${esc((p.name||"?").trim().charAt(0).toUpperCase())}</span>${esc(p.name)}</button>`).join("")}</div>
       <p class="hint" style="margin:4px 0 0">Everyone new gets an email and a 🔔 when you save.</p></div>
     <div class="fld" style="max-width:220px"><label for="tk-due">Due</label><input id="tk-due" type="date" value="${esc(t.due||"")}"></div>
-    ${!isNew?`<label class="pp-chk ${t.done?"on":""}" style="margin-bottom:12px"><input type="checkbox" id="tk-done" ${t.done?"checked":""}> Done</label>`:""}
+    ${picBox("tk-d","Details", t.details, imgs, "Anything they need to know — links, the exact wording, a screenshot of what to change…")}
     <div class="row dr-foot"><button class="btn pri" id="tkSave">${isNew?"Create task":"Save changes"}</button><button class="btn" id="tkCancel">Cancel</button>
-      ${!isNew?`<button class="btn danger" id="tkDel" style="margin-left:auto">Delete</button>`:""}</div>`, false, "task:"+t.id);
+      ${!isNew?`<button class="btn danger" id="tkDel" style="margin-left:auto">🗑 Delete</button>`:""}</div>`, false, "task:"+t.id);
   const D=$("#drawer");
   $("#xClose").onclick=$("#tkCancel").onclick=()=>closeDrawer(true);
   wirePicBox(D, "tk-d", imgs, ()=>{});
+  D.querySelectorAll("[data-tkst]").forEach(b=>b.onclick=()=>{ st=b.dataset.tkst; D.querySelectorAll("[data-tkst]").forEach(x=>x.classList.toggle("on",x===b)); });
+  const drawLabs=()=>{ const all=[...new Set([...labs, ...tkAllLabels()])];
+    D.querySelector("#tkLabs").innerHTML=all.map(l=>`<button type="button" class="tk-lab ${labs.includes(l)?"on":""}" data-lab="${esc(l)}" style="--kc:${tkLabelColor(l)}" aria-pressed="${labs.includes(l)}">${labs.includes(l)?"✓ ":""}${esc(l)}</button>`).join("");
+    D.querySelectorAll("[data-lab]").forEach(b=>b.onclick=()=>{ const l=b.dataset.lab, i=labs.indexOf(l); if(i>=0) labs.splice(i,1); else labs.push(l); drawLabs(); }); };
+  drawLabs();
+  const addLab=()=>{ const inp=$("#tk-lab"), v=inp.value.trim().slice(0,30); if(!v) return; const ex=tkAllLabels().find(x=>x.toLowerCase()===v.toLowerCase())||v; if(!labs.includes(ex)) labs.push(ex); inp.value=""; drawLabs(); };
+  $("#tkLabAdd").onclick=addLab; $("#tk-lab").onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); addLab(); } };
   D.querySelectorAll("[data-asg]").forEach(b=>b.onclick=()=>{ const id=b.dataset.asg, i=asg.indexOf(id); if(i>=0) asg.splice(i,1); else asg.push(id); b.classList.toggle("on",i<0); b.setAttribute("aria-pressed",String(i<0)); });
   $("#tkSave").onclick=()=>{ const title=$("#tk-t").value.trim(); if(!title){ toast("Say what needs doing"); return; }
-    Object.assign(t, { title, details:$("#tk-d").value.trim(), imgs:imgs.slice(), ownerIds:asg.slice(), due:$("#tk-due").value||"" });
-    const dn=$("#tk-done"); if(dn && dn.checked!==!!t.done){ t.done=dn.checked; t.doneAt=dn.checked?today():""; t.doneBy=dn.checked?meName():""; }
+    const pend=$("#tk-lab").value.trim(); if(pend) addLab();
+    Object.assign(t, { title, details:$("#tk-d").value.trim(), imgs:imgs.slice(), ownerIds:asg.slice(), labels:labs.slice(), due:$("#tk-due").value||"" });
+    tkSetStatus(t, st);
     if(isNew) S.tasks.unshift(t);
     if(!save()) return;
     const fresh=asg.filter(i=>!was.includes(i)); if(fresh.length && OPT.taskAssigned) OPT.taskAssigned(SPACE, t, fresh);
     closeDrawer(true); toast((isNew?"Task created":"Saved")+(fresh.length?` · ${fresh.map(taskName).filter(Boolean).join(", ")} told by email + 🔔`:"")); renderTasks(); };
-  const del=$("#tkDel"); if(del) del.onclick=()=>{ if(!confirm("Delete this task?")) return; const i=S.tasks.indexOf(t); if(i>=0) S.tasks.splice(i,1); if(save()){ closeDrawer(true); toast("Task deleted"); renderTasks(); } };
+  const del=$("#tkDel"); if(del) del.onclick=()=>tkDelete(t, ()=>closeDrawer(true));
   setTimeout(()=>{ const e=$("#tk-t"); if(e&&isNew) e.focus(); },30);
 }
 
