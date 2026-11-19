@@ -6037,59 +6037,84 @@ function mktPermOf(obj, email){
   const m = p.spacePerms[obj.id]; return (m && m[email]) || null;
 }
 function mktFullAccess(u, cs){ if(!u) return false; if(u.super) return true; const r = roleOf(u, TEAM); return roleRank(r) <= roleRank("admin") || isSpaceHead(u, csRef(cs)); }
-function canManageMktPerms(mkt){ const u = currentUser(); return !!(u && mkt && (u.super || roleRank(roleOf(u, TEAM)) <= roleRank("admin") || isSpaceHead(u, csRef(mkt)))); }
+const MKT_PERM_ADMINS = ["mannat.dubuddy@gmail.com","aditya.dubuddy@gmail.com"];   /* may change every 🛡 Space Permissions, space and sub space */
+function canManageMktPerms(mkt){ const u = currentUser(); return !!(u && mkt && (u.super || roleRank(roleOf(u, TEAM)) <= roleRank("admin") || isSpaceHead(u, csRef(mkt))
+  || MKT_PERM_ADMINS.includes(String(u.email||"").toLowerCase()))); }
+/* section level (a sub space's tabs: Tasks, Analysis, Content Process…): mkt.sectionPerms[subId][tabKey][email] = {v,e,d} */
+function secPermOf(cs, tab, email){ const p = mktParentOf(cs); const m = p && p.sectionPerms && p.sectionPerms[cs.id] && p.sectionPerms[cs.id][tab]; return (m && email && m[email]) || null; }
+/* k = "e" (create & edit) or "d" (delete) in this section; no entry → the space's own rule (fallback) */
+function secAllowed(cs, tab, k, fallback){
+  const u = currentUser(); if(!u) return false;
+  if(!mktFullAccess(u, cs)){ const sp = secPermOf(cs, tab, u.email); if(sp) return !!(sp.v && sp[k]); }
+  return !!fallback();
+}
 /* may I delete work (cards, tasks, pieces) in this space? fallback = the space's own rule when no 🛡 entry exists */
 function mktCanDelete(cs, fallback){
   const u = currentUser(); if(!u) return false;
   if(!mktFullAccess(u, cs)){ const mp = mktPermOf(cs, u.email); if(mp) return !!(mp.v && mp.d); }
   return fallback ? !!fallback() : true;
 }
-function mktPermsPanel(mkt){
+/* 🛡 Space Permissions. mkt only → the spaces inside it; mkt + sub → that sub space's sections (its tabs) */
+function mktPermsPanel(mkt, sub){
   if(!mkt) return;
   document.querySelectorAll(".overlay.mperm-ov").forEach(o=> o.remove());
-  const subs = (CSPACES.list||[]).filter(x=> x.parent===mkt.id);
+  const ico = x=> x.type==="social" ? "🎯" : x.type==="campaign" ? "📣" : x.type==="procdept" ? "⚙️" : x.type==="watch" ? "👀" : "•";
+  const items = sub ? spaceTabsFor(sub).map(([k,l])=>({ id:k, label:l }))
+                    : (CSPACES.list||[]).filter(x=> x.parent===mkt.id).map(x=>({ id:x.id, label:ico(x)+" "+x.name, cs:x }));
+  const csOf = it=> sub || it.cs;
   const people = USERS.filter(u=> isMember(u, TEAM)).sort((a,b)=> userDisplayName(a).localeCompare(userDisplayName(b)));
   const can = canManageMktPerms(mkt);
-  const work = JSON.parse(JSON.stringify(mkt.spacePerms || {}));
-  let sel = subs[0] ? subs[0].id : "";
+  const work = JSON.parse(JSON.stringify((sub ? ((mkt.sectionPerms||{})[sub.id]) : mkt.spacePerms) || {}));
+  let sel = items[0] ? items[0].id : "";
   const ov = document.createElement("div"); ov.className = "overlay show mperm-ov";
-  const dg = document.createElement("div"); dg.className = "dialog mperm"; dg.style.maxWidth = "860px";
+  const dg = document.createElement("div"); dg.className = "dialog mperm"; dg.style.maxWidth = "880px";
   const close = ()=> ov.remove();
   ov.onclick = e=>{ if(e.target===ov) close(); };
-  const effective = (u, cs)=>{   /* what this person has here: the 🛡 entry being edited, else the general permissions */
-    const m = (work[cs.id]||{})[u.email];
-    if(m) return { v:!!m.v, e:!!m.e, d:!!m.d, own:true };
+  /* what this person has today in a space (general permissions, or its 🛡 space entry) */
+  const spaceLevel = (u, cs)=>{
+    const m = !sub ? (work[cs.id]||{})[u.email] : mktPermOf(cs, u.email);
+    if(m) return { v:!!m.v, e:!!m.e, d:!!m.d, own:!sub };
     const base = spaceRoleBase(u, csRef(cs), roleOf(u, TEAM));
     const e = !!base && roleRank(base) <= roleRank("editor");
     const d = cs.type==="social" ? e && (roleRank(roleOf(u, TEAM)) <= roleRank("admin") || hasPermFor(u, "delete_social_cards", TEAM)) : e;
     return { v:!!base, e, d, own:false };
   };
+  const effective = (u, it)=>{
+    if(sub){ const m = (work[it.id]||{})[u.email]; if(m) return { v:!!m.v, e:!!m.e, d:!!m.d, own:true };
+      const sl = spaceLevel(u, sub); const acc = sub.tabAccess && sub.tabAccess[it.id];
+      return { v: sl.v && (!Array.isArray(acc) || acc.includes(u.email)), e:sl.e, d:sl.d, own:false }; }
+    return spaceLevel(u, it.cs);
+  };
   const draw = ()=>{
-    const cs = subs.find(x=> x.id===sel);
-    const ico = x=> x.type==="social" ? "🎯" : x.type==="campaign" ? "📣" : x.type==="procdept" ? "⚙️" : x.type==="watch" ? "👀" : "•";
-    dg.innerHTML = '<div style="display:flex;align-items:flex-start;gap:12px"><div><h3 style="margin:0">🛡 Space permissions — '+mtEsc(mkt.name)+'</h3>'
-      + '<p class="mperm-sub">Choose what each person can do in each space inside '+mtEsc(mkt.name)+'. This only adds to the general permissions — it doesn\u2019t change them. Team Owners, Admins and a space\u2019s heads always have full access.</p></div>'
+    const it = items.find(x=> x.id===sel);
+    const where = sub ? sub.name : mkt.name;
+    dg.innerHTML = '<div style="display:flex;align-items:flex-start;gap:12px"><div><h3 style="margin:0">🛡 Space Permissions — '+mtEsc(where)+'</h3>'
+      + '<p class="mperm-sub">'+(sub ? 'Choose what each person can do in each section of '+mtEsc(sub.name)+'.'
+                                     : 'Choose what each person can do in each space inside '+mtEsc(mkt.name)+'. For a space\u2019s sections (Tasks, Analysis\u2026), use \u22EF \u2192 Space Permissions on that space.')
+      + ' This only adds to the general permissions \u2014 it doesn\u2019t change them. Team Owners, Admins and a space\u2019s heads always have full access.</p></div>'
       + '<button class="tool sm" data-x style="margin-left:auto">Close</button></div>';
-    if(!subs.length){ dg.insertAdjacentHTML("beforeend", '<p class="mperm-sub">There are no spaces inside '+mtEsc(mkt.name)+' yet.</p>'); dg.querySelector("[data-x]").onclick = close; return; }
+    dg.querySelector("[data-x]").onclick = close;
+    if(!items.length){ dg.insertAdjacentHTML("beforeend", '<p class="mperm-sub">'+(sub ? "This space has no sections to set." : "There are no spaces inside "+mtEsc(mkt.name)+" yet.")+'</p>'); return; }
     const tabs = document.createElement("div"); tabs.className = "mperm-tabs";
-    subs.forEach(x=>{ const b = document.createElement("button"); b.type = "button"; b.className = "mperm-tab" + (x.id===sel ? " on" : "");
-      const n = Object.keys(work[x.id]||{}).length;
-      b.textContent = ico(x) + " " + x.name + (n ? " · " + n : ""); b.onclick = ()=>{ sel = x.id; draw(); }; tabs.appendChild(b); });
+    items.forEach(x=>{ const b = document.createElement("button"); b.type = "button"; b.className = "mperm-tab" + (x.id===sel ? " on" : "");
+      const n = Object.keys(work[x.id]||{}).length; b.textContent = x.label + (n ? " · " + n : ""); b.onclick = ()=>{ sel = x.id; draw(); }; tabs.appendChild(b); });
     dg.appendChild(tabs);
+    const cs = csOf(it);
     const tb = document.createElement("div"); tb.className = "mperm-tbl";
     tb.innerHTML = '<div class="mperm-row mperm-h"><span>Person</span><span>View</span><span>Create &amp; edit work</span><span>Delete work</span><span></span></div>';
     people.forEach(u=>{
-      const full = mktFullAccess(u, cs), ef = effective(u, cs);
+      const full = mktFullAccess(u, cs), ef = effective(u, it);
       const r = document.createElement("div"); r.className = "mperm-row" + (full ? " full" : "") + (ef.own ? " own" : "");
       const nm = document.createElement("span"); nm.className = "mperm-nm";
       nm.innerHTML = '<b></b><small></small>'; nm.querySelector("b").textContent = userDisplayName(u);
-      nm.querySelector("small").textContent = full ? (isSpaceHead(u, csRef(cs)) ? "👑 Head · full access" : roleLabel(roleOf(u, TEAM)) + " · full access") : ef.own ? "Set here" : "General permissions";
+      nm.querySelector("small").textContent = full ? (isSpaceHead(u, csRef(cs)) ? "👑 Head · full access" : roleLabel(roleOf(u, TEAM)) + " · full access")
+        : ef.own ? "Set here" : sub && mktPermOf(sub, u.email) ? "From the space's permissions" : "General permissions";
       r.appendChild(nm);
       [["v","View"],["e","Create & edit work"],["d","Delete work"]].forEach(([k,l])=>{
         const c = document.createElement("label"); c.className = "mperm-cb";
         const i = document.createElement("input"); i.type = "checkbox"; i.checked = full ? true : !!ef[k]; i.disabled = full || !can;
-        i.setAttribute("aria-label", l + " — " + userDisplayName(u) + " in " + cs.name);
-        i.onchange = ()=>{ const m = work[cs.id] = work[cs.id] || {}; const cur = m[u.email] || { v:ef.v, e:ef.e, d:ef.d };
+        i.setAttribute("aria-label", l + " — " + userDisplayName(u) + " in " + it.label);
+        i.onchange = ()=>{ const m = work[it.id] = work[it.id] || {}; const cur = m[u.email] || { v:ef.v, e:ef.e, d:ef.d };
           cur[k] = i.checked;
           if(k==="v" && !i.checked){ cur.e = false; cur.d = false; }
           if((k==="e" || k==="d") && i.checked) cur.v = true;
@@ -6097,19 +6122,20 @@ function mktPermsPanel(mkt){
         c.appendChild(i); r.appendChild(c); });
       const rs = document.createElement("span");
       if(ef.own && can && !full){ const b = document.createElement("button"); b.type = "button"; b.className = "tool sm"; b.textContent = "Reset";
-        b.title = "Go back to the general permissions for this person here"; b.onclick = ()=>{ delete work[cs.id][u.email]; draw(); }; rs.appendChild(b); }
+        b.title = "Go back to what this person had before"; b.onclick = ()=>{ delete work[it.id][u.email]; draw(); }; rs.appendChild(b); }
       r.appendChild(rs); tb.appendChild(r); });
     dg.appendChild(tb);
     const ft = document.createElement("div"); ft.className = "mperm-ft";
     if(can){
       const ok = document.createElement("button"); ok.className = "tool primary"; ok.textContent = "Save permissions";
-      ok.onclick = ()=>{ Object.keys(work).forEach(k=>{ if(!subs.some(x=> x.id===k) || !Object.keys(work[k]).length) delete work[k]; });
-        mkt.spacePerms = work; close(); renderAll(); pushAll(); toast("Space permissions saved"); };
+      ok.onclick = ()=>{ Object.keys(work).forEach(k=>{ if(!items.some(x=> x.id===k) || !Object.keys(work[k]).length) delete work[k]; });
+        if(sub){ mkt.sectionPerms = mkt.sectionPerms || {}; if(Object.keys(work).length) mkt.sectionPerms[sub.id] = work; else delete mkt.sectionPerms[sub.id]; }
+        else mkt.spacePerms = work;
+        close(); renderAll(); pushAll(); toast("Space Permissions saved"); };
       const cn = document.createElement("button"); cn.className = "tool"; cn.textContent = "Cancel"; cn.onclick = close;
       ft.append(ok, cn);
-    } else ft.insertAdjacentHTML("beforeend", '<span class="mperm-sub">Only the heads of '+mtEsc(mkt.name)+' and team Admins can change these.</span>');
+    } else ft.insertAdjacentHTML("beforeend", '<span class="mperm-sub">Only the heads of '+mtEsc(mkt.name)+', Mannat, Aditya and team Admins can change these.</span>');
     dg.appendChild(ft);
-    dg.querySelector("[data-x]").onclick = close;
   };
   draw(); ov.appendChild(dg); document.body.appendChild(ov);
 }
@@ -13746,6 +13772,7 @@ function spaceTabsFor(cs){
   return [];
 }
 function tabAllowed(cs, key){
+  { const u = currentUser(); if(cs && u && !mktFullAccess(u, cs)){ const sp = secPermOf(cs, key, u.email); if(sp) return !!sp.v; } }   // 🛡 Space Permissions → sections
   const acc = cs && cs.tabAccess && cs.tabAccess[key];
   if(!Array.isArray(acc)) return true;
   const me = currentUser(); if(!me) return false;
@@ -13770,11 +13797,13 @@ function tabSetWork(k){
   else if(view==="campaign") campView = k; else if(view==="watch") watchView = k; else if(view==="horizon") horizonView = k;
 }
 /* nothing of this space is open to you */
-function tabNoneAllowed(cs){ return !!(cs && cs.tabAccess) && !spaceTabsFor(cs).some(([k])=> tabAllowed(cs, k)); }
+/* some tab of this space is limited: 👁 Tab access, or 🛡 Space Permissions on its sections */
+function tabRestricted(cs){ if(!cs) return false; if(cs.tabAccess) return true; const p = mktParentOf(cs); return !!(p && p.sectionPerms && p.sectionPerms[cs.id]); }
+function tabNoneAllowed(cs){ return tabRestricted(cs) && !spaceTabsFor(cs).some(([k])=> tabAllowed(cs, k)); }
 /* land on a tab you may see: the first open work tab, else the Summary */
 function tabFix(cs){
   cs = cs || tabHostCs();
-  if(!cs || !cs.tabAccess) return;
+  if(!tabRestricted(cs)) return;
   const sum = tabHasSummary(cs);
   const work = spaceTabsFor(cs).map(([k])=> k).filter(k=> !(sum && k==="summary"));
   if(paneTab==="summary" && (!sum || !tabAllowed(cs, "summary"))) paneTab = "work";
@@ -13789,7 +13818,7 @@ function tabGate(){
   let lock = $("tab-lock");
   if(!lock){ lock = document.createElement("div"); lock.id = "tab-lock"; lock.className = "empty"; lock.style.padding = "40px"; content.parentNode.insertBefore(lock, content); }
   const cs = tabHostCs();
-  const shut = !!(cs && cs.tabAccess) && !tabAllowed(cs, workTabActiveKey());
+  const shut = tabRestricted(cs) && !tabAllowed(cs, workTabActiveKey());
   content.style.display = shut ? "none" : "";
   lock.style.display = shut && tabNoneAllowed(cs) ? "" : "none";
   if(shut) lock.textContent = "🔒 " + cs.name + "\u2019s tabs are only shown to chosen people. Ask a 👑 head of " + cs.name + " (or a team Admin) if you need to see them.";
@@ -18643,10 +18672,10 @@ function renderContentCampaign(){
   if(campSyncCards()) saveQuiet();
   CX.render(cs, wrap, {
     tab: campView,
-    canEdit: ()=> campAdmin(cs),
-    canPlan: ()=> campPlanner(cs),
+    canEdit: ()=> secAllowed(cs, campView, "e", ()=> campAdmin(cs)),   // 🛡 Space Permissions → sections
+    canPlan: ()=> secAllowed(cs, campView, "e", ()=> campPlanner(cs)),
     canDelete: ()=> campAdmin(cs) && hasPerm("delete_spaces"),
-    canDeleteWork: ()=> mktCanDelete(cs),   // 🛡 Space permissions → Delete work (pieces, tasks, sub tasks)
+    canDeleteWork: ()=> secAllowed(cs, campView, "d", ()=> mktCanDelete(cs)),   // 🛡 Space permissions → Delete work (pieces, tasks, sub tasks)
     me: ()=> (currentUser() || {}).id || "",
     people: ()=> USERS.filter(u=>isMember(u, TEAM)).map(u=>({ id:u.id, name:userDisplayName(u), role:(u.profile&&u.profile.title)||roleLabel(roleOf(u,TEAM)) })),
     save: ()=> pushAll(),
@@ -18786,7 +18815,7 @@ function renderContentSocial(){
   SX.render(cs, wrap, {
     tab: socialView, team: TEAM, supa: SUPA,
     canEdit: ()=>{ const u = currentUser(), mp = u && !mktFullAccess(u, cs) ? mktPermOf(cs, u.email) : null;   // 🛡 Space permissions → Create & edit work
-      return mp ? !!(mp.v && mp.e) : canEditHere(); }, isMember: ()=>!!currentUser(),
+      return secAllowed(cs, socialView, "e", ()=> mp ? !!(mp.v && mp.e) : canEditHere()); }, isMember: ()=>!!currentUser(),
     me: ()=>{ const u=currentUser(); return u ? userDisplayName(u) : ""; },
     people: ()=>USERS.filter(u=>isMember(u, TEAM)).map(userDisplayName),
     teamPeople: ()=>USERS.filter(u=>isMember(u, TEAM)).map(u=>({ id:u.id, name:userDisplayName(u) })),   // not "team": that one is the team slug
@@ -18803,8 +18832,8 @@ function renderContentSocial(){
     targets: sp=>SOCIAL_TARGETS[sp.id] || null,
     canEditTargets: ()=>hasPerm("edit_targets"),
     // deleting a Content Process card: Owners and Admins, plus any role given "Delete Social Media cards"
-    canDeleteCards: ()=> mktCanDelete(cs, ()=>{ const r = roleOf(currentUser(), TEAM); return r==="owner" || r==="admin" || hasPerm("delete_social_cards"); }),
-    canDeleteWork: ()=> mktCanDelete(cs),   // 🛡 Space permissions → Delete work (Tasks)
+    canDeleteCards: ()=> secAllowed(cs, socialView, "d", ()=> mktCanDelete(cs, ()=>{ const r = roleOf(currentUser(), TEAM); return r==="owner" || r==="admin" || hasPerm("delete_social_cards"); })),
+    canDeleteWork: ()=> secAllowed(cs, socialView, "d", ()=> mktCanDelete(cs)),   // 🛡 Space Permissions → Delete work (section, then space)
     // these logins may move any card to any column, even when what a column needs isn't filled in yet
     canForceMove: ()=>{ const u = currentUser(); return !!u && ["aditya.dubuddy@gmail.com"].includes(String(u.email||"").toLowerCase()); },
     saveTargets: (sp, obj)=>{ SOCIAL_TARGETS[sp.id] = obj; pushAll(); },
@@ -20526,7 +20555,8 @@ function renderAll(){
           if(cs.type==="pdt") _items.push({label:"Board mapping", onClick:()=>{ view="pdt"; activeCspace=cs.id; pdtView="mapping"; renderAll(); }});
           if(cs.type==="scrum") _items.push({label:"\uFF0B New dev team", onClick: devNewTeam});
           if(cs.type==="marketing" && hasPerm("add_spaces")) _items.push({label:"\uFF0B Add space inside", onClick:()=> openMarketingTemplates(cs)});
-          { const _mk = cs.type==="marketing" ? cs : mktParentOf(cs); if(_mk && canManageMktPerms(_mk)) _items.push({label:"🛡 Space permissions", onClick:()=> mktPermsPanel(_mk)}); }
+          { const _mk = cs.type==="marketing" ? cs : mktParentOf(cs);   /* Marketing → its spaces · a space inside → its sections */
+            if(_mk && canManageMktPerms(_mk)) _items.push({label:"🛡 Space Permissions", onClick:()=> cs.type==="marketing" ? mktPermsPanel(_mk) : mktPermsPanel(_mk, cs)}); }
           _items.push({label:"📄 Submit a template", onClick:()=> tplSubmit(cs)});
           _items.push(..._lmsItems);
           _items.push({label:"\uD83D\uDE48 Hide from my sidebar", onClick:()=> setHiddenForMe("cs:"+cs.id, true, cs.name)});
