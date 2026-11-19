@@ -29,7 +29,7 @@
 <!-- Student ideas (tools.dubuddy.in/ideas) in the product space, status sync, idea emails, My product ideas (student-ideas.js) -->
 <script src="student-ideas.js"></script>
 <!-- Marketing mega space: campaigns (Details · Board · Roles · Reminders · Calendar) — campaign-space.js -->
-<script src="campaign-space.js?v=20261120a"></script>
+<script src="campaign-space.js?v=20261120b"></script>
 <!-- Keep an Eye: a fixed template for studying role-model and competitor companies, inside Marketing — watch-space.js -->
 <script src="watch-space.js"></script>
 <!-- Widen our Horizon: big questions answered every week, then checked — horizon-space.js -->
@@ -6248,7 +6248,7 @@ function restorePlace(){
     if(typeof p.socialView === "string") socialView = p.socialView;
     if(typeof p.discView === "string") discView = p.discView;
     if(typeof p.pdtView === "string") pdtView = p.pdtView;
-    if(typeof p.campView === "string") campView = (p.campView==="assign"||p.campView==="dash") ? "board" : p.campView;
+    if(typeof p.campView === "string") campView = (p.campView==="assign"||p.campView==="dash"||p.campView==="roles") ? "board" : p.campView;
     if(typeof p.watchView === "string") watchView = p.watchView;
     if(typeof p.horizonView === "string") horizonView = p.horizonView;
     if(typeof p.maverickView === "string") maverickView = p.maverickView;
@@ -18675,6 +18675,7 @@ function renderContentCampaign(){
     canEdit: ()=> secAllowed(cs, campView, "e", ()=> campAdmin(cs)),   // 🛡 Space Permissions → sections
     canPlan: ()=> secAllowed(cs, campView, "e", ()=> campPlanner(cs)),
     canDelete: ()=> campAdmin(cs) && hasPerm("delete_spaces"),
+    canBoard: ()=> !!currentUser() && secAllowed(cs, "board", "e", ()=> true),   // 📋 everyone works the Board (🛡 Space Permissions can narrow it)
     canDeleteWork: ()=> secAllowed(cs, campView, "d", ()=> mktCanDelete(cs)),   // 🛡 Space permissions → Delete work (pieces, tasks, sub tasks)
     me: ()=> (currentUser() || {}).id || "",
     people: ()=> USERS.filter(u=>isMember(u, TEAM)).map(u=>({ id:u.id, name:userDisplayName(u), role:(u.profile&&u.profile.title)||roleLabel(roleOf(u,TEAM)) })),
@@ -20637,7 +20638,7 @@ function renderAll(){
           });
         }
         if(cs.type==="campaign" && view==="campaign" && activeCspace===cs.id && window.CX){
-          [["details","\uD83D\uDCDD Campaign Details"],["board","\uD83D\uDCCB Board"],["roles","\uD83D\uDC65 Roles & responsibilities"],["reminders","\u23F0 Reminders"],["calendar","\uD83D\uDDD3 Calendar"]].filter(([k])=> tabAllowed(cs, k)).forEach(([k,lbl])=>{
+          [["details","\uD83D\uDCDD Campaign Details"],["board","\uD83D\uDCCB Board"],["reminders","\u23F0 Reminders"],["calendar","\uD83D\uDDD3 Calendar"]].filter(([k])=> tabAllowed(cs, k)).forEach(([k,lbl])=>{
             const sub=document.createElement("button");
             sub.className="ws-sub"+(_nested?" ws-sub-nested":"")+(campView===k?" active":"");
             sub.textContent=lbl;
