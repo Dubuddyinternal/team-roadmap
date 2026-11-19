@@ -569,24 +569,15 @@ details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var
 .tk input[type=checkbox]{width:18px;height:18px;margin-top:2px;accent-color:var(--good)}.tk.done{border-left-color:var(--good);background:var(--good-soft)}.tk.done .tk-t{text-decoration:line-through;color:var(--ink-3)}
 .tk.late{border-left-color:var(--crit)}.tk-main{display:grid;gap:4px;min-width:0}.tk-t{font-size:14px;overflow-wrap:anywhere}.tk-d{font-size:12.5px;color:var(--ink-2);white-space:pre-wrap;overflow-wrap:anywhere}
 .tk-m{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px}.tk-who{font-size:12px;color:var(--ink-2)}.tk-due{font-family:var(--mono);font-size:11px;color:var(--ink-3)}.tk.late .tk-due{color:var(--crit);font-weight:600}
-.tk-board{grid-auto-flow:row;grid-template-columns:repeat(3,minmax(240px,1fr))}
-.tkc{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-s);padding:10px 11px;margin-bottom:8px;cursor:pointer;display:grid;gap:6px}
-.tkc[draggable=true]{cursor:grab}.tkc:hover{border-color:var(--ink-3)}.tkc.dragging{opacity:.4}
-.tkc.late{border-left:3px solid var(--crit)}.tkc.done{background:var(--good-soft,#E4F2EA);border-color:color-mix(in srgb,var(--good) 35%,transparent)}
-.tkc.done h5{text-decoration:line-through;color:var(--ink-3)}
-.tkc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:6px}.tkc-top .ktags{min-width:0}
-.tkc-due{font-family:var(--mono);font-size:11px;color:var(--ink-2);white-space:nowrap;background:var(--surface-2);border-radius:5px;padding:2px 6px}
-.tkc.late .tkc-due{color:#fff;background:var(--crit);font-weight:600}.tkc.done .tkc-due{color:var(--good)}
-.tkc-who{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2)}.tkc-who .inits{margin-left:0}
-.tkc h5{font-size:13px;font-weight:600;margin:0;line-height:1.38;overflow-wrap:anywhere}
+.tkc.late{border-left:3px solid var(--crit)}.tkc.live h5{text-decoration:line-through;color:var(--ink-3)}
 .tkc-d{font-size:12px;color:var(--ink-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap}
-.tkc-foot{display:flex;justify-content:space-between;align-items:center;font-size:11px;min-height:20px}
+.tkc-foot{display:flex;justify-content:space-between;align-items:center;font-size:11px;min-height:20px;margin-top:6px}.tkc-foot .inits{margin-left:0}
+.tk-pick{padding:4px 8px 6px 34px}.pmpop .tk-pick input{width:auto;height:auto;border:1px solid var(--line-2);border-radius:var(--r-s);padding:5px 8px;font:inherit;font-size:13px}
 .tkc-del{border:1px solid transparent;background:none;border-radius:6px;padding:1px 6px;font-size:13px;cursor:pointer;opacity:.55}.tkc-del:hover{opacity:1;border-color:var(--crit);background:color-mix(in srgb,var(--crit) 10%,transparent)}
 .tk-nodate{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px}
 .tk-seg button{padding:6px 14px;font-size:12px}
 .tk-labs{display:flex;flex-wrap:wrap;gap:6px}.tk-lab{font-family:var(--mono);font-size:11.5px;font-weight:600;padding:4px 9px;border-radius:6px;cursor:pointer;color:var(--kc);background:transparent;border:1px dashed color-mix(in srgb,var(--kc) 45%,transparent)}
 .tk-lab.on{background:color-mix(in srgb,var(--kc) 14%,transparent);border-style:solid}
-@media (max-width:760px){.tk-board{grid-template-columns:1fr}}
 .tk-pics{display:flex;gap:5px;align-items:center}.tk-pics img{width:40px;height:40px;object-fit:cover;border-radius:5px;border:1px solid var(--line)}
 .aspick{display:flex;flex-wrap:wrap;gap:5px}.aspp{font:inherit;font-size:12px;padding:3px 10px 3px 3px;border-radius:99px;border:1px solid var(--line-2);background:var(--surface);cursor:pointer;display:inline-flex;align-items:center;gap:6px;color:var(--ink-2)}
 .aspp .av{width:20px;height:20px;border-radius:50%;background:var(--surface-2);display:inline-grid;place-items:center;font-size:10px;font-weight:700;color:var(--ink-2)}
@@ -4477,26 +4468,28 @@ function tkFix(t){ t.labels=Array.isArray(t.labels)?t.labels:[]; t.ownerIds=Arra
 function tkSetStatus(t, st){ t.status=st; const d=st==="done"; if(d!==!!t.done){ t.done=d; t.doneAt=d?today():""; t.doneBy=d?meName():""; } }
 function tkInits(t, max){ const names=(t.ownerIds||[]).map(taskName).filter(Boolean); if(!names.length) return "";
   return `<span class="inits" title="${esc(names.join(", "))}">${names.slice(0,max||4).map(n=>`<i style="background:${INI_COLORS[hue(n.toLowerCase())%INI_COLORS.length]}">${esc(n.charAt(0).toUpperCase())}</i>`).join("")}${names.length>(max||4)?`<i class="more">+${names.length-(max||4)}</i>`:""}</span>`; }
-function tkDatePass(t){ const d=TASKF.date, T0=today(); if(d==="all") return true; if(d==="nodate") return !t.due; if(!t.due) return false;
+function tkDatePass(t){ const d=TASKF.date, T0=today(); if(d==="all"||d==="pick") return true; if(d==="nodate") return !t.due; if(!t.due) return false;
   if(d==="overdue") return taskLate(t); if(d==="today") return t.due===T0;
+  if(d==="yesterday"){ const y=new Date(T0+"T00:00:00"); y.setDate(y.getDate()-1); return t.due===iso(y); }
+  if(d.startsWith("on:")) return t.due===d.slice(3);
   const n=new Date(T0+"T00:00:00"); n.setDate(n.getDate()+7); const wk=iso(n);
   if(d==="week") return t.due>=T0 && t.due<=wk; return true; }
-const TK_DATES=[["all","Any date"],["overdue","⏰ Past due"],["today","Due today"],["week","Due in the next 7 days"],["nodate","No due date"]];
-function tkCard(t, ed){ const names=(t.ownerIds||[]).map(taskName).filter(Boolean), late=taskLate(t);
-  return `<div class="tkc ${t.status==="done"?"done":""} ${late?"late":""}" data-tk="${esc(t.id)}" draggable="${ed?"true":"false"}">
-    <div class="tkc-top"><span class="ktags">${(t.labels||[]).map(tkLabel).join("")||`<span class="hint" style="font-size:11px">No label</span>`}</span>
-      <span class="tkc-due">${t.due?`${t.status==="done"?"📅 ":late?"⏰ ":"📅 "}${esc(dmy(t.due))}`:"No date"}</span></div>
-    <div class="tkc-who">${tkInits(t)}<span>${names.length?esc(names.join(", ")):`<span class="hint">Not assigned</span>`}</span></div>
-    <h5>${t.status==="done"?"✓ ":""}${esc(t.title)}</h5>
-    ${t.details?`<div class="tkc-d">${esc(t.details)}</div>`:""}
-    ${(t.imgs||[]).length?`<span class="tk-pics">${t.imgs.slice(0,3).map(u=>`<img src="${esc(u)}" alt="" loading="lazy">`).join("")}${t.imgs.length>3?`<span class="hint">+${t.imgs.length-3}</span>`:""}</span>`:""}
-    <div class="tkc-foot"><span class="hint">${t.status==="done"&&t.doneBy?`✓ ${esc(t.doneBy)}${t.doneAt?" · "+esc(dmy(t.doneAt)):""}`:t.by?`from ${esc(t.by)}`:""}</span>
-      ${ed?`<button type="button" class="tkc-del" data-tkdel title="Delete this task" aria-label="Delete ${esc(t.title)}">🗑</button>`:""}</div></div>`; }
+const TK_DATES=[["all","Any date"],["today","Today"],["yesterday","Yesterday"],["pick","Pick a date…"],["overdue","⏰ Past due"],["week","Next 7 days"],["nodate","No due date"]];
+function tkCard(t, ed){ const names=(t.ownerIds||[]).map(taskName).filter(Boolean), late=taskLate(t), done=t.status==="done";
+  return `<div class="kcard tkc ${ed?"":"ro"} ${done?"live":""} ${late?"late":""}" data-tk="${esc(t.id)}" draggable="${ed?"true":"false"}">
+    <div class="hotbar" style="background:var(--surface-2);color:var(--ink-2)">👤 ${names.length?esc(names.join(", ")):"Not assigned"}</div>
+    <h5>${done?"✓ ":""}${esc(t.title)}</h5>
+    <div class="meta">${(t.labels||[]).map(tkLabel).join("")}${t.due?`<span class="chip" ${late?'style="color:var(--crit);border-color:var(--crit);font-weight:600"':""}>${late?"⏰ ":""}${esc(dmy(t.due))}</span>`:""}</div>
+    ${t.details?`<div class="tkc-d" style="margin-top:7px">${esc(t.details)}</div>`:""}
+    ${(t.imgs||[]).length?`<span class="tk-pics" style="margin-top:7px">${t.imgs.slice(0,3).map(u=>`<img src="${esc(u)}" alt="" loading="lazy">`).join("")}${t.imgs.length>3?`<span class="hint">+${t.imgs.length-3}</span>`:""}</span>`:""}
+    <div class="tkc-foot">${done&&t.doneBy?`<span class="hint">✓ ${esc(t.doneBy)}${t.doneAt?" · "+esc(dmy(t.doneAt)):""}</span>`:"<span></span>"}
+      <span style="display:flex;gap:6px;align-items:center">${ed?`<button type="button" class="tkc-del" data-tkdel title="Delete this task" aria-label="Delete ${esc(t.title)}">🗑</button>`:""}${tkInits(t)}</span></div></div>`; }
 function tkSel(key, icon, opts, single){ const cur=TASKF[key], open=TASKF.open===key;
-  const label = single ? (opts.find(o=>o[0]===cur)||opts[0])[1] : !cur.length ? opts.allLabel : cur.length<=2 ? cur.map(v=>(opts.find(o=>o[0]===v)||[v,v])[1]).join(", ") : cur.length+" selected";
+  const label = single ? (String(cur).startsWith("on:") ? dmy(cur.slice(3)) : (opts.find(o=>o[0]===cur)||opts[0])[1]) : !cur.length ? opts.allLabel : cur.length<=2 ? cur.map(v=>(opts.find(o=>o[0]===v)||[v,v])[1]).join(", ") : cur.length+" selected";
   const on = single ? cur!=="all" : cur.length>0;
   return `<div class="pmsel ${on?"on":""}" data-tksel="${key}"><button type="button" class="pmbtn" aria-haspopup="true" aria-expanded="${open}">${icon} ${esc(label)}</button>
-    <div class="pmpop" ${open?"":"hidden"} role="group">${opts.map(([v,t,html])=>`<label><input type="${single?"radio":"checkbox"}" name="tk-${key}" value="${esc(v)}" ${single?(cur===v?"checked":""):(cur.includes(v)?"checked":"")}>${html||esc(t)}</label>`).join("")||`<span class="hint" style="padding:6px 8px;display:block">Nothing yet</span>`}
+    <div class="pmpop" ${open?"":"hidden"} role="group">${opts.map(([v,t,html])=>`<label><input type="${single?"radio":"checkbox"}" name="tk-${key}" value="${esc(v)}" ${single?((cur===v||(v==="pick"&&String(cur).startsWith("on:")))?"checked":""):(cur.includes(v)?"checked":"")}>${html||esc(t)}</label>`).join("")||`<span class="hint" style="padding:6px 8px;display:block">Nothing yet</span>`}
+      ${single&&key==="date"?`<div class="tk-pick" ${cur==="pick"||String(cur).startsWith("on:")?"":"hidden"}><input type="date" data-tkpick value="${String(cur).startsWith("on:")?esc(cur.slice(3)):""}" aria-label="Pick a date"></div>`:""}
       ${single?"":`<div class="pmft"><button type="button" class="btn sm" data-tkclr>Clear</button><button type="button" class="btn sm pri" data-tkok>Done</button></div>`}</div></div>`; }
 function renderTasks(){
   const P=$("#pane-tasks"), ed=canEdit(), team=taskTeam(); S.tasks.forEach(tkFix); const T=S.tasks;
@@ -4524,7 +4517,7 @@ function renderTasks(){
       <div style="overflow-x:auto"><div class="cal">${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=>`<div class="dow">${d}</div>`).join("")}${cells}</div></div>
       ${nodate.length?`<div class="lbl" style="margin:16px 0 8px">No due date · ${nodate.length}</div><div class="tk-nodate">${nodate.sort(sortT).map(t=>tkCard(t,ed)).join("")}</div>`:""}`;
   } else {
-    body=`<div class="board tk-board">${TK_STAGES.map(([id,lab])=>{ const items=list.filter(t=>t.status===id).sort(sortT);
+    body=`<div class="board">${TK_STAGES.map(([id,lab])=>{ const items=list.filter(t=>t.status===id).sort(sortT);
       return `<div class="col" data-tkcol="${id}"><div class="col-h"><h4>${lab}${id==="done"?' <span style="color:var(--good)">✓</span>':""}</h4><span class="count">${items.length}</span></div>
         ${items.map(t=>tkCard(t,ed)).join("")||`<div class="dashed" style="margin:0">${ed?"drop here":"empty"}</div>`}</div>`; }).join("")}</div>`;
   }
@@ -4534,9 +4527,9 @@ function renderTasks(){
       ${ed?`<button class="btn pri" id="tkNew">+ New task</button>`:""}</span></div>
     <div class="row" style="gap:8px;margin-bottom:14px;flex-wrap:wrap"><span class="lbl">Filter</span>
       ${tkSel("date","📅",TK_DATES,true)}${tkSel("who","👤",whoOpts)}${tkSel("labels","🏷",labOpts)}
-      ${TASKF.who.length||TASKF.labels.length||TASKF.date!=="all"?`<button class="btn sm" id="tkClrAll">Clear filters</button>`:""}
+      ${TASKF.who.length||TASKF.labels.length||!["all","pick"].includes(TASKF.date)?`<button class="btn sm" id="tkClrAll">Clear filters</button>`:""}
       <span class="hint">${list.length} of ${T.length} task${T.length===1?"":"s"}</span></div>
-    ${T.length?body:`<div class="dashed" style="padding:26px;text-align:center"><b>No tasks yet.</b><p class="hint" style="margin:6px 0 0">Give someone a job like “put the sale code in every caption today” or “update the Instagram bio link”.</p></div>`}</div>`;
+    ${body}</div>`;
   // view, month, filters
   P.querySelectorAll("[data-tkv]").forEach(b=>b.onclick=()=>{ TASKF.view=b.dataset.tkv; renderTasks(); });
   P.querySelectorAll("[data-tkm]").forEach(b=>b.onclick=()=>{ const n=+b.dataset.tkm; if(!n){ TASKF.cursor=today(); } else { const d=new Date(TASKF.cursor+"T00:00:00"); d.setDate(1); d.setMonth(d.getMonth()+n); TASKF.cursor=iso(d); } renderTasks(); });
@@ -4545,7 +4538,8 @@ function renderTasks(){
     box.querySelector(".pmbtn").onclick=e=>{ e.stopPropagation(); TASKF.open = TASKF.open===key ? null : key; renderTasks(); };
     pop.onclick=e=>e.stopPropagation();
     pop.querySelectorAll("input").forEach(inp=>inp.onchange=()=>{
-      if(inp.type==="radio"){ TASKF[key]=inp.value; TASKF.open=null; } else { TASKF[key]=[...pop.querySelectorAll("input:checked")].map(x=>x.value); TASKF.open=key; }
+      if(inp.dataset.tkpick!=null){ if(inp.value){ TASKF.date="on:"+inp.value; TASKF.open=null; } }
+      else if(inp.type==="radio"){ TASKF[key]=inp.value; TASKF.open = inp.value==="pick" ? key : null; } else { TASKF[key]=[...pop.querySelectorAll("input:checked")].map(x=>x.value); TASKF.open=key; }
       renderTasks(); });
     const c=pop.querySelector("[data-tkclr]"); if(c) c.onclick=()=>{ TASKF[key]=[]; renderTasks(); };
     const k=pop.querySelector("[data-tkok]"); if(k) k.onclick=()=>{ TASKF.open=null; renderTasks(); }; });
