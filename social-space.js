@@ -565,6 +565,11 @@ details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var
 .fld label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:5px;font-weight:500}
 .fld input,.fld select,.fld textarea{width:100%;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-s);padding:8px 10px;font-size:13px}
 .fld textarea{resize:vertical;min-height:62px;font-family:inherit}
+.tk-list{display:grid;gap:8px}.tk{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:start;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:var(--r-s);padding:11px 13px}
+.tk input[type=checkbox]{width:18px;height:18px;margin-top:2px;accent-color:var(--good)}.tk.done{border-left-color:var(--good);background:var(--good-soft)}.tk.done .tk-t{text-decoration:line-through;color:var(--ink-3)}
+.tk.late{border-left-color:var(--crit)}.tk-main{display:grid;gap:4px;min-width:0}.tk-t{font-size:14px;overflow-wrap:anywhere}.tk-d{font-size:12.5px;color:var(--ink-2);white-space:pre-wrap;overflow-wrap:anywhere}
+.tk-m{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px}.tk-who{font-size:12px;color:var(--ink-2)}.tk-due{font-family:var(--mono);font-size:11px;color:var(--ink-3)}.tk.late .tk-due{color:var(--crit);font-weight:600}
+.tk-pics{display:flex;gap:5px;align-items:center}.tk-pics img{width:40px;height:40px;object-fit:cover;border-radius:5px;border:1px solid var(--line)}
 .aspick{display:flex;flex-wrap:wrap;gap:5px}.aspp{font:inherit;font-size:12px;padding:3px 10px 3px 3px;border-radius:99px;border:1px solid var(--line-2);background:var(--surface);cursor:pointer;display:inline-flex;align-items:center;gap:6px;color:var(--ink-2)}
 .aspp .av{width:20px;height:20px;border-radius:50%;background:var(--surface-2);display:inline-grid;place-items:center;font-size:10px;font-weight:700;color:var(--ink-2)}
 .aspp.on{border-color:var(--accent);background:var(--accent-soft);color:var(--ink);font-weight:600}.aspp.on .av{background:var(--accent);color:#fff}.aspp:disabled{cursor:default}
@@ -748,6 +753,7 @@ function normalize(space){
   s.formats = DEFAULT_FORMATS.map(d=>Object.assign({}, d, fm.find(f=>f.key===d.key)||{})).concat(fm.filter(f=>!DEFAULT_FORMATS.some(d=>d.key===f.key)));
   FORMATS = s.formats.filter(f=>!f.hidden).length ? s.formats : DEFAULT_FORMATS;
   s.cards = Array.isArray(s.cards) ? s.cards : [];
+  s.tasks = Array.isArray(s.tasks) ? s.tasks : [];   // ✅ Tasks: general jobs for the content team, not tied to a card
   // 🗑 recycle bin: deleted cards wait here 7 days (Restore), then they and their files are gone: [{card, at, by}]
   s.bin = Array.isArray(s.bin) ? s.bin.filter(x=>x && x.card && x.card.id && x.at) : [];
   s.reg = s.reg && typeof s.reg==="object" ? s.reg : {};
@@ -4433,13 +4439,76 @@ function openRivalLog(id){
   lockDrawer();
 }
 
+
+/* ------------------------------------------------------------ ✅ TASKS
+   General jobs for the content team that aren't a piece of content: "put this in the caption", "update the bio"…
+   S.tasks = [{ id, title, details, imgs:[], ownerIds:[], due, done, doneAt, doneBy, by, at }] — saved with the space.
+   Everyone newly assigned gets an email and a 🔔 (OPT.taskAssigned → idea-mail "assign"). */
+let TASKF={ who:"", show:"open" };
+const taskTeam = () => (OPT.teamPeople && OPT.teamPeople()) || [];
+const taskName = id => (taskTeam().find(p=>p.id===id)||{}).name || "";
+const taskLate = t => !t.done && !!t.due && t.due < today();
+function taskInits(t){ const names=(t.ownerIds||[]).map(taskName).filter(Boolean); if(!names.length) return `<span class="hint">No one yet</span>`;
+  return `<span class="inits" title="${esc(names.join(", "))}">${names.slice(0,4).map(n=>`<i style="background:${INI_COLORS[hue(n.toLowerCase())%INI_COLORS.length]}">${esc(n.charAt(0).toUpperCase())}</i>`).join("")}</span><span class="tk-who">${esc(names.join(", "))}</span>`; }
+function renderTasks(){
+  const P=$("#pane-tasks"), T=S.tasks, ed=canEdit(), team=taskTeam();
+  const pass = t => (!TASKF.who || (t.ownerIds||[]).includes(TASKF.who)) && (TASKF.show==="all" || (TASKF.show==="done" ? t.done : !t.done));
+  const list = T.filter(pass).sort((a,b)=> (a.done-b.done) || String(a.due||"9999").localeCompare(String(b.due||"9999")) || String(b.at||"").localeCompare(String(a.at||"")));
+  const open=T.filter(t=>!t.done).length, late=T.filter(taskLate).length;
+  const chip=(k,v,l,n)=>`<button class="chip ${TASKF[k]===v?"on":""}" data-tf="${k}:${esc(v)}">${esc(l)}${n!=null?` · ${n}`:""}</button>`;
+  P.innerHTML=`<div class="sec"><div class="sec-h"><h3>Tasks</h3>
+      <span class="hint">General jobs for the content team, not tied to a card · ${open} open${late?` · <b style="color:var(--crit)">${late} past due</b>`:""}</span>
+      ${ed?`<button class="btn pri" id="tkNew" style="margin-left:auto">+ New task</button>`:""}</div>
+    <div class="row" style="gap:6px;margin-bottom:12px;flex-wrap:wrap"><span class="lbl">Show</span>${chip("show","open","Open",open)}${chip("show","done","Done",T.length-open)}${chip("show","all","All",T.length)}
+      <span style="width:10px"></span><span class="lbl">Person</span>${chip("who","","Everyone")}${team.map(p=>chip("who",p.id,p.name,T.filter(t=>!t.done&&(t.ownerIds||[]).includes(p.id)).length)).join("")}</div>
+    <div class="tk-list">${list.map(t=>`<div class="tk ${t.done?"done":""} ${taskLate(t)?"late":""}" data-tk="${esc(t.id)}">
+        <input type="checkbox" data-tkdone ${t.done?"checked":""} ${ed?"":"disabled"} aria-label="Done: ${esc(t.title)}">
+        <div class="tk-main"><b class="tk-t">${esc(t.title)}</b>${t.details?`<span class="tk-d">${esc(t.details)}</span>`:""}
+          ${(t.imgs||[]).length?`<span class="tk-pics">${t.imgs.slice(0,4).map(u=>`<img src="${esc(u)}" alt="" loading="lazy">`).join("")}${t.imgs.length>4?`<span class="hint">+${t.imgs.length-4}</span>`:""}</span>`:""}
+          <span class="tk-m">${taskInits(t)}${t.due?`<span class="tk-due">${t.done?"":taskLate(t)?"⏰ was due ":"due "}${esc(dmy(t.due))}</span>`:""}${t.done&&t.doneBy?`<span class="tk-due" style="color:var(--good)">✓ done by ${esc(t.doneBy)}${t.doneAt?" · "+esc(dmy(t.doneAt)):""}</span>`:""}${t.by?`<span class="hint">· from ${esc(t.by)}</span>`:""}</span></div>
+        ${ed?`<button class="btn sm" data-tkedit>Open</button>`:""}</div>`).join("")
+      || `<div class="dashed" style="padding:26px;text-align:center">${T.length?"Nothing here with these filters.":`<b>No tasks yet.</b><p class="hint" style="margin:6px 0 0">Give someone a job like “put the sale code in every caption today” or “update the Instagram bio link”.</p>`}</div>`}</div></div>`;
+  P.querySelectorAll("[data-tf]").forEach(b=>b.onclick=()=>{ const [k,v]=b.dataset.tf.split(":"); TASKF[k]=v; renderTasks(); });
+  const nb=P.querySelector("#tkNew"); if(nb) nb.onclick=()=>openTask(null);
+  P.querySelectorAll("[data-tk]").forEach(row=>{ const t=T.find(x=>x.id===row.dataset.tk); if(!t) return;
+    const cb=row.querySelector("[data-tkdone]"); if(cb) cb.onchange=()=>{ t.done=cb.checked; t.doneAt=cb.checked?today():""; t.doneBy=cb.checked?meName():""; if(save()) toast(cb.checked?"✓ Done":"Back to open"); renderTasks(); };
+    const ob=row.querySelector("[data-tkedit]"); if(ob) ob.onclick=()=>openTask(t.id); });
+}
+function openTask(id){
+  const isNew=!id, t=isNew ? { id:uid("tk"), title:"", details:"", imgs:[], ownerIds:[], due:"", done:false, by:meName(), at:new Date().toISOString() } : S.tasks.find(x=>x.id===id);
+  if(!t) return;
+  const team=taskTeam(), asg=(t.ownerIds||[]).slice(), was=asg.slice(), imgs=(t.imgs||[]).slice();
+  openDrawer(`<div class="dr-h"><div><div class="lbl">Tasks</div><h3 style="margin-top:4px">${isNew?"New task":esc(t.title)}</h3></div><button class="btn sm" id="xClose">Close</button></div>
+    <div class="fld"><label for="tk-t">What needs doing</label><input id="tk-t" value="${esc(t.title)}" placeholder="Put the Diwali sale code in every caption today"></div>
+    ${picBox("tk-d","Details", t.details, imgs, "Anything they need to know — links, the exact wording, a screenshot of what to change…")}
+    <div class="fld"><label>Assigned to</label><div class="aspick">${team.map(p=>`<button type="button" class="aspp ${asg.includes(p.id)?"on":""}" data-asg="${esc(p.id)}" aria-pressed="${asg.includes(p.id)}"><span class="av">${esc((p.name||"?").trim().charAt(0).toUpperCase())}</span>${esc(p.name)}</button>`).join("")}</div>
+      <p class="hint" style="margin:4px 0 0">Everyone new gets an email and a 🔔 when you save.</p></div>
+    <div class="fld" style="max-width:220px"><label for="tk-due">Due</label><input id="tk-due" type="date" value="${esc(t.due||"")}"></div>
+    ${!isNew?`<label class="pp-chk ${t.done?"on":""}" style="margin-bottom:12px"><input type="checkbox" id="tk-done" ${t.done?"checked":""}> Done</label>`:""}
+    <div class="row dr-foot"><button class="btn pri" id="tkSave">${isNew?"Create task":"Save changes"}</button><button class="btn" id="tkCancel">Cancel</button>
+      ${!isNew?`<button class="btn danger" id="tkDel" style="margin-left:auto">Delete</button>`:""}</div>`, false, "task:"+t.id);
+  const D=$("#drawer");
+  $("#xClose").onclick=$("#tkCancel").onclick=()=>closeDrawer(true);
+  wirePicBox(D, "tk-d", imgs, ()=>{});
+  D.querySelectorAll("[data-asg]").forEach(b=>b.onclick=()=>{ const id=b.dataset.asg, i=asg.indexOf(id); if(i>=0) asg.splice(i,1); else asg.push(id); b.classList.toggle("on",i<0); b.setAttribute("aria-pressed",String(i<0)); });
+  $("#tkSave").onclick=()=>{ const title=$("#tk-t").value.trim(); if(!title){ toast("Say what needs doing"); return; }
+    Object.assign(t, { title, details:$("#tk-d").value.trim(), imgs:imgs.slice(), ownerIds:asg.slice(), due:$("#tk-due").value||"" });
+    const dn=$("#tk-done"); if(dn && dn.checked!==!!t.done){ t.done=dn.checked; t.doneAt=dn.checked?today():""; t.doneBy=dn.checked?meName():""; }
+    if(isNew) S.tasks.unshift(t);
+    if(!save()) return;
+    const fresh=asg.filter(i=>!was.includes(i)); if(fresh.length && OPT.taskAssigned) OPT.taskAssigned(SPACE, t, fresh);
+    closeDrawer(true); toast((isNew?"Task created":"Saved")+(fresh.length?` · ${fresh.map(taskName).filter(Boolean).join(", ")} told by email + 🔔`:"")); renderTasks(); };
+  const del=$("#tkDel"); if(del) del.onclick=()=>{ if(!confirm("Delete this task?")) return; const i=S.tasks.indexOf(t); if(i>=0) S.tasks.splice(i,1); if(save()){ closeDrawer(true); toast("Task deleted"); renderTasks(); } };
+  setTimeout(()=>{ const e=$("#tk-t"); if(e&&isNew) e.focus(); },30);
+}
+
 /* ------------------------------------------------------------ mount */
 // "targets" (🤝 Our agreement) is no longer a tab: its saved targets still drive the Summary; people's goals live in 🎯 Individual OKRs
-const PANES=["summary","okrs","ideation","process","schedule","rivals"];
+const PANES=["summary","tasks","okrs","ideation","process","schedule","rivals"];
 function refresh(){
   if(!R || !S) return;
   PANES.forEach(p=>{ const el=$("#pane-"+p); if(el) el.hidden = p!==TAB; });
-  ({targets:renderTargets,summary:renderSummary,okrs:renderOkrs,ideation:renderIdeation,process:renderProcess,schedule:renderSchedule,rivals:renderRivals})[TAB]();
+  ({targets:renderTargets,summary:renderSummary,tasks:renderTasks,okrs:renderOkrs,ideation:renderIdeation,process:renderProcess,schedule:renderSchedule,rivals:renderRivals})[TAB]();
 }
 function mount(){
   if(HOST) return;
@@ -4457,7 +4526,7 @@ window.SX = {
   openState: ()=>OPEN,
   reopen: o=>{ if(!o||!R) return; if(o.kind==="card"&&CARDS.some(c=>c.id===o.id)) openCard(o.id); else if(o.kind==="idea"&&IDEAS.some(i=>i.id===o.id)) openIdea(o.id); },
   normalize: normalize,
-  tabs: [["summary","Summary"],["okrs","Individual OKRs"],["ideation","Ideation"],["process","Content Process"],["schedule","Schedule"],["rivals","Keep an Eye on 2nd Love"]],
+  tabs: [["summary","Analysis"],["tasks","Tasks"],["okrs","Individual OKRs"],["ideation","Ideation"],["process","Content Process"],["schedule","Schedule"],["rivals","Keep an Eye on 2nd Love"]],
   /* draw the space. opt: {tab, team, supa, canEdit(), isMember(), me(), people(), save(),
        targets(space), canEditTargets(), saveTargets(space, obj), canDeleteCards()} */
   render: function(space, wrap, opt){
