@@ -569,6 +569,15 @@ details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var
 .tk input[type=checkbox]{width:18px;height:18px;margin-top:2px;accent-color:var(--good)}.tk.done{border-left-color:var(--good);background:var(--good-soft)}.tk.done .tk-t{text-decoration:line-through;color:var(--ink-3)}
 .tk.late{border-left-color:var(--crit)}.tk-main{display:grid;gap:4px;min-width:0}.tk-t{font-size:14px;overflow-wrap:anywhere}.tk-d{font-size:12.5px;color:var(--ink-2);white-space:pre-wrap;overflow-wrap:anywhere}
 .tk-m{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px}.tk-who{font-size:12px;color:var(--ink-2)}.tk-due{font-family:var(--mono);font-size:11px;color:var(--ink-3)}.tk.late .tk-due{color:var(--crit);font-weight:600}
+.tk-board{display:grid;gap:12px;align-items:stretch;overflow-x:auto;padding-bottom:12px;min-height:72vh}
+.tk-col{display:flex;flex-direction:column;min-height:72vh}
+.tk-addcard{width:100%;text-align:left;border:none;background:transparent;color:var(--ink-2);font:inherit;font-size:13px;padding:8px 10px;border-radius:var(--r-s);cursor:pointer;margin-top:4px}
+.tk-addcard:hover{background:color-mix(in srgb,var(--ink) 7%,transparent);color:var(--ink)}
+.tk-addcol{align-self:start;width:36px;height:36px;border-radius:var(--r-s);border:1px dashed var(--line-2);background:var(--surface);color:var(--ink-2);font-size:16px;cursor:pointer}
+.tk-addcol:hover{border-color:var(--accent);color:var(--accent)}
+.tk-colx{border:none;background:none;color:var(--ink-3);font-size:15px;line-height:1;cursor:pointer;padding:0 3px;border-radius:4px}.tk-colx:hover{color:var(--crit)}
+.tk-dayadd{border:none;background:none;color:var(--ink-3);font-size:12px;cursor:pointer;padding:0 3px;border-radius:4px;opacity:0}.day:hover .tk-dayadd,.tk-dayadd:focus{opacity:1}.tk-dayadd:hover{color:var(--accent);background:var(--accent-soft)}
+@media (hover:none){.tk-dayadd{opacity:1}}
 .tkc.late{border-left:3px solid var(--crit)}.tkc.live h5{text-decoration:line-through;color:var(--ink-3)}
 .tkc-d{font-size:12px;color:var(--ink-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap}
 .tkc-foot{display:flex;justify-content:space-between;align-items:center;font-size:11px;min-height:20px;margin-top:6px}.tkc-foot .inits{margin-left:0}
@@ -4454,7 +4463,9 @@ function openRivalLog(id){
    S.tasks = [{ id, title, details, imgs:[], ownerIds:[], labels:[], due, status:todo|doing|done, done, doneAt, doneBy, by, at }] — saved with the space.
    Everyone newly assigned gets an email and a 🔔 (OPT.taskAssigned → idea-mail "assign"). */
 let TASKF={ who:[], labels:[], date:"all", view:"board", cursor:"", open:null };
-const TK_STAGES=[["todo","To do"],["doing","In progress"],["done","Done"]];
+const TK_BASE=[["todo","To do"],["doing","In progress"],["done","Done"]];
+// statuses = the three built-in ones + any the team adds with the ＋ after the last column: S.taskStages=[{id,label}]
+function tkStages(){ const extra=(Array.isArray(S.taskStages)?S.taskStages:[]).filter(x=>x&&x.id&&x.label&&!TK_BASE.some(b=>b[0]===x.id)); return TK_BASE.concat(extra.map(x=>[x.id,x.label])); }
 const TK_LABELS=["Caption","Thumbnail","Bio / profile","Edit","Upload","Design","Research","Comments"];
 const TK_COLORS=["#C8511B","#6246D4","#0F7F86","#B3417A","#17784F","#9A7C00","#3B6FB6","#AE2318"];
 const taskTeam = () => (OPT.teamPeople && OPT.teamPeople()) || [];
@@ -4464,7 +4475,7 @@ const tkLabelColor = l => TK_COLORS[hue(String(l).toLowerCase())%TK_COLORS.lengt
 const tkLabel = l => `<span class="ktag" style="--kc:${tkLabelColor(l)}">${esc(l)}</span>`;
 const tkAllLabels = () => [...new Set([...TK_LABELS, ...S.tasks.flatMap(t=>t.labels||[])])];
 function tkFix(t){ t.labels=Array.isArray(t.labels)?t.labels:[]; t.ownerIds=Array.isArray(t.ownerIds)?t.ownerIds:[];
-  if(!["todo","doing","done"].includes(t.status)) t.status = t.done ? "done" : "todo"; t.done = t.status==="done"; return t; }
+  if(!tkStages().some(x=>x[0]===t.status)) t.status = t.done ? "done" : "todo"; t.done = t.status==="done"; return t; }
 function tkSetStatus(t, st){ t.status=st; const d=st==="done"; if(d!==!!t.done){ t.done=d; t.doneAt=d?today():""; t.doneBy=d?meName():""; } }
 function tkInits(t, max){ const names=(t.ownerIds||[]).map(taskName).filter(Boolean); if(!names.length) return "";
   return `<span class="inits" title="${esc(names.join(", "))}">${names.slice(0,max||4).map(n=>`<i style="background:${INI_COLORS[hue(n.toLowerCase())%INI_COLORS.length]}">${esc(n.charAt(0).toUpperCase())}</i>`).join("")}${names.length>(max||4)?`<i class="more">+${names.length-(max||4)}</i>`:""}</span>`; }
@@ -4508,18 +4519,22 @@ function renderTasks(){
     const start=(new Date(y,m,1).getDay()+6)%7, dim=new Date(y,m+1,0).getDate();
     let cells=""; for(let i=0;i<start;i++) cells+=`<div class="day pad"></div>`;
     for(let dd=1;dd<=dim;dd++){ const key=iso(new Date(y,m,dd)); const ev=list.filter(t=>t.due===key).sort(sortT);
-      cells+=`<div class="day ${key===TODAY?"today":""}" data-tkdate="${key}"><span class="dn">${dd}</span>
+      cells+=`<div class="day ${key===TODAY?"today":""}" data-tkdate="${key}"><span class="dn" style="display:flex;justify-content:space-between;align-items:center">${dd}${ed?`<button type="button" class="tk-dayadd" data-tkdayadd="${key}" title="Add a task due ${esc(dmy(key))}" aria-label="Add a task due ${esc(dmy(key))}">＋</button>`:""}</span>
         ${ev.map(t=>`<button type="button" class="evt ${t.status==="done"?"live":""}" style="border-left-color:${t.status==="done"?"var(--good)":taskLate(t)?"var(--crit)":(t.labels||[])[0]?tkLabelColor(t.labels[0]):"var(--ink-3)"}" data-tk="${esc(t.id)}" draggable="${ed?"true":"false"}">
           <b>${t.status==="done"?"✓ ":""}${esc(t.title)}</b><span class="evrow"><span class="ktags">${(t.labels||[]).map(tkLabel).join("")}</span>${tkInits(t,3)}</span></button>`).join("")}</div>`; }
     const nodate=list.filter(t=>!t.due&&t.status!=="done");
     body=`<div class="sec-h" style="margin-top:4px"><button class="btn sm" data-tkm="-1">←</button><h3>${cur.toLocaleDateString("en-GB",{month:"long",year:"numeric"})}</h3><button class="btn sm" data-tkm="1">→</button><button class="btn sm" data-tkm="0">Today</button>
-        <span class="hint" style="margin-left:auto">${ed?"Drag a task to another day to change its due date · double-click a day to add a task on it":""}</span></div>
+        <span class="hint" style="margin-left:auto">${ed?"Drag a task to another day to change its due date · ＋ on a day adds a task on it":""}</span>${ed?`<button class="btn pri sm" id="tkCalNew">+ New task</button>`:""}</div>
       <div style="overflow-x:auto"><div class="cal">${["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=>`<div class="dow">${d}</div>`).join("")}${cells}</div></div>
       ${nodate.length?`<div class="lbl" style="margin:16px 0 8px">No due date · ${nodate.length}</div><div class="tk-nodate">${nodate.sort(sortT).map(t=>tkCard(t,ed)).join("")}</div>`:""}`;
   } else {
-    body=`<div class="board">${TK_STAGES.map(([id,lab])=>{ const items=list.filter(t=>t.status===id).sort(sortT);
-      return `<div class="col" data-tkcol="${id}"><div class="col-h"><h4>${lab}${id==="done"?' <span style="color:var(--good)">✓</span>':""}</h4><span class="count">${items.length}</span></div>
-        ${items.map(t=>tkCard(t,ed)).join("")||`<div class="dashed" style="margin:0">${ed?"drop here":"empty"}</div>`}</div>`; }).join("")}</div>`;
+    const STG=tkStages();
+    body=`<div class="tk-board" style="grid-template-columns:repeat(${STG.length},minmax(230px,1fr))${ed?" 40px":""}">${STG.map(([id,lab])=>{ const items=list.filter(t=>t.status===id).sort(sortT), custom=!TK_BASE.some(b=>b[0]===id);
+      return `<div class="col tk-col" data-tkcol="${esc(id)}"><div class="col-h"><h4>${esc(lab)}${id==="done"?' <span style="color:var(--good)">✓</span>':""}</h4>
+          <span style="display:flex;gap:4px;align-items:center"><span class="count">${items.length}</span>${ed&&custom?`<button type="button" class="tk-colx" data-tkcolx="${esc(id)}" title="Remove this status" aria-label="Remove status ${esc(lab)}">×</button>`:""}</span></div>
+        <div class="tk-items">${items.map(t=>tkCard(t,ed)).join("")||(ed?"":`<div class="dashed" style="margin:0">empty</div>`)}</div>
+        ${ed?`<button type="button" class="tk-addcard" data-tkadd="${esc(id)}">＋ Add task</button>`:""}</div>`; }).join("")}
+      ${ed?`<button type="button" class="tk-addcol" id="tkAddCol" title="Add a status" aria-label="Add a status">＋</button>`:""}</div>`;
   }
   P.innerHTML=`<div class="sec"><div class="sec-h"><h3>Tasks</h3>
       <span class="hint">General jobs for the content team, not tied to a card · ${open} open${late?` · <b style="color:var(--crit)">${late} past due</b>`:""}</span>
@@ -4545,6 +4560,15 @@ function renderTasks(){
     const k=pop.querySelector("[data-tkok]"); if(k) k.onclick=()=>{ TASKF.open=null; renderTasks(); }; });
   P.onclick=e=>{ if(TASKF.open && !(e.target.closest && e.target.closest(".pmsel"))){ TASKF.open=null; renderTasks(); } };
   const nb=P.querySelector("#tkNew"); if(nb) nb.onclick=()=>openTask(null);
+  const cn=P.querySelector("#tkCalNew"); if(cn) cn.onclick=()=>openTask(null);
+  P.querySelectorAll("[data-tkadd]").forEach(b=>b.onclick=()=>openTask(null,{ status:b.dataset.tkadd }));
+  P.querySelectorAll("[data-tkdayadd]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); openTask(null,{ due:b.dataset.tkdayadd }); });
+  const ac=P.querySelector("#tkAddCol"); if(ac) ac.onclick=()=>{ const n=(prompt("Name of the new status (e.g. Waiting for approval)")||"").trim().slice(0,30); if(!n) return;
+    if(tkStages().some(x=>x[1].toLowerCase()===n.toLowerCase())){ toast("That status already exists"); return; }
+    S.taskStages=(Array.isArray(S.taskStages)?S.taskStages:[]).concat([{ id:uid("st"), label:n }]); if(save()) toast("Status added: "+n); renderTasks(); };
+  P.querySelectorAll("[data-tkcolx]").forEach(b=>b.onclick=()=>{ const id=b.dataset.tkcolx, lab=(tkStages().find(x=>x[0]===id)||[])[1], n=S.tasks.filter(t=>t.status===id).length;
+    if(!confirm(`Remove the status “${lab}”?${n?` Its ${n} task${n>1?"s go":" goes"} back to To do.`:""}`)) return;
+    S.tasks.forEach(t=>{ if(t.status===id) tkSetStatus(t,"todo"); }); S.taskStages=(S.taskStages||[]).filter(x=>x.id!==id); if(save()) toast("Status removed"); renderTasks(); });
   // cards: open, delete, drag
   let drag=null;
   P.querySelectorAll("[data-tk]").forEach(el=>{ const t=T.find(x=>x.id===el.dataset.tk); if(!t) return;
@@ -4558,7 +4582,7 @@ function renderTasks(){
     col.addEventListener("dragover",e=>{ if(!drag) return; e.preventDefault(); e.dataTransfer.dropEffect="move"; col.classList.add("over"); });
     col.addEventListener("dragleave",e=>{ if(!col.contains(e.relatedTarget)) col.classList.remove("over"); });
     col.addEventListener("drop",e=>{ e.preventDefault(); col.classList.remove("over"); const t=T.find(x=>x.id===drag); drag=null; if(!t) return;
-      const to=col.dataset.tkcol; if(t.status===to) return; tkSetStatus(t,to); if(save()) toast("Moved to "+TK_STAGES.find(s=>s[0]===to)[1]); renderTasks(); }); });
+      const to=col.dataset.tkcol; if(t.status===to) return; tkSetStatus(t,to); if(save()) toast("Moved to "+(tkStages().find(s=>s[0]===to)||[,""])[1]); renderTasks(); }); });
   P.querySelectorAll("[data-tkdate]").forEach(day=>{
     day.ondblclick=e=>{ if(e.target.closest("[data-tk]")) return; openTask(null, { due:day.dataset.tkdate }); };
     day.addEventListener("dragover",e=>{ if(!drag) return; e.preventDefault(); e.dataTransfer.dropEffect="move"; day.classList.add("dropon"); });
@@ -4574,7 +4598,7 @@ function openTask(id, preset){
   const team=taskTeam(), asg=t.ownerIds.slice(), was=asg.slice(), imgs=(t.imgs||[]).slice(), labs=t.labels.slice(); let st=t.status;
   openDrawer(`<div class="dr-h"><div><div class="lbl">Tasks</div><h3 style="margin-top:4px">${isNew?"New task":esc(t.title)}</h3></div><button class="btn sm" id="xClose">Close</button></div>
     <div class="fld"><label for="tk-t">What needs doing</label><input id="tk-t" value="${esc(t.title)}" placeholder="Put the Diwali sale code in every caption today"></div>
-    <div class="fld"><label>Status</label><div class="seg tk-seg" role="group">${TK_STAGES.map(([v,l])=>`<button type="button" data-tkst="${v}" class="${st===v?"on":""}">${l}</button>`).join("")}</div></div>
+    <div class="fld"><label>Status</label><div class="seg tk-seg" role="group">${tkStages().map(([v,l])=>`<button type="button" data-tkst="${esc(v)}" class="${st===v?"on":""}">${esc(l)}</button>`).join("")}</div></div>
     <div class="fld"><label>Labels</label><div class="tk-labs" id="tkLabs"></div>
       <div class="row" style="gap:6px;margin-top:6px"><input id="tk-lab" placeholder="Add a label, e.g. Caption" style="max-width:240px"><button type="button" class="btn sm" id="tkLabAdd">Add</button></div>
       <p class="hint" style="margin:4px 0 0">Shown on the card, like the video tags on the content calendar.</p></div>
