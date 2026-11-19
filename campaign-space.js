@@ -88,6 +88,10 @@ const BCSS = `
 .kb-pic{position:relative}.kb-pic img{width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--line);display:block}
 .kb-pic button{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;border:none;background:var(--ink);color:var(--bg);font-size:11px;cursor:pointer;line-height:1}
 .kb-picadd{border:1px dashed var(--line-2);border-radius:var(--r-s);padding:6px 10px;font-size:13px;color:var(--accent);cursor:pointer;font-weight:600}
+.kb-send{cursor:pointer;font:inherit;font-family:var(--mono);font-size:10px}.kb-send:hover{filter:brightness(.95);text-decoration:underline}
+.kb-tpick{position:relative;margin:0 0 8px}.kb-tpbtn{border:1px solid var(--line-2);background:var(--surface);border-radius:999px;padding:6px 12px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--ink-2);max-width:100%;text-align:left}
+.kb-tppop{position:absolute;z-index:5;top:calc(100% + 4px);left:0;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);box-shadow:0 10px 28px rgba(26,24,21,.16);padding:6px;min-width:240px;max-height:320px;overflow:auto}
+.kb-tppop label{display:flex;gap:8px;align-items:center;padding:5px 8px;border-radius:6px;font-size:13px;cursor:pointer}.kb-tppop label:hover{background:var(--surface-2)}
 .kb-blk{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:12px}
 .kb-blk h4{font-size:13.5px;margin:0 0 8px;display:flex;align-items:center;gap:8px}
 .kb-kv{display:grid;grid-template-columns:120px 1fr;gap:6px 12px;font-size:13px;align-items:center}.kb-kv>span:nth-child(odd){color:var(--ink-3)}
@@ -994,9 +998,13 @@ const ITEM_KINDS = {
   alert:       { emo:"📢", label:"Alert message",    c:"var(--c3)" },
   notification:{ emo:"🔔", label:"Notification",     c:"var(--c4)" },
   whatsapp:    { emo:"💬", label:"WhatsApp message", c:"var(--good)" },
+  wagroup:     { emo:"👥", label:"WhatsApp group",   c:"var(--good)" },
+  email:       { emo:"📧", label:"Email",            c:"#3B6FB6" },
+  reddit:      { emo:"🟠", label:"Reddit",           c:"#D9480F" },
+  telegram:    { emo:"✈️", label:"Telegram",         c:"#229ED9" },
   other:       { emo:"📌", label:"Other",            c:"var(--ink-3)" }
 };
-const PLATFORMS = ["Instagram","YouTube","App","Website","WhatsApp","Email","Other"];
+const PLATFORMS = ["Instagram","YouTube","App","Website","WhatsApp","Email","Reddit","Telegram","Other"];
 const kindOf = it => ITEM_KINDS[it.kind] || ITEM_KINDS.other;
 const kindName = it => it.kind==="other" && it.kindOther ? it.kindOther : kindOf(it).label;
 /* Types are shared with the Social Media space's content types (OPT.sharedTypes / OPT.ensureType), so a
@@ -1497,7 +1505,7 @@ function targetDialog(c, idx){
 /* the content pieces */
 /* ---------- the content list: one tab per day, pieces grouped by type ---------- */
 let DAYSEL = null;                 /* the day open in the strip: "YYYY-MM-DD", "none", or null = pick one */
-const PLATFORM_GUESS = { longvideo:"YouTube", notification:"App", whatsapp:"WhatsApp", banner:"Website", alert:"Website",
+const PLATFORM_GUESS = { longvideo:"YouTube", notification:"App", whatsapp:"WhatsApp", banner:"Website", alert:"Website", wagroup:"WhatsApp", email:"Email", reddit:"Reddit", telegram:"Telegram",
                          story:"Instagram", reel:"Instagram", influencer:"Instagram", other:"Other" };
 /* "Story" → "Stories", "Long video" → "Long videos", "Press release" → "Press releases" */
 const plural = (w, n) => n===1 ? w : /[^aeiou]y$/i.test(w) ? w.slice(0,-1)+"ies" : /(s|x|ch|sh)$/i.test(w) ? w+"es" : w+"s";
@@ -2450,8 +2458,14 @@ function openPiece(c, id){
      c.lead — the person told when something is published */
 /* one tag per type, coloured like Content Process: YT Short / Insta Reel for reels, else the type's own name */
 const KT_COLORS = { "YT Short":"var(--c1)", "Insta Reel":"var(--c3)", "YT Long video":"var(--c2)", "Story":"#B3417A", "Poster":"var(--c4)",
-  "Community Post":"#0F7F86", "Notification":"#B4560B", "Webinar":"var(--crit)", "WhatsApp":"var(--good)", "Banner":"#5B6B7A", "Community post":"#0F7F86" };
+  "Community Post":"#0F7F86", "Notification":"#B4560B", "Webinar":"var(--crit)", "WhatsApp":"var(--good)", "Banner":"#5B6B7A", "Community post":"#0F7F86",
+  "WhatsApp group":"var(--good)", "Email":"#3B6FB6", "Reddit":"#D9480F", "Telegram":"#229ED9" };
+/* a card can carry several types (picked under Labels): it.types = ["reel","t:Poster","banner"…] */
 function typeLabels(it){
+  if(Array.isArray(it.types) && it.types.length>1 && !it.__one) return [...new Set(it.types.flatMap(v=>typeLabels(Object.assign({}, it, resolveKind(v,""), { __one:true }))))];
+  return typeLabels1(it);
+}
+function typeLabels1(it){
   const pl=platsOf(it), yt=pl.includes("YouTube"), ig=pl.includes("Instagram"), out=[];
   if(it.kind==="reel"||it.kind==="influencer"){ if(yt) out.push("YT Short"); if(ig) out.push("Insta Reel"); return out.length ? out : [kindName(it)]; }
   if(it.kind==="longvideo") return ["YT Long video"];
@@ -2496,8 +2510,9 @@ function kbRows(c){
   });
   c.tasks.forEach(t=>{ if(!Array.isArray(t.subs)) t.subs=[];
     const ids = assigneesOf(t);
+    const tnames = Array.isArray(t.types)&&t.types.length ? t.types.map(v=>{ const r=resolveKind(v,""); return r.kind==="other" ? r.kindOther : (ITEM_KINDS[r.kind]||{}).label||v; }) : [t.kind||"Other"];
     rows.push({ src:"task", ref:t, id:t.id, title:t.title||"(untitled)", due:t.due||"", ownerId:t.ownerId||"", ownerIds:ids, owner:ids.length?ids.map(kbName).filter(Boolean).join(", "):t.owner||"", content:false, card:null, si:0,
-      live:!!t.live, liveBy:t.liveBy||"", link:t.link||"", cat:"k:"+(t.kind||"Other"), catLabel:t.kind||"Other", subs:kbSubs(t), plats:[], hl:!!t.highlight, tags:ktOne(t.kind||"Other"), labels:[t.kind||"Other"] }); });
+      live:!!t.live, liveBy:t.liveBy||"", link:t.link||"", cat:"k:"+(t.kind||"Other"), catLabel:t.kind||"Other", subs:kbSubs(t), plats:[], hl:!!t.highlight, tags:tnames.map(ktOne).join(""), labels:tnames }); });
   return rows;
 }
 const kbLate = x => !x.live && !!x.due && x.due < TODAY;
@@ -2506,7 +2521,7 @@ const kbState = x => x.live ? "done" : x.content ? (x.si>0 || x.ref.bst==="prog"
 const kbPct = x => x.content ? Math.round(x.si/5*100) : x.subs.length ? Math.round(x.subs.filter(s=>s.done).length/x.subs.length*100) : 0;
 function kbTags(x){
   return (x.hl?`<span class="kb-tag hl">⭐ Highlight</span>`:"") + x.tags + (x.ref.labels||[]).map(l=>`<span class="kt own">${esc(l)}</span>`).join("")
-    + (x.content ? `<span class="kb-tag sync" title="The same card is on Content Process">↔ Content Process</span>`
+    + (x.content ? `<button type="button" class="kb-tag sync kb-send" data-kbsend="${esc(x.id)}" title="Open this card in Content Process (it's the same card)">↗ Send to Content Process</button>`
        : x.plats.filter(p=>!PROCESS_PLATFORMS.includes(p)).map(p=>`<span class="kb-tag">${esc(p)}</span>`).join(""));
 }
 const kbWho = (id, name, ids) => ids && ids.length>1
@@ -2612,6 +2627,7 @@ function wireBoard(c){
       onTap: ()=>kbOpen(c, x.id), onDrop: z=>kbMove(c, x, z.dataset.kbdrop), onMiss: ()=>{} }); });
   B.querySelectorAll("[data-kb]").forEach(b=>{ if(!b.dataset.drag) b.onclick=()=>kbOpen(c, b.dataset.kb);
     if(b.tagName!=="BUTTON") b.onkeydown=e=>{ if((e.key==="Enter"||e.key===" ") && e.target===b){ e.preventDefault(); kbOpen(c, b.dataset.kb); } }; });
+  B.querySelectorAll("[data-kbsend]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); kbSend(c, b.dataset.kbsend); });
   B.querySelectorAll("[data-kbnotify]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); const x=kbRows(c).find(y=>y.id===b.dataset.kbnotify); if(x) kbNotify(c, x, null, b); });
   [["#kbWho","who"],["#kbDate","date"],["#kbCat","cat"]].forEach(([id,k])=>{ const e=B.querySelector(id); if(e) e.onchange=()=>{ KBF[k]=e.value; draw(); }; });
   const cl=B.querySelector("#kbClear"); if(cl) cl.onclick=()=>{ KBF={who:"",date:"",cat:""}; draw(); };
@@ -2629,6 +2645,25 @@ function wireBoard(c){
     col.addEventListener("drop",e=>{ if(!colDrag) return; e.preventDefault(); col.classList.remove("colover"); const id=colDrag; colDrag=null; kbMoveCol(c, id, col.dataset.kbdrop); }); });
   const ld=B.querySelector("#kbLead"); if(ld) ld.onchange=()=>{ c.lead=ld.value; save(); toast(kbName(ld.value)+" is told when something is published"); };
 }
+/* 🏷 the card's types, as a multi-select dropdown (the same list as Create Cards) */
+function kbTypeVals(x){ if(Array.isArray(x.ref.types)&&x.ref.types.length) return x.ref.types;
+  if(x.src==="task"){ const hit=kindChoices().find(([v,l])=>l.replace(/^\S+\s/,"").toLowerCase()===String(x.ref.kind||"").toLowerCase()); return hit?[hit[0]]:[]; }
+  return [kindValue(x.ref)]; }
+function kbTypePicker(x){ const cur=kbTypeVals(x), ch=kindChoices().filter(([v])=>v!=="other");
+  const names=cur.map(v=>(ch.find(o=>o[0]===v)||[,v])[1]);
+  return `<div class="kb-tpick"><button type="button" class="kb-tpbtn" aria-haspopup="true" aria-expanded="false">🏷 Types: ${esc(names.join(", ")||"pick")} ▾</button>
+    <div class="kb-tppop" hidden role="group" aria-label="Types">${ch.map(([v,l])=>`<label><input type="checkbox" value="${esc(v)}" ${cur.includes(v)?"checked":""}> ${esc(l)}</label>`).join("")}</div></div>`; }
+function kbSetTypes(c, x, vals){
+  x.ref.types = vals.slice();
+  const r = resolveKind(vals[0], "");
+  if(x.src==="task") x.ref.kind = r.kind==="other" ? r.kindOther : (ITEM_KINDS[r.kind]||{}).label || x.ref.kind;
+  else { x.ref.kind = r.kind; x.ref.kindOther = r.kindOther; }
+  save(); toast("Types: "+vals.map(v=>{ const q=resolveKind(v,""); return q.kind==="other"?q.kindOther:(ITEM_KINDS[q.kind]||{}).label; }).join(", "));
+}
+/* ↗ a YouTube / Instagram card → Content Process (the card is made there now if it isn't yet), and open it */
+function kbSend(c, id){ const x=kbRows(c).find(y=>y.id===id); if(!x) return;
+  if(OPT.syncNow) try{ OPT.syncNow(c); }catch(_){ }
+  kbClose(); if(OPT.goProcess) OPT.goProcess(c); toast(`“${x.title}” is in Content Process`); }
 /* 📎 pictures for a card's Details: uploaded (the page's uploadPhoto) and kept as links on the card */
 async function kbAddPics(x, files, d){
   const st=d.querySelector("#kbPicSt"), fs=[...files].filter(f=>/^image\//.test(f.type));
@@ -2670,9 +2705,10 @@ function kbOpen(c, id, keep){
       ${x.ownerIds.length && pl ? `<button class="btn" id="kbNotify">🔔 Notify ${esc(x.ownerIds.map(i=>(kbName(i)||"").split(" ")[0]).join(" + "))}</button>` : ""}
       ${pl ? `<button class="btn ${x.hl?"pri":""}" id="kbHl">${x.hl?"⭐ Highlighted — remove":"⭐ Highlight this card"}</button>` : ""}</div>` : ""}
     <div class="kf"><label for="kbT">What needs doing</label><input id="kbT" value="${esc(x.ref.title||x.ref.name||"")}" ${ed?"":"disabled"} placeholder="What this card is"></div>
+    <div class="kf"><label for="kbDesc">Description</label><textarea id="kbDesc" ${ed?"":"disabled"} placeholder="What this card is about, in a line or two">${esc(x.ref.desc||"")}</textarea></div>
     <p class="kb-rep">✍️ Reporter: <b>${esc(x.ref.by||"—")}</b>${x.ref.at?" · created "+esc(dmy(String(x.ref.at).slice(0,10))):""}</p>
     <div class="kf"><label>Status</label><div class="kb-seg" role="group">${kbCols(c).map(([k,l])=>`<button type="button" data-kbcol="${k}" ${ed?"":"disabled"} class="${kbState(x)===k?"on":""}" aria-pressed="${kbState(x)===k}">${esc(l)}</button>`).join("")}</div></div>
-    <div class="kf"><label>Labels</label><div class="kb-labs">${x.tags}${(x.ref.labels||[]).map((l,i)=>`<span class="kt own">${esc(l)}${ed?`<button type="button" data-kblabx="${i}" aria-label="Remove label ${esc(l)}">×</button>`:""}</span>`).join("")}</div>
+    <div class="kf"><label>Labels</label>${ed?kbTypePicker(x):""}<div class="kb-labs">${x.tags}${(x.ref.labels||[]).map((l,i)=>`<span class="kt own">${esc(l)}${ed?`<button type="button" data-kblabx="${i}" aria-label="Remove label ${esc(l)}">×</button>`:""}</span>`).join("")}</div>
       ${ed?`<div class="kb-labadd"><input id="kbLab" placeholder="Add a label, e.g. Caption"><button type="button" class="btn sm" id="kbLabAdd">Add</button></div>`:""}</div>
     <div class="kf"><label>Assigned to</label>${pl?`<span class="kb-pp" id="kbOwners">${kbPeople().map(p=>`<button type="button" data-kbown="${esc(p.id)}" class="${x.ownerIds.includes(p.id)?"on":""}" aria-pressed="${x.ownerIds.includes(p.id)}">${avatar(p.name)}${esc(p.name)}</button>`).join("")}</span>
       <p class="hint" style="margin:4px 0 0">Everyone new gets an email and a 🔔.${x.content?" The same on the card in Content Process.":""}</p>`:kbWho(x.ownerId,x.owner,x.ownerIds)}</div>
@@ -2698,6 +2734,15 @@ function kbOpen(c, id, keep){
   const ed2=d.querySelector("#kbEdit"); if(ed2) ed2.onclick=()=>{ const i=c.items.indexOf(x.ref); if(i>=0){ kbClose(); itemDialog(c, i); } };
   const dp=d.querySelector("#kbDelPiece"); if(dp) dp.onclick=()=>kbDeletePiece(c, x);
   const du=d.querySelector("#kbDue"); if(du) du.onchange=()=>{ x.ref.due=du.value; save(); };
+  const ds=d.querySelector("#kbDesc"); if(ds){ ds.oninput=()=>{ x.ref.desc=ds.value; saveQuiet(); }; ds.onchange=()=>{ x.ref.desc=ds.value; save(); }; }
+  const tp=d.querySelector(".kb-tpick");
+  if(tp){ const btn=tp.querySelector(".kb-tpbtn"), pop=tp.querySelector(".kb-tppop");
+    btn.onclick=e=>{ e.stopPropagation(); pop.hidden=!pop.hidden; btn.setAttribute("aria-expanded", String(!pop.hidden)); };
+    pop.onclick=e=>e.stopPropagation();
+    pop.querySelectorAll("input[type=checkbox]").forEach(cb=>cb.onchange=()=>{ const vals=[...pop.querySelectorAll("input:checked")].map(i=>i.value);
+      if(!vals.length){ cb.checked=true; toast("A card needs at least one type"); return; }
+      kbSetTypes(c, x, vals); });
+    d.addEventListener("click",()=>{ if(!pop.hidden){ pop.hidden=true; btn.setAttribute("aria-expanded","false"); } }); }
   const tt=d.querySelector("#kbT"); if(tt){ const put=()=>{ const v=tt.value.trim(); if(!v) return false; if(x.src==="task") x.ref.title=v; else x.ref.name=v; return true; };
     tt.oninput=()=>{ if(put()) saveQuiet(); }; tt.onchange=()=>{ if(put()) save(); else toast("Say what this card is"); }; }
   const d2=d.querySelector("#kbDue2"); if(d2) d2.onchange=()=>{ if(x.src==="task") x.ref.due=d2.value; else x.ref.date=d2.value; save(); };
@@ -2832,7 +2877,7 @@ function kbAddTask(c){
 
 /* ============================================================ API */
 window.CX = {
-  tabs: [["details","Campaign Details"],["board","Board"],["reminders","Reminders"],["calendar","Calendar"]],
+  tabs: [["details","Campaign Details"],["board","Board"],["calendar","Calendar"],["reminders","Reminders"]],
   normalize: normalize,
   kinds: ITEM_KINDS,
   typeKey: typeKey,
