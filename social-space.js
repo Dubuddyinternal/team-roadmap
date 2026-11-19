@@ -327,6 +327,7 @@ details.fdrop{margin-bottom:14px}
 .gs-g{font-family:var(--mono,monospace);color:var(--good);text-align:right}.gs-l{font-family:var(--mono,monospace);color:var(--crit);text-align:right}
 .gs-h{font-family:var(--mono,monospace);font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);padding-top:0}.gs-h span:nth-child(n+3){text-align:right}
 .gs-rest .gs-t{color:var(--ink-2)}
+.gs-type{font-weight:600;color:var(--ink-2)}.gs-split{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--ink-2);margin:0 0 8px}.gs-split b{color:var(--good);font-family:var(--mono,monospace)}
 .wl{border:1px solid var(--line);border-radius:10px;overflow:auto;max-height:320px}
 .wl-r{display:grid;grid-template-columns:minmax(92px,1fr) 58px 56px 74px 74px 16px;min-width:420px;gap:6px;align-items:center;padding:7px 12px;border-bottom:1px solid var(--line);font-size:12.5px}
 .wl-r:last-child{border-bottom:0}.wl-r b{font-family:var(--mono,monospace);text-align:right}
@@ -595,6 +596,10 @@ details.manual>summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var
 @media (hover:none){.tk-dayadd{opacity:1}}
 .tkc.late{border-left:3px solid var(--crit)}.tkc.live h5{text-decoration:line-through;color:var(--ink-3)}
 .tkc-d{font-size:12px;color:var(--ink-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap}
+.tkc-rep{font-size:11.5px;color:var(--ink-3);margin:-2px 0 6px}.tkc-rep b{color:var(--ink-2);font-weight:600}
+.tk-mv{display:inline-flex;opacity:0;transition:opacity .12s}.tk-col:hover .tk-mv,.tk-mv:focus-within{opacity:1}
+.tk-mv button{border:none;background:none;color:var(--ink-3);font-size:15px;line-height:1;padding:0 4px;cursor:pointer;border-radius:4px}.tk-mv button:hover:not(:disabled){color:var(--ink);background:var(--surface)}.tk-mv button:disabled{opacity:.3;cursor:default}
+@media (hover:none){.tk-mv{opacity:1}}
 .tkc-foot{display:flex;justify-content:space-between;align-items:center;font-size:11px;min-height:20px;margin-top:6px}.tkc-foot .inits{margin-left:0}
 .tk-pick{padding:4px 8px 6px 34px}.pmpop .tk-pick input{width:auto;height:auto;border:1px solid var(--line-2);border-radius:var(--r-s);padding:5px 8px;font:inherit;font-size:13px}
 .tkc-del{border:1px solid transparent;background:none;border-radius:6px;padding:1px 6px;font-size:13px;cursor:pointer;opacity:.55}.tkc-del:hover{opacity:1;border-color:var(--crit);background:color-mix(in srgb,var(--crit) 10%,transparent)}
@@ -1502,41 +1507,46 @@ function dayLog(k, series){
       <span>${new Date(r.d+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})}${r.d===today()?" · today":""}</span>
       <b class="dl-g">${r.g ? `<button type="button" class="dl-gbtn" data-dlday="${k}|${r.d}" title="Which ${k==="yt"?"videos":"posts"} brought them">${num(r.g)}</button>` : num(r.g)}</b><b class="dl-l">${num(r.l)}</b>
       <b class="${r.ch>0?"dl-up":r.ch<0?"dl-dn":""}">${num(r.ch,true)}</b></div>`).join("")
-    + `<div class="dl-r tot"><span>${monthName(mk).split(" ")[0]} total</span><b class="dl-g">${anyG?fmt(tg):"—"}</b><b class="dl-l">${anyG&&anyC?fmt(tl):"—"}</b><b class="${tc>0?"dl-up":tc<0?"dl-dn":""}">${anyC?num(tc,true):"—"}</b></div>`;
+    + `<div class="dl-r tot"><span>${monthName(mk).split(" ")[0]} total</span><b class="dl-g">${anyG?`<button type="button" class="dl-gbtn" data-dlday="${k}|${mk}-01|${end}" title="Which ${k==="yt"?"videos":"posts"} brought them this month">${fmt(tg)}</button>`:"—"}</b><b class="dl-l">${anyG&&anyC?fmt(tl):"—"}</b><b class="${tc>0?"dl-up":tc<0?"dl-dn":""}">${anyC?num(tc,true):"—"}</b></div>`;
   const pick=`<label class="dl-pick">Month <select data-dlmonth="${k}" aria-label="Month">${months.map(x=>`<option value="${x}" ${x===mk?"selected":""}>${monthName(x)}</option>`).join("")}</select></label>`;
   return fdrop("dl-"+k, `📆 Day by day · ${monthName(mk)}${anyC?` · ${tc>0?"+":tc<0?"−":""}${fmt(Math.abs(tc))}`:""}`, `${pick}<div class="wl dl">${head}${body}</div>`);
 }
 /* a day's Gain → which videos / posts brought them. YouTube: exact (Analytics, per video per day, saved by the sync).
    Instagram: an estimate — Meta doesn't say, so the sync splits each day's new followers by the views each post got that day. */
-async function openGainSources(k, d){
-  const plat = k==="yt" ? "youtube" : "instagram", yt = k==="yt";
-  const day = new Date(d+"T00:00:00").toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric"});
-  const snap = LIVE.snaps.find(r=>r.platform===plat && r.day===d), total = snap && snap.gained!=null ? Number(snap.gained) : null;
+async function openGainSources(k, d, d2){
+  const plat = k==="yt" ? "youtube" : "instagram", yt = k==="yt", to = d2 || d, range = to!==d;
+  const lab = x => new Date(x+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+  const day = range ? `${lab(d)} – ${lab(to)} ${to.slice(0,4)}` : new Date(d+"T00:00:00").toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric"});
+  const snaps = LIVE.snaps.filter(r=>r.platform===plat && r.day>=d && r.day<=to && r.gained!=null);
+  const total = snaps.length ? snaps.reduce((a,r)=>a+Number(r.gained),0) : null;
   const head = `<div class="dr-h"><div><div class="lbl">${yt?"YouTube subscribers":"Instagram followers"} · ${esc(day)}</div><h3 style="margin-top:4px">${total!=null?fmt(total)+" gained":"Gained"}</h3></div><button class="btn sm" id="xClose">Close</button></div>`;
-  openDrawer(head+`<p class="hint">Loading…</p>`, false, "gain:"+k+d); $("#xClose").onclick=()=>closeDrawer(true);
+  openDrawer(head+`<p class="hint">Loading…</p>`, false, "gain:"+k+d+to); $("#xClose").onclick=()=>closeDrawer(true);
   let rows=[];
-  try{ const r = await OPT.supa.from("social_post_daily").select("external_id,est_follows,subs_gained,subs_lost").eq("team_slug", LIVE.team || OPT.team).eq("platform", plat).eq("day", d).limit(500);
+  try{ const r = await OPT.supa.from("social_post_daily").select("external_id,est_follows,subs_gained,subs_lost").eq("team_slug", LIVE.team || OPT.team).eq("platform", plat).gte("day", d).lte("day", to).limit(10000);
     if(r.error) throw r.error; rows = r.data || []; }
-  catch(e){ openDrawer(head+`<p class="hint">Couldn't load this: ${esc(e.message||String(e))}</p>`, false, "gain:"+k+d); $("#xClose").onclick=()=>closeDrawer(true); return; }
+  catch(e){ openDrawer(head+`<p class="hint">Couldn't load this: ${esc(e.message||String(e))}</p>`, false, "gain:"+k+d+to); $("#xClose").onclick=()=>closeDrawer(true); return; }
   const post = id => LIVE.posts.find(p=>p.platform===plat && p.external_id===id);
-  const list = (yt ? rows.filter(r=>r.external_id!=="_none" && (Number(r.subs_gained)||Number(r.subs_lost))).map(r=>({ id:r.external_id, g:Number(r.subs_gained)||0, l:Number(r.subs_lost)||0 }))
-                   : rows.filter(r=>Number(r.est_follows)>0).map(r=>({ id:r.external_id, g:Number(r.est_follows) })))
-    .sort((a,b)=>b.g-a.g);
+  const agg = new Map();   // one line per video / post, summed over the day(s)
+  rows.forEach(r=>{ if(r.external_id==="_none") return; const g = yt ? Number(r.subs_gained)||0 : Number(r.est_follows)||0, l = yt ? Number(r.subs_lost)||0 : 0;
+    if(!g && !l) return; const x = agg.get(r.external_id) || { id:r.external_id, g:0, l:0, days:0 }; x.g+=g; x.l+=l; x.days++; agg.set(r.external_id, x); });
+  const list = [...agg.values()].sort((a,b)=>b.g-a.g || a.l-b.l);
   const sum = list.reduce((s,x)=>s+x.g,0), saved = yt ? rows.length>0 : list.length>0;
   const item = x => { const p = post(x.id) || {}, title = p.title || (yt ? "Video "+x.id : "Post "+x.id), url = p.url || (yt ? "https://www.youtube.com/watch?v="+x.id : "");
     return `<div class="gs-r">${p.thumbnail?`<img src="${esc(p.thumbnail)}" alt="" loading="lazy">`:`<span class="gs-ph"></span>`}
-      <div class="gs-t">${url?`<a href="${esc(url)}" target="_blank" rel="noopener">${esc(title)}</a>`:esc(title)}<small>${esc(p.post_type||"")}${p.published_at?" · posted "+esc(dmy(String(p.published_at).slice(0,10))):""}</small></div>
+      <div class="gs-t">${url?`<a href="${esc(url)}" target="_blank" rel="noopener">${esc(title)}</a>`:esc(title)}<small>${p.post_type?`<b class="gs-type">${esc(p.post_type)}</b>`:""}${p.published_at?" · posted "+esc(dmy(String(p.published_at).slice(0,10))):""}${range&&x.days>1?" · on "+x.days+" days":""}</small></div>
       <b class="gs-g">${yt?"+"+fmt(x.g):"≈ +"+(Math.round(x.g*10)/10)}</b>${yt?`<b class="gs-l">${x.l?"−"+fmt(x.l):""}</b>`:""}</div>`; };
+  const byType = {}; list.forEach(x=>{ const t=(post(x.id)||{}).post_type||"Other"; byType[t]=(byType[t]||0)+x.g; });
+  const split = Object.keys(byType).length ? `<p class="gs-split">${Object.entries(byType).sort((a,b)=>b[1]-a[1]).map(([t,v])=>`<span><b>${yt?fmt(v):"≈"+Math.round(v)}</b> from ${esc(t.toLowerCase())}${t==="Other"?"":"s"}</span>`).join("")}</p>` : "";
   let body;
-  if(!saved) body = `<p class="hint">${yt ? "This day isn't loaded yet — the daily sync fills a few weeks of history per run. Try again tomorrow." : "Instagram's estimate only covers about the last 30–40 days, and not this day."}</p>`;
+  if(!saved) body = `<p class="hint">${yt ? (range?"These days aren't":"This day isn't")+" loaded yet — the daily sync fills a few weeks of history per run. Try again tomorrow." : "Instagram's estimate only covers about the last 30–40 days, and not "+(range?"these days.":"this day.")}</p>`;
   else {
     const rest = total!=null ? Math.round((total - sum)*10)/10 : null;
-    body = `${yt?`<div class="gs-r gs-h"><span></span><span>Video</span><span>Gained</span><span>Lost</span></div>`:""}
-      ${list.map(item).join("") || `<p class="hint">No ${yt?"video":"post"} is credited with new ${yt?"subscribers":"followers"} on this day.</p>`}
+    body = `${split}${yt?`<div class="gs-r gs-h"><span></span><span>Video</span><span>Gained</span><span>Lost</span></div>`:""}
+      ${list.map(item).join("") || `<p class="hint">No ${yt?"video":"post"} is credited with new ${yt?"subscribers":"followers"} ${range?"in these days":"on this day"}.</p>`}
       ${rest!=null && rest>0.5 ? `<div class="gs-r gs-rest"><span class="gs-ph"></span><div class="gs-t">${yt?"Not from a video":"Not linked to a post"}<small>${yt?"channel page, search, other places on YouTube":"profile visits, other places on Instagram"}</small></div><b class="gs-g">+${fmt(Math.round(rest))}</b>${yt?"<b></b>":""}</div>` : ""}
       <p class="hint" style="margin-top:12px">${yt ? "Exact numbers from YouTube Analytics." : "≈ Estimate: Meta doesn't say which post brought a follower, so each day's new followers are split across posts by the views they got that day."}</p>`;
   }
-  openDrawer(head+`<div class="gs ${yt?"yt":""}">${body}</div>`, false, "gain:"+k+d); $("#xClose").onclick=()=>closeDrawer(true);
+  openDrawer(head+`<div class="gs ${yt?"yt":""}">${body}</div>`, false, "gain:"+k+d+to); $("#xClose").onclick=()=>closeDrawer(true);
 }
 /* 📅 the agreement week by week, for the whole quarter: for each weekly (or daily ×7) target, how many were posted
    in each week from the "counting from" date to the end of the quarter (weeks still to come show what's needed),
@@ -2451,7 +2461,7 @@ function renderSummary(){
   const sn=$("#syncNow"); if(sn) sn.onclick=syncNow;
   P.querySelectorAll("[data-okrmore]").forEach(b=>b.onclick=()=>{ OKR_OPEN[b.dataset.okrmore]=!OKR_OPEN[b.dataset.okrmore]; renderSummary(); });
   wireFdrop(P);
-  P.querySelectorAll("[data-dlday]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); const [k,d]=b.dataset.dlday.split("|"); openGainSources(k, d); });
+  P.querySelectorAll("[data-dlday]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); const [k,d,e2]=b.dataset.dlday.split("|"); openGainSources(k, d, e2); });
   P.querySelectorAll("[data-dlmonth]").forEach(sel=>{ sel.onclick=e=>e.stopPropagation(); sel.onchange=()=>{ DLMONTH[sel.dataset.dlmonth]=sel.value; FDROP_OPEN["dl-"+sel.dataset.dlmonth]=true; renderSummary(); }; });
   P.querySelectorAll("[data-pfadd]").forEach(b=>b.onclick=()=>openProof(b.dataset.pfadd, b.dataset.pfmetric));
   P.querySelectorAll("[data-pfimg]").forEach(i=>i.onclick=()=>{ if(typeof showPhoto==="function") showPhoto(i.dataset.pfimg); else window.open(i.dataset.pfimg,"_blank"); });
@@ -4542,9 +4552,14 @@ function openRivalLog(id){
    S.tasks = [{ id, title, details, imgs:[], ownerIds:[], labels:[], due, status:todo|doing|done, done, doneAt, doneBy, by, at }] — saved with the space.
    Everyone newly assigned gets an email and a 🔔 (OPT.taskAssigned → idea-mail "assign"). */
 let TASKF={ who:[], labels:[], date:"all", view:"board", cursor:"", open:null };
-const TK_BASE=[["todo","To do"],["doing","In progress"],["done","Done"]];
+const TK_BASE=[["idea","Ideas"],["todo","To do"],["doing","In progress"],["done","Done"]];
 // statuses = the three built-in ones + any the team adds with the ＋ after the last column: S.taskStages=[{id,label}]
-function tkStages(){ const extra=(Array.isArray(S.taskStages)?S.taskStages:[]).filter(x=>x&&x.id&&x.label&&!TK_BASE.some(b=>b[0]===x.id)); return TK_BASE.concat(extra.map(x=>[x.id,x.label])); }
+function tkStages(){ const extra=(Array.isArray(S.taskStages)?S.taskStages:[]).filter(x=>x&&x.id&&x.label&&!TK_BASE.some(b=>b[0]===x.id));
+  const all=TK_BASE.concat(extra.map(x=>[x.id,x.label])), ord=Array.isArray(S.taskOrder)?S.taskOrder:[];   // S.taskOrder: the columns' order, set with ‹ ›
+  const at=id=>{ const i=ord.indexOf(id); return i<0 ? 1000+all.findIndex(x=>x[0]===id) : i; };
+  return all.slice().sort((a,b)=>at(a[0])-at(b[0])); }
+function tkMoveStage(id, dir){ const ids=tkStages().map(x=>x[0]), i=ids.indexOf(id), j=i+dir; if(i<0||j<0||j>=ids.length) return;
+  [ids[i],ids[j]]=[ids[j],ids[i]]; S.taskOrder=ids; if(save()) toast("Status moved"); renderTasks(); }
 const TK_LABELS=["Caption","Thumbnail","Bio / profile","Edit","Upload","Design","Research","Comments"];
 const TK_COLORS=["#C8511B","#6246D4","#0F7F86","#B3417A","#17784F","#9A7C00","#3B6FB6","#AE2318"];
 const taskTeam = () => (OPT.teamPeople && OPT.teamPeople()) || [];
@@ -4568,6 +4583,7 @@ const TK_DATES=[["all","Any date"],["today","Today"],["yesterday","Yesterday"],[
 function tkCard(t, ed){ const names=(t.ownerIds||[]).map(taskName).filter(Boolean), late=taskLate(t), done=t.status==="done";
   return `<div class="kcard tkc ${ed?"":"ro"} ${done?"live":""} ${late?"late":""}" data-tk="${esc(t.id)}" draggable="${ed?"true":"false"}">
     <div class="hotbar" style="background:var(--surface-2);color:var(--ink-2)">👤 ${names.length?esc(names.join(", ")):"Not assigned"}</div>
+    ${t.by?`<div class="tkc-rep" title="Who created this task${t.at?" · "+esc(dmy(String(t.at).slice(0,10))):""}">✍️ Reporter: <b>${esc(t.by)}</b></div>`:""}
     <h5>${done?"✓ ":""}${esc(t.title)}</h5>
     <div class="meta">${(t.labels||[]).map(tkLabel).join("")}${t.due?`<span class="chip" ${late?'style="color:var(--crit);border-color:var(--crit);font-weight:600"':""}>${late?"⏰ ":""}${esc(dmy(t.due))}</span>`:""}</div>
     ${t.details?`<div class="tkc-d" style="margin-top:7px">${esc(t.details)}</div>`:""}
@@ -4609,8 +4625,9 @@ function renderTasks(){
   } else {
     const STG=tkStages();
     body=`<div class="tk-board" style="grid-template-columns:repeat(${STG.length},minmax(230px,1fr))${ed?" 40px":""}">${STG.map(([id,lab])=>{ const items=list.filter(t=>t.status===id).sort(sortT), custom=!TK_BASE.some(b=>b[0]===id);
+      const ix=STG.findIndex(x=>x[0]===id);
       return `<div class="col tk-col" data-tkcol="${esc(id)}"><div class="col-h"><h4>${esc(lab)}${id==="done"?' <span style="color:var(--good)">✓</span>':""}</h4>
-          <span style="display:flex;gap:4px;align-items:center"><span class="count">${items.length}</span>${ed&&custom?`<button type="button" class="tk-colx" data-tkcolx="${esc(id)}" title="Remove this status" aria-label="Remove status ${esc(lab)}">×</button>`:""}</span></div>
+          <span style="display:flex;gap:4px;align-items:center">${ed?`<span class="tk-mv"><button type="button" data-tkmv="${esc(id)}|-1" ${ix===0?"disabled":""} title="Move this status left" aria-label="Move ${esc(lab)} left">‹</button><button type="button" data-tkmv="${esc(id)}|1" ${ix===STG.length-1?"disabled":""} title="Move this status right" aria-label="Move ${esc(lab)} right">›</button></span>`:""}<span class="count">${items.length}</span>${ed&&custom?`<button type="button" class="tk-colx" data-tkcolx="${esc(id)}" title="Remove this status" aria-label="Remove status ${esc(lab)}">×</button>`:""}</span></div>
         <div class="tk-items">${items.map(t=>tkCard(t,ed)).join("")||(ed?"":`<div class="dashed" style="margin:0">empty</div>`)}</div>
         ${ed?`<button type="button" class="tk-addcard" data-tkadd="${esc(id)}">＋ Add task</button>`:""}</div>`; }).join("")}
       ${ed?`<button type="button" class="tk-addcol" id="tkAddCol" title="Add a status" aria-label="Add a status">＋</button>`:""}</div>`;
@@ -4645,6 +4662,7 @@ function renderTasks(){
   const ac=P.querySelector("#tkAddCol"); if(ac) ac.onclick=()=>{ const n=(prompt("Name of the new status (e.g. Waiting for approval)")||"").trim().slice(0,30); if(!n) return;
     if(tkStages().some(x=>x[1].toLowerCase()===n.toLowerCase())){ toast("That status already exists"); return; }
     S.taskStages=(Array.isArray(S.taskStages)?S.taskStages:[]).concat([{ id:uid("st"), label:n }]); if(save()) toast("Status added: "+n); renderTasks(); };
+  P.querySelectorAll("[data-tkmv]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); const [id,dir]=b.dataset.tkmv.split("|"); tkMoveStage(id, +dir); });
   P.querySelectorAll("[data-tkcolx]").forEach(b=>b.onclick=()=>{ const id=b.dataset.tkcolx, lab=(tkStages().find(x=>x[0]===id)||[])[1], n=S.tasks.filter(t=>t.status===id).length;
     if(!confirm(`Remove the status “${lab}”?${n?` Its ${n} task${n>1?"s go":" goes"} back to To do.`:""}`)) return;
     S.tasks.forEach(t=>{ if(t.status===id) tkSetStatus(t,"todo"); }); S.taskStages=(S.taskStages||[]).filter(x=>x.id!==id); if(save()) toast("Status removed"); renderTasks(); });
@@ -4678,6 +4696,7 @@ function openTask(id, preset){
   const team=taskTeam(), asg=t.ownerIds.slice(), was=asg.slice(), imgs=(t.imgs||[]).slice(), labs=t.labels.slice(); let st=t.status;
   openDrawer(`<div class="dr-h"><div><div class="lbl">Tasks</div><h3 style="margin-top:4px">${isNew?"New task":esc(t.title)}</h3></div><button class="btn sm" id="xClose">Close</button></div>
     <div class="fld"><label for="tk-t">What needs doing</label><input id="tk-t" value="${esc(t.title)}" placeholder="Put the Diwali sale code in every caption today"></div>
+    <p class="hint" style="margin:-6px 0 12px">✍️ Reporter: <b>${esc(t.by||"—")}</b>${isNew?" (you — set automatically)":t.at?" · created "+esc(dmy(String(t.at).slice(0,10))):""}</p>
     <div class="fld"><label>Status</label><div class="seg tk-seg" role="group">${tkStages().map(([v,l])=>`<button type="button" data-tkst="${esc(v)}" class="${st===v?"on":""}">${esc(l)}</button>`).join("")}</div></div>
     <div class="fld"><label>Labels</label><div class="tk-labs" id="tkLabs"></div>
       <div class="row" style="gap:6px;margin-top:6px"><input id="tk-lab" placeholder="Add a label, e.g. Caption" style="max-width:240px"><button type="button" class="btn sm" id="tkLabAdd">Add</button></div>
