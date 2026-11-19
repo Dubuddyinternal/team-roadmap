@@ -312,6 +312,7 @@ details.fdrop{margin-bottom:14px}
 .cp-r>span:last-child{text-align:right;font-weight:600}.cp-bad{color:var(--crit)}.cp-ok{color:var(--good)}
 .okr .fdrop{margin:12px 0 0}
 .okr-from{display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:var(--ink-3);margin:2px 0 8px}.okr-from b{color:var(--ink-2)}
+.wl-pair{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start}.wl-pair>.fdrop{flex:1 1 300px;min-width:0}
 .wl{border:1px solid var(--line);border-radius:10px;overflow:auto;max-height:320px}
 .wl-r{display:grid;grid-template-columns:minmax(92px,1fr) 58px 56px 74px 74px 16px;min-width:420px;gap:6px;align-items:center;padding:7px 12px;border-bottom:1px solid var(--line);font-size:12.5px}
 .wl-r:last-child{border-bottom:0}.wl-r b{font-family:var(--mono,monospace);text-align:right}
@@ -1461,6 +1462,32 @@ function weekLog(k, series, st, tgt){
       <span class="wl-m">${r.now?"…":r.gain>=need?"✓":"✕"}</span></div>`; }).join("");
   return fdrop("wl-"+k, `📅 Week by week · ${done?met+" of "+done+" weeks on pace":"first week running"}`, `<div class="wl">${head}${body}</div>`);
 }
+/* 📆 day by day since the target started: each day's gain (from that day's reading) against the gain needed per day */
+function dayLog(k, series, st, tgt){
+  const dl=deadlineOf(k), span=Math.max(1, days(st.d, dl)), end=today();
+  const need=Math.max(0, Math.ceil((tgt-st.v)/Math.max(1, days(st.d, dl))));
+  const have=new Map(series.map(p=>[p.d,p.v]));
+  const rows=[]; let d=st.d, prev=st.v;
+  while(d<=end && rows.length<400){ const v=have.has(d)?have.get(d):null;
+    if(v!=null){ rows.push({ d, gain:d===st.d?0:v-prev, at:v, now:d===end, first:d===st.d }); prev=v; }
+    else rows.push({ d, gap:true });
+    d=addDays(d,1); }
+  const real=rows.filter(r=>!r.gap && !r.first && !r.now);
+  if(!rows.some(r=>!r.gap)) return "";
+  const met=real.filter(r=>r.gain>=need).length;
+  const head=`<div class="wl-r wl-h"><span>Day</span><span>Change</span><span>Needed</span><span title="Where the count had to be by that day to stay on pace">Should be</span><span title="The count read that day">Reached</span><span></span></div>`;
+  const body=rows.slice().reverse().map(r=>{ const lbl=r.now?"Today":`${new Date(r.d+"T00:00:00").toLocaleDateString("en-GB",{weekday:"short"})} ${dmy(r.d)}`;
+    if(r.gap) return `<div class="wl-r up"><span>${lbl}</span><b>—</b><span class="wl-n">+${fmt(need)}</span><span class="wl-n"></span><span class="wl-n" title="No reading saved that day">no reading</span><span class="wl-m"></span></div>`;
+    const should=Math.round(st.v+(tgt-st.v)*Math.min(1, Math.max(0, days(st.d, r.d))/span)), behind=r.at<should;
+    return `<div class="wl-r ${r.now?"now":r.first?"":r.gain>=need?"ok":"miss"}">
+      <span>${lbl}${r.first?" · start":""}</span>
+      <b>${r.first?"":(r.gain>=0?"+":"−")+fmt(Math.abs(r.gain))}</b>
+      <span class="wl-n">+${fmt(need)}</span>
+      <span class="wl-n">${fmt(should)}</span>
+      <span class="wl-at ${behind?"behind":"ahead"}" title="${behind?fmt(should-r.at)+" behind pace":"on or ahead of pace"}">${fmt(r.at)}</span>
+      <span class="wl-m">${r.now?"…":r.first?"":r.gain>=need?"✓":"✕"}</span></div>`; }).join("");
+  return fdrop("dl-"+k, `📆 Day by day · ${real.length?met+" of "+real.length+" days on pace":"first day running"}`, `<div class="wl">${head}${body}</div>`);
+}
 /* 📅 the agreement week by week, for the whole quarter: for each weekly (or daily ×7) target, how many were posted
    in each week from the "counting from" date to the end of the quarter (weeks still to come show what's needed),
    with the quarter's total at the bottom — like the subscriber log above */
@@ -2311,7 +2338,7 @@ function renderSummary(){
       </div>
       <div class="meter okr2-m" title="Start ${fmt(st.v)} · now ${fmt(cur)} · target ${fmt(tgt)}"><i style="width:${pct}%;background:${col}"></i><u style="left:${startPct}%"></u></div>
       <div class="okr-foot"><span>${cur>=tgt?"Target reached 🎉":`${fmt(tgt-cur)} to go · ${pct.toFixed(1)}% of ${fmt(tgt)}`}</span>${stale?`<span class="stalec">⚠ not synced since ${dmy(last.d)}</span>`:""}</div>
-      ${weekLog(k, series, st, tgt)}</div>`; };
+      <div class="wl-pair">${weekLog(k, series, st, tgt)}${dayLog(k, series, st, tgt)}</div></div>`; };
   $("#pane-summary").innerHTML=`
    <div class="sumbar">
      <div class="platsw">${[["all","Both platforms"],["yt","YouTube"],["ig","Instagram"]].map(([k,l])=>
