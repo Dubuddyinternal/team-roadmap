@@ -25,8 +25,9 @@
         + '<div style="font-size:11.5px;color:' + GREY + '">' + esc(k.tag) + '</div>' + bar(k.pct, col) + '</td>'
         + '<td style="padding:9px 0;border-top:1px solid #EEE6DF;text-align:right;font-family:monospace;white-space:nowrap;vertical-align:top">' + doneText(k) + '<div style="color:' + col + ';font-family:Arial;font-weight:700;font-size:12px;margin-top:3px">' + st + '</div></td></tr>';
     }).join("");
-    var tot = o.total && o.total.now != null ? '<div style="font-size:12.5px;color:' + GREY + ';margin:2px 0 6px">' + esc(o.total.label) + ' now <b style="color:' + INK + '">' + fmt(o.total.now) + '</b> of ' + fmt(o.total.target)
-      + (o.total.gained != null ? ' · ' + (o.total.gained >= 0 ? "+" : "−") + fmt(Math.abs(o.total.gained)) + ' this period' : '') + '</div>' : "";
+    var tot = (o.totals || (o.total ? [o.total] : [])).filter(function (t) { return t && t.now != null; }).map(function (t) {
+      return '<div style="font-size:12.5px;color:' + GREY + ';margin:2px 0 6px">' + esc(t.label) + ' now <b style="color:' + INK + '">' + fmt(t.now) + '</b> of ' + fmt(t.target)
+        + (t.gained != null ? ' · ' + (t.gained >= 0 ? "+" : "−") + fmt(Math.abs(t.gained)) + ' this period' : '') + '</div>'; }).join("");
     return '<div style="border:1px solid #E5DDD5;border-radius:12px;padding:12px 16px 8px;margin:0 0 12px">'
       + '<table style="width:100%;border-collapse:collapse"><tr><td style="font-size:15px;font-weight:800">' + esc(o.title) + '</td><td style="text-align:right;font-size:20px;font-weight:800;color:' + (o.pct >= 100 ? GREEN : INK) + '">' + o.pct + '%</td></tr></table>'
       + tot + '<table style="width:100%;font-size:13.5px;border-collapse:collapse">' + rows + '</table></div>';

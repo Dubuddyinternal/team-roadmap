@@ -93,10 +93,11 @@ function model(p: any, name: string, R: { from: string; asOf: string; months: nu
       const tag = k.type === "posts" ? ((k.vtype === "short" || k.vtype === "reel") ? "YT Short / Insta Reel" : (KIND[k.pl + ":" + k.vtype] || "Posts")) : k.type === "ideas" ? (cats[k.cat] || "Any") + " ideas" : k.type === "count" ? "Done count" : "%";
       return { title: k.title, type: k.type, done: v, target: t, pct: Math.round(t ? Math.min(100, v / t * 100) : 0), tag };
     });
-    let total = null;
-    if (ob.pl && Number(ob.total) > 0) { const s = ser[ob.pl] || []; const now = s.length ? valueAt(s, R.asOf) : null, st = s.length ? valueAt(s, addDays(R.from, -1)) : null;
-      total = { label: ob.pl === "yt" ? "YouTube subscribers" : "Instagram followers", now, target: Number(ob.total), gained: now != null && st != null ? now - st : null }; }
-    return { title: ob.title, pct: krs.length ? Math.round(krs.reduce((a: number, k: any) => a + k.pct, 0) / krs.length) : 0, total, krs };
+    // up to two platform totals per objective (pl/total and pl2/total2)
+    const totals = [[ob.pl, ob.total], [ob.pl2, ob.total2]].filter(([pl, t]) => pl && Number(t) > 0).map(([pl, t]) => {
+      const s = ser[pl] || []; const now = s.length ? valueAt(s, R.asOf) : null, st = s.length ? valueAt(s, addDays(R.from, -1)) : null;
+      return { label: pl === "yt" ? "YouTube subscribers" : "Instagram followers", now, target: Number(t), gained: now != null && st != null ? now - st : null }; });
+    return { title: ob.title, pct: krs.length ? Math.round(krs.reduce((a: number, k: any) => a + k.pct, 0) / krs.length) : 0, total: totals[0] || null, totals, krs };
   });
 }
 

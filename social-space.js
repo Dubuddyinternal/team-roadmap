@@ -1363,7 +1363,7 @@ function normTargets(o){
        [{email, name, objectives:[{id, title, pl, total, krs:[{id, title, type, cat, plat, pl, vtype, target, period, log:{period: value}}]}],
          mail:{mid, end}}] */
     people:(Array.isArray(o.people)?o.people:[]).filter(x=>x && x.email).map(x=>({ email:String(x.email).toLowerCase(), name:x.name||"",
-      objectives:(Array.isArray(x.objectives)?x.objectives:[]).map(ob=>({ id:ob.id||uid("ob"), title:ob.title||"", pl:ob.pl||"", total:ob.total??null,
+      objectives:(Array.isArray(x.objectives)?x.objectives:[]).map(ob=>({ id:ob.id||uid("ob"), title:ob.title||"", pl:ob.pl||"", total:ob.total??null, pl2:ob.pl2||"", total2:ob.total2??null,
         krs:(Array.isArray(ob.krs)?ob.krs:[]).map(k=>Object.assign({ id:k.id||uid("kr"), title:"", type:"manual_pct", cat:"", plat:"", pl:"", vtype:"", target:null, period:"month", log:{} }, k)) })),
       mail:Object.assign({ mid:true, end:true }, x.mail||{}) })) };
   t.goals.forEach(g=>{ if(!g.id) g.id=uid("g"); });
@@ -4133,9 +4133,10 @@ function okrCompute(p, R){
   return (p.objectives||[]).map(ob=>{
     const krs=ob.krs.filter(k=>Number(k.target)>0).map(k=>{ const v=krValue(k,p,R), t=krTarget(k,R); return { k, v, t, pct:t?Math.min(100,v/t*100):0, met:v>=t }; });
     const pct=krs.length?krs.reduce((a,x)=>a+x.pct,0)/krs.length:0;
-    let tot=null; if(ob.pl && Number(ob.total)>0){ const ser=ob.pl==="yt"?ytSeries():igSeries(), now=ser.length?valueAt(ser,R.asOf):null, st=ser.length?valueAt(ser,addDays(R.from,-1)):null;
-      tot={ now, st, target:Number(ob.total), gained:now!=null&&st!=null?now-st:null, pct:now!=null?Math.min(100,now/Number(ob.total)*100):0 }; }
-    return { ob, krs, pct, tot };
+    // up to two platform totals per objective (e.g. YouTube subscribers and Instagram followers)
+    const tots=[[ob.pl,ob.total],[ob.pl2,ob.total2]].filter(([pl,t])=>pl && Number(t)>0).map(([pl,t])=>{ const ser=pl==="yt"?ytSeries():igSeries(), now=ser.length?valueAt(ser,R.asOf):null, st=ser.length?valueAt(ser,addDays(R.from,-1)):null;
+      return { pl, now, st, target:Number(t), gained:now!=null&&st!=null?now-st:null, pct:now!=null?Math.min(100,now/Number(t)*100):0 }; });
+    return { ob, krs, pct, tot:tots[0]||null, tots };
   });
 }
 const krKindTag = k => k.type==="posts" ? ((k.vtype==="short"||k.vtype==="reel") ? ktag("yt","short")+ktag("ig","reel") : ktag(k.pl,k.vtype)) : k.type==="ideas" ? `<span class="catag">💡 ${esc(regLabel("ideacat",k.cat)||k.cat||"any")}${k.plat?" · "+(k.plat==="yt"?"YT":"Insta"):""}</span>`
@@ -4174,11 +4175,11 @@ function renderOkrs(){
         <p class="hint">${R.custom?`${days(R.from,R.to)+1} days, targets scaled to ${R.months} month${R.months===1?"":"s"}`:R.finished?"Month finished":"Day "+(days(R.from,R.asOf)+1)+" of "+(days(R.from,R.to)+1)+" · "+(days(R.asOf,R.to))+" days left"}
           · ideas from Ideation, posts from YouTube and Instagram</p></div></div>
       <div class="okr-score"><b>${Math.round(overall)}<small>%</small></b><span class="lbl">${met} of ${allKrs.length} key results done</span></div></div>
-      ${obs.map((o,oi)=>`<div class="ob2"><div class="ob2-h"><div><span class="lbl">Objective ${oi+1}${o.ob.pl?" · "+(o.ob.pl==="yt"?"YouTube":"Instagram"):""}</span><h3>${esc(o.ob.title)}</h3></div>
+      ${obs.map((o,oi)=>`<div class="ob2"><div class="ob2-h"><div><span class="lbl">Objective ${oi+1}${o.tots.length?" · "+[...new Set(o.tots.map(t=>t.pl==="yt"?"YouTube":"Instagram"))].join(" + "):o.ob.pl?" · "+(o.ob.pl==="yt"?"YouTube":"Instagram"):""}</span><h3>${esc(o.ob.title)}</h3></div>
           <div class="ob2-pct"><b>${Math.round(o.pct)}%</b><span class="hint">${o.krs.filter(x=>x.met).length} of ${o.krs.length} done</span></div></div>
-        ${o.tot?`<div class="ob2-tot"><span>${o.ob.pl==="yt"?"Subscribers":"Followers"} now <b>${o.tot.now==null?"—":fmt(o.tot.now)}</b> of <b>${fmt(o.tot.target)}</b></span>
-          <div class="meter"><i style="width:${o.tot.pct}%;background:${o.ob.pl==="yt"?"var(--c1)":"var(--c3)"}"></i></div>
-          <span class="hint">${o.tot.gained==null?"":(o.tot.gained>=0?"+":"−")+fmt(Math.abs(o.tot.gained))+" in this period · "}${o.tot.now==null?"":fmt(Math.max(0,o.tot.target-o.tot.now))+" to go"}</span></div>`:""}
+        ${o.tots.map(t=>`<div class="ob2-tot"><span>${t.pl==="yt"?"YouTube subscribers":"Instagram followers"} now <b>${t.now==null?"—":fmt(t.now)}</b> of <b>${fmt(t.target)}</b></span>
+          <div class="meter"><i style="width:${t.pct}%;background:${t.pl==="yt"?"var(--c1)":"var(--c3)"}"></i></div>
+          <span class="hint">${t.gained==null?"":(t.gained>=0?"+":"−")+fmt(Math.abs(t.gained))+" in this period · "}${t.now==null?"":fmt(Math.max(0,t.target-t.now))+" to go"}</span></div>`).join("")}
         <div class="kr2s">${o.krs.map((x,i)=>krRow(x,i,R,ed,oi)).join("")||`<p class="hint">No key results yet.</p>`}</div></div>`).join("")}
       ${ed?`<div class="okr-foot2"><span style="flex:1"></span><button class="btn sm" id="okrEdit">${OKR_EDIT?"Close editing":"✎ Edit objectives & key results"}</button></div>`:""}
       ${ed&&OKR_EDIT?okrEditor(p):""}
@@ -4194,6 +4195,9 @@ function okrEditor(p){
       <div class="ed-row"><input class="ed-t" data-obt value="${esc(ob.title)}" placeholder="Objective">
         <select data-obpl><option value="">No platform total</option><option value="yt" ${ob.pl==="yt"?"selected":""}>YouTube subscribers</option><option value="ig" ${ob.pl==="ig"?"selected":""}>Instagram followers</option></select>
         <input type="number" data-obtot value="${ob.total??""}" placeholder="total to reach" style="width:120px"><button class="btn sm danger" data-obdel="${oi}">Remove</button></div>
+      <div class="ed-row"><span class="hint" style="min-width:0">and also</span>
+        <select data-obpl2><option value="">No second total</option><option value="yt" ${ob.pl2==="yt"?"selected":""}>YouTube subscribers</option><option value="ig" ${ob.pl2==="ig"?"selected":""}>Instagram followers</option></select>
+        <input type="number" data-obtot2 value="${ob.total2??""}" placeholder="total to reach" style="width:120px"></div>
       ${ob.krs.map((k,ki)=>`<div class="ed-row kr" data-kr="${ki}"><span class="kr2-n">KR${ki+1}</span><input class="ed-t" data-krt value="${esc(k.title)}" placeholder="Key result">
         <select data-krtype>${Object.entries(OKR_TYPES).map(([v,l])=>`<option value="${v}" ${k.type===v?"selected":""}>${l}</option>`).join("")}</select>
         ${k.type==="ideas"?`<select data-krcat>${catOpts(k.cat)}</select><select data-krplat><option value="">Any platform</option><option value="yt" ${k.plat==="yt"?"selected":""}>For YouTube</option><option value="ig" ${k.plat==="ig"?"selected":""}>For Instagram</option></select>`:""}
@@ -4209,6 +4213,7 @@ function readOkrEditor(p){
   const box=$("#pane-okrs").querySelector(".okr-edit"); if(!box) return;
   box.querySelectorAll(".ed-ob").forEach(el=>{ const ob=p.objectives[Number(el.dataset.ob)]; if(!ob) return;
     ob.title=el.querySelector("[data-obt]").value.trim(); ob.pl=el.querySelector("[data-obpl]").value; const t=el.querySelector("[data-obtot]").value; ob.total=t===""?null:Number(t);
+    const p2=el.querySelector("[data-obpl2]"), t2=el.querySelector("[data-obtot2]"); if(p2){ ob.pl2=p2.value; ob.total2=t2.value===""?null:Number(t2.value); }
     el.querySelectorAll(".ed-row.kr").forEach(r=>{ const k=ob.krs[Number(r.dataset.kr)]; if(!k) return;
       k.title=r.querySelector("[data-krt]").value.trim(); k.type=r.querySelector("[data-krtype]").value;
       const c=r.querySelector("[data-krcat]"); if(c) k.cat=c.value; const pf=r.querySelector("[data-krplat]"); if(pf) k.plat=pf.value;
@@ -4239,8 +4244,9 @@ function okrMailPanel(p, R, ed){
 // the email exactly as the Edge Function builds it (okr-mail.js is shared by both)
 function okrMailModel(p, R){
   return okrCompute(p,R).map(o=>({ title:o.ob.title, pct:Math.round(o.pct),
-    total:o.tot?{ label:o.ob.pl==="yt"?"YouTube subscribers":"Instagram followers", now:o.tot.now, target:o.tot.target, gained:o.tot.gained }:null,
-    krs:o.krs.map(x=>({ title:x.k.title, type:x.k.type, done:x.v, target:x.t, pct:Math.round(x.pct), tag:x.k.type==="posts"?kindOf(x.k.pl,x.k.vtype):x.k.type==="ideas"?(regLabel("ideacat",x.k.cat)||"Ideas")+" ideas":x.k.type==="count"?"Done count":"%" })) }));
+    total:o.tot?{ label:o.tot.pl==="yt"?"YouTube subscribers":"Instagram followers", now:o.tot.now, target:o.tot.target, gained:o.tot.gained }:null,
+    totals:o.tots.map(t=>({ label:t.pl==="yt"?"YouTube subscribers":"Instagram followers", now:t.now, target:t.target, gained:t.gained })),
+    krs:o.krs.map(x=>({ title:x.k.title, type:x.k.type, done:x.v, target:x.t, pct:Math.round(x.pct), tag:x.k.type==="posts"?((x.k.vtype==="short"||x.k.vtype==="reel")?"YT Short / Insta Reel":kindOf(x.k.pl,x.k.vtype)):x.k.type==="ideas"?(regLabel("ideacat",x.k.cat)||"Ideas")+" ideas":x.k.type==="count"?"Done count":"%" })) }));
 }
 function wireOkrs(P, p, R, people){
   P.querySelectorAll("[data-okrwho]").forEach(b=>b.onclick=()=>{ OKR_WHO=b.dataset.okrwho; OKR_EDIT=false; renderOkrs(); });
