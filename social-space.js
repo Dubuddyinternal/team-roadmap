@@ -312,7 +312,13 @@ details.fdrop{margin-bottom:14px}
 .cp-r>span:last-child{text-align:right;font-weight:600}.cp-bad{color:var(--crit)}.cp-ok{color:var(--good)}
 .okr .fdrop{margin:12px 0 0}
 .okr-from{display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:var(--ink-3);margin:2px 0 8px}.okr-from b{color:var(--ink-2)}
-.wl-pair{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start}.wl-pair>.fdrop{flex:1 1 300px;min-width:0}
+.dl-r{display:grid;grid-template-columns:minmax(90px,1.4fr) repeat(3,minmax(60px,1fr));gap:8px;align-items:center;padding:7px 12px;border-bottom:1px solid var(--line);font-size:12.5px}
+.dl-r:last-child{border-bottom:0}.dl-r b{font-family:var(--mono,monospace);text-align:right}.dl-r>span:first-child{color:var(--ink-2)}
+.dl-r.now{background:var(--surface-4)}.dl-r.tot{background:var(--surface-4);border-top:1.5px solid var(--line-strong);font-weight:600}
+.dl-g{color:var(--good)}.dl-l{color:var(--crit)}.dl-up{color:var(--good)}.dl-dn{color:var(--crit)}
+.dl-r.wl-h>span{text-align:right}.dl-r.wl-h>span:first-child{text-align:left}
+.dl-pick{display:inline-flex;gap:8px;align-items:center;font-size:12.5px;color:var(--ink-2);margin:0 0 8px}.dl-pick select{border:1px solid var(--line-2);border-radius:var(--r-s);padding:4px 8px;font:inherit;font-size:12.5px;background:var(--surface)}
+.dl{max-height:420px}
 .wl{border:1px solid var(--line);border-radius:10px;overflow:auto;max-height:320px}
 .wl-r{display:grid;grid-template-columns:minmax(92px,1fr) 58px 56px 74px 74px 16px;min-width:420px;gap:6px;align-items:center;padding:7px 12px;border-bottom:1px solid var(--line);font-size:12.5px}
 .wl-r:last-child{border-bottom:0}.wl-r b{font-family:var(--mono,monospace);text-align:right}
@@ -1177,7 +1183,7 @@ async function loadLive(force){
     const [posts, snaps] = await Promise.all([
       allRows(()=>OPT.supa.from("social_posts").select("platform,external_id,title,url,thumbnail,post_type,published_at,duration_s,views,likes,comments,shares,watch_minutes,avg_view_s,avg_view_pct,impressions,followers_gained,updated_at")
         .eq("team_slug", team).order("published_at", {ascending:false}).order("external_id", {ascending:true})),
-      allRows(()=>OPT.supa.from("social_snapshots").select("platform,day,followers,updated_at")
+      allRows(()=>OPT.supa.from("social_snapshots").select("platform,day,followers,gained,updated_at")
         .eq("team_slug", team).gte("day", since).order("day", {ascending:true}).order("platform", {ascending:true}))
     ]);
     LIVE.posts = posts; LIVE.snaps = snaps; LIVE.since = since;
@@ -1462,31 +1468,35 @@ function weekLog(k, series, st, tgt){
       <span class="wl-m">${r.now?"…":r.gain>=need?"✓":"✕"}</span></div>`; }).join("");
   return fdrop("wl-"+k, `📅 Week by week · ${done?met+" of "+done+" weeks on pace":"first week running"}`, `<div class="wl">${head}${body}</div>`);
 }
-/* 📆 day by day since the target started: each day's gain (from that day's reading) against the gain needed per day */
-function dayLog(k, series, st, tgt){
-  const dl=deadlineOf(k), span=Math.max(1, days(st.d, dl)), end=today();
-  const need=Math.max(0, Math.ceil((tgt-st.v)/Math.max(1, days(st.d, dl))));
-  const have=new Map(series.map(p=>[p.d,p.v]));
-  const rows=[]; let d=st.d, prev=st.v;
-  while(d<=end && rows.length<400){ const v=have.has(d)?have.get(d):null;
-    if(v!=null){ rows.push({ d, gain:d===st.d?0:v-prev, at:v, now:d===end, first:d===st.d }); prev=v; }
-    else rows.push({ d, gap:true });
-    d=addDays(d,1); }
-  const real=rows.filter(r=>!r.gap && !r.first && !r.now);
-  if(!rows.some(r=>!r.gap)) return "";
-  const met=real.filter(r=>r.gain>=need).length;
-  const head=`<div class="wl-r wl-h"><span>Day</span><span>Change</span><span>Needed</span><span title="Where the count had to be by that day to stay on pace">Should be</span><span title="The count read that day">Reached</span><span></span></div>`;
-  const body=rows.slice().reverse().map(r=>{ const lbl=r.now?"Today":`${new Date(r.d+"T00:00:00").toLocaleDateString("en-GB",{weekday:"short"})} ${dmy(r.d)}`;
-    if(r.gap) return `<div class="wl-r up"><span>${lbl}</span><b>—</b><span class="wl-n">+${fmt(need)}</span><span class="wl-n"></span><span class="wl-n" title="No reading saved that day">no reading</span><span class="wl-m"></span></div>`;
-    const should=Math.round(st.v+(tgt-st.v)*Math.min(1, Math.max(0, days(st.d, r.d))/span)), behind=r.at<should;
-    return `<div class="wl-r ${r.now?"now":r.first?"":r.gain>=need?"ok":"miss"}">
-      <span>${lbl}${r.first?" · start":""}</span>
-      <b>${r.first?"":(r.gain>=0?"+":"−")+fmt(Math.abs(r.gain))}</b>
-      <span class="wl-n">+${fmt(need)}</span>
-      <span class="wl-n">${fmt(should)}</span>
-      <span class="wl-at ${behind?"behind":"ahead"}" title="${behind?fmt(should-r.at)+" behind pace":"on or ahead of pace"}">${fmt(r.at)}</span>
-      <span class="wl-m">${r.now?"…":r.first?"":r.gain>=need?"✓":"✕"}</span></div>`; }).join("");
-  return fdrop("dl-"+k, `📆 Day by day · ${real.length?met+" of "+real.length+" days on pace":"first day running"}`, `<div class="wl">${head}${body}</div>`);
+/* 📆 day by day, one calendar month at a time (starts on the 1st; a month picker shows earlier ones):
+   Gain = new followers / subscribers that day (synced), Change = that day's count minus the day before,
+   Loss = Gain − Change (for YouTube that is exactly its "subscribers lost") */
+const DLMONTH = {};
+function dayLog(k, series){
+  if(!series.length) return "";
+  const plat = k==="yt" ? "youtube" : "instagram";
+  const gainOf = new Map(LIVE.snaps.filter(r=>r.platform===plat && r.gained!=null).map(r=>[r.day, Number(r.gained)]));
+  const have = new Map(series.map(p=>[p.d, p.v]));
+  const nowM = today().slice(0,7), firstM = series[0].d.slice(0,7);
+  const months=[]; { const d=new Date(nowM+"-01T00:00:00"); for(let i=0;i<24;i++){ const m=iso(d).slice(0,7); if(m<firstM) break; months.push(m); d.setMonth(d.getMonth()-1); } }
+  const mk = months.includes(DLMONTH[k]) ? DLMONTH[k] : nowM;
+  const [y,m] = mk.split("-").map(Number), last = iso(new Date(y, m, 0)), end = last>today() ? today() : last;
+  const rows=[]; let tg=0, tl=0, tc=0, anyG=false, anyC=false;
+  for(let d=mk+"-01"; d<=end; d=addDays(d,1)){
+    const v=have.get(d), pv=have.get(addDays(d,-1)), ch = v!=null && pv!=null ? v-pv : null, g = gainOf.has(d) ? gainOf.get(d) : null;
+    const l = g!=null && ch!=null ? Math.max(0, g-ch) : null;
+    if(g!=null){ tg+=g; anyG=true; } if(l!=null) tl+=l; if(ch!=null){ tc+=ch; anyC=true; }
+    rows.push({ d, g, l, ch });
+  }
+  const num = (x, sign) => x==null ? `<span class="wl-n">—</span>` : sign ? `${x>0?"+":x<0?"−":""}${fmt(Math.abs(x))}` : fmt(x);
+  const head=`<div class="dl-r wl-h"><span>Date</span><span>Gain</span><span>Loss</span><span>Change</span></div>`;
+  const body=rows.map(r=>`<div class="dl-r ${r.d===today()?"now":""}">
+      <span>${new Date(r.d+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})}${r.d===today()?" · today":""}</span>
+      <b class="dl-g">${num(r.g)}</b><b class="dl-l">${num(r.l)}</b>
+      <b class="${r.ch>0?"dl-up":r.ch<0?"dl-dn":""}">${num(r.ch,true)}</b></div>`).join("")
+    + `<div class="dl-r tot"><span>${monthName(mk).split(" ")[0]} total</span><b class="dl-g">${anyG?fmt(tg):"—"}</b><b class="dl-l">${anyG&&anyC?fmt(tl):"—"}</b><b class="${tc>0?"dl-up":tc<0?"dl-dn":""}">${anyC?num(tc,true):"—"}</b></div>`;
+  const pick=`<label class="dl-pick">Month <select data-dlmonth="${k}" aria-label="Month">${months.map(x=>`<option value="${x}" ${x===mk?"selected":""}>${monthName(x)}</option>`).join("")}</select></label>`;
+  return fdrop("dl-"+k, `📆 Day by day · ${monthName(mk)}${anyC?` · ${tc>0?"+":tc<0?"−":""}${fmt(Math.abs(tc))}`:""}`, `${pick}<div class="wl dl">${head}${body}</div>`);
 }
 /* 📅 the agreement week by week, for the whole quarter: for each weekly (or daily ×7) target, how many were posted
    in each week from the "counting from" date to the end of the quarter (weeks still to come show what's needed),
@@ -2338,7 +2348,7 @@ function renderSummary(){
       </div>
       <div class="meter okr2-m" title="Start ${fmt(st.v)} · now ${fmt(cur)} · target ${fmt(tgt)}"><i style="width:${pct}%;background:${col}"></i><u style="left:${startPct}%"></u></div>
       <div class="okr-foot"><span>${cur>=tgt?"Target reached 🎉":`${fmt(tgt-cur)} to go · ${pct.toFixed(1)}% of ${fmt(tgt)}`}</span>${stale?`<span class="stalec">⚠ not synced since ${dmy(last.d)}</span>`:""}</div>
-      <div class="wl-pair">${weekLog(k, series, st, tgt)}${dayLog(k, series, st, tgt)}</div></div>`; };
+      ${dayLog(k, series)}</div>`; };
   $("#pane-summary").innerHTML=`
    <div class="sumbar">
      <div class="platsw">${[["all","Both platforms"],["yt","YouTube"],["ig","Instagram"]].map(([k,l])=>
@@ -2401,6 +2411,7 @@ function renderSummary(){
   const sn=$("#syncNow"); if(sn) sn.onclick=syncNow;
   P.querySelectorAll("[data-okrmore]").forEach(b=>b.onclick=()=>{ OKR_OPEN[b.dataset.okrmore]=!OKR_OPEN[b.dataset.okrmore]; renderSummary(); });
   wireFdrop(P);
+  P.querySelectorAll("[data-dlmonth]").forEach(sel=>{ sel.onclick=e=>e.stopPropagation(); sel.onchange=()=>{ DLMONTH[sel.dataset.dlmonth]=sel.value; FDROP_OPEN["dl-"+sel.dataset.dlmonth]=true; renderSummary(); }; });
   P.querySelectorAll("[data-pfadd]").forEach(b=>b.onclick=()=>openProof(b.dataset.pfadd, b.dataset.pfmetric));
   P.querySelectorAll("[data-pfimg]").forEach(i=>i.onclick=()=>{ if(typeof showPhoto==="function") showPhoto(i.dataset.pfimg); else window.open(i.dataset.pfimg,"_blank"); });
   P.querySelectorAll("[data-pfdel]").forEach(b=>b.onclick=()=>{ const [k,id]=b.dataset.pfdel.split("|"), list=S.proofs[k]||[], i=list.findIndex(p=>p.id===id); if(i<0) return;
