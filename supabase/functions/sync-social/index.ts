@@ -213,9 +213,10 @@ async function syncYouTube(admin, team, cfg) {
     });
     // the count at the end of day D = current minus the net change on every day after D
     let count = current;
+    // gained = new subscribers that day (the app shows Gain, Loss = Gain − change, and Change, day by day)
     for (const r of rows) {
-      if (r.day >= ymd(today)) { count -= (num(r.subscribersGained) || 0) - (num(r.subscribersLost) || 0); continue; }
-      snaps.push({ team_slug: team, platform: "youtube", day: r.day, followers: count, updated_at: new Date().toISOString() });
+      if (r.day >= ymd(today)) { snaps[0].gained = num(r.subscribersGained); count -= (num(r.subscribersGained) || 0) - (num(r.subscribersLost) || 0); continue; }
+      snaps.push({ team_slug: team, platform: "youtube", day: r.day, followers: count, gained: num(r.subscribersGained), updated_at: new Date().toISOString() });
       count -= (num(r.subscribersGained) || 0) - (num(r.subscribersLost) || 0);
     }
   } catch (e) { notes.push("Follower history not available: " + e.message); }
