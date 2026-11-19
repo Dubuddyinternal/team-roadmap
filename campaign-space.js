@@ -62,6 +62,7 @@ const BCSS = `
 .kb-t{font-weight:600;font-size:13px;line-height:1.35;overflow-wrap:anywhere}
 .kb-m{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
 .kb-tag{font-family:var(--mono);font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;white-space:nowrap;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line)}
+.kb-tag[style*="--kc"]{background:color-mix(in srgb,var(--kc) 12%,transparent);color:var(--kc);border-color:color-mix(in srgb,var(--kc) 30%,transparent)}
 .kb-tag.yt{background:#FBEAE2;color:#B2451A;border-color:#F1CDBD}.kb-tag.ig{background:#ECE8FB;color:#5034C0;border-color:#D7CFF6}
 .kb-tag.task{background:var(--saffron-soft);color:#8A5A00;border-color:#F1DDB0}.kb-tag.sync{background:#E3F4F6;color:#006C79;border-color:#C2E6EB}
 .kb-tag.late{background:var(--crit-soft);color:var(--crit);border-color:#F2C8C2}
@@ -80,7 +81,7 @@ const BCSS = `
 .kb-rep{font-size:12.5px;color:var(--ink-3);margin:-8px 0 14px}.kb-rep b{color:var(--ink-2)}
 .kb-seg{display:inline-flex;border:1px solid var(--line-2);border-radius:999px;overflow:hidden;flex-wrap:wrap}
 .kb-seg button{border:none;background:none;font-family:var(--mono);font-size:12px;padding:7px 14px;color:var(--ink-3);cursor:pointer}.kb-seg button.on{background:var(--ink);color:var(--bg)}.kb-seg button:disabled{cursor:default}
-.kb-labs{display:flex;flex-wrap:wrap;gap:6px}.kt.own{--kc:var(--ink-2);display:inline-flex;align-items:center;gap:4px}.kt.own button{border:none;background:none;color:inherit;cursor:pointer;padding:0;font-size:12px;line-height:1}
+.kb-labs{display:flex;flex-wrap:wrap;gap:6px}.kt.own{display:inline-flex;align-items:center;gap:4px}.kt.own button{border:none;background:none;color:inherit;cursor:pointer;padding:0;font-size:12px;line-height:1}
 .kb-labadd{display:flex;gap:6px;margin-top:8px}.kb-labadd input{max-width:240px}
 .kb-picbox{border:1px solid var(--line-2);border-radius:var(--r-s);background:var(--surface)}.kb-picbox textarea{border:none;border-radius:var(--r-s) var(--r-s) 0 0;min-height:80px;resize:vertical}
 .kb-picbox.dropping{outline:2px dashed var(--accent);outline-offset:-2px}
@@ -91,6 +92,7 @@ const BCSS = `
 .kb-it{position:relative}.kb-it .kb-t{padding-right:26px}
 .kb-del{position:absolute;top:8px;right:8px;border:1px solid transparent;background:none;border-radius:6px;padding:1px 5px;font-size:13px;cursor:pointer;opacity:.5;line-height:1.3}
 .kb-del:hover{opacity:1;border-color:var(--crit);background:color-mix(in srgb,var(--crit) 10%,transparent)}
+.kb-savebar{position:sticky;bottom:-40px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 0;margin:4px 0 6px;background:var(--bg);border-top:1px solid var(--line);z-index:2}
 .kb-send{cursor:pointer;font:inherit;font-family:var(--mono);font-size:10px}.kb-send:hover{filter:brightness(.95);text-decoration:underline}
 .kb-tpick{position:relative;margin:0 0 8px}.kb-tpbtn{border:1px solid var(--line-2);background:var(--surface);border-radius:999px;padding:6px 12px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--ink-2);max-width:100%;text-align:left}
 .kb-tppop{position:absolute;z-index:5;top:calc(100% + 4px);left:0;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);box-shadow:0 10px 28px rgba(26,24,21,.16);padding:6px;min-width:240px;max-height:320px;overflow:auto}
@@ -2478,7 +2480,10 @@ function typeLabels1(it){
 }
 const ktBase = l => String(l).replace(/^(YT|Insta) /,"");
 const ktColor = l => /Story$/.test(l) ? "#B3417A" : /Long video$/.test(l) ? "var(--c2)" : /Live$/.test(l) ? "var(--crit)"
-  : /^YT /.test(l) ? "var(--c1)" : /^Insta /.test(l) ? "var(--c3)" : (KT_COLORS[l]||KT_COLORS[ktBase(l)]||"var(--ink-3)");
+  : /^YT /.test(l) ? "var(--c1)" : /^Insta /.test(l) ? "var(--c3)" : (KT_COLORS[l]||KT_COLORS[ktBase(l)]||ktHue(l));
+/* no grey tags: a type without its own colour gets one of these, always the same for the same name */
+const KT_PALETTE = ["#C8511B","#6246D4","#0F7F86","#B3417A","#17784F","#9A7C00","#3B6FB6","#AE2318","#7A4FB5","#B4560B"];
+function ktHue(l){ let h=0; for(const ch of String(l).toLowerCase()) h=(h*31+ch.charCodeAt(0))%997; return KT_PALETTE[h%KT_PALETTE.length]; }
 const ktOne = l => `<span class="kt" style="--kc:${ktColor(l)}">${esc(l)}</span>`;
 const typeTags = it => typeLabels(it).map(ktOne).join("");
 const CP_STAGES = [["todo","Ideas"],["draft","To shoot"],["inprogress","Editing"],["inreview","Your check"],["approved","Scheduled"],["published","Live"]];
@@ -2523,9 +2528,9 @@ const kbState = x => x.live ? "done" : x.content ? (x.si>0 || x.ref.bst==="prog"
   : ["idea","todo","prog"].includes(x.ref.bst) ? x.ref.bst : (x.ref.bstatus==="prog" || x.subs.some(s=>s.status!=="todo")) ? "prog" : "todo";
 const kbPct = x => x.content ? Math.round(x.si/5*100) : x.subs.length ? Math.round(x.subs.filter(s=>s.done).length/x.subs.length*100) : 0;
 function kbTags(x){
-  return (x.hl?`<span class="kb-tag hl">⭐ Highlight</span>`:"") + x.tags + (x.ref.labels||[]).map(l=>`<span class="kt own">${esc(l)}</span>`).join("")
+  return (x.hl?`<span class="kb-tag hl">⭐ Highlight</span>`:"") + x.tags + (x.ref.labels||[]).map(l=>`<span class="kt own" style="--kc:${ktHue(l)}">${esc(l)}</span>`).join("")
     + (x.content ? `<button type="button" class="kb-tag sync kb-send" data-kbsend="${esc(x.id)}" title="Open this card in Content Process (it's the same card)">↗ Send to Content Process</button>`
-       : x.plats.filter(p=>!PROCESS_PLATFORMS.includes(p)).map(p=>`<span class="kb-tag">${esc(p)}</span>`).join(""));
+       : x.plats.filter(p=>!PROCESS_PLATFORMS.includes(p) && p!=="Other").map(p=>`<span class="kb-tag" style="--kc:${ktHue(p)}">${esc(p)}</span>`).join(""));
 }
 const kbWho = (id, name, ids) => ids && ids.length>1
   ? `<span class="kb-who">${ids.map(i=>avatar(kbName(i)||"?")).join("")}${esc(ids.map(i=>(kbName(i)||"").split(" ")[0]).join(" + "))}</span>`
@@ -2679,7 +2684,7 @@ function kbPicBox(x, id, label, textKey, imgKey, ed, ph){ const imgs=x.ref[imgKe
       ${ed?`<label class="kb-picadd">📎 Add picture<input type="file" data-picin="${id}" accept="image/*" multiple hidden></label><span class="hint">or drop / paste a picture here</span>`:""}<span class="hint" data-picst="${id}"></span></div></div></div>`; }
 function kbWirePics(x, d, id, textKey, imgKey){
   const ta=d.querySelector("#"+id), box=d.querySelector(`[data-pbox="${id}"]`); if(!ta || !box) return;
-  ta.oninput=()=>{ x.ref[textKey]=ta.value; saveQuiet(); }; ta.onchange=()=>{ x.ref[textKey]=ta.value; save(); };
+  ta.oninput=()=>{ x.ref[textKey]=ta.value; KBDIRTY=true; saveQuiet(); }; ta.onchange=()=>{ x.ref[textKey]=ta.value; KBDIRTY=true; saveQuiet(); };
   if(ta.disabled) return;
   const add=files=>kbAddPics(x, files, d, id, imgKey);
   ta.addEventListener("paste",e=>{ const fs=[...((e.clipboardData&&e.clipboardData.files)||[])].filter(f=>/^image\//.test(f.type)); if(fs.length){ e.preventDefault(); add(fs); } });
@@ -2715,7 +2720,8 @@ function chDiff(c){
   [...CH.m.keys()].filter(id=>!seen.has(id)).forEach(id=>{ const old=CH.m.get(id); ev.push({ place:"camp:"+c.id+":"+id, scope, place_label:"card “"+String(old.Title||id).slice(0,80)+"”", field:"deleted", old_val:"", new_val:"" }); CH.m.delete(id); });
   if(ev.length) CMT.log(ev.slice(0,200));
 }
-function kbClose(){ KBOPEN=null; const d=R&&R.querySelector("#kbDr"); if(d) d.classList.remove("on"); const s=R&&R.querySelector("#kbScrim"); if(s) s.classList.remove("on"); }
+let KBDIRTY=false;   /* typed in the open card (saved quietly): a full save — board + 🕘 History — when it closes */
+function kbClose(){ KBOPEN=null; if(KBDIRTY){ KBDIRTY=false; setTimeout(()=>save(),0); } const d=R&&R.querySelector("#kbDr"); if(d) d.classList.remove("on"); const s=R&&R.querySelector("#kbScrim"); if(s) s.classList.remove("on"); }
 const kbCanTouch = x => canPlan() || x.ownerIds.includes(me());
 function kbOpen(c, id, keep){
   const x=kbRows(c).find(y=>y.id===id); if(!x){ kbClose(); return; } KBOPEN=id;
@@ -2733,7 +2739,7 @@ function kbOpen(c, id, keep){
     ${kbPicBox(x, "kbDesc", "Description", "desc", "descImgs", ed, "What this card is about, in a line or two")}
     <p class="kb-rep">✍️ Reporter: <b>${esc(x.ref.by||"—")}</b>${x.ref.at?" · created "+esc(dmy(String(x.ref.at).slice(0,10))):""}</p>
     <div class="kf"><label>Status</label><div class="kb-seg" role="group">${kbCols(c).map(([k,l])=>`<button type="button" data-kbcol="${k}" ${ed?"":"disabled"} class="${kbState(x)===k?"on":""}" aria-pressed="${kbState(x)===k}">${esc(l)}</button>`).join("")}</div></div>
-    <div class="kf"><label>Labels</label>${ed?kbTypePicker(x):""}<div class="kb-labs">${x.tags}${(x.ref.labels||[]).map((l,i)=>`<span class="kt own">${esc(l)}${ed?`<button type="button" data-kblabx="${i}" aria-label="Remove label ${esc(l)}">×</button>`:""}</span>`).join("")}</div>
+    <div class="kf"><label>Labels</label>${ed?kbTypePicker(x):""}<div class="kb-labs">${x.tags}${(x.ref.labels||[]).map((l,i)=>`<span class="kt own" style="--kc:${ktHue(l)}">${esc(l)}${ed?`<button type="button" data-kblabx="${i}" aria-label="Remove label ${esc(l)}">×</button>`:""}</span>`).join("")}</div>
       ${ed?`<div class="kb-labadd"><input id="kbLab" placeholder="Add a label, e.g. Caption"><button type="button" class="btn sm" id="kbLabAdd">Add</button></div>`:""}</div>
     <div class="kf"><label>Assigned to</label>${pl?`<span class="kb-pp" id="kbOwners">${kbPeople().map(p=>`<button type="button" data-kbown="${esc(p.id)}" class="${x.ownerIds.includes(p.id)?"on":""}" aria-pressed="${x.ownerIds.includes(p.id)}">${avatar(p.name)}${esc(p.name)}</button>`).join("")}</span>
       <p class="hint" style="margin:4px 0 0">Everyone new gets an email and a 🔔.${x.content?" The same on the card in Content Process.":""}</p>`:kbWho(x.ownerId,x.owner,x.ownerIds)}</div>
@@ -2748,6 +2754,7 @@ function kbOpen(c, id, keep){
       ${pl&&x.src==="task"&&canDelWork()?`<div style="margin-top:12px"><button class="btn sm danger" id="kbDel">Delete this task</button></div>`:""}</div>`}
     ${kbSubsBlock(x)}
     ${x.src==="piece" && canEdit() ? `<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" id="kbEdit">✏️ More details</button>${canDelWork()?`<button class="btn sm danger" id="kbDelPiece">🗑 Delete this card</button>`:""}</div>` : ""}
+    <div class="kb-savebar">${ed?`<button type="button" class="btn pri" id="kbSave">💾 Save card</button>`:""}<button type="button" class="btn" id="kbClose2">Close</button><span class="hint">Changes also save as you type.</span></div>
     <div data-cmthost></div>`;
   d.classList.add("on"); $("#kbScrim").classList.add("on");
   d.querySelector("#kbX").onclick=kbClose;
@@ -2766,13 +2773,19 @@ function kbOpen(c, id, keep){
       kbSetTypes(c, x, vals); });
     d.addEventListener("click",()=>{ if(!pop.hidden){ pop.hidden=true; btn.setAttribute("aria-expanded","false"); } }); }
   const tt=d.querySelector("#kbT"); if(tt){ const put=()=>{ const v=tt.value.trim(); if(!v) return false; if(x.src==="task") x.ref.title=v; else x.ref.name=v; return true; };
-    tt.oninput=()=>{ if(put()) saveQuiet(); }; tt.onchange=()=>{ if(put()) save(); else toast("Say what this card is"); }; }
+    tt.oninput=()=>{ if(put()){ KBDIRTY=true; saveQuiet(); } }; tt.onchange=()=>{ if(!put()) toast("Say what this card is"); }; }
   const d2=d.querySelector("#kbDue2"); if(d2) d2.onchange=()=>{ if(x.src==="task") x.ref.due=d2.value; else x.ref.date=d2.value; save(); };
   const la=d.querySelector("#kbLabAdd"), li=d.querySelector("#kbLab");
   const addLab=()=>{ const v=(li.value||"").trim().slice(0,30); if(!v) return; x.ref.labels=Array.isArray(x.ref.labels)?x.ref.labels:[]; if(!x.ref.labels.some(l=>l.toLowerCase()===v.toLowerCase())) x.ref.labels.push(v); save(); };
   if(la){ la.onclick=addLab; li.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); addLab(); } }; }
   d.querySelectorAll("[data-kblabx]").forEach(b=>b.onclick=()=>{ x.ref.labels.splice(+b.dataset.kblabx,1); save(); });
   kbWirePics(x, d, "kbDesc", "desc", "descImgs"); kbWirePics(x, d, "kbDet", "details", "imgs");
+  const cl2=d.querySelector("#kbClose2"); if(cl2) cl2.onclick=kbClose;
+  const sv=d.querySelector("#kbSave"); if(sv) sv.onclick=()=>{ const t=d.querySelector("#kbT"), v=t?t.value.trim():"";
+    if(t && !v){ toast("Say what this card is"); t.focus(); return; }
+    if(t){ if(x.src==="task") x.ref.title=v; else x.ref.name=v; }
+    const ds=d.querySelector("#kbDesc"), dt=d.querySelector("#kbDet"); if(ds) x.ref.desc=ds.value; if(dt) x.ref.details=dt.value;
+    KBDIRTY=false; kbClose(); save(); toast("💾 Card saved"); };
   { const h=d.querySelector("[data-cmthost]"); if(h && window.CMT && window.cmtCampPlace) try{ CMT.mount(h, cmtCampPlace(c.id, x.id, x.title)); }catch(e){ console.warn("comments", e); } }
   const go=d.querySelector("#kbGo"); if(go) go.onclick=()=>{ kbClose(); OPT.goProcess(c); };
   d.querySelectorAll("[data-kbcp]").forEach(b=>b.onclick=()=>{ const sid=b.dataset.kbcp; if(sid==="published"){ kbPublish(c,x,""); return; }
@@ -2892,6 +2905,8 @@ function kbAddTask(c){
 
 /* ============================================================ API */
 window.CX = {
+  openState: ()=>KBOPEN,
+  reopen: id=>{ if(!SPACE) return; KBOPEN=id; draw(); },
   tabs: [["details","Campaign Details"],["board","Board"],["calendar","Calendar"],["reminders","Reminders"]],
   normalize: normalize,
   kinds: ITEM_KINDS,
