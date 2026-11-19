@@ -48,7 +48,14 @@ const BCSS = `
 .kb-board{display:grid;grid-template-columns:repeat(4,minmax(220px,1fr));gap:12px;overflow-x:auto;padding-bottom:6px}
 .kb-col{background:var(--surface-2);border-radius:var(--r);padding:10px;display:flex;flex-direction:column;gap:8px;min-width:0;overflow:hidden}
 .kb-col-h{display:flex;align-items:center;gap:8px;padding:2px 4px 4px}.kb-col-h h4{font-size:13px;margin:0}.kb-col-h .n{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-left:auto}
-.kb-col.late .kb-col-h h4{color:var(--crit)}.kb-col.live .kb-col-h h4{color:var(--good)}
+.kb-col.late .kb-col-h h4{color:var(--crit)}.kb-col.live .kb-col-h h4,.kb-col.done .kb-col-h h4{color:var(--good)}
+.kb-board4{min-height:62vh}.kb-board4 .kb-col{min-height:62vh}
+.kb-colh{cursor:grab}.kb-grip{color:var(--ink-3);margin-right:5px;font-size:12px;opacity:0;transition:opacity .12s}.kb-col:hover .kb-grip{opacity:1}
+.kb-ren{border:none;background:none;color:var(--ink-3);font-size:12px;cursor:pointer;margin-left:5px;padding:0 3px;border-radius:4px;opacity:0}.kb-col:hover .kb-ren,.kb-ren:focus{opacity:1}.kb-ren:hover{color:var(--ink);background:var(--surface)}
+.kb-mv{display:inline-flex;opacity:0;margin-left:auto}.kb-col:hover .kb-mv,.kb-mv:focus-within{opacity:1}.kb-mv button{border:none;background:none;color:var(--ink-3);font-size:15px;line-height:1;padding:0 4px;cursor:pointer;border-radius:4px}.kb-mv button:disabled{opacity:.3;cursor:default}
+.kb-col.coldrag{opacity:.45}.kb-col.colover{box-shadow:inset 3px 0 0 var(--accent)}
+.kb-addc{border:none;background:transparent;text-align:left;color:var(--ink-2);font:inherit;font-size:13px;padding:8px 10px;border-radius:var(--r-s);cursor:pointer}.kb-addc:hover{background:color-mix(in srgb,var(--ink) 7%,transparent);color:var(--ink)}
+@media (hover:none){.kb-grip,.kb-ren,.kb-mv{opacity:1}}
 .kb-it{min-width:0;max-width:100%;overflow:hidden;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--line-2);border-radius:var(--r-s);padding:10px 11px;text-align:left;display:grid;gap:6px;width:100%;cursor:pointer;font:inherit;color:inherit}
 .kb-it>*{min-width:0}.kb-it:hover{border-color:var(--line-2)}
 .kb-it.live{border-left-color:var(--good);background:var(--good-soft)}.kb-it.late{border-left-color:var(--crit)}.kb-it.prog{border-left-color:var(--saffron)}
@@ -880,9 +887,11 @@ function avatar(name){ const n=String(name||"?").trim()||"?";
   return `<span class="av" style="background:hsl(${hue(n)} 48% 42%)">${esc(n.charAt(0).toUpperCase())}</span>`; }
 /* admins really can edit; in Member view they see what everyone else sees */
 const isAdmin = () => !OPT.canEdit || OPT.canEdit();
-const canEdit = () => isAdmin() && !MEMBERVIEW;
+/* 📋 the Board is open to everyone on the team (no Member view there); OPT.canBoard lets Space Permissions narrow it */
+const onBoard = () => CTAB==="board" && (!OPT.canBoard || !!OPT.canBoard());
+const canEdit = () => onBoard() || (isAdmin() && !MEMBERVIEW);
 /* a Team Manager (or admin): moves pieces on the calendar, works the Assignment tab */
-const canPlan = () => !MEMBERVIEW && (isAdmin() || !!(OPT.canPlan && OPT.canPlan()));
+const canPlan = () => onBoard() || (!MEMBERVIEW && (isAdmin() || !!(OPT.canPlan && OPT.canPlan())));
 /* 🛡 Space permissions (Marketing heads) → "Delete work": pieces, tasks and sub tasks */
 const canDelWork = () => !OPT.canDeleteWork || !!OPT.canDeleteWork();
 const me = () => (OPT.me && OPT.me()) || "";
@@ -1248,17 +1257,17 @@ function mount(){
 function draw(){
   const c = SPACE; if(!c) return;
   const B = $("#body");
-  B.innerHTML = viewToggle() + (CTAB==="details" ? detailsPane(c) : CTAB==="board" ? boardPane(c) : CTAB==="roles" ? rolesPane(c) : CTAB==="reminders" ? remindersPane(c) : calendarPane(c));
+  B.innerHTML = viewToggle() + (CTAB==="details" ? detailsPane(c) : CTAB==="board" ? boardPane(c) : CTAB==="reminders" ? remindersPane(c) : calendarPane(c));
   B.querySelectorAll("[data-ctab]").forEach(b=>b.onclick=()=>goTab(b.dataset.ctab));
   B.querySelectorAll("[data-mv]").forEach(b=>b.onclick=()=>{ MEMBERVIEW = b.dataset.mv==="1"; draw(); });
   if(CTAB==="details"){ wireDetails(c); tickCountdown(); }
   else if(CTAB==="calendar") wireCalendar(c);
-  else if(CTAB==="board"||CTAB==="roles"||CTAB==="reminders") wireBoard(c);
+  else if(CTAB==="board"||CTAB==="reminders") wireBoard(c);
   if(KBOPEN) kbOpen(c, KBOPEN, true);
 }
 /* admins only: edit the campaign, or see it exactly as a team member does */
 function viewToggle(){
-  if(!isAdmin()) return "";
+  if(!isAdmin() || CTAB==="board") return "";
   return `<div class="vtog" role="group" aria-label="Which view">
     <div class="vt-seg">
       <button type="button" data-mv="0" class="${MEMBERVIEW?"":"on"}" aria-pressed="${!MEMBERVIEW}">✏️ Marketing Head view</button>
@@ -1602,7 +1611,6 @@ function detailsPane(c){
       ${ro ? "" : fieldNav(c)}
     </div>
     ${targetSection(c, ro)}
-    ${itemsSection(c, ro)}
     ${!ro && OPT.canDelete && OPT.canDelete() ? `<div class="row" style="margin-top:30px;padding-top:18px;border-top:1.5px solid var(--line-2)">
       <span class="hint">Finished with this campaign, or made it by mistake?</span>
       <button class="btn danger sm" id="delCampaign" style="margin-left:auto">Delete this campaign</button>
@@ -1795,7 +1803,7 @@ function wireDetails(c){
 }
 
 /* ---------- "Create content piece": many pieces for one day in one go ---------- */
-function bulkDialog(c){
+function bulkDialog(c, bst){
   if(!canEdit()) return;
   const sel = pickDay(c);
   const day0 = sel && sel!=="none" ? sel : (c.details.start || TODAY);
@@ -1807,10 +1815,10 @@ function bulkDialog(c){
       <button class="bx" type="button" title="Remove this row">✕</button>
       <input class="bother" list="ctypes" placeholder="A new type, e.g. Press release (pick from the list if it's already there)" hidden>
     </div>`;
-  $("#dlgTitle").textContent = "Create content pieces";
-  $("#dlgSub").textContent = "Pick the day, then how many of each type go out on it. Each piece gets a card you can fill in afterwards.";
+  $("#dlgTitle").textContent = "Create Cards";
+  $("#dlgSub").textContent = "Pick the day, then how many of each type go out on it. Each one gets a card on the board you can fill in afterwards.";
   $("#dlgSub").hidden = false;
-  $("#dlgOk").textContent = "Add them";
+  $("#dlgOk").textContent = "Create cards";
   $("#dlgBody").innerHTML = `
     <div class="fbox" style="background:var(--surface-4);margin-bottom:12px">
       <label for="b-day">Which day these go out on</label><input id="b-day" type="date" value="${esc(day0)}">
@@ -1860,14 +1868,14 @@ function bulkDialog(c){
       top = Math.max(top, c.items.filter(it=>it.date===day && groupKey(it)===(w.kind==="other" ? "other:"+w.other.toLowerCase() : w.kind) && !re.test(it.name||"")).length);
       for(let i=1;i<=w.n;i++){
         c.items.push({ id:uid("ci"), name:`${base} ${top+i}`, kind:w.kind, kindOther:w.kind==="other" ? w.other : "",
-          date:day, platform:PLATFORM_GUESS[w.kind]||"Other", platforms:[PLATFORM_GUESS[w.kind]||"Other"], ownerId:"", owner:"", details:"" });
+          date:day, platform:PLATFORM_GUESS[w.kind]||"Other", platforms:[PLATFORM_GUESS[w.kind]||"Other"], ownerId:"", owner:"", details:"", ...(bst&&bst!=="done"?{ bst }:{}) });
         made++;
       }
     });
     if(!stripDays(c).includes(day)) (c.extraDays = c.extraDays || []).push(day);
     DAYSEL = day;
     closeDialog(); save();
-    toast(`${made} piece${made===1?"":"s"} added to ${dmy(day)}`);
+    toast(`${made} card${made===1?"":"s"} created for ${dmy(day)}`);
   };
   $("#dlgScrim").classList.add("on");
   setTimeout(()=>rows.querySelector(".bkind").focus(), 60);
@@ -2441,7 +2449,12 @@ const ktColor = l => /Story$/.test(l) ? "#B3417A" : /Long video$/.test(l) ? "var
 const ktOne = l => `<span class="kt" style="--kc:${ktColor(l)}">${esc(l)}</span>`;
 const typeTags = it => typeLabels(it).map(ktOne).join("");
 const CP_STAGES = [["todo","Ideas"],["draft","To shoot"],["inprogress","Editing"],["inreview","Your check"],["approved","Scheduled"],["published","Live"]];
-const KB_COLS = [["todo","Not started"],["prog","In progress"],["late","Past deadline · waiting"],["live","Live ✓"]];
+/* the board's status columns: always there, renamable and movable (c.boardNames / c.boardOrder). Done = live / published. */
+const KB_BASE = [["idea","Ideas"],["todo","To do"],["prog","In progress"],["done","Done"]];
+function kbCols(c){ const nm=(c&&c.boardNames)||{}, ord=Array.isArray(c&&c.boardOrder)?c.boardOrder:[];
+  const at=id=>{ const i=ord.indexOf(id); return i<0 ? 100+KB_BASE.findIndex(x=>x[0]===id) : i; };
+  return KB_BASE.map(([id,l])=>[id, nm[id]||l]).sort((a,b)=>at(a[0])-at(b[0])); }
+const kbColName = (c, id) => (kbCols(c).find(x=>x[0]===id)||[,id])[1];
 const TASK_KINDS = ["Webinar","App banner","Notification","WhatsApp","Email","Offer setup","Website","Event","Report","Other"];
 const WEBINAR_SUBS = ["Speaker found and spoken to","Platform decided (YouTube Live, Zoom…)","Poster and content made","Registration link created","WhatsApp group made and shared","Reminder notification sent"];
 let KBF = { who:"", date:"", cat:"" }, KBOPEN = null, KBREM = null, KBREMFOR = "";
@@ -2472,7 +2485,8 @@ function kbRows(c){
   return rows;
 }
 const kbLate = x => !x.live && !!x.due && x.due < TODAY;
-const kbState = x => x.live ? "live" : kbLate(x) ? "late" : (x.content ? x.si>0 : (x.ref.bstatus ? x.ref.bstatus==="prog" : x.subs.some(s=>s.status!=="todo"))) ? "prog" : "todo";
+const kbState = x => x.live ? "done" : x.content ? (x.si>0 || x.ref.bst==="prog" ? "prog" : x.ref.bst==="idea" ? "idea" : "todo")
+  : ["idea","todo","prog"].includes(x.ref.bst) ? x.ref.bst : (x.ref.bstatus==="prog" || x.subs.some(s=>s.status!=="todo")) ? "prog" : "todo";
 const kbPct = x => x.content ? Math.round(x.si/5*100) : x.subs.length ? Math.round(x.subs.filter(s=>s.done).length/x.subs.length*100) : 0;
 function kbTags(x){
   return (x.hl?`<span class="kb-tag hl">⭐ Highlight</span>`:"") + x.tags
@@ -2493,7 +2507,7 @@ function kbPass(x){
   return true;
 }
 function kbHead(c, rows){
-  const n=rows.length, l=rows.filter(x=>x.live).length, late=rows.filter(kbLate).length, prog=rows.filter(x=>kbState(x)==="prog").length, w=v=>n?v/n*100:0;
+  const n=rows.length, l=rows.filter(x=>x.live).length, late=rows.filter(kbLate).length, prog=rows.filter(x=>kbState(x)==="prog"&&!kbLate(x)).length, w=v=>n?v/n*100:0;
   return `<div class="kb-head"><div><span class="lbl">Campaign board</span><h3 style="font-size:20px;margin:4px 0 2px">${esc(c.details.name||c.name)}</h3>
       <p class="hint" style="max-width:60ch">Every piece from Campaign Details and every task, in one place. YouTube and Instagram pieces are the same cards as in Content Process.</p></div>
     <div class="kb-prog"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px"><span class="lbl">Went live</span><b class="num">${l}<small> of ${n} live</small></b></div>
@@ -2514,23 +2528,31 @@ function kbFilters(c, rows){
       <optgroup label="Type">${cats.map(k=>`<option value="t:${esc(k)}" ${KBF.cat==="t:"+k?"selected":""}>${esc(k)}</option>`).join("")}</optgroup>
       <option value="hl" ${KBF.cat==="hl"?"selected":""}>⭐ Highlighted</option></select>
     ${KBF.who||KBF.date||KBF.cat?`<button class="btn sm" id="kbClear">Clear filters</button>`:""}
-    <span class="kb-sp"></span>${canPlan()?`<button class="btn pri" id="kbAdd">＋ Add task</button>`:""}</div>`;
+    <span class="kb-sp"></span>${canPlan()?`<button class="btn pri" id="kbAdd">＋ Create Cards</button>`:""}</div>`;
 }
 function kbCard(x){
-  const st=kbState(x), nd=x.subs.filter(s=>s.status==="done").length;
+  const st=(x.live?"live":kbState(x))+(kbLate(x)?" late":""), nd=x.subs.filter(s=>s.status==="done").length;
   const sub = (x.content ? `<div class="kb-sub"><span>Content Process: <b>${esc(x.card?CP_STAGES[x.si][1]:"not there yet")}</b></span><span class="mb"><i style="width:${kbPct(x)}%"></i></span></div>` : "")
     + (x.subs.length || !x.content ? `<div class="kb-sub"><span>${nd}/${x.subs.length} sub tasks</span><span class="mb"><i style="width:${x.subs.length?Math.round(nd/x.subs.length*100):0}%"></i></span></div>` : "");
   return `<div role="button" tabindex="0" class="kb-it ${st} ${x.hl?"hl":""}" data-kb="${esc(x.id)}"><span class="kb-t">${esc(x.title)}</span><span class="kb-m">${kbTags(x)}</span>${x.live?"":sub}
     <span class="kb-m">${kbWho(x.ownerId,x.owner,x.ownerIds)}<span class="kb-sp"></span>${x.live?`<span class="kb-by">✓ ${esc(kbByLine(x))}</span>`
-      :x.due?`<span class="kb-due ${st==="late"?"late":""}">${st==="late"?"⏰ was due "+dmy(x.due):"due "+dmy(x.due)}</span>`:`<span class="kb-due">no date</span>`}</span>
+      :x.due?`<span class="kb-due ${kbLate(x)?"late":""}">${kbLate(x)?"⏰ was due "+dmy(x.due):"due "+dmy(x.due)}</span>`:`<span class="kb-due">no date</span>`}</span>
     ${!x.live && x.ownerIds.length && canPlan() ? `<span class="kb-m"><button type="button" class="kb-nt" data-kbnotify="${esc(x.id)}" title="Send ${esc(x.owner)} a 🔔 and an email about this card">🔔 Notify ${esc(x.ownerIds.map(i=>(kbName(i)||"").split(" ")[0]).join(" + "))}</button></span>` : ""}</div>`;
 }
 function boardPane(c){
-  const rows=kbRows(c), list=rows.filter(kbPass);
-  return kbHead(c, rows) + kbFilters(c, rows) + (rows.length && canPlan() ? `<p class="hint" style="margin:-4px 0 10px">✋ Drag a card to another column to change its status. Live = ✓ Published.</p>` : "") + (rows.length ? `<div class="kb-board">${KB_COLS.map(([k,l])=>{ const xs=list.filter(x=>kbState(x)===k);
-      return `<div class="kb-col ${k}" data-kbdrop="${k}"><div class="kb-col-h"><h4>${l}</h4><span class="n">${xs.length}</span></div>${xs.map(kbCard).join("")||`<p class="hint" style="padding:6px;margin:0">Nothing here.</p>`}</div>`; }).join("")}</div>`
-    : `<div class="dashed" style="padding:30px;text-align:center"><b>Nothing on the board yet.</b><p class="hint">Add content pieces in Campaign Details, or press ＋ Add task for a webinar, banner or notification.</p></div>`);
+  const rows=kbRows(c), list=rows.filter(kbPass), pl=canPlan(), cols=kbCols(c);
+  return kbHead(c, rows) + kbFilters(c, rows) + (pl ? `<p class="hint" style="margin:-4px 0 10px">✋ Drag a card to another column to change its status (Done = ✓ Published) · drag a column by its name to move it · ✎ renames it.</p>` : "")
+    + `<div class="kb-board kb-board4" style="grid-template-columns:repeat(${cols.length},minmax(220px,1fr))">${cols.map(([k,l],i)=>{ const xs=list.filter(x=>kbState(x)===k);
+      return `<div class="kb-col ${k}" data-kbdrop="${k}"><div class="kb-col-h ${pl?"kb-colh":""}" ${pl?`draggable="true" data-kbcolh="${k}" title="Drag to move this status · double-click to rename"`:""}><h4>${pl?`<span class="kb-grip" aria-hidden="true">⠿</span>`:""}${esc(l)}${k==="done"?' <span style="color:var(--good)">✓</span>':""}${pl?`<button type="button" class="kb-ren" data-kbren="${k}" title="Rename this status" aria-label="Rename ${esc(l)}">✎</button>`:""}</h4>
+          <span style="display:flex;gap:2px;align-items:center">${pl?`<span class="kb-mv"><button type="button" data-kbmv="${k}|-1" ${i===0?"disabled":""} aria-label="Move ${esc(l)} left">‹</button><button type="button" data-kbmv="${k}|1" ${i===cols.length-1?"disabled":""} aria-label="Move ${esc(l)} right">›</button></span>`:""}<span class="n">${xs.length}</span></span></div>
+        ${xs.map(kbCard).join("")}${pl?`<button type="button" class="kb-addc" data-kbaddc="${k}">＋ Add card</button>`:xs.length?"":`<p class="hint" style="padding:6px;margin:0">Nothing here.</p>`}</div>`; }).join("")}</div>`;
 }
+function kbRenameCol(c, id){ const cur=kbColName(c,id), n=(prompt("Rename this status", cur)||"").trim().slice(0,30); if(!n||n===cur) return;
+  c.boardNames=Object.assign({}, c.boardNames||{}, { [id]:n }); save(); toast("Renamed to "+n); }
+function kbMoveCol(c, id, beforeOrDir){ const ids=kbCols(c).map(x=>x[0]);
+  if(typeof beforeOrDir==="number"){ const i=ids.indexOf(id), j=i+beforeOrDir; if(j<0||j>=ids.length) return; [ids[i],ids[j]]=[ids[j],ids[i]]; c.boardOrder=ids; }
+  else { const from=ids.indexOf(id), to=ids.indexOf(beforeOrDir); if(from<0||to<0||from===to) return; ids.splice(from,1); ids.splice(to,0,id); c.boardOrder=ids; }
+  save(); toast("Status moved"); }
 function rolesPane(c){
   const rows=kbRows(c), ids=[...new Set(rows.flatMap(x=>[...x.ownerIds,...(x.subs||[]).map(s=>s.ownerId)]).filter(Boolean))];
   const lead=OPT.leadOf?OPT.leadOf(c):"", d=c.details;
@@ -2577,14 +2599,25 @@ function wireBoard(c){
   B.querySelectorAll("[data-kbnotify]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); const x=kbRows(c).find(y=>y.id===b.dataset.kbnotify); if(x) kbNotify(c, x, null, b); });
   [["#kbWho","who"],["#kbDate","date"],["#kbCat","cat"]].forEach(([id,k])=>{ const e=B.querySelector(id); if(e) e.onchange=()=>{ KBF[k]=e.value; draw(); }; });
   const cl=B.querySelector("#kbClear"); if(cl) cl.onclick=()=>{ KBF={who:"",date:"",cat:""}; draw(); };
-  const ad=B.querySelector("#kbAdd"); if(ad) ad.onclick=()=>kbAddTask(c);
+  const ad=B.querySelector("#kbAdd"); if(ad) ad.onclick=()=>bulkDialog(c);
+  B.querySelectorAll("[data-kbaddc]").forEach(b=>b.onclick=()=>bulkDialog(c, b.dataset.kbaddc));
+  B.querySelectorAll("[data-kbren]").forEach(b=>{ b.setAttribute("draggable","false"); b.onclick=e=>{ e.stopPropagation(); kbRenameCol(c, b.dataset.kbren); }; });
+  B.querySelectorAll("[data-kbmv]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); const [id,dir]=b.dataset.kbmv.split("|"); kbMoveCol(c, id, +dir); });
+  let colDrag=null;
+  B.querySelectorAll("[data-kbcolh]").forEach(h=>{ h.ondblclick=()=>kbRenameCol(c, h.dataset.kbcolh);
+    h.addEventListener("dragstart",e=>{ colDrag=h.dataset.kbcolh; h.parentNode.classList.add("coldrag"); e.dataTransfer.effectAllowed="move"; try{ e.dataTransfer.setData("text/plain","col:"+colDrag); }catch(_){ } });
+    h.addEventListener("dragend",()=>{ colDrag=null; B.querySelectorAll(".kb-col").forEach(x=>x.classList.remove("coldrag","colover")); }); });
+  B.querySelectorAll(".kb-board4 [data-kbdrop]").forEach(col=>{
+    col.addEventListener("dragover",e=>{ if(colDrag && colDrag!==col.dataset.kbdrop){ e.preventDefault(); col.classList.add("colover"); } });
+    col.addEventListener("dragleave",e=>{ if(!col.contains(e.relatedTarget)) col.classList.remove("colover"); });
+    col.addEventListener("drop",e=>{ if(!colDrag) return; e.preventDefault(); col.classList.remove("colover"); const id=colDrag; colDrag=null; kbMoveCol(c, id, col.dataset.kbdrop); }); });
   const ld=B.querySelector("#kbLead"); if(ld) ld.onchange=()=>{ c.lead=ld.value; save(); toast(kbName(ld.value)+" is told when something is published"); };
 }
 function kbClose(){ KBOPEN=null; const d=R&&R.querySelector("#kbDr"); if(d) d.classList.remove("on"); const s=R&&R.querySelector("#kbScrim"); if(s) s.classList.remove("on"); }
 const kbCanTouch = x => canPlan() || x.ownerIds.includes(me());
 function kbOpen(c, id, keep){
   const x=kbRows(c).find(y=>y.id===id); if(!x){ kbClose(); return; } KBOPEN=id;
-  const st=kbState(x), d=$("#kbDr"), ed=kbCanTouch(x), pl=canPlan();
+  const st=kbLate(x)?"late":kbState(x), d=$("#kbDr"), ed=kbCanTouch(x), pl=canPlan();
   const col = x.live ? "live" : x.content ? (x.si>0?"prog":"todo") : st;
   d.innerHTML=`<div class="kb-dh"><div><span class="lbl">${x.content?"Content piece":"Task · "+esc(x.catLabel)} · ${esc(c.details.name||c.name)}</span><h3>${esc(x.title)}</h3><div class="kb-m" style="margin-top:8px">${kbTags(x)}</div></div><button class="btn sm" id="kbX">Close</button></div>
     ${x.live?`<div class="kb-cf ok"><b>✓ Live</b><p class="hint" style="margin:2px 0 0">${esc(kbByLine(x))}${x.link?` · ${esc(x.link)}`:""}${x.content?" · live here and in Content Process":""}</p></div>`
@@ -2598,7 +2631,7 @@ function kbOpen(c, id, keep){
       <span>Deadline</span><span>${pl&&x.src==="task"?`<input type="date" id="kbDue" value="${esc(x.due)}">`:x.due?dmy(x.due):"No date"}</span><span>Category</span><span>${esc(x.catLabel)}</span></div>
       ${x.src==="piece"?`<p class="hint" style="margin:8px 0 0">${x.content?"Title, date and assignee are the same in Content Process. ":""}The title and date come from Campaign Details${x.content?" (or the card in Content Process)":""}.</p>`:""}</div>
     ${x.content?`<div class="kb-blk"><h4>Status, in both places</h4>${x.card?`
-      <div class="kb-sync"><span class="lbl">Campaign board</span><span class="kb-pills">${KB_COLS.filter(([k])=>k!=="late").map(([k,l])=>`<button type="button" data-kbcol="${k}" ${ed?"":"disabled"} class="${col===k?(k==="live"?"livenow":"now"):""}">${l}</button>`).join("")}</span></div>
+      <div class="kb-sync"><span class="lbl">Campaign board</span><span class="kb-pills">${kbCols(c).map(([k,l])=>`<button type="button" data-kbcol="${k}" ${ed?"":"disabled"} class="${kbState(x)===k?(k==="done"?"livenow":"now"):""}">${esc(l)}</button>`).join("")}</span></div>
       <div class="kb-sync"><span class="lbl">Content Process</span><span class="kb-pills">${CP_STAGES.map(([sid,l],i)=>`<button type="button" data-kbcp="${sid}" ${ed?"":"disabled"} class="${i===x.si?(i===5?"livenow":"now"):i<x.si?"done":""}">${l}</button>`).join("")}</span></div>
       <p class="hint" style="margin:6px 0 0">The two boards name their columns differently; <b>Live</b> is the same in both. Moving it here moves it there.</p>
       ${OPT.goProcess?`<button class="btn sm" id="kbGo" style="margin-top:8px">Open Content Process →</button>`:""}`
@@ -2618,9 +2651,7 @@ function kbOpen(c, id, keep){
   const go=d.querySelector("#kbGo"); if(go) go.onclick=()=>{ kbClose(); OPT.goProcess(c); };
   d.querySelectorAll("[data-kbcp]").forEach(b=>b.onclick=()=>{ const sid=b.dataset.kbcp; if(sid==="published"){ kbPublish(c,x,""); return; }
     if(OPT.setCardStage && OPT.setCardStage(c, x.ref, sid)){ save(); toast(`Content Process → ${CP_STAGES.find(s=>s[0]===sid)[1]}`); } });
-  d.querySelectorAll("[data-kbcol]").forEach(b=>b.onclick=()=>{ const k=b.dataset.kbcol; if(k==="live"){ kbPublish(c,x,""); return; }
-    const sid = k==="todo" ? "todo" : (x.si>0 && x.si<5 ? CP_STAGES[x.si][0] : "draft");
-    if(OPT.setCardStage && OPT.setCardStage(c, x.ref, sid)){ save(); toast(`Board → ${k==="todo"?"Not started":"In progress"} · Content Process → ${CP_STAGES.find(s=>s[0]===sid)[1]}`); } });
+  d.querySelectorAll("[data-kbcol]").forEach(b=>b.onclick=()=>kbMove(c, x, b.dataset.kbcol));
   const nt=d.querySelector("#kbNotify"); if(nt) nt.onclick=()=>kbNotify(c, x, null, nt);
   const hl=d.querySelector("#kbHl"); if(hl) hl.onclick=()=>{ x.ref.highlight=!x.ref.highlight; save(); toast(x.ref.highlight?"⭐ Highlighted on the board and the calendar":"Highlight removed"); };
   const subOf = el => x.subs.find(s=>s.id===el.closest("[data-sid]").dataset.sid);
@@ -2675,22 +2706,13 @@ async function kbNotify(c, x, sub, btn){
 /* a card dropped on another column */
 function kbMove(c, x, col){
   const from = kbState(x); if(col===from) return;
-  if(col==="late"){ toast("“Past deadline” comes from the date — drop it on another column, or give it a new date"); return; }
-  if(col==="live"){ kbPublish(c, x, ""); return; }
-  const setStatus = ()=>{
-    if(x.content){ const sid = col==="todo" ? "todo" : (x.si>0 && x.si<5 ? CP_STAGES[x.si][0] : "draft");
-      if(!(OPT.setCardStage && OPT.setCardStage(c, x.ref, sid))){ toast("Couldn't reach the card in Content Process"); return; } }
-    else { if(x.live) Object.assign(x.ref, { live:false, liveBy:"", liveAt:"" }); x.ref.bstatus = col; }
-    save(); toast(`“${x.title}” → ${col==="todo"?"Not started":"In progress"}${x.content?" · Content Process → "+CP_STAGES.find(s=>s[0]===(col==="todo"?"todo":(x.si>0&&x.si<5?CP_STAGES[x.si][0]:"draft")))[1]:""}`);
-  };
-  if(from==="late"){   // still past its deadline: it needs a new date to leave that column
-    openDialog({ title:"A new date", sub:`“${x.title}” is past its deadline. Pick the new date and it moves to ${col==="todo"?"Not started":"In progress"}.`, okLabel:"Move",
-      fields:[{ k:"date", label:"New date", type:"date", value:addDays(TODAY,1) }],
-      onSave:v=>{ if(!v.date || v.date<TODAY){ toast("Pick today or a later date"); return false; }
-        if(x.src==="task") x.ref.due=v.date; else x.ref.date=v.date; x.due=v.date; setStatus(); } });
-    return;
-  }
-  setStatus();
+  if(col==="done"){ kbPublish(c, x, ""); return; }
+  if(x.content){ const sid = col==="prog" ? (x.si>0 && x.si<5 ? CP_STAGES[x.si][0] : "draft") : "todo";
+    if(!(OPT.setCardStage && OPT.setCardStage(c, x.ref, sid))){ toast("Couldn't reach the card in Content Process"); return; }
+    x.ref.bst = col; save(); toast(`“${x.title}” → ${kbColName(c,col)} · Content Process → ${CP_STAGES.find(s=>s[0]===sid)[1]}`); return; }
+  if(x.live) Object.assign(x.ref, { live:false, liveBy:"", liveAt:"" });
+  x.ref.bst = col; x.ref.bstatus = col==="prog" ? "prog" : "todo";
+  save(); toast(`“${x.title}” → ${kbColName(c,col)}`);
 }
 function kbPublish(c, x, link){
   if(x.live) return;
@@ -2744,7 +2766,7 @@ function kbAddTask(c){
 
 /* ============================================================ API */
 window.CX = {
-  tabs: [["details","Campaign Details"],["board","Board"],["roles","Roles & responsibilities"],["reminders","Reminders"],["calendar","Calendar"]],
+  tabs: [["details","Campaign Details"],["board","Board"],["reminders","Reminders"],["calendar","Calendar"]],
   normalize: normalize,
   kinds: ITEM_KINDS,
   typeKey: typeKey,
@@ -2758,7 +2780,7 @@ window.CX = {
     if(!SPACE || SPACE.id!==space.id){ KBF={who:"",date:"",cat:""}; KBOPEN=null; KBREM=null; KBREMFOR=""; if(R) kbClose(); }
     if(SPACE!==space){ SPACE=space; ASSIGNFILTER="All"; CALMONTH=""; DAYSEL=null; CALFILTER={range:"all",anchor:"",type:[],platform:[],owner:[]}; if(R) closeDialog(); }
     normalize(space);
-    CTAB = ["details","board","roles","reminders","calendar"].includes(OPT.tab) ? OPT.tab : OPT.tab==="assign"||OPT.tab==="dash" ? "board" : "details";
+    CTAB = ["details","board","reminders","calendar"].includes(OPT.tab) ? OPT.tab : OPT.tab==="assign"||OPT.tab==="dash"||OPT.tab==="roles" ? "board" : "details";
     if(HOST.parentNode!==wrap) wrap.appendChild(HOST);
     draw();
   }
