@@ -15,7 +15,7 @@
 <!-- Social Media space: Summary (live YouTube numbers) / Ideation / Content Process / Schedule -->
 <script src="richtext.js"></script><!-- rich text + "Show all" in every multi-line text box (load before the spaces) -->
 <script src="okr-mail.js?v=20261119b"></script>
-<script src="social-space.js?v=20261120d"></script>
+<script src="social-space.js?v=20261120e"></script>
 <script src="pipeline.js"></script><!-- Claude edit & post panel on Content Process cards -->
 <script src="comments.js"></script><!-- 💬 comments + history at the bottom of every Social Media card and idea, with @tags by email -->
 <script src="hinglish.js"></script><script src="dictate.js"></script><!-- 🎤 dictation in every text box -->
@@ -29,7 +29,7 @@
 <!-- Student ideas (tools.dubuddy.in/ideas) in the product space, status sync, idea emails, My product ideas (student-ideas.js) -->
 <script src="student-ideas.js"></script>
 <!-- Marketing mega space: campaigns (Details · Board · Roles · Reminders · Calendar) — campaign-space.js -->
-<script src="campaign-space.js?v=20261107e"></script>
+<script src="campaign-space.js?v=20261120a"></script>
 <!-- Keep an Eye: a fixed template for studying role-model and competitor companies, inside Marketing — watch-space.js -->
 <script src="watch-space.js"></script>
 <!-- Widen our Horizon: big questions answered every week, then checked — horizon-space.js -->
@@ -2415,6 +2415,18 @@ body.rail-hidden .rail-open-btn{display:inline-flex;align-items:center;justify-c
 .sq-leadhint{font-size:11px;color:var(--muted);margin:2px 0 8px}
 /* accountability detail dialog */
 #acc-dialog .dialog{max-width:460px}
+.mperm-sub{color:var(--muted);font-size:13px;margin:6px 0 0;line-height:1.45}
+.mperm-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 10px}
+.mperm-tab{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer}
+.mperm-tab.on{border-color:var(--accent,#C8511B);background:color-mix(in srgb,var(--accent,#C8511B) 10%,transparent);font-weight:600}
+.mperm-tbl{overflow:auto;border:1px solid var(--line);border-radius:10px;flex:1;min-height:0}
+.mperm-row{display:grid;grid-template-columns:minmax(170px,1.6fr) repeat(3,minmax(90px,1fr)) 70px;align-items:center;gap:8px;padding:9px 12px;border-top:1px solid var(--line)}
+.mperm-row:first-child{border-top:0}.mperm-h{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--card)}
+.mperm-h span:not(:first-child),.mperm-cb{text-align:center;justify-self:center}
+.mperm-nm{display:flex;flex-direction:column;min-width:0}.mperm-nm small{color:var(--muted);font-size:11.5px}
+.mperm-row.full{opacity:.65}.mperm-row.own .mperm-nm small{color:var(--accent,#C8511B);font-weight:600}
+.mperm-cb input{width:17px;height:17px;cursor:pointer}.mperm-cb input:disabled{cursor:default}
+.mperm-ft{display:flex;gap:8px;margin-top:14px}
 .accd-role{display:flex;align-items:center;gap:9px;margin-bottom:4px}
 .accd-dot{width:12px;height:12px;border-radius:50%;flex:none}
 .accd-nm{font-family:var(--disp);font-weight:700;font-size:17px}
@@ -5883,6 +5895,13 @@ function spaceRoleOf(user, ref){
   if(roleRank(teamRole) <= roleRank("admin")) return teamRole;   // team Owners/Admins ALWAYS keep full power
   if(!ref) return teamRole;                    // team-level view -> team role
   if(isSpaceHead(user, ref)) return "admin";   // 👑 head of this space (or of the space it sits in)
+  /* 🛡 Space permissions set by the Marketing heads for a space inside it: on top of everything below */
+  const mp = mktPermOf(ref.obj, user.email);
+  if(mp){ if(!mp.v) return ""; if(!mp.e) return "viewer";
+    const base = spaceRoleBase(user, ref, teamRole); return base && roleRank(base) <= roleRank("editor") ? base : "editor"; }
+  return spaceRoleBase(user, ref, teamRole);
+}
+function spaceRoleBase(user, ref, teamRole){
   const m = spaceMembers(ref);
   const sr = m[user.email];
   // "none" is an explicit "no access to this space" for a team member
@@ -5909,6 +5928,7 @@ function canViewSpace(ref){
   if(!teamRole) return false;
   if(roleRank(teamRole) <= roleRank("admin")) return true;   // owners/admins see everything
   if(isSpaceHead(currentUser(), ref)) return true;
+  const mp = mktPermOf(ref.obj, currentUser().email); if(mp) return !!mp.v;   // 🛡 Space permissions (Marketing heads)
   const m = spaceMembers(ref);
   const sr = m[currentUser().email];
   if(sr === "none") return false;               // explicitly shut out of this space
@@ -6005,6 +6025,93 @@ function csOkrChip(cs){
 }
 function csRef(cs){
   return { key:"cs:"+cs.id, obj:cs, name:cs.name };
+}
+/* ---------- 🛡 Space permissions (Marketing) ----------
+   The heads of a Marketing space decide, per person, what they can do in each space inside it:
+   mkt.spacePerms = { [subSpaceId]: { [email]: { v:view, e:create & edit, d:delete work } } }.
+   A person with no entry keeps the general permissions (Settings, set by the panel's Owner) — nothing there changes.
+   Team Owners/Admins and the space's heads always keep full access. */
+function mktParentOf(obj){ return obj && obj.parent ? (CSPACES.list||[]).find(x=> x.id===obj.parent && x.type==="marketing") || null : null; }
+function mktPermOf(obj, email){
+  const p = mktParentOf(obj); if(!p || !p.spacePerms || !email) return null;
+  const m = p.spacePerms[obj.id]; return (m && m[email]) || null;
+}
+function mktFullAccess(u, cs){ if(!u) return false; if(u.super) return true; const r = roleOf(u, TEAM); return roleRank(r) <= roleRank("admin") || isSpaceHead(u, csRef(cs)); }
+function canManageMktPerms(mkt){ const u = currentUser(); return !!(u && mkt && (u.super || roleRank(roleOf(u, TEAM)) <= roleRank("admin") || isSpaceHead(u, csRef(mkt)))); }
+/* may I delete work (cards, tasks, pieces) in this space? fallback = the space's own rule when no 🛡 entry exists */
+function mktCanDelete(cs, fallback){
+  const u = currentUser(); if(!u) return false;
+  if(!mktFullAccess(u, cs)){ const mp = mktPermOf(cs, u.email); if(mp) return !!(mp.v && mp.d); }
+  return fallback ? !!fallback() : true;
+}
+function mktPermsPanel(mkt){
+  if(!mkt) return;
+  document.querySelectorAll(".overlay.mperm-ov").forEach(o=> o.remove());
+  const subs = (CSPACES.list||[]).filter(x=> x.parent===mkt.id);
+  const people = USERS.filter(u=> isMember(u, TEAM)).sort((a,b)=> userDisplayName(a).localeCompare(userDisplayName(b)));
+  const can = canManageMktPerms(mkt);
+  const work = JSON.parse(JSON.stringify(mkt.spacePerms || {}));
+  let sel = subs[0] ? subs[0].id : "";
+  const ov = document.createElement("div"); ov.className = "overlay show mperm-ov";
+  const dg = document.createElement("div"); dg.className = "dialog mperm"; dg.style.maxWidth = "860px";
+  const close = ()=> ov.remove();
+  ov.onclick = e=>{ if(e.target===ov) close(); };
+  const effective = (u, cs)=>{   /* what this person has here: the 🛡 entry being edited, else the general permissions */
+    const m = (work[cs.id]||{})[u.email];
+    if(m) return { v:!!m.v, e:!!m.e, d:!!m.d, own:true };
+    const base = spaceRoleBase(u, csRef(cs), roleOf(u, TEAM));
+    const e = !!base && roleRank(base) <= roleRank("editor");
+    const d = cs.type==="social" ? e && (roleRank(roleOf(u, TEAM)) <= roleRank("admin") || hasPermFor(u, "delete_social_cards", TEAM)) : e;
+    return { v:!!base, e, d, own:false };
+  };
+  const draw = ()=>{
+    const cs = subs.find(x=> x.id===sel);
+    const ico = x=> x.type==="social" ? "🎯" : x.type==="campaign" ? "📣" : x.type==="procdept" ? "⚙️" : x.type==="watch" ? "👀" : "•";
+    dg.innerHTML = '<div style="display:flex;align-items:flex-start;gap:12px"><div><h3 style="margin:0">🛡 Space permissions — '+mtEsc(mkt.name)+'</h3>'
+      + '<p class="mperm-sub">Choose what each person can do in each space inside '+mtEsc(mkt.name)+'. This only adds to the general permissions — it doesn\u2019t change them. Team Owners, Admins and a space\u2019s heads always have full access.</p></div>'
+      + '<button class="tool sm" data-x style="margin-left:auto">Close</button></div>';
+    if(!subs.length){ dg.insertAdjacentHTML("beforeend", '<p class="mperm-sub">There are no spaces inside '+mtEsc(mkt.name)+' yet.</p>'); dg.querySelector("[data-x]").onclick = close; return; }
+    const tabs = document.createElement("div"); tabs.className = "mperm-tabs";
+    subs.forEach(x=>{ const b = document.createElement("button"); b.type = "button"; b.className = "mperm-tab" + (x.id===sel ? " on" : "");
+      const n = Object.keys(work[x.id]||{}).length;
+      b.textContent = ico(x) + " " + x.name + (n ? " · " + n : ""); b.onclick = ()=>{ sel = x.id; draw(); }; tabs.appendChild(b); });
+    dg.appendChild(tabs);
+    const tb = document.createElement("div"); tb.className = "mperm-tbl";
+    tb.innerHTML = '<div class="mperm-row mperm-h"><span>Person</span><span>View</span><span>Create &amp; edit work</span><span>Delete work</span><span></span></div>';
+    people.forEach(u=>{
+      const full = mktFullAccess(u, cs), ef = effective(u, cs);
+      const r = document.createElement("div"); r.className = "mperm-row" + (full ? " full" : "") + (ef.own ? " own" : "");
+      const nm = document.createElement("span"); nm.className = "mperm-nm";
+      nm.innerHTML = '<b></b><small></small>'; nm.querySelector("b").textContent = userDisplayName(u);
+      nm.querySelector("small").textContent = full ? (isSpaceHead(u, csRef(cs)) ? "👑 Head · full access" : roleLabel(roleOf(u, TEAM)) + " · full access") : ef.own ? "Set here" : "General permissions";
+      r.appendChild(nm);
+      [["v","View"],["e","Create & edit work"],["d","Delete work"]].forEach(([k,l])=>{
+        const c = document.createElement("label"); c.className = "mperm-cb";
+        const i = document.createElement("input"); i.type = "checkbox"; i.checked = full ? true : !!ef[k]; i.disabled = full || !can;
+        i.setAttribute("aria-label", l + " — " + userDisplayName(u) + " in " + cs.name);
+        i.onchange = ()=>{ const m = work[cs.id] = work[cs.id] || {}; const cur = m[u.email] || { v:ef.v, e:ef.e, d:ef.d };
+          cur[k] = i.checked;
+          if(k==="v" && !i.checked){ cur.e = false; cur.d = false; }
+          if((k==="e" || k==="d") && i.checked) cur.v = true;
+          m[u.email] = cur; draw(); };
+        c.appendChild(i); r.appendChild(c); });
+      const rs = document.createElement("span");
+      if(ef.own && can && !full){ const b = document.createElement("button"); b.type = "button"; b.className = "tool sm"; b.textContent = "Reset";
+        b.title = "Go back to the general permissions for this person here"; b.onclick = ()=>{ delete work[cs.id][u.email]; draw(); }; rs.appendChild(b); }
+      r.appendChild(rs); tb.appendChild(r); });
+    dg.appendChild(tb);
+    const ft = document.createElement("div"); ft.className = "mperm-ft";
+    if(can){
+      const ok = document.createElement("button"); ok.className = "tool primary"; ok.textContent = "Save permissions";
+      ok.onclick = ()=>{ Object.keys(work).forEach(k=>{ if(!subs.some(x=> x.id===k) || !Object.keys(work[k]).length) delete work[k]; });
+        mkt.spacePerms = work; close(); renderAll(); pushAll(); toast("Space permissions saved"); };
+      const cn = document.createElement("button"); cn.className = "tool"; cn.textContent = "Cancel"; cn.onclick = close;
+      ft.append(ok, cn);
+    } else ft.insertAdjacentHTML("beforeend", '<span class="mperm-sub">Only the heads of '+mtEsc(mkt.name)+' and team Admins can change these.</span>');
+    dg.appendChild(ft);
+    dg.querySelector("[data-x]").onclick = close;
+  };
+  draw(); ov.appendChild(dg); document.body.appendChild(ov);
 }
 // build a ref for a roadmap so it reuses the whole space access/permission machinery
 function rmapRef(m){
@@ -18298,6 +18405,7 @@ function campPlanner(cs){
   if(campAdmin(cs)) return true;
   const u = currentUser(); if(!u || !cs) return false;
   const r = spaceRoleOf(u, csRef(cs)); if(!r) return false;
+  const mp = mktPermOf(cs, u.email); if(mp) return !!(mp.v && mp.e);   // 🛡 Space permissions → Create & edit work
   const d = (ROLE_DEFS[TEAM] || {})[r];
   return rolePerms(r).indexOf("plan_campaigns") >= 0 || /manager/i.test(r) || !!(d && /manager/i.test(d.name||""));
 }
@@ -18538,6 +18646,7 @@ function renderContentCampaign(){
     canEdit: ()=> campAdmin(cs),
     canPlan: ()=> campPlanner(cs),
     canDelete: ()=> campAdmin(cs) && hasPerm("delete_spaces"),
+    canDeleteWork: ()=> mktCanDelete(cs),   // 🛡 Space permissions → Delete work (pieces, tasks, sub tasks)
     me: ()=> (currentUser() || {}).id || "",
     people: ()=> USERS.filter(u=>isMember(u, TEAM)).map(u=>({ id:u.id, name:userDisplayName(u), role:(u.profile&&u.profile.title)||roleLabel(roleOf(u,TEAM)) })),
     save: ()=> pushAll(),
@@ -18676,7 +18785,8 @@ function renderContentSocial(){
   // drawn by social-space.js (the team's Social Media template); saves ride in cspaces
   SX.render(cs, wrap, {
     tab: socialView, team: TEAM, supa: SUPA,
-    canEdit: canEditHere, isMember: ()=>!!currentUser(),
+    canEdit: ()=>{ const u = currentUser(), mp = u && !mktFullAccess(u, cs) ? mktPermOf(cs, u.email) : null;   // 🛡 Space permissions → Create & edit work
+      return mp ? !!(mp.v && mp.e) : canEditHere(); }, isMember: ()=>!!currentUser(),
     me: ()=>{ const u=currentUser(); return u ? userDisplayName(u) : ""; },
     people: ()=>USERS.filter(u=>isMember(u, TEAM)).map(userDisplayName),
     teamPeople: ()=>USERS.filter(u=>isMember(u, TEAM)).map(u=>({ id:u.id, name:userDisplayName(u) })),   // not "team": that one is the team slug
@@ -18693,7 +18803,8 @@ function renderContentSocial(){
     targets: sp=>SOCIAL_TARGETS[sp.id] || null,
     canEditTargets: ()=>hasPerm("edit_targets"),
     // deleting a Content Process card: Owners and Admins, plus any role given "Delete Social Media cards"
-    canDeleteCards: ()=>{ const r = roleOf(currentUser(), TEAM); return r==="owner" || r==="admin" || hasPerm("delete_social_cards"); },
+    canDeleteCards: ()=> mktCanDelete(cs, ()=>{ const r = roleOf(currentUser(), TEAM); return r==="owner" || r==="admin" || hasPerm("delete_social_cards"); }),
+    canDeleteWork: ()=> mktCanDelete(cs),   // 🛡 Space permissions → Delete work (Tasks)
     // these logins may move any card to any column, even when what a column needs isn't filled in yet
     canForceMove: ()=>{ const u = currentUser(); return !!u && ["aditya.dubuddy@gmail.com"].includes(String(u.email||"").toLowerCase()); },
     saveTargets: (sp, obj)=>{ SOCIAL_TARGETS[sp.id] = obj; pushAll(); },
@@ -20415,6 +20526,7 @@ function renderAll(){
           if(cs.type==="pdt") _items.push({label:"Board mapping", onClick:()=>{ view="pdt"; activeCspace=cs.id; pdtView="mapping"; renderAll(); }});
           if(cs.type==="scrum") _items.push({label:"\uFF0B New dev team", onClick: devNewTeam});
           if(cs.type==="marketing" && hasPerm("add_spaces")) _items.push({label:"\uFF0B Add space inside", onClick:()=> openMarketingTemplates(cs)});
+          { const _mk = cs.type==="marketing" ? cs : mktParentOf(cs); if(_mk && canManageMktPerms(_mk)) _items.push({label:"🛡 Space permissions", onClick:()=> mktPermsPanel(_mk)}); }
           _items.push({label:"📄 Submit a template", onClick:()=> tplSubmit(cs)});
           _items.push(..._lmsItems);
           _items.push({label:"\uD83D\uDE48 Hide from my sidebar", onClick:()=> setHiddenForMe("cs:"+cs.id, true, cs.name)});
