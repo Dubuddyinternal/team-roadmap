@@ -74,6 +74,20 @@ const BCSS = `
 .kb-dr{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--bg);border-left:1px solid var(--line);transform:translateX(102%);transition:transform .2s;overflow-y:auto;z-index:61;padding:20px 22px 40px}
 .kb-dr.on{transform:none}
 .kb-dh{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px}.kb-dh h3{font-size:19px;margin:4px 0 0}
+.kf{margin:0 0 14px}.kf>label{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin:0 0 6px}
+.kf input:not([type=file]),.kf textarea{width:100%;box-sizing:border-box;border:1px solid var(--line-2);border-radius:var(--r-s);padding:9px 11px;font:inherit;font-size:14px;background:var(--surface);color:var(--ink)}
+.kf input:disabled,.kf textarea:disabled{opacity:.75}
+.kb-rep{font-size:12.5px;color:var(--ink-3);margin:-8px 0 14px}.kb-rep b{color:var(--ink-2)}
+.kb-seg{display:inline-flex;border:1px solid var(--line-2);border-radius:999px;overflow:hidden;flex-wrap:wrap}
+.kb-seg button{border:none;background:none;font-family:var(--mono);font-size:12px;padding:7px 14px;color:var(--ink-3);cursor:pointer}.kb-seg button.on{background:var(--ink);color:var(--bg)}.kb-seg button:disabled{cursor:default}
+.kb-labs{display:flex;flex-wrap:wrap;gap:6px}.kt.own{--kc:var(--ink-2);display:inline-flex;align-items:center;gap:4px}.kt.own button{border:none;background:none;color:inherit;cursor:pointer;padding:0;font-size:12px;line-height:1}
+.kb-labadd{display:flex;gap:6px;margin-top:8px}.kb-labadd input{max-width:240px}
+.kb-picbox{border:1px solid var(--line-2);border-radius:var(--r-s);background:var(--surface)}.kb-picbox textarea{border:none;border-radius:var(--r-s) var(--r-s) 0 0;min-height:80px;resize:vertical}
+.kb-picbox.dropping{outline:2px dashed var(--accent);outline-offset:-2px}
+.kb-picrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;border-top:1px dashed var(--line-2)}
+.kb-pic{position:relative}.kb-pic img{width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--line);display:block}
+.kb-pic button{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;border:none;background:var(--ink);color:var(--bg);font-size:11px;cursor:pointer;line-height:1}
+.kb-picadd{border:1px dashed var(--line-2);border-radius:var(--r-s);padding:6px 10px;font-size:13px;color:var(--accent);cursor:pointer;font-weight:600}
 .kb-blk{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:12px}
 .kb-blk h4{font-size:13.5px;margin:0 0 8px;display:flex;align-items:center;gap:8px}
 .kb-kv{display:grid;grid-template-columns:120px 1fr;gap:6px 12px;font-size:13px;align-items:center}.kb-kv>span:nth-child(odd){color:var(--ink-3)}
@@ -902,7 +916,7 @@ const memberBar = () => `<div class="bar2"><span class="ic2">VIEW ONLY</span><p>
 function people(){ return (OPT.people && OPT.people()) || []; }          /* [{id,name,role}] */
 function ownerName(it){ if(!it.ownerId) return it.owner||""; const p=people().find(x=>x.id===it.ownerId); return p ? p.name : (it.owner||""); }
 /* save and redraw (index.html's save redraws the whole page, which calls CX.render again) */
-function save(){ if(OPT.save) OPT.save(SPACE); else draw(); }
+function save(){ try{ if(typeof chDiff==="function") chDiff(SPACE); }catch(e){ console.warn("history", e); } if(OPT.save) OPT.save(SPACE); else draw(); }
 /* save without a redraw — while someone is typing */
 function saveQuiet(){ (OPT.saveQuiet || OPT.save || function(){})(SPACE); }
 function goTab(t){ if(OPT.setTab) OPT.setTab(t); else { CTAB=t; draw(); } }
@@ -1256,6 +1270,7 @@ function mount(){
 }
 function draw(){
   const c = SPACE; if(!c) return;
+  try{ if(CH.src!==c) chBase(c); }catch(_){ }   // fresh data (opened, or teammates' changes): the starting point for 🕘 History
   const B = $("#body");
   B.innerHTML = viewToggle() + (CTAB==="details" ? detailsPane(c) : CTAB==="board" ? boardPane(c) : CTAB==="reminders" ? remindersPane(c) : calendarPane(c));
   B.querySelectorAll("[data-ctab]").forEach(b=>b.onclick=()=>goTab(b.dataset.ctab));
@@ -1868,7 +1883,8 @@ function bulkDialog(c, bst){
       top = Math.max(top, c.items.filter(it=>it.date===day && groupKey(it)===(w.kind==="other" ? "other:"+w.other.toLowerCase() : w.kind) && !re.test(it.name||"")).length);
       for(let i=1;i<=w.n;i++){
         c.items.push({ id:uid("ci"), name:`${base} ${top+i}`, kind:w.kind, kindOther:w.kind==="other" ? w.other : "",
-          date:day, platform:PLATFORM_GUESS[w.kind]||"Other", platforms:[PLATFORM_GUESS[w.kind]||"Other"], ownerId:"", owner:"", details:"", ...(bst&&bst!=="done"?{ bst }:{}) });
+          date:day, platform:PLATFORM_GUESS[w.kind]||"Other", platforms:[PLATFORM_GUESS[w.kind]||"Other"], ownerId:"", owner:"", details:"", ...(bst&&bst!=="done"?{ bst }:{}),
+          by:kbName(me())||"", at:new Date().toISOString() });
         made++;
       }
     });
@@ -2489,7 +2505,7 @@ const kbState = x => x.live ? "done" : x.content ? (x.si>0 || x.ref.bst==="prog"
   : ["idea","todo","prog"].includes(x.ref.bst) ? x.ref.bst : (x.ref.bstatus==="prog" || x.subs.some(s=>s.status!=="todo")) ? "prog" : "todo";
 const kbPct = x => x.content ? Math.round(x.si/5*100) : x.subs.length ? Math.round(x.subs.filter(s=>s.done).length/x.subs.length*100) : 0;
 function kbTags(x){
-  return (x.hl?`<span class="kb-tag hl">⭐ Highlight</span>`:"") + x.tags
+  return (x.hl?`<span class="kb-tag hl">⭐ Highlight</span>`:"") + x.tags + (x.ref.labels||[]).map(l=>`<span class="kt own">${esc(l)}</span>`).join("")
     + (x.content ? `<span class="kb-tag sync" title="The same card is on Content Process">↔ Content Process</span>`
        : x.plats.filter(p=>!PROCESS_PLATFORMS.includes(p)).map(p=>`<span class="kb-tag">${esc(p)}</span>`).join(""));
 }
@@ -2613,13 +2629,39 @@ function wireBoard(c){
     col.addEventListener("drop",e=>{ if(!colDrag) return; e.preventDefault(); col.classList.remove("colover"); const id=colDrag; colDrag=null; kbMoveCol(c, id, col.dataset.kbdrop); }); });
   const ld=B.querySelector("#kbLead"); if(ld) ld.onchange=()=>{ c.lead=ld.value; save(); toast(kbName(ld.value)+" is told when something is published"); };
 }
+/* 📎 pictures for a card's Details: uploaded (the page's uploadPhoto) and kept as links on the card */
+async function kbAddPics(x, files, d){
+  const st=d.querySelector("#kbPicSt"), fs=[...files].filter(f=>/^image\//.test(f.type));
+  if(!fs.length){ if(st) st.textContent="Only pictures can go here."; return; }
+  if(typeof uploadPhoto!=="function"){ if(st) st.textContent="Uploading isn't available here."; return; }
+  x.ref.imgs=Array.isArray(x.ref.imgs)?x.ref.imgs:[];
+  for(const f of fs){ if(st) st.textContent="Uploading…";
+    try{ x.ref.imgs.push(await uploadPhoto(f)); }catch(e){ if(st) st.textContent="Couldn't upload the picture: "+(e.message||e); return; } }
+  save();
+}
+/* 🕘 History for the Activity section: what changed on each card (logged when the campaign is saved) */
+const CH = { src:null, m:new Map() };
+const chSnap = (c, x) => ({ "Title":x.title, "Status":kbColName(c, kbState(x)), "Assigned to":x.ownerIds.map(kbName).filter(Boolean).join(", "), "Due":x.due||"",
+  "Labels":(x.ref.labels||[]).join(", "), "Details":String(x.ref.details||"").slice(0,600), "Pictures":String((x.ref.imgs||[]).length), "Sub tasks":x.subs.map(s=>s.t+" ("+s.status+")").join(" · ").slice(0,600) });
+function chBase(c){ CH.src=c; CH.m=new Map(kbRows(c).map(x=>[x.id, chSnap(c,x)])); }
+function chDiff(c){
+  if(!c || !window.CMT || !CMT.log) return;
+  if(CH.src!==c){ chBase(c); return; }
+  const ev=[], scope="cs:"+c.id, seen=new Set();
+  kbRows(c).forEach(x=>{ seen.add(x.id); const now=chSnap(c,x), old=CH.m.get(x.id), place="camp:"+c.id+":"+x.id, label="card “"+String(x.title).slice(0,80)+"”";
+    if(!old) ev.push({ place, scope, place_label:label, field:"created", old_val:"", new_val:x.title });
+    else Object.keys(now).forEach(k=>{ if(now[k]!==old[k]) ev.push({ place, scope, place_label:label, field:k, old_val:old[k], new_val:now[k] }); });
+    CH.m.set(x.id, now); });
+  [...CH.m.keys()].filter(id=>!seen.has(id)).forEach(id=>{ const old=CH.m.get(id); ev.push({ place:"camp:"+c.id+":"+id, scope, place_label:"card “"+String(old.Title||id).slice(0,80)+"”", field:"deleted", old_val:"", new_val:"" }); CH.m.delete(id); });
+  if(ev.length) CMT.log(ev.slice(0,200));
+}
 function kbClose(){ KBOPEN=null; const d=R&&R.querySelector("#kbDr"); if(d) d.classList.remove("on"); const s=R&&R.querySelector("#kbScrim"); if(s) s.classList.remove("on"); }
 const kbCanTouch = x => canPlan() || x.ownerIds.includes(me());
 function kbOpen(c, id, keep){
   const x=kbRows(c).find(y=>y.id===id); if(!x){ kbClose(); return; } KBOPEN=id;
   const st=kbLate(x)?"late":kbState(x), d=$("#kbDr"), ed=kbCanTouch(x), pl=canPlan();
   const col = x.live ? "live" : x.content ? (x.si>0?"prog":"todo") : st;
-  d.innerHTML=`<div class="kb-dh"><div><span class="lbl">${x.content?"Content piece":"Task · "+esc(x.catLabel)} · ${esc(c.details.name||c.name)}</span><h3>${esc(x.title)}</h3><div class="kb-m" style="margin-top:8px">${kbTags(x)}</div></div><button class="btn sm" id="kbX">Close</button></div>
+  d.innerHTML=`<div class="kb-dh"><div><span class="lbl">${x.content?"Content piece":"Task · "+esc(x.catLabel)} · ${esc(c.details.name||c.name)}</span><h3>${esc(x.title)}</h3></div><button class="btn sm" id="kbX">Close</button></div>
     ${x.live?`<div class="kb-cf ok"><b>✓ Live</b><p class="hint" style="margin:2px 0 0">${esc(kbByLine(x))}${x.link?` · ${esc(x.link)}`:""}${x.content?" · live here and in Content Process":""}</p></div>`
       :st==="late"?`<div class="kb-cf"><b>⏰ The deadline (${dmy(x.due)}) has passed and it isn't marked live.</b>
         <p class="hint" style="margin:2px 0 0">${esc(x.owner||"Its owner")} gets a 🔔 and an email asking to confirm.</p>${ed?`<input id="kbLink" placeholder="Link or proof (the post URL, Firebase campaign number…)">
@@ -2627,19 +2669,27 @@ function kbOpen(c, id, keep){
     ${!x.live && (x.ownerId || pl) ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
       ${x.ownerIds.length && pl ? `<button class="btn" id="kbNotify">🔔 Notify ${esc(x.ownerIds.map(i=>(kbName(i)||"").split(" ")[0]).join(" + "))}</button>` : ""}
       ${pl ? `<button class="btn ${x.hl?"pri":""}" id="kbHl">${x.hl?"⭐ Highlighted — remove":"⭐ Highlight this card"}</button>` : ""}</div>` : ""}
-    <div class="kb-blk"><div class="kb-kv"><span>Assignees</span><span>${pl?`<span class="kb-pp" id="kbOwners">${kbPeople().map(p=>`<button type="button" data-kbown="${esc(p.id)}" class="${x.ownerIds.includes(p.id)?"on":""}" aria-pressed="${x.ownerIds.includes(p.id)}">${avatar(p.name)}${esc(p.name)}</button>`).join("")}</span>`:kbWho(x.ownerId,x.owner,x.ownerIds)}</span>
-      <span>Deadline</span><span>${pl&&x.src==="task"?`<input type="date" id="kbDue" value="${esc(x.due)}">`:x.due?dmy(x.due):"No date"}</span><span>Category</span><span>${esc(x.catLabel)}</span></div>
-      ${x.src==="piece"?`<p class="hint" style="margin:8px 0 0">${x.content?"Title, date and assignee are the same in Content Process. ":""}The title and date come from Campaign Details${x.content?" (or the card in Content Process)":""}.</p>`:""}</div>
-    ${x.content?`<div class="kb-blk"><h4>Status, in both places</h4>${x.card?`
-      <div class="kb-sync"><span class="lbl">Campaign board</span><span class="kb-pills">${kbCols(c).map(([k,l])=>`<button type="button" data-kbcol="${k}" ${ed?"":"disabled"} class="${kbState(x)===k?(k==="done"?"livenow":"now"):""}">${esc(l)}</button>`).join("")}</span></div>
+    <div class="kf"><label for="kbT">What needs doing</label><input id="kbT" value="${esc(x.ref.title||x.ref.name||"")}" ${ed?"":"disabled"} placeholder="What this card is"></div>
+    <p class="kb-rep">✍️ Reporter: <b>${esc(x.ref.by||"—")}</b>${x.ref.at?" · created "+esc(dmy(String(x.ref.at).slice(0,10))):""}</p>
+    <div class="kf"><label>Status</label><div class="kb-seg" role="group">${kbCols(c).map(([k,l])=>`<button type="button" data-kbcol="${k}" ${ed?"":"disabled"} class="${kbState(x)===k?"on":""}" aria-pressed="${kbState(x)===k}">${esc(l)}</button>`).join("")}</div></div>
+    <div class="kf"><label>Labels</label><div class="kb-labs">${x.tags}${(x.ref.labels||[]).map((l,i)=>`<span class="kt own">${esc(l)}${ed?`<button type="button" data-kblabx="${i}" aria-label="Remove label ${esc(l)}">×</button>`:""}</span>`).join("")}</div>
+      ${ed?`<div class="kb-labadd"><input id="kbLab" placeholder="Add a label, e.g. Caption"><button type="button" class="btn sm" id="kbLabAdd">Add</button></div>`:""}</div>
+    <div class="kf"><label>Assigned to</label>${pl?`<span class="kb-pp" id="kbOwners">${kbPeople().map(p=>`<button type="button" data-kbown="${esc(p.id)}" class="${x.ownerIds.includes(p.id)?"on":""}" aria-pressed="${x.ownerIds.includes(p.id)}">${avatar(p.name)}${esc(p.name)}</button>`).join("")}</span>
+      <p class="hint" style="margin:4px 0 0">Everyone new gets an email and a 🔔.${x.content?" The same on the card in Content Process.":""}</p>`:kbWho(x.ownerId,x.owner,x.ownerIds)}</div>
+    <div class="kf" style="max-width:220px"><label for="kbDue2">Due</label><input type="date" id="kbDue2" value="${esc(x.due)}" ${ed?"":"disabled"}></div>
+    <div class="kf"><label for="kbDet">Details</label><div class="kb-picbox"><textarea id="kbDet" ${ed?"":"disabled"} placeholder="Anything they need to know — links, the exact wording, a screenshot of what to change…">${esc(x.ref.details||"")}</textarea>
+      <div class="kb-picrow">${(x.ref.imgs||[]).map((u,i)=>`<span class="kb-pic"><a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="Reference picture ${i+1}" loading="lazy"></a>${ed?`<button type="button" data-kbpicx="${i}" aria-label="Remove picture ${i+1}">×</button>`:""}</span>`).join("")}
+        ${ed?`<label class="kb-picadd">📎 Add picture<input type="file" id="kbPicIn" accept="image/*" multiple hidden></label><span class="hint">or drop / paste a picture here</span>`:""}<span class="hint" id="kbPicSt"></span></div></div></div>
+    ${x.content?`<div class="kb-blk"><h4>Content Process</h4>${x.card?`
       <div class="kb-sync"><span class="lbl">Content Process</span><span class="kb-pills">${CP_STAGES.map(([sid,l],i)=>`<button type="button" data-kbcp="${sid}" ${ed?"":"disabled"} class="${i===x.si?(i===5?"livenow":"now"):i<x.si?"done":""}">${l}</button>`).join("")}</span></div>
-      <p class="hint" style="margin:6px 0 0">The two boards name their columns differently; <b>Live</b> is the same in both. Moving it here moves it there.</p>
+      <p class="hint" style="margin:6px 0 0">Moving the card on this board moves it there too; <b>Done</b> here is <b>Live</b> there.</p>
       ${OPT.goProcess?`<button class="btn sm" id="kbGo" style="margin-top:8px">Open Content Process →</button>`:""}`
       :`<p class="hint" style="margin:0">The card is being made in Content Process — it appears there the next time someone who plans this campaign opens it.</p>`}</div>`
     :`<div class="kb-blk">${!x.live&&st!=="late"&&ed?`<input id="kbLink" placeholder="Link or proof, once it's out" style="width:100%"><button class="btn kb-good" id="kbPub" style="margin-top:8px">✓ Published</button>`:`<span class="hint">${x.live?"It's live.":""}</span>`}
       ${pl&&x.src==="task"&&canDelWork()?`<div style="margin-top:12px"><button class="btn sm danger" id="kbDel">Delete this task</button></div>`:""}</div>`}
     ${kbSubsBlock(x)}
-    ${x.src==="piece" && canEdit() ? `<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" id="kbEdit">✏️ Edit details</button>${canDelWork()?`<button class="btn sm danger" id="kbDelPiece">🗑 Delete this card</button>`:""}</div>` : ""}`;
+    ${x.src==="piece" && canEdit() ? `<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm" id="kbEdit">✏️ More details</button>${canDelWork()?`<button class="btn sm danger" id="kbDelPiece">🗑 Delete this card</button>`:""}</div>` : ""}
+    <div data-cmthost></div>`;
   d.classList.add("on"); $("#kbScrim").classList.add("on");
   d.querySelector("#kbX").onclick=kbClose;
   const pub=d.querySelector("#kbPub"); if(pub) pub.onclick=()=>kbPublish(c, x, (d.querySelector("#kbLink")||{}).value||"");
@@ -2648,6 +2698,22 @@ function kbOpen(c, id, keep){
   const ed2=d.querySelector("#kbEdit"); if(ed2) ed2.onclick=()=>{ const i=c.items.indexOf(x.ref); if(i>=0){ kbClose(); itemDialog(c, i); } };
   const dp=d.querySelector("#kbDelPiece"); if(dp) dp.onclick=()=>kbDeletePiece(c, x);
   const du=d.querySelector("#kbDue"); if(du) du.onchange=()=>{ x.ref.due=du.value; save(); };
+  const tt=d.querySelector("#kbT"); if(tt){ const put=()=>{ const v=tt.value.trim(); if(!v) return false; if(x.src==="task") x.ref.title=v; else x.ref.name=v; return true; };
+    tt.oninput=()=>{ if(put()) saveQuiet(); }; tt.onchange=()=>{ if(put()) save(); else toast("Say what this card is"); }; }
+  const d2=d.querySelector("#kbDue2"); if(d2) d2.onchange=()=>{ if(x.src==="task") x.ref.due=d2.value; else x.ref.date=d2.value; save(); };
+  const dt=d.querySelector("#kbDet"); if(dt){ dt.oninput=()=>{ x.ref.details=dt.value; saveQuiet(); }; dt.onchange=()=>{ x.ref.details=dt.value; save(); };
+    dt.addEventListener("paste",e=>{ const fs=[...((e.clipboardData&&e.clipboardData.files)||[])].filter(f=>/^image\//.test(f.type)); if(fs.length){ e.preventDefault(); kbAddPics(x, fs, d); } }); }
+  const la=d.querySelector("#kbLabAdd"), li=d.querySelector("#kbLab");
+  const addLab=()=>{ const v=(li.value||"").trim().slice(0,30); if(!v) return; x.ref.labels=Array.isArray(x.ref.labels)?x.ref.labels:[]; if(!x.ref.labels.some(l=>l.toLowerCase()===v.toLowerCase())) x.ref.labels.push(v); save(); };
+  if(la){ la.onclick=addLab; li.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); addLab(); } }; }
+  d.querySelectorAll("[data-kblabx]").forEach(b=>b.onclick=()=>{ x.ref.labels.splice(+b.dataset.kblabx,1); save(); });
+  d.querySelectorAll("[data-kbpicx]").forEach(b=>b.onclick=()=>{ x.ref.imgs.splice(+b.dataset.kbpicx,1); save(); });
+  const pin=d.querySelector("#kbPicIn"); if(pin) pin.onchange=()=>{ const fs=[...pin.files]; pin.value=""; if(fs.length) kbAddPics(x, fs, d); };
+  const pbox=d.querySelector(".kb-picbox"); if(pbox && ed){ const hasF=e=>e.dataTransfer && [...(e.dataTransfer.types||[])].includes("Files");
+    pbox.addEventListener("dragover",e=>{ if(!hasF(e)) return; e.preventDefault(); pbox.classList.add("dropping"); });
+    pbox.addEventListener("dragleave",e=>{ if(!pbox.contains(e.relatedTarget)) pbox.classList.remove("dropping"); });
+    pbox.addEventListener("drop",e=>{ if(!hasF(e)) return; e.preventDefault(); pbox.classList.remove("dropping"); kbAddPics(x, e.dataTransfer.files, d); }); }
+  { const h=d.querySelector("[data-cmthost]"); if(h && window.CMT && window.cmtCampPlace) try{ CMT.mount(h, cmtCampPlace(c.id, x.id, x.title)); }catch(e){ console.warn("comments", e); } }
   const go=d.querySelector("#kbGo"); if(go) go.onclick=()=>{ kbClose(); OPT.goProcess(c); };
   d.querySelectorAll("[data-kbcp]").forEach(b=>b.onclick=()=>{ const sid=b.dataset.kbcp; if(sid==="published"){ kbPublish(c,x,""); return; }
     if(OPT.setCardStage && OPT.setCardStage(c, x.ref, sid)){ save(); toast(`Content Process → ${CP_STAGES.find(s=>s[0]===sid)[1]}`); } });
@@ -2757,7 +2823,7 @@ function kbAddTask(c){
       { k:"ownerId", label:"Owner", type:"select", value:mine, opts:[["","— nobody yet —"]].concat(ppl.map(p=>[p.id, p.name+(p.role?" · "+p.role:"")])) },
       { k:"due", label:"Deadline", type:"date", value:addDays(TODAY,3) } ],
     onSave:(v)=>{ if(!v.title){ toast("Say what the task is"); return false; }
-      const t={ id:uid("kt"), title:v.title, kind:v.kind, ownerId:v.ownerId, owner:kbName(v.ownerId), due:v.due,
+      const t={ id:uid("kt"), title:v.title, kind:v.kind, ownerId:v.ownerId, owner:kbName(v.ownerId), due:v.due, by:kbName(me())||"", at:new Date().toISOString(),
         subs:(v.kind==="Webinar"?WEBINAR_SUBS:[]).map(s=>({ t:s, ownerId:v.ownerId, done:false })), live:false };
       if(!Array.isArray(c.tasks)) c.tasks=[]; c.tasks.push(t); KBOPEN=t.id; save();
       if(v.ownerId && v.ownerId!==mine && OPT.notify) OPT.notify(c, { ownerId:v.ownerId, owner:t.owner, name:t.title, kind:"other", kindOther:t.kind, date:t.due, platform:"", details:"A task on the campaign board." });
