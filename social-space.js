@@ -1036,7 +1036,7 @@ function save(){
 }
 /* ---- 🕘 History: every saved change to a card or idea — who, which field, old → new (team_activity; comments.js shows it) ---- */
 const at=(o,p)=>p.split(".").reduce((x,k)=>x==null?x:x[k],o);
-const H_CARD=[["stage","Status",v=>(STAGES.find(x=>x.id===v)||{}).label||v],["idea","Idea"],["pre.title","Title"],["pre.desc","Description"],
+const H_CARD=[["stage","Status",v=>(STAGES.find(x=>x.id===v)||{}).label||v],["idea","Idea"],["pre.title","Title"],["pre.desc","Description"],["pre.script","Script"],
   ["pre.hashtags","Hashtags"],[x=>plats(x),"Post on",v=>v.map(k=>regLabel("platform",k)||k).join(", ")],["vtype","Video type",v=>regLabel("vtype",v)||v],
   ["scheduled","Goes live on",v=>v?dmy(v):""],["time","Time"],["shoot.hook","Hook"],["shoot.points","Talking points"],["shoot.cta","Closing line"],
   ["shoot.tips","Shooting notes"],["raw","Raw video",v=>!v?"":v.kind==="link"?v.url:v.name],["raw.audio","Audio (WAV)",v=>v?"made":""],
@@ -3700,6 +3700,7 @@ function openCard(id,showGate,preset){
         <button class="btn sm" id="repull" style="margin-left:6px" data-w="1">Re-pull from idea</button></p>`:""}
       <div class="fld"><label for="r-title">Title</label><input id="r-title" value="${esc(c.pre.title)}"></div>
       <div class="fld"><label for="r-desc">${F.video?"Description":"Caption"}</label><textarea id="r-desc">${esc(c.pre.desc)}</textarea></div>
+      <div class="fld"><label for="r-script">Script</label><textarea id="r-script" rows="6" placeholder="What gets said on camera — the hook, the points, the closing line…">${esc(c.pre.script||"")}</textarea></div>
       <div class="fld"><label for="r-hashtags">Hashtags</label>
         <input id="r-hashtags" value="${esc(c.pre.hashtags)}" placeholder="#cuet #du"></div>
       ${picBox("r-ref","Comments & reference", c.pre.refNote, refImgs, "Any comments for the team — what to keep in mind, what the reference picture shows…")}
@@ -3860,6 +3861,7 @@ function openCard(id,showGate,preset){
       if(TEAM_.length){ c.ownerIds=asg.slice(); c.ownerId=asg[0]||""; c.owner=asg.map(id=>(TEAM_.find(p=>p.id===id)||{}).name).filter(Boolean).join(", "); }
       c.pre.title=$("#r-title").value.trim();   // research fields are off the card for now: what's stored stays
       c.pre.desc=$("#r-desc").value.trim(); c.pre.hashtags=$("#r-hashtags").value.trim();
+      { const sc=$("#r-script"); if(sc) c.pre.script=sc.value.trim(); }
       c.pre.refNote=$("#r-ref").value.trim(); c.pre.refImgs=refImgs.slice();
       c.post = c.post || {}; c.post.links = c.post.links && typeof c.post.links==="object" ? c.post.links : {};   // a brand-new card has none yet
       $("#drawer").querySelectorAll("[data-plink]").forEach(e=>{ c.post.links[e.dataset.plink]=e.value.trim(); });
