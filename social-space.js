@@ -1118,7 +1118,7 @@ function gateMsg(c,g){ const F=fmtOf(c), thumb=F.video&&c.vtype==="long"&&plats(
   return GATE_MSG[g]; }
 const forceMove = () => { try{ return !!(OPT.canForceMove && OPT.canForceMove()); }catch(_){ return false; } };
 function canMove(c,to){ const fi=STAGES.findIndex(s=>s.id===c.stage), ti=STAGES.findIndex(s=>s.id===to);
-  if(ti<=fi || forceMove()) return {ok:true};   // backwards is always fine; Aditya may move any card anywhere
+  if(ti<=fi || forceMove()) return {ok:true};   // backwards is always fine; Aditya and Mannat may move any card anywhere
   for(let i=fi;i<ti;i++){ const g=gateFor(STAGES[i].id); if(g&&!gatePass(c,g))
     return {ok:false,msg:g==="prep"?`Fill in the research and copy before Editing. Missing: ${prepMissing(c).join(", ")}.`:gateMsg(c,g)}; }
   return {ok:true}; }
