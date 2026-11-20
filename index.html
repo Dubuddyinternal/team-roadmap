@@ -18845,7 +18845,7 @@ function renderContentSocial(){
     canDeleteCards: ()=> secAllowed(cs, socialView, "d", ()=> mktCanDelete(cs, ()=>{ const r = roleOf(currentUser(), TEAM); return r==="owner" || r==="admin" || hasPerm("delete_social_cards"); })),
     canDeleteWork: ()=> secAllowed(cs, socialView, "d", ()=> mktCanDelete(cs)),   // 🛡 Space Permissions → Delete work (section, then space)
     // these logins may move any card to any column, even when what a column needs isn't filled in yet
-    canForceMove: ()=>{ const u = currentUser(); return !!u && ["aditya.dubuddy@gmail.com"].includes(String(u.email||"").toLowerCase()); },
+    canForceMove: ()=>{ const u = currentUser(); return !!u && ["aditya.dubuddy@gmail.com","mannat.dubuddy@gmail.com"].includes(String(u.email||"").toLowerCase()); },
     saveTargets: (sp, obj)=>{ SOCIAL_TARGETS[sp.id] = obj; pushAll(); },
     save: saveSocial,
   });
