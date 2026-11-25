@@ -18805,6 +18805,13 @@ function maverickOpts(){
     canPay: ()=> hasPerm("pay_maverick"),
     me: ()=>{ const u=currentUser(); return u ? { id:u.id, name:userDisplayName(u) } : null; },
     toast: toast,
+    /* a creator's dashboard link (?mx=<id>) opens the space on that tab */
+    openSpace: (tab)=>{
+      const cs = (CSPACES.list||[]).find(x=>x.type==="maverick" && canViewSpace(csRef(x)));
+      if(!cs) return false;
+      view = "maverick"; activeCspace = cs.id; maverickView = tab || "all"; renderAll();
+      return true;
+    },
   };
 }
 function renderContentMaverick(){

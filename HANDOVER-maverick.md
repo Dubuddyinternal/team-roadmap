@@ -18,6 +18,7 @@ The team's side is the **🎬 Maverick Admin** space here. Add it from Administr
 | **Publish to verify** | The creator says it's live. **Approve** = verified, and base pay becomes due 7 days after the publishing date. **Reject** sends it back to "Approved" with the reason and clears the link, so they can publish again. |
 | **Payouts → Base pay** | Verified videos. **Release payout** once the UPI transfer is done; it shows in the creator's payment history. |
 | **Payouts → Bonuses** | Videos whose 30-day window is over. Type the views; the slab picks the amount. Then **Release payout**. |
+| **👥 Creators** | Everyone who logged in on maverick.dubuddy.in: name, number, email, when they joined, last login, videos and pay. **Open** shows one creator's profile and videos; **Copy dashboard link** gives a link (`?team=dubuddy&mx=<id>`) that opens that view for anyone on the Maverick team. **Download CSV** lets you tick the columns you want (the search applies). Data comes from `maverick_people()`, which returns nothing to people without a Maverick permission. |
 
 The 🔔 in the space and the "waiting on us" sticker count what's waiting. Anyone with a Maverick permission also gets a toast when they open the app if videos are waiting, and a live toast when a new video or link comes in.
 

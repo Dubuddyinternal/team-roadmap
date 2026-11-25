@@ -13,6 +13,9 @@
        becomes due 7 days after publishing) or send it back with a reason.
      * Payouts — Base pay and Bonuses (enter the 30-day views, the slab
        picks the amount). Only the payout head releases money.
+     * 👥 Creators — everyone who logged in (name, number, email, videos,
+       pay), an Open view per creator with a shareable dashboard link
+       (?mx=<id>), and a CSV download with the columns you pick.
      * ✉️ Emails — every email creators got from maverick@dubuddy.in (each
        step above sends one through the maverick-mail Edge Function, in
        Dubuddyinternal/maverick), and a link to open that mailbox.
@@ -246,6 +249,10 @@ td b{font-weight:600}
 .pre button:hover{border-color:var(--crit);color:var(--crit)}
 textarea.rsn{width:100%;border:1px solid var(--line-2);border-radius:var(--r-s);padding:10px 12px;font-size:14px;resize:vertical;min-height:100px;background:var(--card)}
 textarea.rsn:focus{outline:none;border-color:var(--crit);box-shadow:0 0 0 1px var(--crit)}
+.csvcols{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px}
+.csvcols label{display:flex;align-items:center;gap:8px;font-size:13.5px;padding:7px 10px;border:1px solid var(--line);border-radius:var(--r-s);cursor:pointer}
+.csvcols label:hover{border-color:var(--line-2)}
+.csvcols input{accent-color:var(--accent);width:15px;height:15px}
 .mailnote{display:flex;gap:10px;align-items:flex-start;background:var(--blue-soft);border-radius:var(--r-s);padding:11px 13px;margin-top:14px}
 .mailnote svg{width:18px;height:18px;flex:none;color:var(--blue);margin-top:2px}
 .mailnote b{display:block;font-size:13.5px}
@@ -282,6 +289,7 @@ let TAB="all", PAYTAB="base", SEARCH="";
 let VIDEOS=[], LOADED=false, LOADING=null, ERR="", LAST_LOAD=0;
 let CH=null, RELOAD_T=null, BUSY=false, BELL_OPEN=false;
 let EMAILS=[], EMAILS_ERR="";
+let PEOPLE=[], PEOPLE_ERR="", CSV_PICK=null;
 
 function esc(s){ return String(s===null||s===undefined?"":s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 /* only ever link out to http(s); a bare "drive.google.com/…" gets https:// */
@@ -365,6 +373,10 @@ async function load(){
     const em = await sb.from("maverick_emails").select("*").order("created_at", { ascending:false }).limit(300);
     EMAILS = em.error ? [] : (em.data || []);
     EMAILS_ERR = em.error ? (em.error.message || "couldn't load") : "";
+    /* everyone who has logged in with a phone, with their profile if they made one (maverick_people(): team only) */
+    const pp = await sb.rpc("maverick_people");
+    PEOPLE = pp.error ? [] : (pp.data || []);
+    PEOPLE_ERR = pp.error ? (pp.error.message || "couldn't load") : "";
     LOADED = true; LAST_LOAD = Date.now();
   })();
   try{ await LOADING; } finally { LOADING = null; }
@@ -391,6 +403,10 @@ function subscribe(){
     })
     .on("postgres_changes", { event:"*", schema:"public", table:"maverick_payouts" }, ()=> reloadSoon())
     .on("postgres_changes", { event:"INSERT", schema:"public", table:"maverick_emails" }, ()=> reloadSoon())
+    .on("postgres_changes", { event:"INSERT", schema:"public", table:"maverick_creators" }, payload=>{
+      note("🙋 New Maverick creator: " + ((payload.new && payload.new.full_name) || "someone") + " just signed up.");
+      reloadSoon();
+    })
     .subscribe();
 }
 /* a message inside the space if it's open, else the app's own toast */
@@ -707,6 +723,127 @@ function viewEmails(){
       '<a class="btn g sm" href="'+esc(CFG.mailbox)+'" target="_blank" rel="noopener noreferrer" style="text-decoration:none">Open the Maverick mailbox ↗</a>');
 }
 
+/* ---------- TAB 6: CREATORS ---------- */
+/* everyone who logged in on maverick.dubuddy.in: name, number, email, their videos and pay */
+function phoneTxt(p){ p = String(p||"").replace(/\D/g,""); return p ? "+"+p : ""; }
+function personStats(id){
+  const vs = VIDEOS.filter(v=> v.creatorId===id);
+  const paid = vs.reduce((t,v)=> t + (v.base && v.base.status==="paid" ? Number(v.base.amount) : 0) + (v.bonus && v.bonus.status==="paid" ? Number(v.bonus.amount) : 0), 0);
+  return { videos: vs, live: vs.filter(v=> v.published).length, paid: paid };
+}
+function profileDone(p){ return !!(p.has_profile && String(p.full_name||"").trim() && /^\S+@\S+\.\S+$/.test(String(p.email||"").trim())); }
+/* opens this space on that creator: tools.dubuddy.in/?team=dubuddy&mx=<id> */
+function dashLink(id){ return location.origin + location.pathname + "?team=dubuddy&mx=" + encodeURIComponent(id); }
+function people(){
+  const q = SEARCH.toLowerCase();
+  return PEOPLE.filter(p=> !q || [p.full_name, p.email, phoneTxt(p.phone), p.upi_id].some(x=> String(x||"").toLowerCase().indexOf(q) >= 0));
+}
+function viewCreators(){
+  const list = people();
+  const done = PEOPLE.filter(profileDone).length;
+  const sent = PEOPLE.filter(p=> personStats(p.id).videos.length).length;
+  const rows = list.length ? list.map((p,i)=>{
+    const st = personStats(p.id);
+    return '<tr>'+
+      '<td class="tnum mut">'+(i+1)+'</td>'+
+      '<td>'+(p.full_name ? '<b>'+esc(p.full_name)+'</b>' : '<span class="mut">No name yet</span>')+
+        (profileDone(p) ? '' : '<div class="meta"><span class="due soon">'+(p.has_profile ? 'Profile incomplete' : 'Logged in, not signed up')+'</span></div>')+'</td>'+
+      '<td class="tnum">'+(p.phone ? esc(phoneTxt(p.phone)) : dash())+'</td>'+
+      '<td>'+(p.email ? esc(p.email) : dash())+'</td>'+
+      '<td class="tnum">'+fmt(day(p.joined_at))+'</td>'+
+      '<td class="tnum">'+(p.last_login_at ? fmt(day(p.last_login_at)) : dash())+'</td>'+
+      '<td class="tnum">'+st.videos.length+(st.live ? '<div class="meta">'+st.live+' live</div>' : '')+'</td>'+
+      '<td class="tnum"><b>'+money(st.paid)+'</b></td>'+
+      '<td><div class="acts"><button class="btn g sm" data-person="'+esc(p.id)+'">Open</button></div></td>'+
+    '</tr>';
+  }).join('') : emptyRow(9, PEOPLE_ERR ? 'The creator list isn’t set up yet.' : (SEARCH ? 'Nothing matches “'+esc(SEARCH)+'”.' : 'No creators yet.'),
+      PEOPLE_ERR ? esc(PEOPLE_ERR) : 'Everyone who logs in on maverick.dubuddy.in shows up here.', '');
+  return '<div class="kpis">'+
+      '<div class="kpi c1"><h6>Creators</h6><b>'+PEOPLE.length+'</b><p>Everyone who logged in</p></div>'+
+      '<div class="kpi c3"><h6>Profile complete</h6><b>'+done+'</b><p>Name and email added</p></div>'+
+      '<div class="kpi c2"><h6>Sent a video</h6><b>'+sent+'</b><p>At least one submission</p></div>'+
+      '<div class="kpi c4"><h6>Paid out</h6><b>'+money(paidSoFar())+'</b><p>Base pay plus bonuses</p></div>'+
+    '</div>'+
+    panel('Creators', list.length+(SEARCH ? ' of '+PEOPLE.length : '')+' · newest first',
+      '<th>#</th><th>Name</th><th>Number</th><th>Email</th><th>Joined</th><th>Last login</th><th>Videos</th><th>Paid</th><th style="text-align:right">Dashboard</th>',
+      rows, PEOPLE.length ? '<button class="btn g sm" data-csv="1">⬇ Download CSV</button>' : '', 'stickylast');
+}
+
+/* one creator's own dashboard, inside the admin space */
+function openCreator(id){
+  const p = PEOPLE.find(x=> x.id===id);
+  if(!p){ toast("That creator isn't in the list."); return; }
+  const st = personStats(id);
+  const vids = st.videos.length ? '<div class="tblwrap" style="border:1px solid var(--line);border-radius:var(--r-s);margin-top:6px"><table><thead><tr><th>S. No.</th><th>Title</th><th>Platform</th><th>Submitted</th><th>Status</th></tr></thead><tbody>'+
+      st.videos.map(v=> '<tr><td>'+snBtn(v)+'</td><td>'+esc(v.title)+'</td><td>'+esc(v.platform)+'</td><td class="tnum">'+fmt(v.submitted)+'</td><td>'+chip(v.status)+'</td></tr>').join('')+
+      '</tbody></table></div>' : '<p class="mut" style="margin-top:4px">No videos yet.</p>';
+  openModal(
+    '<div class="mhead"><div><h2>'+(p.full_name ? esc(p.full_name) : 'No name yet')+'</h2>'+
+      '<div style="margin-top:7px">'+(profileDone(p) ? '<span class="chip green"><span class="d"></span>Profile complete</span>' : '<span class="chip amber"><span class="d"></span>'+(p.has_profile ? 'Profile incomplete' : 'Logged in, not signed up')+'</span>')+'</div></div>'+
+      '<button class="x" data-close="1" aria-label="Close">✕</button></div>'+
+    '<div class="mbody"><div class="fgrid">'+
+      fbox('Number', esc(phoneTxt(p.phone)))+
+      fbox('Email', esc(p.email))+
+      fbox('UPI ID', esc(p.upi_id))+
+      fbox('Joined', fmt(day(p.joined_at)))+
+      fbox('YouTube', p.youtube_handle ? esc('@'+String(p.youtube_handle).replace(/^@/,'')) : null)+
+      fbox('Instagram', p.instagram_handle ? esc('@'+String(p.instagram_handle).replace(/^@/,'')) : null)+
+      fbox('Last login', p.last_login_at ? fmt(day(p.last_login_at)) : null)+
+      fbox('Paid so far', money(st.paid))+
+    '</div>'+
+    '<h3 style="font-size:15px;margin:18px 0 2px">Videos · '+st.videos.length+'</h3>'+vids+
+    '</div>'+
+    '<div class="mfoot"><button class="btn g" data-copylink="'+esc(p.id)+'">🔗 Copy dashboard link</button><button class="btn g" data-close="1">Close</button>'+
+      '<span class="sp">The link opens this view for anyone on the Maverick team.</span></div>'
+  );
+}
+
+/* CSV: pick the columns, download the creators shown (the search applies) */
+const CSV_COLS = [
+  ["name","Name", p=> p.full_name||""],
+  ["number","Number", p=> phoneTxt(p.phone)],
+  ["email","Email", p=> p.email||""],
+  ["link","Dashboard link", p=> dashLink(p.id)],
+  ["upi","UPI ID", p=> p.upi_id||""],
+  ["youtube","YouTube", p=> p.youtube_handle||""],
+  ["instagram","Instagram", p=> p.instagram_handle||""],
+  ["joined","Joined", p=> p.joined_at ? ymd(new Date(p.joined_at)) : ""],
+  ["login","Last login", p=> p.last_login_at ? ymd(new Date(p.last_login_at)) : ""],
+  ["profile","Profile", p=> profileDone(p) ? "Complete" : (p.has_profile ? "Incomplete" : "Not signed up")],
+  ["videos","Videos", p=> String(personStats(p.id).videos.length)],
+  ["live","Live videos", p=> String(personStats(p.id).live)],
+  ["paid","Paid (₹)", p=> String(personStats(p.id).paid)]
+];
+function openCsv(){
+  if(!CSV_PICK) CSV_PICK = { name:1, number:1, email:1, link:1 };
+  const n = people().length;
+  openModal(
+    '<div class="mhead"><div><h2>Download creators</h2><p style="color:var(--muted);margin-top:4px;font-size:13px">Tick the columns you want. '+n+' creator(s)'+(SEARCH ? ' matching “'+esc(SEARCH)+'”' : '')+'.</p></div>'+
+      '<button class="x" data-close="1" aria-label="Close">✕</button></div>'+
+    '<div class="mbody"><div class="csvcols">'+
+      CSV_COLS.map(c=> '<label><input type="checkbox" data-col="'+c[0]+'"'+(CSV_PICK[c[0]]?' checked':'')+'> '+esc(c[1])+'</label>').join('')+
+    '</div></div>'+
+    '<div class="mfoot"><button class="btn" data-csvgo="1">⬇ Download CSV</button><button class="btn g" data-csvall="1">Select all</button><button class="btn g" data-close="1">Cancel</button></div>'
+  );
+}
+function csvCell(v){
+  v = String(v==null ? "" : v);
+  if(/^[=+\-@\t\r]/.test(v) && !/^\+\d+$/.test(v)) v = "'" + v;   /* never let a spreadsheet run a cell as a formula */
+  return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v;
+}
+function downloadCsv(){
+  const cols = CSV_COLS.filter(c=> CSV_PICK[c[0]]);
+  if(!cols.length){ toast("Tick at least one column."); return; }
+  const lines = [cols.map(c=> csvCell(c[1])).join(",")].concat(people().map(p=> cols.map(c=> csvCell(c[2](p))).join(",")));
+  const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type:"text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "maverick-creators-" + ymd(new Date()) + ".csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=> URL.revokeObjectURL(a.href), 2000);
+  closeModal(); toast("Downloaded " + (lines.length-1) + " creator(s).");
+}
+
 /* the parts of a bonus row that follow the views typed in */
 function bonusCells(v){
   const s = slabFor(v.views), amt = bonusFor(v.views);
@@ -719,7 +856,7 @@ function bonusCells(v){
   };
 }
 
-const VIEWS = { all:viewAll, review:viewReview, verify:viewVerify, payouts:viewPayouts, emails:viewEmails };
+const VIEWS = { all:viewAll, review:viewReview, verify:viewVerify, payouts:viewPayouts, emails:viewEmails, creators:viewCreators };
 
 function draw(){
   if(!R) return;
@@ -727,7 +864,7 @@ function draw(){
   const keepFocus = R.activeElement && R.activeElement.matches && R.activeElement.matches("[data-search]") ? R.activeElement.selectionStart : null;
   const c = counts();
   const b = bellHtml(c);
-  const tabs = [["all","All videos",c.all],["review","Review queue",c.review],["verify","Publish to verify",c.verify],["payouts","Payouts",c.payouts],["emails","✉️ Emails",EMAILS.length]];
+  const tabs = [["all","All videos",c.all],["review","Review queue",c.review],["verify","Publish to verify",c.verify],["payouts","Payouts",c.payouts],["emails","✉️ Emails",EMAILS.length],["creators","👥 Creators",PEOPLE.length]];
   let body;
   if(!isStaff()) body = '<div class="notice"><b>This desk is for the Maverick team.</b><p>To review videos you need “Review Maverick videos”, and to release payouts “Release Maverick payouts”. An owner can tick them for your role in Administration → Roles.</p></div>';
   else if(!LOADED) body = '<div class="notice"><b>Loading…</b><p>Fetching every Maverick video.</p></div>';
@@ -875,6 +1012,17 @@ function wire(){
     if(st){ PAYTAB = st.dataset.pt; draw(); return; }
     if(t.closest("[data-refresh]")){ LOADED = false; draw(); await load(); draw(); toast("Up to date."); return; }
 
+    const pr = t.closest("[data-person]");
+    if(pr){ openCreator(pr.dataset.person); return; }
+    if(t.closest("[data-csv]")){ openCsv(); return; }
+    if(t.closest("[data-csvgo]")){ downloadCsv(); return; }
+    if(t.closest("[data-csvall]")){ CSV_COLS.forEach(c=> CSV_PICK[c[0]] = 1); R.querySelectorAll("[data-col]").forEach(x=> x.checked = true); return; }
+    const cl = t.closest("[data-copylink]");
+    if(cl){
+      const link = dashLink(cl.dataset.copylink);
+      try{ await navigator.clipboard.writeText(link); toast("Dashboard link copied."); }catch(_){ toast(link); }
+      return;
+    }
     const rec = t.closest("[data-rec]");
     if(rec){ openRecord(rec.dataset.rec); return; }
 
@@ -930,6 +1078,10 @@ function wire(){
     }
   });
 
+  R.addEventListener("change", e=>{
+    const c = e.target.closest("[data-col]");
+    if(c && CSV_PICK) CSV_PICK[c.dataset.col] = c.checked ? 1 : 0;
+  });
   R.addEventListener("input", e=>{
     const s = e.target.closest("[data-search]");
     if(s){ SEARCH = s.value.trim(); draw(); return; }
@@ -976,14 +1128,14 @@ function mount(){
 
 /* ============================================================ API */
 window.MX = {
-  tabs: [["all","All videos"],["review","Review queue"],["verify","Publish to verify"],["payouts","Payouts"],["emails","✉️ Emails"]],
+  tabs: [["all","All videos"],["review","Review queue"],["verify","Publish to verify"],["payouts","Payouts"],["emails","✉️ Emails"],["creators","👥 Creators"]],
   normalize: function(space){ /* nothing is stored on the space itself: all data lives in the maverick_* tables */ return space; },
   /* opt: { supa, tab, canReview(), canPay(), me() → {id,name}, setTab(t), toast(msg) } */
   render: function(space, wrap, opt){
     mount();
     OPT = opt || {};
     if(SPACE !== space){ SPACE = space; SEARCH = ""; closeModal(); }
-    TAB = ["all","review","verify","payouts","emails"].includes(OPT.tab) ? OPT.tab : "all";
+    TAB = ["all","review","verify","payouts","emails","creators"].includes(OPT.tab) ? OPT.tab : "all";
     if(HOST.parentNode !== wrap) wrap.appendChild(HOST);
     subscribe();
     draw();
@@ -995,6 +1147,13 @@ window.MX = {
     if(!isStaff() || !supa()) return;
     subscribe();
     await load();
+    /* a creator's dashboard link (?mx=<id>): open this space on them */
+    const want = new URLSearchParams(location.search).get("mx");
+    if(want){
+      try{ const u = new URL(location.href); u.searchParams.delete("mx"); history.replaceState(history.state, "", u.toString()); }catch(_){ }
+      if(OPT.openSpace && OPT.openSpace("creators")) setTimeout(()=> openCreator(want), 300);
+      return;
+    }
     if(ERR) return;
     const c = counts(), n = c.review + c.verify;
     if(n && OPT.toast) OPT.toast("🎬 Maverick: " + (c.review ? c.review + " video(s) to review" : "") + (c.review && c.verify ? " and " : "") + (c.verify ? c.verify + " published link(s) to verify" : ""));
