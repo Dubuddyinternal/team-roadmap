@@ -87,6 +87,11 @@ lottie-ios rejected an early export, so every file must be **plain Lottie**:
   character and hero-object ideas, and what must stay the same.
 - `references/lessons.md`: bugs and feedback from the first build. Skim it before starting so
   you don't repeat them.
+- Other animation tools (`../dubuddy-short/references/toolbox.md`): the banner itself stays Lottie
+  JSON built here, since that is what the app and site load. Use the toolbox only around it: `gsap-*`
+  skills if the developers ask for an HTML/web version of the hero; anidoodle / lemo-opuscar plus
+  real-sfx / earshot when the same campaign also needs a Reel/ad video; `earshot make` if the user
+  wants the MP4 preview with sound. Skip any tool that is not installed.
 
 ## Scripts (copied into the project by setup_project.sh)
 
