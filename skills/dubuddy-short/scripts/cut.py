@@ -26,6 +26,7 @@ def source_fps(src):
     """Match the source frame rate (e.g. DJI 30000/1001); fall back to 30 for odd/variable rates."""
     r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=r_frame_rate",
                         "-of", "csv=p=0", str(src)], capture_output=True, text=True).stdout.strip()
+    r = next((ln.strip().rstrip(",") for ln in r.splitlines() if ln.strip()), "")   # some DJI files list the stream twice
     try:
         n, d = (int(x) for x in r.split("/"))
         f = n / d
@@ -119,7 +120,11 @@ def main():
     if plan.get("teaser") and plan.get("teaser_move"):      # teaser_move: the teaser words play only up front, not again in the body
         a, b = plan["teaser"]
         all_idx = [i for i in all_idx if not a <= i <= b]
-    segs += segments_for(all_idx)
+    if plan.get("order"):      # order: [[a, b], …] — play these word ranges in this order (best takes from many clips)
+        for a, b in plan["order"]:
+            segs += segments_for(range(a, b + 1))
+    else:
+        segs += segments_for(all_idx)
 
     # --- output timeline (frame-quantised so audio/video stay locked)
     t = 0.0

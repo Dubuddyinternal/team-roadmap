@@ -7,6 +7,7 @@ description: Automatic edit of a raw Hindi/Hinglish talking-head clip into a fin
 
 `S=~/.agents/skills/dubuddy-short/scripts` · per clip: `ED=<footage_dir>/edit/<stem>` · source is never modified.
 Extras (music, Devanagari, custom graphics, Codex, missing B-roll, troubleshooting): read `references/extras.md` only when needed.
+**Toolbox** (GSAP / Three.js / Manim / anidoodle / huashu / lemo-opuscar animation, real-sfx / earshot / Openverse sound, yt-* packaging): read `references/toolbox.md` when planning the storyboard and before writing any animation or picking SFX. Tools missing on this machine → skip them, default path.
 
 ## Rules
 - **Fetch the latest skill first.** Every time this skill is used, before anything else run `bash $S/sync.sh` (pulls GitHub main), and if it changed anything re-read this file.
@@ -25,7 +26,7 @@ Extras (music, Devanagari, custom graphics, Codex, missing B-roll, troubleshooti
 - **Real news articles.** When a clip cites a report, show the real article (screenshot: masthead, headline, byline, summary) with lines highlighted as they're said — never a made-up newspaper.
 - **Big centred numbers that match what's said** (say 45 → show 45).
 - B-roll display by purpose: explains → `full` (steps/site/media) · small animation → `split` (stat/list/media) · text → `float` (text/stat/mark).
-- Sources, free only, in order: dubuddy.in capture → HyperFrames animation → Pexels video → Openverse/Wikimedia photo. No AI generation unless asked. Only claim what dubuddy.in actually shows.
+- Sources, free only, in order: dubuddy.in capture → HyperFrames animation (GSAP; a Manim / anidoodle / Three.js render when the beat needs it — `references/toolbox.md`) → Pexels video → Openverse/Wikimedia photo. No AI generation unless asked. Only claim what dubuddy.in actually shows.
 - Judgment: hook → info density → clarity → pacing → captions → variation → polish. Every cut/zoom/graphic/sound must improve retention or clarity, else skip it. Professional, not AI-looking; the speaker and the info stay the focus. Content beats rules.
 
 ## 1 · Watch + propose (every video — nothing in HyperFrames yet)
@@ -38,7 +39,7 @@ Then **tell the user what you will do**, in chat, and **wait**:
 - start from the user's **edit brief** + its files (screenshots / clips to use, moments, ideas) and the card's idea + shoot plan; build the plan around them
 - **precautions**: everything planned that doesn't match the video (planned hook / closing line not said, missing talking point, a file the brief mentions but didn't attach, clean audio that didn't fit) and what you'll do about each
 - the **whole transcript** of the raw clip, start to end, word for word as spoken (timestamps per sentence/phrase), with every part you plan to cut marked
-- the hook (+ why it stops the scroll) · what you cut and the new length · the full storyboard: every moment that can be **demonstrated as a vector animation** (beat · what's said · the scene idea · display full/split/float · depth/alive details) · other B-roll + its source · captions · CTA · audio (SFX, music).
+- the hook (+ why it stops the scroll) · what you cut and the new length · the full storyboard: every moment that can be **demonstrated as a vector animation** (beat · what's said · the scene idea · display full/split/float · depth/alive details · **tool**: GSAP scene, gsap-plugins effect, Three.js 3D, Manim maths, anidoodle/huashu drawn clip — pick per `references/toolbox.md`) · other B-roll + its source · captions · CTA · audio (SFX per the toolbox order: own library → real-sfx → earshot → Openverse; music).
 - What to aim for — Animation bar: detailed illustrated scenes with depth (parallax layers, soft shadows, light), **always alive** (idle breathing, drifting particles, flicker, bobbing — nothing frozen), smooth at the source fps (29.97/59.94 → eased GSAP tweens, no step holds), toned-down grain on our graphics only. CTA (default, user 2026-10-12): from the "comment mein batao" line → `common.comment_cards(start, T-1.25, comments)` (square sticker comment cards beside the head with example student comments + COMMENT KARO pill) + punch-in ~1.18 on "comment mein batao" + `common.comment_cta(start, text="Comment: kaunsa course?", end=T+1)` on the chest for the **last ≥5 s**; the Subscribe/Follow card joins at the end. Run `sfx_lib.py` first (bubble/ding).
 - Changes → update the proposal and show it again. **Don't write scenes, build, fetch B-roll or open Studio before the user says OK** ("ok" / "go" / "build it").
 
@@ -59,7 +60,9 @@ Turn the approved proposal into `$ED/plan.json`:
 
 B-roll: `python3 $S/broll.py site "$ED" https://dubuddy.in/app/ dubuddy_app --mobile --tall` · `broll.py search "$ED" "<query>" --src pexels|pexels-photo|openverse|wikimedia` → `broll.py sheet "$ED" <src>` → Read `broll/cand_sheet.jpg` → `broll.py get "$ED" <id>`.
 
-**Animation QA (before showing ANY animation):** snapshot 6–10 frames per scene (entry · each beat · exit) and check: no part of one character on separate moving layers · nothing clipped at panel edges · no text on busy art (labels get pills) · no empty placeholders for steps not yet shown · no stray dots/blobs (fromTo renders FROM state immediately) · counters are plain number tweens · cut-out (matte) colour matches the clip (`scripts/matte.sh`). **Read `references/animation-lessons.md` first** — every mistake the user has caught and its fix.
+**Writing animation:** load the `gsap-core` + `gsap-timeline` skills (and `gsap-plugins` for DrawSVG / MorphSVG / MotionPath / SplitText / CustomWiggle) before any `kind:"custom"` js; `threejs-*` for 3D; render Manim / anidoodle / huashu beats to the beat's exact length and drop them in as `media`. For SFX on busy animations, `real-sfx/scripts/from_hyperframes.py` lists every entrance/burst with exact times (see toolbox). Missing sounds: `earshot make` → `$ED/sfx/`.
+
+**Animation QA (before showing ANY animation — external renders too):** snapshot 6–10 frames per scene (entry · each beat · exit) and check: no part of one character on separate moving layers · nothing clipped at panel edges · no text on busy art (labels get pills) · no empty placeholders for steps not yet shown · no stray dots/blobs (fromTo renders FROM state immediately) · counters are plain number tweens · cut-out (matte) colour matches the clip (`scripts/matte.sh`). **Read `references/animation-lessons.md` first** — every mistake the user has caught and its fix.
 
 **Phones = real phone mockups** (user rule): any app/site on a phone uses `iphone()` from `references/scenes/common.py` (titanium frame, buttons, Dynamic Island, 9:41 status bar, glare) — never a plain rounded rectangle.
 
@@ -76,7 +79,7 @@ Show the user, in chat: the timeline (brief.md §0), the cut + hook reasoning, e
 ```bash
 bash $S/finish.sh "$ED"          # renders hf_yt then hf_ig (or one: finish.sh "$ED" yt|ig)
 ```
-Prints the QC table per version. Read `qc_yt/sheet.jpg` + `qc_ig/sheet.jpg`; fix + re-render anything off. Deliver `$ED/output/` (`youtube/final_yt.mp4`, `instagram/final_ig.mp4` + plan, transcript, captions, srt, credits) and `SendUserFile` both mp4s.
+Prints the QC table per version. Read `qc_yt/sheet.jpg` + `qc_ig/sheet.jpg`; fix + re-render anything off. Deliver `$ED/output/` (`youtube/final_yt.mp4`, `instagram/final_ig.mp4` + plan, transcript, captions, srt, credits) and `SendUserFile` both mp4s. With them give the **upload pack**: `yt-package` (3 linted title options + thumbnail text) and `yt-seo` (description + tags) for YouTube, and an IG caption from the same hook (skip if those skills aren't installed).
 **Then send both mp4s to DropShelf** (finish.sh does it after both versions: `open -a DropShelf <yt.mp4> <ig.mp4>`; the shelf keeps them across restarts). If you re-render after fixes, send the new files again. Stop Studio preview servers before rendering (8 GB Mac: they starve the render).
 
 ## 4 · Clean (end of session, or when the user says "clean")

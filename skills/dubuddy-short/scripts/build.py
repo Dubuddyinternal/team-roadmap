@@ -103,7 +103,7 @@ def main():
 
     T = tl["duration"]                      # speech length (a-roll)
     cta = plan.get("cta") or {}
-    end_mode = cta.get("url") and cta.get("mode", "end") == "end"
+    end_mode = cta.get("url") and not cta.get("off") and cta.get("mode", "end") == "end"
     TT = round(T + float(cta.get("dur", 3.0)), 3) if end_mode else round(T + float(cta.get("tail", 0)), 3)   # composition length (tail = hold last frame)
     W = {w["i"]: w for w in tl["words"]}
     cap_y = plan.get("captions", {}).get("y", 1440)
@@ -155,7 +155,7 @@ def main():
     if fry:
         body.append(f'<video id="aroll-bg" src="assets/cut.mp4" data-start="0" data-duration="{TT}" data-track-index="9" muted playsinline '
                     f'style="position:absolute;left:0;top:0;width:1080px;height:1920px;object-fit:cover;z-index:0;'
-                    f'transform:scale(1.3);filter:blur(38px) brightness(.78) saturate(1.1)"></video>')
+                    f'transform:scale(1.3);transform-origin:50% {"0%" if fry > 0 else "50%"};filter:blur(38px) brightness(.78) saturate(1.1)"></video>')   # fry>0: fill the top strip from the top of the frame, not from the head
         J.append(f'tl.set("#aroll-wrap", {{y: {fry}}}, 0);')
         edge = "to bottom" if fry < 0 else "to top"       # feather the cut edge into the blur (wrap coords)
         css_extra_frame = f"#aroll-wrap{{-webkit-mask-image:linear-gradient({edge},#000 1790px,transparent 1920px);mask-image:linear-gradient({edge},#000 1790px,transparent 1920px)}}"
@@ -559,6 +559,8 @@ def main():
         J.append(f'tl.to("#ctacur", {{autoAlpha: 0, duration: .2}}, {r + (1.25 if yt else .95):.3f});')
 
     # ------------------------------------------------------------------ CTA
+    if cta.get("off"):   # cta.off: no Subscribe/Follow card (custom ending owns the tail)
+        cta = {}
     if cta.get("url"):
         cd = float(cta.get("dur", 3.0))
         if end_mode:   # branded end card after the speech: ink + glow, CTA centred
@@ -598,7 +600,7 @@ def main():
         sfx("chime", c0 + 1.98, 0.2)
 
     # ------------------------------------------------------------------ pop captions
-    for k, c in enumerate(tl["chunks"]):
+    for k, c in enumerate([] if plan.get("captions", {}).get("off") else tl["chunks"]):   # captions.off: graphics-only edit
         mid = (c["s"] + c["e"]) / 2
         y = lay["split_caption_y"] if any(a <= mid <= b for a, b in split_windows) else cap_y
         spans = "".join(f'<span class="w{" kw" if W[i]["kw"] else ""}" id="c{k}w{j}">{esc(W[i]["text"])}</span>'

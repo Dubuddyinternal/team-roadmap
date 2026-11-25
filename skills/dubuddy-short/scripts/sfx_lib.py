@@ -31,10 +31,22 @@ if not os.path.isdir(LIB):
     missing = [m[0] for m in M if not os.path.exists(f"{out}/{m[0]}.mp3")]
     print(f"{n} sfx from {os.path.realpath(REPO_SFX)} → {out}" + (f" · missing (house set used): {', '.join(missing)}" if missing else ""))
     sys.exit(0)
+# the library gets re-organised into category folders → find each file by its name anywhere under LIB
+INDEX = {}
+for root, _, files in os.walk(LIB):
+    for f in files: INDEX.setdefault(f.lower(), os.path.join(root, f))
+ALIAS = {"ting.mp3": "ting ding.mp3", "correct sfx.mp3": "correct answer sound effect.mp3"}
+def find(src):
+    base = os.path.basename(src).lower(); base = ALIAS.get(base, base)
+    if base in INDEX: return INDEX[base]
+    stem = os.path.splitext(base)[0]
+    hits = sorted(v for k, v in INDEX.items() if k.startswith(stem))     # e.g. "Pop 1 - Copy.mp3"
+    return hits[0] if hits else None
 for name, src, L in M:
-    if not os.path.exists(LIB + src): print(f"missing in the library, house sound used: {src}"); continue
+    path = find(src)
+    if not path: print(f"missing in the library, house sound used: {src}"); continue
     fo = min(.25, L * .3); tmp = f"{out}/{name}.wav"
-    subprocess.run(["ffmpeg","-v","error","-y","-i",LIB+src,"-af",f"silenceremove=start_periods=1:start_threshold=-45dB,atrim=0:{L},afade=t=out:st={L-fo:.3f}:d={fo:.3f},aformat=channel_layouts=stereo:sample_rates=48000",tmp],check=True)
+    subprocess.run(["ffmpeg","-v","error","-y","-i",path,"-af",f"silenceremove=start_periods=1:start_threshold=-45dB,atrim=0:{L},afade=t=out:st={L-fo:.3f}:d={fo:.3f},aformat=channel_layouts=stereo:sample_rates=48000",tmp],check=True)
     mx = float(re.search(r"max_volume: (-?[\d.]+)", subprocess.run(["ffmpeg","-i",tmp,"-af","volumedetect","-f","null","-"],capture_output=True,text=True).stderr).group(1))
     subprocess.run(["ffmpeg","-v","error","-y","-i",tmp,"-af",f"volume={-1-mx:.2f}dB","-c:a","libmp3lame","-b:a","192k",f"{out}/{name}.mp3"],check=True)
     os.remove(tmp)
