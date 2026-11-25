@@ -337,7 +337,8 @@ function toV(r, pays){
     submitted:day(r.created_at), drive:r.drive_link,
     name:c.full_name||"(no name yet)", email:c.email||"", phone:c.phone||"",
     channel: handle ? (String(handle).charAt(0)==="@" ? handle : "@"+handle) : (r.channel_link || ""),
-    channelLink:r.channel_link, platform:PLATFORM[r.platform]||r.platform||"",
+    channelLink:r.channel_link,
+    platform: r.platform==="other" && r.platform_name ? "Other · "+r.platform_name : (PLATFORM[r.platform]||r.platform||""),   /* "Other" shows the name the creator typed */
     upi:c.upi_id||"", link:r.published_link, published:day(r.published_at),
     views:(r.views_30d===null || r.views_30d===undefined) ? null : r.views_30d,
     db:r.status, status:st, reason:r.reviewer_note||"", reply:r.creator_reply||"",
