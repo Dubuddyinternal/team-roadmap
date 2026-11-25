@@ -46,7 +46,8 @@ const CFG = {
   reviewDays:"2 to 4 days",
   remindBefore:3,       // flag base pay this many days before it is due
   viewFloor:1500,
-  mailbox:"https://mail.zoho.in/zm/",   // maverick@dubuddy.in, where creators' replies land
+  mailbox:"https://mail.zoho.in/zm/",
+  site:"https://maverick.dubuddy.in",     // the creator site; /view/<id> is the team's read-only dashboard view   // maverick@dubuddy.in, where creators' replies land
   slabs:[
     {min:1500,   max:5000,   bonus:50,   label:"1,500 to 5,000"},
     {min:5000,   max:15000,  bonus:150,  label:"5,000 to 15,000"},
@@ -249,6 +250,8 @@ td b{font-weight:600}
 .pre button:hover{border-color:var(--crit);color:var(--crit)}
 textarea.rsn{width:100%;border:1px solid var(--line-2);border-radius:var(--r-s);padding:10px 12px;font-size:14px;resize:vertical;min-height:100px;background:var(--card)}
 textarea.rsn:focus{outline:none;border-color:var(--crit);box-shadow:0 0 0 1px var(--crit)}
+.namebtn{font-weight:600;color:var(--ink);text-align:left;padding:0}
+.namebtn:hover{color:var(--accent);text-decoration:underline}
 .csvcols{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px}
 .csvcols label{display:flex;align-items:center;gap:8px;font-size:13.5px;padding:7px 10px;border:1px solid var(--line);border-radius:var(--r-s);cursor:pointer}
 .csvcols label:hover{border-color:var(--line-2)}
@@ -746,7 +749,7 @@ function viewCreators(){
     const st = personStats(p.id);
     return '<tr>'+
       '<td class="tnum mut">'+(i+1)+'</td>'+
-      '<td>'+(p.full_name ? '<b>'+esc(p.full_name)+'</b>' : '<span class="mut">No name yet</span>')+
+      '<td><button class="namebtn" data-person="'+esc(p.id)+'" title="Open profile">'+(p.full_name ? esc(p.full_name) : '<span class="mut">No name yet</span>')+'</button>'+
         (profileDone(p) ? '' : '<div class="meta"><span class="due soon">'+(p.has_profile ? 'Profile incomplete' : 'Logged in, not signed up')+'</span></div>')+'</td>'+
       '<td class="tnum">'+(p.phone ? esc(phoneTxt(p.phone)) : dash())+'</td>'+
       '<td>'+(p.email ? esc(p.email) : dash())+'</td>'+
@@ -754,7 +757,7 @@ function viewCreators(){
       '<td class="tnum">'+(p.last_login_at ? fmt(day(p.last_login_at)) : dash())+'</td>'+
       '<td class="tnum">'+st.videos.length+(st.live ? '<div class="meta">'+st.live+' live</div>' : '')+'</td>'+
       '<td class="tnum"><b>'+money(st.paid)+'</b></td>'+
-      '<td><div class="acts"><button class="btn g sm" data-person="'+esc(p.id)+'">Open</button></div></td>'+
+      '<td><div class="acts"><button class="btn g sm" data-viewas="'+esc(p.id)+'" title="Their dashboard on maverick.dubuddy.in, read only">Dashboard ↗</button></div></td>'+
     '</tr>';
   }).join('') : emptyRow(9, PEOPLE_ERR ? 'The creator list isn’t set up yet.' : (SEARCH ? 'Nothing matches “'+esc(SEARCH)+'”.' : 'No creators yet.'),
       PEOPLE_ERR ? esc(PEOPLE_ERR) : 'Everyone who logs in on maverick.dubuddy.in shows up here.', '');
@@ -769,7 +772,19 @@ function viewCreators(){
       rows, PEOPLE.length ? '<button class="btn g sm" data-csv="1">⬇ Download CSV</button>' : '', 'stickylast');
 }
 
-/* one creator's own dashboard, inside the admin space */
+/* their real dashboard on maverick.dubuddy.in, read only: the site checks this login is on the
+   Maverick team (the access token goes in the link's #, never to a server, and lasts an hour) */
+async function openDashboard(id){
+  const w = window.open("", "_blank");          /* opened now, so the browser doesn't block it as a pop-up */
+  let token = "";
+  try{ const r = await supa().auth.getSession(); token = (r.data && r.data.session && r.data.session.access_token) || ""; }catch(_){ }
+  if(!w){ toast("Allow pop-ups for tools.dubuddy.in to open the dashboard."); return; }
+  if(!token){ w.close(); toast("Sign in again, then open the dashboard."); return; }
+  w.opener = null;
+  w.location.href = CFG.site + "/view/" + encodeURIComponent(id) + "#t=" + encodeURIComponent(token);
+}
+
+/* one creator's profile, inside the admin space */
 function openCreator(id){
   const p = PEOPLE.find(x=> x.id===id);
   if(!p){ toast("That creator isn't in the list."); return; }
@@ -793,8 +808,8 @@ function openCreator(id){
     '</div>'+
     '<h3 style="font-size:15px;margin:18px 0 2px">Videos · '+st.videos.length+'</h3>'+vids+
     '</div>'+
-    '<div class="mfoot"><button class="btn g" data-copylink="'+esc(p.id)+'">🔗 Copy dashboard link</button><button class="btn g" data-close="1">Close</button>'+
-      '<span class="sp">The link opens this view for anyone on the Maverick team.</span></div>'
+    '<div class="mfoot"><button class="btn" data-viewas="'+esc(p.id)+'">Open their dashboard ↗</button><button class="btn g" data-copylink="'+esc(p.id)+'">🔗 Copy profile link</button><button class="btn g" data-close="1">Close</button>'+
+      '<span class="sp">The link opens this profile for anyone on the Maverick team.</span></div>'
   );
 }
 
@@ -803,7 +818,7 @@ const CSV_COLS = [
   ["name","Name", p=> p.full_name||""],
   ["number","Number", p=> phoneTxt(p.phone)],
   ["email","Email", p=> p.email||""],
-  ["link","Dashboard link", p=> dashLink(p.id)],
+  ["link","Profile link", p=> dashLink(p.id)],
   ["upi","UPI ID", p=> p.upi_id||""],
   ["youtube","YouTube", p=> p.youtube_handle||""],
   ["instagram","Instagram", p=> p.instagram_handle||""],
@@ -1012,6 +1027,8 @@ function wire(){
     if(st){ PAYTAB = st.dataset.pt; draw(); return; }
     if(t.closest("[data-refresh]")){ LOADED = false; draw(); await load(); draw(); toast("Up to date."); return; }
 
+    const va = t.closest("[data-viewas]");
+    if(va){ openDashboard(va.dataset.viewas); return; }
     const pr = t.closest("[data-person]");
     if(pr){ openCreator(pr.dataset.person); return; }
     if(t.closest("[data-csv]")){ openCsv(); return; }
